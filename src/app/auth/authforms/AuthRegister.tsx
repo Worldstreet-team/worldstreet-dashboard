@@ -1,12 +1,14 @@
 "use client";
 
 import { Button, Label, TextInput, Spinner } from "flowbite-react";
+import { useRouter } from "next/navigation";
 import React, { useState } from "react";
 import { signup } from "../actions";
 
 const AuthRegister = () => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -15,6 +17,11 @@ const AuthRegister = () => {
 
     const formData = new FormData(e.currentTarget);
     const result = await signup(formData);
+
+    if (result?.success && result?.redirectTo) {
+      router.push(result.redirectTo);
+      return;
+    }
 
     if (result?.error) {
       setError(result.error);

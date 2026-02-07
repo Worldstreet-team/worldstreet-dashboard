@@ -2,12 +2,14 @@
 
 import { Button, Checkbox, Label, TextInput, Spinner } from "flowbite-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import React, { useState } from "react";
 import { login } from "../actions";
 
 const AuthLogin = () => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -16,6 +18,11 @@ const AuthLogin = () => {
 
     const formData = new FormData(e.currentTarget);
     const result = await login(formData);
+
+    if (result?.success && result?.redirectTo) {
+      router.push(result.redirectTo);
+      return;
+    }
 
     if (result?.error) {
       setError(result.error);

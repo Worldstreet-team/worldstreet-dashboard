@@ -1,6 +1,6 @@
 import { CustomizerContext } from "@/app/context/customizerContext";
+import { useAuth } from "@/app/context/authContext";
 import { Icon } from "@iconify/react/dist/iconify.js";
-import Image from "next/image";
 import React, { useContext } from "react";
 import SimpleBar from "simplebar-react";
 import * as profileData from "./Data";
@@ -9,11 +9,14 @@ import Link from "next/link";
 const ProfileDrawer = () => {
   const { isDrawerOpen, setIsDrawerOpen } = useContext(CustomizerContext);
   const toggleDrawer = () => setIsDrawerOpen(!isDrawerOpen);
-  
-  const user = {
-    name: "Trader",
-    email: "trader@example.com",
-  };
+  const { user, logout } = useAuth();
+
+  const displayName = user ? `${user.firstName} ${user.lastName}` : "Trader";
+  const displayEmail = user?.email || "trader@example.com";
+  const displayRole = user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : "Trader";
+  const initials = user
+    ? user.firstName.charAt(0).toUpperCase() + user.lastName.charAt(0).toUpperCase()
+    : "T";
 
   return (
     <>
@@ -34,26 +37,22 @@ const ProfileDrawer = () => {
           <div className="">
             <h3 className="text-lg font-semibold text-ld">User Profile</h3>
             <div className="flex items-center gap-6 pb-5 border-b border-gray-950/10 dark:border-darkborder mt-5 mb-3">
-              <Image
-                src="/images/profile/user-1.jpg"
-                alt="logo"
-                height="64"
-                width="64"
-                className="rounded-full"
-              />
+              <div className="h-16 w-16 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-xl shrink-0">
+                {initials}
+              </div>
               <div>
                 <h5 className="card-title text-sm mb-0.5 font-medium">
-                  {user.name}
+                  {displayName}
                 </h5>
                 <span className="card-subtitle text-muted font-normal">
-                  Trader
+                  {displayRole}
                 </span>
                 <p className="card-subtitle font-normal text-muted mb-0 mt-1 flex items-center">
                   <Icon
                     icon="tabler:mail"
                     className="text-base me-1 relative top-0.5"
                   />
-                  {user.email}
+                  {displayEmail}
                 </p>
               </div>
             </div>
@@ -86,10 +85,17 @@ const ProfileDrawer = () => {
           ))}
         </SimpleBar>
 
-        <div className="pt-2 px-6 pb-6">
+        <div className="pt-2 px-6 pb-6 space-y-2">
           <button
             type="button"
-            className="inline-block text-center py-2 text-sm font-medium rounded-md w-full text-white bg-primary hover:bg-transparent hover:text-primary border-2 border-primary cursor-pointer"
+            className="inline-block text-center py-2 text-sm font-medium rounded-md w-full text-white bg-red-500 hover:bg-red-600 border-2 border-red-500 hover:border-red-600 cursor-pointer"
+            onClick={() => { toggleDrawer(); logout(); }}
+          >
+            Sign Out
+          </button>
+          <button
+            type="button"
+            className="inline-block text-center py-2 text-sm font-medium rounded-md w-full text-primary bg-transparent hover:bg-primary/10 border-2 border-primary cursor-pointer"
             onClick={toggleDrawer}
           >
             Close
