@@ -56,7 +56,7 @@ const SidebarContent: MenuItem[] = [
         name: "Xtreme Livestream",
         icon: 'solar:play-stream-bold',
         id: uniqueId(),
-        url: "/xtreme",
+        url: "https://xtreme.worldstreetgold.com",
         badge: true,
         badgeType: "filled",
       },
