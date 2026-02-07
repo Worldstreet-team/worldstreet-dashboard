@@ -1,0 +1,120 @@
+@import 'tailwindcss';
+@plugin 'flowbite-react/plugin/tailwindcss';
+@import './layouts/container.css' layer(utilities);
+@import './layouts/sidebar.css' layer(utilities);
+@import './layouts/horizontal.css' layer(utilities);
+@import './layouts/header.css' layer(utilities);
+@import './pages/dashboards.css' layer(utilities);
+@import './pages/widgets.css' layer(utilities);
+@import './pages/auth.css' layer(utilities);
+@import './pages/app.css' layer(utilities);
+@import './theme/default-colors.css' layer(utilities);
+@import './theme/dark.css' layer(utilities);
+@import './override/reboot.css' layer(utilities);
+@import './layouts/rtl.css' layer(utilities);
+
+@source '../../../node_modules/flowbite-react/**/*.js';
+@source '../../../.flowbite-react/class-list.json';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --shadow-md: 0px 1px 4px 0px rgba(133, 146, 173, 0.1);
+  --shadow-lg: 0 1rem 3rem rgba(0, 0, 0, 0.175);
+  --shadow-dark-md:
+    rgba(145, 158, 171, 0.3) 0px 0px 2px 0px,
+    rgba(145, 158, 171, 0.02) 0px 12px 24px -4px;
+  --shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+  --shadow-btn-shadow: rgba(0, 0, 0, 0.05) 0 9px 17.5px;
+
+  --radius-sm: 4px;
+  --radius-md: 7px;
+  --radius-lg: 7px;
+  --radius-tw: 12px;
+
+  --leading-21: 21px;
+
+  --spacing-40\%: 40%;
+
+  --gap-30: 30px;
+
+  --padding-15: 15px;
+  --padding-30: 30px;
+
+  --margin-30: 30px;
+
+  --color-cyan: var(--color-cyan);
+  --color-darkcyan: var(--color-darkcyan);
+  --color-primary: var(--color-primary);
+  --color-secondary: var(--color-secondary);
+  --color-info: var(--color-info);
+  --color-success: var(--color-success);
+  --color-warning: var(--color-warning);
+  --color-error: var(--color-error);
+  --color-lightprimary: var(--color-lightprimary) --color-lightsecondary: var(--color-lightsecondary);
+  --color-lightsuccess: var(--color-lightsuccess);
+  --color-lighterror: var(--color-lighterror);
+  --color-lightwarning: var(--color-lightwarning);
+  --color-border: var(--color-border);
+  --color-bordergray: var(--color-bordergray);
+  --color-lightgray: var(--color-lightgray);
+  --color-muted: var(--color-muted);
+  --color-bodytext: var(--color-bodytext);
+  --color-pink: var(--color-pink);
+  --color-herobg: var(--color-herobg);
+  --color-dark: var(--color-dark);
+  --color-link: var(--color-link);
+  --color-darklink: var(--color-darklink);
+  --color-darkborder: var(--color-darkborder);
+  --color-darkgray: var(--color-darkgray);
+  --color-darkinfo: var(--color-darkinfo);
+  --color-primaryemphasis: var(--color-primary-emphasis);
+  --color-secondaryemphasis: var(--color-secondary-emphasis);
+  --color-warningemphasis: var(--color-warning-emphasis);
+  --color-erroremphasis: var(--color-error-emphasis);
+  --color-successemphasis: var(--color-success-emphasis);
+  --color-infoemphasis: var(--color-info-emphasis);
+  --color-black: var(--color-black);
+}
+
+@layer base {
+
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
+
+
+@layer components {
+
+  body {
+    @apply text-sm overflow-x-hidden dark:bg-dark;
+  }
+
+  body {
+    @apply text-link dark:text-darklink;
+  }
+
+  /*heading text color*/
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply text-dark dark:text-white font-semibold;
+  }
+
+  input::placeholder {
+    @apply text-darklink dark:text-darklink
+  }
+
+}
+
+select {
+  padding-right: 32px;
+}
