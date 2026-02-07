@@ -2,11 +2,11 @@
 
 const authDisabledMessage = 'Authentication is disabled in this project.'
 
-export async function login() {
+export async function login(formData?: FormData) {
   return { error: authDisabledMessage }
 }
 
-export async function signup() {
+export async function signup(formData?: FormData) {
   return { error: authDisabledMessage }
 }
 
