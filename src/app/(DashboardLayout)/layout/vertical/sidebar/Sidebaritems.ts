@@ -63,6 +63,29 @@ const SidebarContent: MenuItem[] = [
     ],
   },
   {
+    heading: "WorldStreet",
+    children: [
+      {
+        name: "Store",
+        icon: 'ph:storefront-duotone',
+        id: uniqueId(),
+        url: "https://shop.worldstreetgold.com",
+      },
+      {
+        name: "Academy",
+        icon: 'ph:graduation-cap-duotone',
+        id: uniqueId(),
+        url: "https://academy.worldstreetgold.com",
+      },
+      {
+        name: "Social",
+        icon: 'ph:chat-circle-dots-duotone',
+        id: uniqueId(),
+        url: "https://social.worldstreetgold.com",
+      },
+    ],
+  },
+  {
     heading: "Trading",
     children: [
       {
