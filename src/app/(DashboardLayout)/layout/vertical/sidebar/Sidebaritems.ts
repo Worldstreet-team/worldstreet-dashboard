@@ -50,7 +50,7 @@ const SidebarContent: MenuItem[] = [
     ],
   },
   {
-    heading: "Xtreme Livestream",
+    heading: "WorldStreet",
     children: [
       {
         name: "Xtreme Livestream",
@@ -60,11 +60,6 @@ const SidebarContent: MenuItem[] = [
         badge: true,
         badgeType: "filled",
       },
-    ],
-  },
-  {
-    heading: "WorldStreet",
-    children: [
       {
         name: "Store",
         icon: 'ph:storefront-duotone',
