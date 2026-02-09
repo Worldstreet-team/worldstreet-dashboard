@@ -53,14 +53,6 @@ const SidebarContent: MenuItem[] = [
     heading: "WorldStreet",
     children: [
       {
-        name: "Xtreme Livestream",
-        icon: 'solar:play-stream-bold',
-        id: uniqueId(),
-        url: "https://xtreme.worldstreetgold.com",
-        badge: true,
-        badgeType: "filled",
-      },
-      {
         name: "Store",
         icon: 'ph:storefront-duotone',
         id: uniqueId(),

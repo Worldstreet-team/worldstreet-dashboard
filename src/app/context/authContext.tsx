@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
+import { useProfile } from "@/app/context/profileContext";
 
 export interface AuthUser {
   userId: string;
@@ -34,6 +35,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { fetchProfile } = useProfile();
 
   const verifyUser = useCallback(async () => {
     try {
@@ -46,9 +48,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       if (data.success && data.user) {
         setUser(data.user);
+        // Auto-fetch (or auto-create) the dashboard profile
+        await fetchProfile();
       } else if (data.refreshed && data.user) {
         // Token was refreshed successfully, user is still valid
         setUser(data.user);
+        await fetchProfile();
       } else {
         // Verification failed, redirect to login
         setUser(null);
@@ -61,7 +66,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchProfile]);
 
   const logout = useCallback(async () => {
     try {

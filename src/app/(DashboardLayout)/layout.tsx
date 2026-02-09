@@ -8,6 +8,9 @@ import ProfileDrawer from "./layout/vertical/header/ProfileDrawer";
 import { ThemeModeScript, ThemeProvider } from 'flowbite-react';
 import customTheme from "@/utils/theme/custom-theme";
 import { AuthProvider, useAuth } from "@/app/context/authContext";
+import { ProfileProvider } from "@/app/context/profileContext";
+import { WalletProvider } from "@/app/context/walletContext";
+import { PinSetupModal } from "@/components/wallet";
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { loading } = useAuth();
@@ -36,8 +39,10 @@ export default function Layout({
     <>
       <ThemeModeScript />
       <ThemeProvider theme={customTheme}>
+        <ProfileProvider>
         <AuthProvider>
           <AuthGate>
+            <WalletProvider>
         <div className="flex w-full min-h-screen">
           <div className="page-wrapper flex w-full">
             {/* Header/sidebar */}
@@ -67,8 +72,12 @@ export default function Layout({
             </div>
           </div>
         </div>
+        {/* Wallet PIN Setup Modal */}
+        <PinSetupModal />
+            </WalletProvider>
           </AuthGate>
         </AuthProvider>
+        </ProfileProvider>
       </ThemeProvider>
     </>
   );

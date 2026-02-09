@@ -40,12 +40,6 @@ const appsLink: appsLinkType[] = [
     avatar: "/images/svgs/icon-dd-lifebuoy.svg",
   },
   {
-    href: "xtreme",
-    title: "Xtreme",
-    subtext: "Live streaming",
-    avatar: "/images/svgs/icon-dd-date.svg",
-  },
-  {
     href: "#",
     title: "Referrals",
     subtext: "Invite and earn",

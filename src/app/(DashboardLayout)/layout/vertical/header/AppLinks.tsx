@@ -14,25 +14,6 @@ const AppMenuContent = () => (
       <div className="grid grid-cols-12 gap-3 w-full">
         {AppsData.appsLink.map((links, index) => (
           <div className="col-span-12 xl:col-span-6 flex items-stretch" key={index}>
-            {links.href === "xtreme" ? (
-              <Link
-                href="/xtreme"
-                className="flex gap-3 items-center group relative"
-              >
-                <span className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 h-10 w-10 flex justify-center items-center rounded-md">
-                  <Icon icon="solar:play-stream-bold" className="h-5 w-5 text-purple-600" />
-                </span>
-                <div>
-                  <h6 className="font-semibold text-sm text-ld group-hover:text-primary mb-1 flex items-center gap-1">
-                    {links.title}
-                    <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded font-bold animate-pulse">LIVE</span>
-                  </h6>
-                  <p className="text-xs text-link/90 dark:text-darklink font-medium">
-                    {links.subtext}
-                  </p>
-                </div>
-              </Link>
-            ) : (
               <Link
                 href={links.href}
                 className="flex gap-3 items-center group relative"
@@ -49,7 +30,6 @@ const AppMenuContent = () => (
                   </p>
                 </div>
               </Link>
-            )}
           </div>
         ))}
         {/* FAQ section - only on desktop */}

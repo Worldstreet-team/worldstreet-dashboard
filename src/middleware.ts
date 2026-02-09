@@ -20,7 +20,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Allow API routes that aren't auth-related (streams, webhooks, etc.)
+  // Allow API routes that aren't auth-related (profile, etc.)
   if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth')) {
     return NextResponse.next();
   }
