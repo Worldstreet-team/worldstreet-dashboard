@@ -138,6 +138,12 @@ const SidebarContent: MenuItem[] = [
     heading: "Wallets",
     children: [
       {
+        name: "Assets",
+        icon: 'ph:stack-duotone',
+        id: uniqueId(),
+        url: "/assets",
+      },
+      {
         name: "Spot Wallet",
         icon: 'ph:wallet-duotone',
         id: uniqueId(),

@@ -10,6 +10,9 @@ import customTheme from "@/utils/theme/custom-theme";
 import { AuthProvider, useAuth } from "@/app/context/authContext";
 import { ProfileProvider } from "@/app/context/profileContext";
 import { WalletProvider } from "@/app/context/walletContext";
+import { SolanaProvider } from "@/app/context/solanaContext";
+import { EvmProvider } from "@/app/context/evmContext";
+import { BitcoinProvider } from "@/app/context/bitcoinContext";
 import { PinSetupModal } from "@/components/wallet";
 
 function AuthGate({ children }: { children: React.ReactNode }) {
@@ -43,6 +46,9 @@ export default function Layout({
         <AuthProvider>
           <AuthGate>
             <WalletProvider>
+        <SolanaProvider>
+        <EvmProvider>
+        <BitcoinProvider>
         <div className="flex w-full min-h-screen">
           <div className="page-wrapper flex w-full">
             {/* Header/sidebar */}
@@ -79,6 +85,9 @@ export default function Layout({
         </div>
         {/* Wallet PIN Setup Modal */}
         <PinSetupModal />
+        </BitcoinProvider>
+        </EvmProvider>
+        </SolanaProvider>
             </WalletProvider>
           </AuthGate>
         </AuthProvider>
