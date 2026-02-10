@@ -1,6 +1,5 @@
 "use client";
 import React, { useState, useEffect, useContext } from "react";
-import { Navbar, NavbarCollapse, Drawer, DrawerItems, Tooltip } from "flowbite-react";
 import Search from "./Search";
 import { Icon } from "@iconify/react";
 import AppLinks from "./AppLinks";
@@ -13,6 +12,8 @@ import MobileSidebar from "../sidebar/MobileSidebar";
 import HorizontalMenu from "../../horizontal/header/HorizontalMenu";
 import Image from "next/image";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
+
 interface HeaderPropsType {
   layoutType: string;
 }
@@ -22,199 +23,141 @@ const Header = ({ layoutType }: HeaderPropsType) => {
 
   useEffect(() => {
     const handleScroll = () => {
-      if (window.scrollY > 50) {
-        setIsSticky(true);
-      } else {
-        setIsSticky(false);
-      }
+      if (window.scrollY > 50) { setIsSticky(true); } else { setIsSticky(false); }
     };
-
     window.addEventListener("scroll", handleScroll);
-
-    return () => {
-      window.removeEventListener("scroll", handleScroll);
-    };
+    return () => { window.removeEventListener("scroll", handleScroll); };
   }, []);
 
-  const { setIsCollapse, isCollapse, isLayout, setActiveMode, activeMode } =
-    useContext(CustomizerContext);
-
+  const { setIsCollapse, isCollapse, isLayout, setActiveMode, activeMode } = useContext(CustomizerContext);
   const [mobileMenu, setMobileMenu] = useState("");
 
   const handleMobileMenu = () => {
-    if (mobileMenu === "active") {
-      setMobileMenu("");
-    } else {
-      setMobileMenu("active");
-    }
+    if (mobileMenu === "active") { setMobileMenu(""); } else { setMobileMenu("active"); }
   };
 
   const toggleMode = () => {
-    setActiveMode((prevMode: string) =>
-      prevMode === "light" ? "dark" : "light"
-    );
+    setActiveMode((prevMode: string) => prevMode === "light" ? "dark" : "light");
   };
 
-  // mobile-sidebar
   const [isOpen, setIsOpen] = useState(false);
   const handleClose = () => setIsOpen(false);
+
   return (
     <>
       <header
-        className={`sticky top-0 z-1 ${isSticky ? " shadow-md bg-white dark:bg-black! fixed w-full" : "bg-white dark:bg-black!"
-          }`}
+        className={cn(
+          "sticky top-0 z-[1] transition-all duration-300",
+          isSticky
+            ? "shadow-sm bg-white/95 dark:bg-black/95 backdrop-blur-md fixed w-full"
+            : "bg-white dark:bg-black"
+        )}
       >
-        <Navbar
-          fluid
-          className={`rounded-none bg-transparent dark:bg-transparent py-4 sm:px-6 ${layoutType == "horizontal" ? "container mx-auto" : ""
-            }  ${isLayout == "full" ? "max-w-full!" : ""}`}
+        <div
+          className={cn(
+            "flex items-center justify-between h-16 px-6",
+            layoutType === "horizontal" ? "container mx-auto" : "",
+            isLayout === "full" ? "max-w-full!" : ""
+          )}
         >
-          {/* Mobile Toggle Icon */}
-          <div className=" block! xl:hidden!">
-            <span
+          {/* Left section */}
+          <div className="flex items-center gap-3">
+            {/* Mobile menu trigger */}
+            <button
               onClick={() => setIsOpen(true)}
-              className="px-3 hover:text-primary dark:hover:text-primary text-link dark:text-darklink relative rounded-full xl:hidden flex justify-center items-center cursor-pointer"
+              className="xl:hidden flex items-center justify-center w-9 h-9 rounded-lg text-link dark:text-darklink hover:text-primary hover:bg-primary/10 transition-colors duration-200 cursor-pointer"
+              aria-label="Open sidebar"
             >
               <Icon icon="tabler:menu-2" height={20} />
-            </span>
-          </div>
-          {/* Toggle Icon   */}
+            </button>
 
-          <NavbarCollapse className="xl:block! hidden!">
-            <div className="flex gap-3 items-center relative">
-              {/* Toggle Menu */}
-              {layoutType != "horizontal" ? (
-                <span
-                  onClick={() => {
-                    if (isCollapse === "full-sidebar") {
-                      setIsCollapse("mini-sidebar");
-                    } else {
-                      setIsCollapse("full-sidebar");
-                    }
-                  }}
-                  className="px-3 relative after:absolute after:w-10 after:h-10 after:rounded-full hover:after:bg-primary/20 after:bg-transparent text-link hover:text-primary dark:text-darklink dark:hover:text-primary rounded-full flex justify-center items-center cursor-pointer"
-                >
-                  <Icon icon="tabler:menu-2" height={20} />
-                </span>
-              ) : null}
+            {/* Desktop sidebar toggle */}
+            {layoutType !== "horizontal" && (
+              <button
+                onClick={() => {
+                  if (isCollapse === "full-sidebar") { setIsCollapse("mini-sidebar"); }
+                  else { setIsCollapse("full-sidebar"); }
+                }}
+                className="hidden xl:flex items-center justify-center w-9 h-9 rounded-lg text-link dark:text-darklink hover:text-primary hover:bg-primary/10 transition-colors duration-200 cursor-pointer"
+                aria-label="Toggle sidebar"
+              >
+                <Icon icon="tabler:menu-2" height={20} />
+              </button>
+            )}
 
+            {/* Search */}
+            <div className="hidden xl:block">
               <Search />
             </div>
-          </NavbarCollapse>
+          </div>
 
-          <NavbarCollapse className="lg:block! hidden!">
-            <div className="flex gap-5 items-center">
-              <div className="flex gap-3 items-center pr-3 border-r border-gray-950/10 dark:border-darkborder">
-                {/* Theme Toggle */}
-                {activeMode === "light" ? (
-                  <div
-                    className=" hover:text-primary group w-10 h-10 hover:bg-primary/20 dark:hover:text-primary focus:ring-0 rounded-full flex justify-center items-center cursor-pointer text-link dark:text-darklink relative"
-                    onClick={toggleMode}
-                  >
-                    <span className="flex items-center justify-center relative">
-                      <Icon
-                        icon="tabler:moon"
-                        width="20"
-                      // className="text-link group-hover:text-primary"
-                      />
-                    </span>
-                  </div>
-                ) : (
-                  // Dark Mode Button
-                  <div
-                    className=" hover:text-primary w-10 h-10 hover:bg-primary/20 dark:hover:text-primary focus:ring-0 rounded-full flex justify-center items-center cursor-pointer text-link dark:text-darklink group relative"
-                    onClick={toggleMode}
-                  >
-                    <span className="flex items-center justify-center relative">
-                      <Icon
-                        icon="solar:sun-bold-duotone"
-                        width="20"
-                        className="group-hover:text-primary"
-                      />
-                    </span>
-                  </div>
-                )}
+          {/* Right section */}
+          <div className="hidden lg:flex items-center gap-1">
+            {/* Theme toggle */}
+            <button
+              onClick={toggleMode}
+              className="w-9 h-9 rounded-lg flex items-center justify-center text-link dark:text-darklink hover:text-primary hover:bg-primary/10 transition-colors duration-200 cursor-pointer"
+              aria-label="Toggle theme"
+            >
+              <Icon
+                icon={activeMode === "light" ? "tabler:moon" : "solar:sun-bold-duotone"}
+                width={20}
+              />
+            </button>
 
-                {/* Language Dropdown*/}
-                <Language />
+            <Language />
+            <Messages />
+            <AppLinks />
 
-                {/* Messages Dropdown */}
-                <Messages />
+            {/* Divider */}
+            <div className="w-px h-8 bg-border dark:bg-darkborder mx-2" />
 
-                {/* App Link Dropwown   */}
-                <AppLinks />
-              </div>
+            <Profile />
+          </div>
 
-              {/* Profile Dropdown */}
-              <Profile />
-            </div>
-          </NavbarCollapse>
-          {/* Mobile Toggle Icon */}
-          <span
-            className="h-10 w-10 flex lg:hidden hover:text-primary hover:bg-primary/20 rounded-full justify-center items-center cursor-pointer"
+          {/* Mobile menu dots */}
+          <button
+            className="h-9 w-9 flex lg:hidden rounded-lg justify-center items-center text-link dark:text-darklink hover:text-primary hover:bg-primary/10 transition-colors duration-200 cursor-pointer"
             onClick={handleMobileMenu}
+            aria-label="More options"
           >
             <Icon icon="tabler:dots" height={21} />
-          </span>
-        </Navbar>
+          </button>
+        </div>
+
+        {/* Mobile header items dropdown */}
         <div className={`w-full xl:hidden block mobile-header-menu ${mobileMenu}`}>
           <MobileHeaderItems />
         </div>
 
-        {/* Horizontal Menu  */}
-        {layoutType == "horizontal" ? (
-          <div className="xl:border-y xl:border-gray-950/10 dark:border-darkborder">
-            <div
-              className={`${isLayout == "full" ? "w-full px-6" : "container mx-auto px-8"}`}
-            >
+        {/* Horizontal menu */}
+        {layoutType === "horizontal" && (
+          <div className="xl:border-y xl:border-border dark:border-darkborder">
+            <div className={`${isLayout === "full" ? "w-full px-6" : "container mx-auto px-8"}`}>
               <HorizontalMenu />
             </div>
           </div>
-        ) : null}
+        )}
       </header>
-      <Drawer open={isOpen} onClose={handleClose} className="w-[270px]">
-        <DrawerItems>
-          <MobileSidebar handleClose={function (): void {
-            throw new Error("Function not implemented.");
-          }} />
-        </DrawerItems>
-        <DrawerItems>
-          <div
-            className={` my-4 mx-6 bg-linear-to-br from-darkcyan to-cyan rounded-md ${isCollapse === "full-sidebar" ? "" : "hidden"
-              }`}
-          >
-            <div
-              className={` pt-4 pb-5 bg-[url('/images/backgrounds/sidebar-card-bg.png')] bg-no-repeat bg-right-top ${isCollapse === "full-sidebar" ? "px-4" : "px-2"
-                }`}
-            >
-              <div>
-                <div>
-                  <Image
-                    src="/images/svgs/icon-rocket.svg"
-                    alt="rocket"
-                    width={40}
-                    height={40}
-                    className=""
-                  />
-                  <div className="mt-4">
-                    <p className="text-sm font-medium text-white">
-                      Get unlimited access and 10% off on your first purchase
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-6">
-                  <Link
-                    href="/"
-                    className="text-white border-2 rounded-md px-3 py-2 hover:text-black hover:bg-white text-sm font-medium"
-                  >
-                    Buy Now
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </div>
-        </DrawerItems>
-      </Drawer>
+
+      {/* Mobile Sidebar Overlay */}
+      <div
+        className={cn(
+          "fixed inset-0 z-40 bg-black/40 backdrop-blur-sm transition-opacity duration-300 xl:hidden",
+          isOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+        )}
+        onClick={handleClose}
+      />
+
+      {/* Mobile Sidebar Panel */}
+      <div
+        className={cn(
+          "fixed left-0 top-0 h-full w-[270px] bg-white dark:bg-black z-50 shadow-xl transition-transform duration-300 ease-in-out xl:hidden",
+          isOpen ? "translate-x-0" : "-translate-x-full"
+        )}
+      >
+        <MobileSidebar handleClose={handleClose} />
+      </div>
     </>
   );
 };

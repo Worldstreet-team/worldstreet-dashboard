@@ -18,9 +18,9 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-herobg dark:bg-dark">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-gray-500 dark:text-gray-400">Verifying identity...</p>
+        <div className="text-center animate-fade-in">
+          <div className="animate-spin rounded-full h-10 w-10 border-2 border-primary/20 border-t-primary mx-auto mb-4"></div>
+          <p className="text-muted text-sm">Verifying identity...</p>
         </div>
       </div>
     );
@@ -56,15 +56,20 @@ export default function Layout({
               )}
 
               {/* Body Content  */}
-              <div className="relative z-0 overflow-hidden after:absolute after:w-96 after:h-96 after:opacity-25 before:opacity-25 after:-top-52 after:-right-52 after:bg-primary after:blur-[250px] after:rounded-full after:-z-1 before:absolute before:w-96 before:h-96 before:bg-warning before:blur-[200px] before:rounded-full before:-bottom-52 before:-left-52 min-h-screen bg-herobg dark:bg-dark ">
+              <div className="relative z-0 min-h-screen bg-herobg dark:bg-dark transition-colors duration-300">
+                {/* Subtle ambient glow */}
+                <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/5 blur-[120px] rounded-full -translate-y-1/2 translate-x-1/3 pointer-events-none" />
+                <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-warning/3 blur-[100px] rounded-full translate-y-1/3 -translate-x-1/4 pointer-events-none" />
                 <div
-                  className={` ${isLayout == "full"
-                    ? "w-full p-8"
-                    : "container xl:max-w-7xl mx-auto px-8 py-8"
+                  className={`relative z-1 ${isLayout == "full"
+                    ? "w-full p-6 lg:p-8"
+                    : "container xl:max-w-7xl mx-auto px-6 lg:px-8 py-6 lg:py-8"
                     } ${activeLayout == "horizontal" ? "xl:mt-3" : ""}
             `}
                 >
-                  {children}
+                  <div className="animate-fade-in">
+                    {children}
+                  </div>
                 </div>
               </div>
               <Customizer />

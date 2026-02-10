@@ -1,13 +1,13 @@
 import React from "react";
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Outfit } from "next/font/google";
 import "./css/globals.css";
 import { ThemeModeScript } from "flowbite-react";
 import customTheme from "@/utils/theme/custom-theme";
 import { CustomizerContextProvider } from "@/app/context/customizerContext";
 import "../utils/i18n";
 import NextTopLoader from "nextjs-toploader";
-const font = Inter({ subsets: ["latin"] });
+const font = Outfit({ subsets: ["latin"], weight: ["300", "400", "500", "600", "700"] });
 
 export const metadata: Metadata = {
   title: "WorldStreet - Trading Platform",

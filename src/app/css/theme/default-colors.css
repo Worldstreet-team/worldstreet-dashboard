@@ -1,40 +1,40 @@
 :root {
-  --color-info: #539bff;
-  --color-success: #22c55e;
-  --color-warning: #f59e0b;
-  --color-error: #ef4444;
-  --color-lightsuccess: #13deb920;
-  --color-lighterror: #fa896b20;
-  --color-darkinfo: #223662;
-  --color-lightwarning: #ffae1f20;
+  --color-info: #2563eb;
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+  --color-error: #dc2626;
+  --color-lightsuccess: #16a34a18;
+  --color-lighterror: #dc262618;
+  --color-darkinfo: #1e3a5f;
+  --color-lightwarning: #d9770618;
   --color-white: #fff;
-  --color-dark: #17192c;
-  --color-black: #0e1025;
-  --color-border: #0e10251a;
-  --color-darkborder: #333f55;
-  --color-link: #2a3547;
-  --color-muted: #5a6a85;
-  --color-darklink: #7c8fac;
-  --color-lightgray: #f6f9fc;
-  --color-darkgray: #333f55;
-  --color-bodytext: #5a6a85bf;
-  --color-error-emphasis: #c93232;
-  --color-warning-emphasis: #d9941a;
-  --color-success-emphasis: #189245;
-  --color-cyan: #3dd9eb;
-  --color-darkcyan: #174feb;
-  --color-pink: #ec4899;
-  --color-info-emphasis: #3184f7;
-  --color-herobg: #e4e6f16b;
+  --color-dark: #0f172a;
+  --color-black: #0a0f1e;
+  --color-border: #0f172a0f;
+  --color-darkborder: #1e293b;
+  --color-link: #334155;
+  --color-muted: #64748b;
+  --color-darklink: #94a3b8;
+  --color-lightgray: #f8fafc;
+  --color-darkgray: #1e293b;
+  --color-bodytext: #64748bbf;
+  --color-error-emphasis: #b91c1c;
+  --color-warning-emphasis: #b45309;
+  --color-success-emphasis: #15803d;
+  --color-cyan: #06b6d4;
+  --color-darkcyan: #0284c7;
+  --color-pink: #db2777;
+  --color-info-emphasis: #1d4ed8;
+  --color-herobg: #f8fafc;
 }
 
 [data-color-theme="BLUE_THEME"] {
-  --color-primary: #0e98d8;
-  --color-primary-emphasis: #0a73a3;
-  --color-secondary: #5e88fe;
-  --color-secondary-emphasis: #395ec2;
-  --color-lightprimary: #3ea2d933;
-  --color-lightsecondary: #5e88fe33;
+  --color-primary: #0f766e;
+  --color-primary-emphasis: #0d5f59;
+  --color-secondary: #6366f1;
+  --color-secondary-emphasis: #4f46e5;
+  --color-lightprimary: #0f766e14;
+  --color-lightsecondary: #6366f114;
 }
 
 [data-color-theme="AQUA_THEME"] {

@@ -1,59 +1,67 @@
-
-
-import { Sidebar, SidebarCollapse, SidebarItemGroup } from "flowbite-react";
-import React from "react";
+"use client";
+import React, { useState } from "react";
 import { ChildItem } from "../Sidebaritems";
 import NavItems from "../NavItems";
 import { Icon } from "@iconify/react";
-import { HiOutlineChevronDown } from "react-icons/hi";
-import { twMerge } from "tailwind-merge";
 import { usePathname } from "next/navigation";
 import { useTranslation } from "react-i18next";
+import { cn } from "@/lib/utils";
 
 interface NavCollapseProps {
   item: ChildItem;
 }
 
-const NavCollapse: React.FC<NavCollapseProps> = ({ item }: any) => {
+const NavCollapse: React.FC<NavCollapseProps> = ({ item }) => {
   const pathname = usePathname();
-  const activeDD = item.children.find((t: { url: string; }) => t.url === pathname)
   const { t } = useTranslation();
+  const activeDD = item.children?.find((child) => child.url === pathname);
+  const [isOpen, setIsOpen] = useState(!!activeDD);
+
   return (
-    <>
-      <SidebarCollapse
-        label={t(`${item.name}`)}
-        open={activeDD ? true : false}
-        icon={() => <Icon icon={item.icon} height={21} className="my-0.5" />}
-        className={`${activeDD ? '!text-primary bg-lightprimary ' : ''} collapse-menu`}
-        renderChevronIcon={(theme, open) => {
-          const IconComponent = open
-            ? HiOutlineChevronDown
-            : HiOutlineChevronDown;
-          return (
-            <IconComponent
-              aria-hidden
-              className={`${twMerge(theme.label.icon.open[open ? "on" : "off"])} drop-icon`}
-            />
-          );
-        }}
+    <div className="collapse-menu">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={cn(
+          "flex w-full items-center justify-between rounded-md px-3 py-2.5 text-sm font-medium transition-all duration-200",
+          "text-link dark:text-darklink hover:text-primary hover:bg-lightprimary dark:hover:text-primary",
+          activeDD && "text-primary bg-lightprimary"
+        )}
       >
-        {/* Render child items */}
-        {item.children && (
-          <SidebarItemGroup className="sidebar-dropdown">
-            {item.children.map((child: any) => (
-              <React.Fragment key={child.id}>
-                {/* Render NavItems for child items */}
+        <span className="flex items-center gap-3">
+          <Icon icon={item.icon} height={20} className="shrink-0 my-0.5" />
+          <span className="collapse-label truncate max-w-[8rem] hide-menu">
+            {t(`${item.name}`)}
+          </span>
+        </span>
+        <Icon
+          icon="tabler:chevron-down"
+          className={cn(
+            "drop-icon h-4 w-4 shrink-0 transition-transform duration-200",
+            isOpen && "rotate-180"
+          )}
+        />
+      </button>
+      <div
+        className={cn(
+          "grid transition-all duration-200 ease-in-out",
+          isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        )}
+      >
+        <div className="overflow-hidden">
+          <ul className="sidebar-dropdown pl-4 space-y-0.5 pt-1">
+            {item.children?.map((child) => (
+              <li key={child.id}>
                 {child.children ? (
-                  <NavCollapse item={child} /> // Recursive call for nested collapse
+                  <NavCollapse item={child} />
                 ) : (
                   <NavItems item={child} />
                 )}
-              </React.Fragment>
+              </li>
             ))}
-          </SidebarItemGroup>
-        )}
-      </SidebarCollapse>
-    </>
+          </ul>
+        </div>
+      </div>
+    </div>
   );
 };
 

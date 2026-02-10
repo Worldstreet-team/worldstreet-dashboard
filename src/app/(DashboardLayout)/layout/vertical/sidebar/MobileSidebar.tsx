@@ -1,6 +1,5 @@
 "use client";
 import React, { useContext } from "react";
-import { Sidebar, SidebarItemGroup, SidebarItems, Tooltip } from "flowbite-react";
 import SidebarContent from "./Sidebaritems";
 import NavItems from "./NavItems";
 import NavCollapse from "./NavCollapse";
@@ -8,41 +7,53 @@ import { CustomizerContext } from "@/app/context/customizerContext";
 import SimpleBar from "simplebar-react";
 import { Icon } from "@iconify/react";
 import Image from "next/image";
+import Link from "next/link";
 
 const MobileSidebar = ({ handleClose }: { handleClose: () => void }) => {
-  const { selectedIconId } = useContext(CustomizerContext) || {};
-  const selectedContent = SidebarContent.find((data) => data.id === selectedIconId);
-
   return (
-    <>
-      <Sidebar className="menu-sidebar static! pt-0 bg-white dark:bg-dark z-10 overflow-hidden" aria-label="Sidebar with multi-level dropdown example">
-        <SimpleBar className="h-[calc(100vh_-_80px)]">
-          <SidebarItems className="px-6">
-            <SidebarItemGroup className="sidebar-nav">
-              {SidebarContent.map((item, index) => (
-                <React.Fragment key={index}>
-                  <h5 className="text-link font-bold text-xs dark:text-darklink border-t border-gray-950/10 dark:border-darkborder caption">
-                    <span className="hide-menu leading-21">{item.heading?.toUpperCase()}</span>
-                    <Icon icon="tabler:dots" className="text-ld block mx-auto leading-6 dark:text-opacity-60 hide-icon" height={18} />
+    <aside className="bg-white dark:bg-black w-full h-full" aria-label="Mobile sidebar navigation">
+      {/* Logo */}
+      <div className="h-16 flex items-center px-6 border-b border-border dark:border-darkborder">
+        <Link href="/" className="flex items-center gap-2.5" onClick={handleClose}>
+          <Image
+            src="/worldstreet-logo/WorldStreet4x.png"
+            alt="WorldStreet"
+            width={28}
+            height={28}
+            className="shrink-0"
+          />
+          <span className="text-base font-semibold text-dark dark:text-white tracking-tight">
+            WorldStreet
+          </span>
+        </Link>
+      </div>
+      <SimpleBar className="h-[calc(100vh_-_64px)]">
+        <nav className="sidebar-nav px-4 py-3">
+          <ul className="sidebar-nav-group space-y-0.5">
+            {SidebarContent.map((item, index) => (
+              <React.Fragment key={index}>
+                <li>
+                  <h5 className="text-muted dark:text-darklink font-semibold text-[10px] uppercase tracking-widest border-t border-border dark:border-darkborder caption px-3">
+                    <span className="leading-21">{item.heading}</span>
                   </h5>
-                  {item.children?.map((child, index) => (
-                    <React.Fragment key={child.id || index}>
-                      {child.children ? (
-                        <div className="collpase-items">
-                          <NavCollapse item={child} />
-                        </div>
-                      ) : (
-                        <NavItems item={child} handleClose={handleClose} />
-                      )}
-                    </React.Fragment>
-                  ))}
-                </React.Fragment>
-              ))}
-            </SidebarItemGroup>
-          </SidebarItems>
-        </SimpleBar>
-      </Sidebar>
-    </>
+                </li>
+                {item.children?.map((child, idx) => (
+                  <li key={child.id || idx}>
+                    {child.children ? (
+                      <div className="collapse-items">
+                        <NavCollapse item={child} />
+                      </div>
+                    ) : (
+                      <NavItems item={child} handleClose={handleClose} />
+                    )}
+                  </li>
+                ))}
+              </React.Fragment>
+            ))}
+          </ul>
+        </nav>
+      </SimpleBar>
+    </aside>
   );
 };
 

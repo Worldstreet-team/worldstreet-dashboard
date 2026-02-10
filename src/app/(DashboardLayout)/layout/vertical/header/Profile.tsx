@@ -1,12 +1,10 @@
 "use client";
 
 import React, { useContext } from "react";
-import Image from "next/image";
 import { CustomizerContext } from "@/app/context/customizerContext";
 import { useAuth } from "@/app/context/authContext";
 
 const Profile = () => {
-
   const { isDrawerOpen, setIsDrawerOpen } = useContext(CustomizerContext);
   const toggleDrawer = () => setIsDrawerOpen(!isDrawerOpen);
   const { user } = useAuth();
@@ -16,21 +14,20 @@ const Profile = () => {
 
   return (
     <div className="relative z-3">
-      {/* Trigger Button to open the drawer */}
-      <div
+      <button
         onClick={toggleDrawer}
-        className="hover:text-primary rounded-md p-1 flex group justify-center items-center gap-2 cursor-pointer"
+        className="flex items-center gap-2.5 rounded-lg py-1.5 px-2 hover:bg-muted/30 dark:hover:bg-white/5 transition-colors duration-200 group cursor-pointer"
       >
-        <div className="h-[35px] w-[35px] rounded-full bg-primary/20 flex items-center justify-center text-primary font-semibold text-sm">
+        <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-semibold text-xs">
           {user ? user.firstName.charAt(0).toUpperCase() + user.lastName.charAt(0).toUpperCase() : "T"}
         </div>
-        <div className="">
-          <h5 className="text-black dark:text-white text-sm group-hover:text-primary">{userName}</h5>
-          <p className="text-black opacity-60 dark:text-white dark:opacity-40 text-xs">
-            {userRole}
-          </p>
+        <div className="text-left hidden xl:block">
+          <h5 className="text-sm font-medium text-dark dark:text-white group-hover:text-primary transition-colors leading-tight">
+            {userName}
+          </h5>
+          <p className="text-[11px] text-muted leading-tight">{userRole}</p>
         </div>
-      </div>
+      </button>
     </div>
   );
 };
