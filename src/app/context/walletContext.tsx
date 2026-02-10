@@ -96,10 +96,12 @@ export function WalletProvider({ children }: WalletProviderProps) {
       if (data.success) {
         setWalletsGenerated(data.walletsGenerated);
         if (data.wallets) {
+          // API returns { solana: { address: "..." }, ... }
+          // Extract the address strings
           setAddresses({
-            solana: data.wallets.solana || "",
-            ethereum: data.wallets.ethereum || "",
-            bitcoin: data.wallets.bitcoin || "",
+            solana: data.wallets.solana?.address || "",
+            ethereum: data.wallets.ethereum?.address || "",
+            bitcoin: data.wallets.bitcoin?.address || "",
           });
         }
       }
