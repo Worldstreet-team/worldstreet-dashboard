@@ -93,7 +93,7 @@ const SidebarContent: MenuItem[] = [
         name: "P2P Trading",
         icon: 'ph:users-duotone',
         id: uniqueId(),
-        url: "/",
+        url: "/p2p",
       },
       {
         name: "Convert",
