@@ -219,16 +219,16 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative bg-dark-surface rounded-2xl w-full max-w-md mx-4 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div className="relative bg-white dark:bg-black border border-border/50 dark:border-darkborder rounded-2xl w-full max-w-md mx-4 overflow-hidden animate-in fade-in zoom-in-95 duration-200 shadow-lg">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-dark-border">
+        <div className="flex items-center justify-between p-6 border-b border-border/50 dark:border-darkborder">
           <div className="flex items-center gap-3">
             <img src={asset.icon} alt={asset.symbol} className="w-8 h-8 rounded-full" />
             <div>
-              <h2 className="text-lg font-semibold text-white">
+              <h2 className="text-lg font-semibold text-dark dark:text-white">
                 Send {asset.symbol}
               </h2>
-              <p className="text-sm text-gray-400">
+              <p className="text-sm text-muted">
                 {step === "details" && "Enter recipient and amount"}
                 {step === "confirm" && "Review transaction"}
                 {step === "pin" && "Enter PIN to confirm"}
@@ -240,9 +240,9 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-dark-card transition-colors"
+            className="p-2 rounded-lg hover:bg-muted/30 dark:hover:bg-white/5 transition-colors"
           >
-            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -254,28 +254,28 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
           {step === "details" && (
             <div className="space-y-4">
               {/* Balance Display */}
-              <div className="flex items-center justify-between p-3 bg-dark-card rounded-lg">
-                <span className="text-sm text-gray-400">Available Balance</span>
-                <span className="text-sm font-medium text-white">
+              <div className="flex items-center justify-between p-3 bg-muted/30 dark:bg-white/5 rounded-lg">
+                <span className="text-sm text-muted">Available Balance</span>
+                <span className="text-sm font-medium text-dark dark:text-white">
                   {formatAmount(asset.balance)} {asset.symbol}
                 </span>
               </div>
 
               {/* Recipient Input */}
               <div>
-                <label className="block text-sm text-gray-400 mb-2">Recipient Address</label>
+                <label className="block text-sm text-muted mb-2">Recipient Address</label>
                 <input
                   type="text"
                   value={recipient}
                   onChange={(e) => setRecipient(e.target.value)}
                   placeholder={`Enter ${asset.chain} address`}
-                  className="w-full px-4 py-3 bg-dark-card border border-dark-border rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                  className="w-full px-4 py-3 bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-darkborder rounded-xl text-dark dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
                 />
               </div>
 
               {/* Amount Input */}
               <div>
-                <label className="block text-sm text-gray-400 mb-2">Amount</label>
+                <label className="block text-sm text-muted mb-2">Amount</label>
                 <div className="relative">
                   <input
                     type="number"
@@ -283,7 +283,7 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
                     onChange={(e) => setAmount(e.target.value)}
                     placeholder="0.00"
                     step="any"
-                    className="w-full px-4 py-3 pr-20 bg-dark-card border border-dark-border rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                    className="w-full px-4 py-3 pr-20 bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-darkborder rounded-xl text-dark dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
                   />
                   <button
                     onClick={handleSetMax}
@@ -293,7 +293,7 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
                   </button>
                 </div>
                 {amountNum > 0 && (
-                  <p className="mt-1 text-sm text-gray-400">≈ {formatUSD(usdValue)}</p>
+                  <p className="mt-1 text-sm text-muted">≈ {formatUSD(usdValue)}</p>
                 )}
               </div>
 
@@ -316,29 +316,29 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
           {/* Confirm Step */}
           {step === "confirm" && (
             <div className="space-y-4">
-              <div className="p-4 bg-dark-card rounded-xl space-y-3">
+              <div className="p-4 bg-muted/30 dark:bg-white/5 rounded-xl space-y-3">
                 <div className="flex justify-between">
-                  <span className="text-gray-400">Sending</span>
-                  <span className="text-white font-medium">
+                  <span className="text-muted">Sending</span>
+                  <span className="text-dark dark:text-white font-medium">
                     {formatAmount(amountNum)} {asset.symbol}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-400">Value</span>
-                  <span className="text-gray-300">≈ {formatUSD(usdValue)}</span>
+                  <span className="text-muted">Value</span>
+                  <span className="text-dark/70 dark:text-gray-300">≈ {formatUSD(usdValue)}</span>
                 </div>
-                <div className="border-t border-dark-border my-2" />
+                <div className="border-t border-border/50 dark:border-darkborder my-2" />
                 <div className="flex justify-between items-start">
-                  <span className="text-gray-400">To</span>
-                  <span className="text-white text-sm font-mono text-right max-w-[200px] break-all">
+                  <span className="text-muted">To</span>
+                  <span className="text-dark dark:text-white text-sm font-mono text-right max-w-[200px] break-all">
                     {recipient}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-400">Network</span>
+                  <span className="text-muted">Network</span>
                   <div className="flex items-center gap-2">
                     <img src={CHAIN_ICONS[asset.chain]} alt={asset.chain} className="w-4 h-4 rounded-full" />
-                    <span className="text-white capitalize">{asset.chain}</span>
+                    <span className="text-dark dark:text-white capitalize">{asset.chain}</span>
                   </div>
                 </div>
               </div>
@@ -346,7 +346,7 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
               <div className="flex gap-3">
                 <button
                   onClick={() => setStep("details")}
-                  className="flex-1 py-3 px-4 bg-dark-card hover:bg-dark-border text-white font-medium rounded-xl transition-colors"
+                  className="flex-1 py-3 px-4 bg-muted/30 dark:bg-white/5 hover:bg-muted/40 dark:hover:bg-white/10 text-dark dark:text-white font-medium rounded-xl transition-colors"
                 >
                   Back
                 </button>
@@ -363,7 +363,7 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
           {/* PIN Step */}
           {step === "pin" && (
             <div className="space-y-6">
-              <p className="text-center text-gray-400">
+              <p className="text-center text-muted">
                 Enter your 6-digit PIN to authorize this transaction
               </p>
 
@@ -379,7 +379,7 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
                     value={digit}
                     onChange={(e) => handlePinChange(index, e.target.value)}
                     onKeyDown={(e) => handlePinKeyDown(index, e)}
-                    className="w-12 h-14 text-center text-xl font-bold bg-dark-card border border-dark-border rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+                    className="w-12 h-14 text-center text-xl font-bold bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-darkborder rounded-xl text-dark dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
                   />
                 ))}
               </div>
@@ -396,7 +396,7 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
                     setPin(["", "", "", "", "", ""]);
                     setStep("confirm");
                   }}
-                  className="flex-1 py-3 px-4 bg-dark-card hover:bg-dark-border text-white font-medium rounded-xl transition-colors"
+                  className="flex-1 py-3 px-4 bg-muted/30 dark:bg-white/5 hover:bg-muted/40 dark:hover:bg-white/10 text-dark dark:text-white font-medium rounded-xl transition-colors"
                 >
                   Back
                 </button>
@@ -417,8 +417,8 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
               <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/20 flex items-center justify-center">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
               </div>
-              <h3 className="text-lg font-semibold text-white mb-2">Processing Transaction</h3>
-              <p className="text-gray-400">Please wait while your transaction is being sent...</p>
+              <h3 className="text-lg font-semibold text-dark dark:text-white mb-2">Processing Transaction</h3>
+              <p className="text-muted">Please wait while your transaction is being sent...</p>
             </div>
           )}
 
@@ -430,8 +430,8 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
-              <h3 className="text-lg font-semibold text-white mb-2">Transaction Sent!</h3>
-              <p className="text-gray-400 mb-4">
+              <h3 className="text-lg font-semibold text-dark dark:text-white mb-2">Transaction Sent!</h3>
+              <p className="text-muted mb-4">
                 {formatAmount(amountNum)} {asset.symbol} has been sent successfully.
               </p>
               
@@ -466,7 +466,7 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </div>
-              <h3 className="text-lg font-semibold text-white mb-2">Transaction Failed</h3>
+              <h3 className="text-lg font-semibold text-dark dark:text-white mb-2">Transaction Failed</h3>
               <p className="text-red-400 mb-4">{error || "Something went wrong"}</p>
 
               <div className="flex gap-3">
@@ -475,7 +475,7 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
                     setPin(["", "", "", "", "", ""]);
                     setStep("pin");
                   }}
-                  className="flex-1 py-3 px-4 bg-dark-card hover:bg-dark-border text-white font-medium rounded-xl transition-colors"
+                  className="flex-1 py-3 px-4 bg-muted/30 dark:bg-white/5 hover:bg-muted/40 dark:hover:bg-white/10 text-dark dark:text-white font-medium rounded-xl transition-colors"
                 >
                   Try Again
                 </button>

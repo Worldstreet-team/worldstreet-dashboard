@@ -59,23 +59,23 @@ const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, chain, add
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative bg-dark-surface rounded-2xl w-full max-w-md mx-4 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      <div className="relative bg-white dark:bg-black border border-border/50 dark:border-darkborder rounded-2xl w-full max-w-md mx-4 overflow-hidden animate-in fade-in zoom-in-95 duration-200 shadow-lg">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-dark-border">
+        <div className="flex items-center justify-between p-6 border-b border-border/50 dark:border-darkborder">
           <div className="flex items-center gap-3">
             {chainInfo.icon && (
               <img src={chainInfo.icon} alt={chainInfo.name} className="w-8 h-8 rounded-full" />
             )}
             <div>
-              <h2 className="text-lg font-semibold text-white">Receive {chainInfo.name}</h2>
-              <p className="text-sm text-gray-400">Scan QR code or copy address</p>
+              <h2 className="text-lg font-semibold text-dark dark:text-white">Receive {chainInfo.name}</h2>
+              <p className="text-sm text-muted">Scan QR code or copy address</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-dark-card transition-colors"
+            className="p-2 rounded-lg hover:bg-muted/30 dark:hover:bg-white/5 transition-colors"
           >
-            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -111,17 +111,17 @@ const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, chain, add
 
           {/* Address */}
           <div className="mb-6">
-            <label className="block text-sm text-gray-400 mb-2">Your {chainInfo.name} Address</label>
+            <label className="block text-sm text-muted mb-2">Your {chainInfo.name} Address</label>
             <div className="flex items-center gap-2">
-              <div className="flex-1 p-3 bg-dark-card rounded-lg">
-                <p className="text-sm text-white font-mono break-all">{address}</p>
+              <div className="flex-1 p-3 bg-muted/30 dark:bg-white/5 rounded-lg">
+                <p className="text-sm text-dark dark:text-white font-mono break-all">{address}</p>
               </div>
               <button
                 onClick={handleCopy}
                 className={`p-3 rounded-lg transition-all duration-200 ${
                   copied
                     ? "bg-green-500/20 text-green-500"
-                    : "bg-dark-card hover:bg-dark-border text-gray-400"
+                    : "bg-muted/30 dark:bg-white/5 hover:bg-muted/40 dark:hover:bg-white/10 text-muted"
                 }`}
               >
                 {copied ? (
