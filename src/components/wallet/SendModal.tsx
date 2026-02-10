@@ -6,6 +6,7 @@ import { useEvm } from "@/app/context/evmContext";
 import { useBitcoin } from "@/app/context/bitcoinContext";
 import { useWallet } from "@/app/context/walletContext";
 import { formatAmount, formatUSD } from "@/lib/wallet/amounts";
+import { usePrices, getPrice } from "@/lib/wallet/usePrices";
 import CryptoJS from "crypto-js";
 
 interface Asset {
@@ -35,15 +36,6 @@ const CHAIN_ICONS: Record<string, string> = {
   bitcoin: "https://cryptologos.cc/logos/bitcoin-btc-logo.png",
 };
 
-// Placeholder prices
-const PRICES: Record<string, number> = {
-  SOL: 150,
-  ETH: 3500,
-  BTC: 65000,
-  USDT: 1,
-  USDC: 1,
-};
-
 const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
   const [step, setStep] = useState<Step>("details");
   const [recipient, setRecipient] = useState("");
@@ -54,6 +46,7 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
 
   const pinInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
+  const { prices } = usePrices();
   const { getEncryptedKeys } = useWallet();
   const { sendTransaction: sendSol, sendTokenTransaction: sendSolToken } = useSolana();
   const { sendTransaction: sendEth, sendTokenTransaction: sendEthToken } = useEvm();
@@ -111,7 +104,7 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
   };
 
   const amountNum = parseFloat(amount) || 0;
-  const usdValue = amountNum * (PRICES[asset?.symbol || ""] || 0);
+  const usdValue = amountNum * getPrice(prices, asset?.symbol || "");
   const isValidAmount = amountNum > 0 && amountNum <= (asset?.balance || 0);
   const isValidRecipient = recipient.length > 0;
   const pinComplete = pin.every((d) => d !== "");

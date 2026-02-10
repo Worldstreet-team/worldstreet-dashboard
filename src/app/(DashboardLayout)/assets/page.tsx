@@ -6,6 +6,7 @@ import { useEvm } from "@/app/context/evmContext";
 import { useBitcoin } from "@/app/context/bitcoinContext";
 import { useWallet } from "@/app/context/walletContext";
 import { formatAmount, formatUSD } from "@/lib/wallet/amounts";
+import { usePrices, getPrice } from "@/lib/wallet/usePrices";
 import Footer from "@/components/dashboard/Footer";
 import { ReceiveModal, SendModal } from "@/components/wallet";
 
@@ -23,15 +24,6 @@ interface Asset {
   icon: string;
 }
 
-// Placeholder prices (in production, fetch from API)
-const PRICES: Record<string, number> = {
-  SOL: 150,
-  ETH: 3500,
-  BTC: 65000,
-  USDT: 1,
-  USDC: 1,
-};
-
 // Chain icons
 const CHAIN_ICONS: Record<string, string> = {
   solana: "https://cryptologos.cc/logos/solana-sol-logo.png",
@@ -46,6 +38,7 @@ const AssetsPage = () => {
   const { balance: solBalance, tokenBalances: solTokens, loading: solLoading, fetchBalance: fetchSolBalance } = useSolana();
   const { balance: ethBalance, tokenBalances: ethTokens, loading: ethLoading, fetchBalance: fetchEthBalance } = useEvm();
   const { balance: btcBalance, loading: btcLoading, fetchBalance: fetchBtcBalance } = useBitcoin();
+  const { prices } = usePrices();
 
   const [receiveModal, setReceiveModal] = useState<{ open: boolean; chain?: string; address?: string }>({ open: false });
   const [sendModal, setSendModal] = useState<{ open: boolean; asset?: Asset }>({ open: false });
@@ -63,7 +56,7 @@ const AssetsPage = () => {
         balance: solBalance,
         balanceRaw: Math.floor(solBalance * 1e9).toString(),
         decimals: 9,
-        usdValue: solBalance * (PRICES.SOL || 0),
+        usdValue: solBalance * getPrice(prices, "SOL"),
         chain: "solana",
         icon: CHAIN_ICONS.solana,
       });
@@ -78,7 +71,7 @@ const AssetsPage = () => {
         balance: token.amount,
         balanceRaw: String(Math.floor(token.amount * Math.pow(10, token.decimals))),
         decimals: token.decimals,
-        usdValue: token.amount * (PRICES[token.symbol] || 0),
+        usdValue: token.amount * getPrice(prices, token.symbol),
         chain: "solana",
         address: token.mint,
         icon: CHAIN_ICONS[token.symbol] || CHAIN_ICONS.solana,
@@ -94,7 +87,7 @@ const AssetsPage = () => {
         balance: ethBalance,
         balanceRaw: Math.floor(ethBalance * 1e18).toString(),
         decimals: 18,
-        usdValue: ethBalance * (PRICES.ETH || 0),
+        usdValue: ethBalance * getPrice(prices, "ETH"),
         chain: "ethereum",
         icon: CHAIN_ICONS.ethereum,
       });
@@ -109,7 +102,7 @@ const AssetsPage = () => {
         balance: token.amount,
         balanceRaw: Math.floor(token.amount * Math.pow(10, token.decimals)).toString(),
         decimals: token.decimals,
-        usdValue: token.amount * (PRICES[token.symbol] || 0),
+        usdValue: token.amount * getPrice(prices, token.symbol),
         chain: "ethereum",
         address: token.address,
         icon: CHAIN_ICONS[token.symbol] || CHAIN_ICONS.ethereum,
@@ -125,14 +118,14 @@ const AssetsPage = () => {
         balance: btcBalance,
         balanceRaw: Math.floor(btcBalance * 1e8).toString(),
         decimals: 8,
-        usdValue: btcBalance * (PRICES.BTC || 0),
+        usdValue: btcBalance * getPrice(prices, "BTC"),
         chain: "bitcoin",
         icon: CHAIN_ICONS.bitcoin,
       });
     }
 
     return list;
-  }, [addresses, solBalance, solTokens, ethBalance, ethTokens, btcBalance]);
+  }, [addresses, solBalance, solTokens, ethBalance, ethTokens, btcBalance, prices]);
 
   // Total portfolio value
   const totalValue = useMemo(() => {
