@@ -278,7 +278,8 @@ export function SwapProvider({ children }: { children: ReactNode }) {
           process.env.NEXT_PUBLIC_SOL_RPC || "https://api.mainnet-beta.solana.com"
         );
         
-        const txData = Buffer.from(quote.transactionRequest.data.replace("0x", ""), "hex");
+        // Li.Fi returns Solana transaction data in base64 format
+        const txData = Buffer.from(quote.transactionRequest.data, "base64");
         const transaction = VersionedTransaction.deserialize(txData);
         transaction.sign([keypair]);
         

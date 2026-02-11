@@ -141,8 +141,10 @@ export function EvmProvider({ children }: { children: ReactNode }) {
           const batchResults = await Promise.all(
             batch.map(async (token) => {
               try {
+                // Normalize address to proper checksum format
+                const normalizedAddress = ethers.getAddress(token.address.toLowerCase());
                 const contract = new ethers.Contract(
-                  token.address,
+                  normalizedAddress,
                   ERC20_ABI,
                   provider
                 );
