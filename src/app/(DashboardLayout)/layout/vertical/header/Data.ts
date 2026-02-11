@@ -243,13 +243,13 @@ const profileDD: ProfileType[] = [
     img: "solar:wallet-bold-duotone",
     title: "My Wallets",
     subtitle: "Manage assets",
-    url: "#",
+    url: "/assets",
   },
   {
     img: "solar:history-bold-duotone",
     title: "Trade History",
     subtitle: "View past trades",
-    url: "#",
+    url: "/transactions",
   },
 ];
 
