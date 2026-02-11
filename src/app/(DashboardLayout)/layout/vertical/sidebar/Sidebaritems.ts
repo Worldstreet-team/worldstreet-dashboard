@@ -89,12 +89,7 @@ const SidebarContent: MenuItem[] = [
         badge: true,
         badgeType: "filled",
       },
-      {
-        name: "P2P Trading",
-        icon: 'ph:users-duotone',
-        id: uniqueId(),
-        url: "/p2p",
-      },
+
       {
         name: "Convert",
         icon: 'ph:swap-duotone',
@@ -159,13 +154,19 @@ const SidebarContent: MenuItem[] = [
         name: "Deposit",
         icon: 'ph:arrow-down-left-duotone',
         id: uniqueId(),
-        url: "/",
+        url: "/deposit",
       },
       {
         name: "Withdraw",
         icon: 'ph:arrow-up-right-duotone',
         id: uniqueId(),
-        url: "/",
+        url: "/withdraw",
+      },
+      {
+        name: "Transactions",
+        icon: 'ph:clock-counter-clockwise-duotone',
+        id: uniqueId(),
+        url: "/transactions",
       },
       {
         name: "Transfer",
