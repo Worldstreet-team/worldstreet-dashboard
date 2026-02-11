@@ -187,14 +187,13 @@ export function SolanaProvider({ children }: { children: ReactNode }) {
       recipient: string,
       amount: number
     ): Promise<string> => {
-      if (!address) throw new Error("No wallet address");
-
       setLoading(true);
       try {
         // Decrypt the private key with PIN
         const privateKeyBase58 = decryptWithPIN(encryptedKey, pin);
         const secretKey = bs58.decode(privateKeyBase58);
         const keypair = Keypair.fromSecretKey(secretKey);
+        const fromAddress = keypair.publicKey.toBase58();
 
         const transaction = new Transaction().add(
           SystemProgram.transfer({
@@ -234,13 +233,12 @@ export function SolanaProvider({ children }: { children: ReactNode }) {
       mint: string,
       decimals: number
     ): Promise<string> => {
-      if (!address) throw new Error("No wallet address");
-
       setLoading(true);
       try {
         const privateKeyBase58 = decryptWithPIN(encryptedKey, pin);
         const secretKey = bs58.decode(privateKeyBase58);
         const keypair = Keypair.fromSecretKey(secretKey);
+        const fromAddress = keypair.publicKey.toBase58();
 
         const mintPubkey = new PublicKey(mint);
         const recipientPubkey = new PublicKey(recipient);

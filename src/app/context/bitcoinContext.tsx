@@ -88,13 +88,21 @@ export function BitcoinProvider({ children }: { children: ReactNode }) {
       recipient: string,
       amount: number
     ): Promise<string> => {
-      if (!address) throw new Error("No wallet address");
-
       setLoading(true);
       try {
         // Decrypt the private key with PIN
         const privateKeyWIF = decryptWithPIN(encryptedKey, pin);
         const keyPair = ECPair.fromWIF(privateKeyWIF, bitcoin.networks.bitcoin);
+        
+        // Derive address from keypair
+        const { address: fromAddress } = bitcoin.payments.p2pkh({
+          pubkey: keyPair.publicKey,
+          network: bitcoin.networks.bitcoin,
+        });
+        
+        if (!fromAddress) {
+          throw new Error("Could not derive Bitcoin address from key");
+        }
 
         // Fetch UTXOs
         let utxos: Array<{
@@ -105,7 +113,7 @@ export function BitcoinProvider({ children }: { children: ReactNode }) {
 
         for (const baseUrl of BTC_APIS) {
           try {
-            const response = await fetch(`${baseUrl}/address/${address}/utxo`);
+            const response = await fetch(`${baseUrl}/address/${fromAddress}/utxo`);
             if (response.ok) {
               utxos = await response.json();
               break;
@@ -170,7 +178,7 @@ export function BitcoinProvider({ children }: { children: ReactNode }) {
         if (change > 546) {
           // Dust threshold
           psbt.addOutput({
-            address: address,
+            address: fromAddress,
             value: BigInt(change),
           });
         }
@@ -203,13 +211,13 @@ export function BitcoinProvider({ children }: { children: ReactNode }) {
         }
 
         setLastTx(txid);
-        await fetchBalance(address);
+        await fetchBalance(fromAddress);
         return txid;
       } finally {
         setLoading(false);
       }
     },
-    [address, fetchBalance]
+    [fetchBalance]
   );
 
   return (

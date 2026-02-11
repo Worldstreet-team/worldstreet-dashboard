@@ -139,13 +139,12 @@ export function EvmProvider({ children }: { children: ReactNode }) {
       recipient: string,
       amount: number
     ): Promise<string> => {
-      if (!address) throw new Error("No wallet address");
-
       setLoading(true);
       try {
         // Decrypt the private key with PIN
         const privateKey = decryptWithPIN(encryptedKey, pin);
         const wallet = new ethers.Wallet(privateKey, provider);
+        const fromAddress = wallet.address;
 
         const tx = await wallet.sendTransaction({
           to: recipient,
@@ -154,13 +153,13 @@ export function EvmProvider({ children }: { children: ReactNode }) {
 
         setLastTx(tx.hash);
         await tx.wait();
-        await fetchBalance(address);
+        await fetchBalance(fromAddress);
         return tx.hash;
       } finally {
         setLoading(false);
       }
     },
-    [address, provider, fetchBalance]
+    [provider, fetchBalance]
   );
 
   const sendTokenTransaction = useCallback(
@@ -172,12 +171,11 @@ export function EvmProvider({ children }: { children: ReactNode }) {
       tokenAddress: string,
       decimals: number
     ): Promise<string> => {
-      if (!address) throw new Error("No wallet address");
-
       setLoading(true);
       try {
         const privateKey = decryptWithPIN(encryptedKey, pin);
         const wallet = new ethers.Wallet(privateKey, provider);
+        const fromAddress = wallet.address;
 
         const contract = new ethers.Contract(tokenAddress, ERC20_ABI, wallet);
         const rawAmount = BigInt(convertDisplayToRaw(amount, decimals));
@@ -186,13 +184,13 @@ export function EvmProvider({ children }: { children: ReactNode }) {
 
         setLastTx(tx.hash);
         await tx.wait();
-        await fetchBalance(address);
+        await fetchBalance(fromAddress);
         return tx.hash;
       } finally {
         setLoading(false);
       }
     },
-    [address, provider, fetchBalance]
+    [provider, fetchBalance]
   );
 
   return (
