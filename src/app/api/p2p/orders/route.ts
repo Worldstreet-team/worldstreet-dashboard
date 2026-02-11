@@ -13,9 +13,9 @@ const PLATFORM_MARKUP = 5; // 5%
 
 const PLATFORM_BANK_DETAILS: Record<string, { bankName: string; accountNumber: string; accountName: string }> = {
   NGN: {
-    bankName: "Zenith Bank",
-    accountNumber: "2270304419",
-    accountName: "Amirize Wisdom",
+    bankName: "Sterling Bank",
+    accountNumber: "0114822083",
+    accountName: "Greg Osimiri",
   },
 };
 

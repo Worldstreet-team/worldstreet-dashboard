@@ -136,37 +136,7 @@ const SidebarContent: MenuItem[] = [
       },
     ],
   },
-  {
-    heading: "Markets",
-    children: [
-      {
-        name: "Market Overview",
-        icon: 'ph:globe-duotone',
-        id: uniqueId(),
-        url: "/",
-      },
-      {
-        name: "Watchlist",
-        icon: 'ph:star-duotone',
-        id: uniqueId(),
-        url: "/",
-      },
-      {
-        name: "Gainers & Losers",
-        icon: 'ph:chart-bar-duotone',
-        id: uniqueId(),
-        url: "/",
-      },
-      {
-        name: "New Listings",
-        icon: 'ph:sparkle-duotone',
-        id: uniqueId(),
-        url: "/",
-        badge: true,
-        badgeType: "outlined",
-      },
-    ],
-  },
+
   {
     heading: "Wallets",
     children: [
@@ -239,29 +209,7 @@ const SidebarContent: MenuItem[] = [
       },
     ],
   },
-  {
-    heading: "History",
-    children: [
-      {
-        name: "Trade History",
-        icon: 'ph:clock-counter-clockwise-duotone',
-        id: uniqueId(),
-        url: "/",
-      },
-      {
-        name: "Order History",
-        icon: 'ph:receipt-duotone',
-        id: uniqueId(),
-        url: "/",
-      },
-      {
-        name: "Transactions",
-        icon: 'ph:list-dashes-duotone',
-        id: uniqueId(),
-        url: "/",
-      },
-    ],
-  },
+
   {
     heading: "Account",
     children: [
@@ -298,35 +246,7 @@ const SidebarContent: MenuItem[] = [
       },
     ],
   },
-  {
-    heading: "Support",
-    children: [
-      {
-        name: "Help Center",
-        icon: 'ph:question-duotone',
-        id: uniqueId(),
-        url: "/",
-      },
-      {
-        name: "Live Chat",
-        icon: 'ph:chat-circle-dots-duotone',
-        id: uniqueId(),
-        url: "/",
-      },
-      {
-        name: "Submit Ticket",
-        icon: 'ph:ticket-duotone',
-        id: uniqueId(),
-        url: "/",
-      },
-      {
-        name: "Announcements",
-        icon: 'ph:megaphone-duotone',
-        id: uniqueId(),
-        url: "/",
-      },
-    ],
-  },
+
 ];
 
 export default SidebarContent;
