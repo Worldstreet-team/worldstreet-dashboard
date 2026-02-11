@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Icon } from "@iconify/react";
-import { useSwap, SwapToken, ChainKey, SWAP_CHAINS } from "@/app/context/swapContext";
+import { useSwap, SwapToken, ChainKey, SWAP_CHAINS, formatSwapError } from "@/app/context/swapContext";
 import { useSolana } from "@/app/context/solanaContext";
 import { useEvm } from "@/app/context/evmContext";
 import { useWallet } from "@/app/context/walletContext";
@@ -25,8 +25,8 @@ export function SwapInterface() {
     saveSwapToHistory,
   } = useSwap();
 
-  const { address: solAddress, balance: solBalance, tokenBalances: solTokens, fetchBalance: fetchSolBalance } = useSolana();
-  const { address: evmAddress, balance: ethBalance, tokenBalances: evmTokens, fetchBalance: fetchEvmBalance } = useEvm();
+  const { address: solAddress, balance: solBalance, tokenBalances: solTokens, fetchBalance: fetchSolBalance, refreshCustomTokens: refreshSolCustom } = useSolana();
+  const { address: evmAddress, balance: ethBalance, tokenBalances: evmTokens, fetchBalance: fetchEvmBalance, refreshCustomTokens: refreshEvmCustom } = useEvm();
   const { walletsGenerated } = useWallet();
 
   // Form state
@@ -171,17 +171,19 @@ export function SwapInterface() {
 
       // Clear form
       setFromAmount("");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Swap error:", err);
-      setError(err.message || "Swap failed. Please try again.");
+      setError(formatSwapError(err));
     }
   }, [quote, executeSwap, saveSwapToHistory]);
 
-  // Refresh balances after swap completes
+  // Refresh balances + custom tokens after swap completes
   const handleSwapComplete = useCallback(() => {
     fetchSolBalance();
     fetchEvmBalance();
-  }, [fetchSolBalance, fetchEvmBalance]);
+    refreshSolCustom();
+    refreshEvmCustom();
+  }, [fetchSolBalance, fetchEvmBalance, refreshSolCustom, refreshEvmCustom]);
 
   // Validation
   const canSwap = useMemo(() => {

@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import { Icon } from "@iconify/react";
 import { Modal, ModalBody, ModalHeader } from "flowbite-react";
 import { SwapQuote, SwapStatus, ChainKey, useSwap, SWAP_CHAINS } from "@/app/context/swapContext";
+import { useSolana } from "@/app/context/solanaContext";
+import { useEvm } from "@/app/context/evmContext";
 
 interface SwapStatusTrackerProps {
   isOpen: boolean;
@@ -53,10 +55,13 @@ export function SwapStatusTracker({
   onSwapComplete,
   onRetry,
 }: SwapStatusTrackerProps) {
-  const { pollSwapStatus, saveSwapToHistory } = useSwap();
+  const { pollSwapStatus, saveSwapToHistory, addSwappedToken } = useSwap();
+  const { refreshCustomTokens: refreshSolTokens } = useSolana();
+  const { refreshCustomTokens: refreshEvmTokens } = useEvm();
   const [status, setStatus] = useState<SwapStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [polling, setPolling] = useState(false);
+  const [tokenAdded, setTokenAdded] = useState(false);
 
   // Poll status when modal is open and we have a txHash
   const pollStatus = useCallback(async () => {
@@ -82,6 +87,21 @@ export function SwapStatusTracker({
         });
 
         if (result.status === "DONE") {
+          // Auto-add the received token to the user's asset list
+          if (!tokenAdded) {
+            try {
+              await addSwappedToken(quote.toToken, quote.toChain);
+              setTokenAdded(true);
+              // Refresh custom tokens so balance shows immediately
+              if (quote.toChain === "solana") {
+                await refreshSolTokens();
+              } else {
+                await refreshEvmTokens();
+              }
+            } catch (addErr) {
+              console.error("[SwapStatus] Failed to auto-add token:", addErr);
+            }
+          }
           onSwapComplete?.();
         }
       }
@@ -119,6 +139,7 @@ export function SwapStatusTracker({
     if (!isOpen) {
       setStatus(null);
       setError(null);
+      setTokenAdded(false);
     }
   }, [isOpen]);
 
@@ -200,6 +221,11 @@ export function SwapStatusTracker({
               <p className="text-sm text-muted mt-2">
                 Your tokens have arrived on {toChainInfo.name}
               </p>
+              {tokenAdded && (
+                <p className="text-sm text-primary mt-1 font-medium">
+                  {quote.toToken.symbol} has been added to your {toChainInfo.name} assets
+                </p>
+              )}
             </>
           ) : (
             <>
