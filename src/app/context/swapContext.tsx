@@ -267,7 +267,8 @@ export function SwapProvider({ children }: { children: ReactNode }) {
         
         // For Solana cross-chain, we need to use versioned transactions
         // Li.Fi provides the transaction in a format we can sign
-        const { Connection, VersionedTransaction, Keypair } = await import("@solana/web3.js");
+        const { Connection, VersionedTransaction, Keypair, PublicKey, TransactionMessage } = await import("@solana/web3.js");
+        const { getAssociatedTokenAddress, createAssociatedTokenAccountInstruction } = await import("@solana/spl-token");
         
         const privateKeyBase64 = decryptWithPIN(encryptedKeys.solana.encryptedPrivateKey, pin);
         const secretKey = new Uint8Array(Buffer.from(privateKeyBase64, "base64"));
@@ -280,7 +281,61 @@ export function SwapProvider({ children }: { children: ReactNode }) {
         
         // Li.Fi returns Solana transaction data in base64 format
         const txData = Buffer.from(quote.transactionRequest.data, "base64");
-        const transaction = VersionedTransaction.deserialize(txData);
+        let transaction = VersionedTransaction.deserialize(txData);
+        
+        // Native SOL address - skip ATA creation for native SOL only
+        const NATIVE_SOL = "So11111111111111111111111111111111111111112";
+        
+        // Ensure destination token account (ATA) exists for SPL tokens
+        if (quote.toToken.address !== NATIVE_SOL) {
+          const mint = new PublicKey(quote.toToken.address);
+          const ata = await getAssociatedTokenAddress(mint, keypair.publicKey);
+          const ataInfo = await connection.getAccountInfo(ata);
+          
+          if (!ataInfo) {
+            // ATA doesn't exist, we need to create it
+            const ataIx = createAssociatedTokenAccountInstruction(
+              keypair.publicKey, // payer
+              ata,               // ata address
+              keypair.publicKey, // owner
+              mint               // mint
+            );
+            
+            // Decompile the versioned message, prepend ATA instruction, recompile
+            const addressLookupTableAccounts = await Promise.all(
+              transaction.message.addressTableLookups.map(async (lookup) => {
+                const accountInfo = await connection.getAccountInfo(lookup.accountKey);
+                if (!accountInfo) return null;
+                const { AddressLookupTableAccount } = await import("@solana/web3.js");
+                return new AddressLookupTableAccount({
+                  key: lookup.accountKey,
+                  state: AddressLookupTableAccount.deserialize(accountInfo.data),
+                });
+              })
+            );
+            
+            const validLookupTables = addressLookupTableAccounts.filter(
+              (table): table is NonNullable<typeof table> => table !== null
+            );
+            
+            const decompiledMessage = TransactionMessage.decompile(
+              transaction.message,
+              { addressLookupTableAccounts: validLookupTables }
+            );
+            
+            // Prepend the ATA creation instruction
+            decompiledMessage.instructions.unshift(ataIx);
+            
+            // Get fresh blockhash for the modified transaction
+            const { blockhash } = await connection.getLatestBlockhash();
+            decompiledMessage.recentBlockhash = blockhash;
+            
+            // Recompile to V0 message with lookup tables
+            const newMessage = decompiledMessage.compileToV0Message(validLookupTables);
+            transaction = new VersionedTransaction(newMessage);
+          }
+        }
+        
         transaction.sign([keypair]);
         
         const signature = await connection.sendRawTransaction(transaction.serialize());
