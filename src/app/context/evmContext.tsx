@@ -73,9 +73,10 @@ interface EvmContextType {
 
 const EvmContext = createContext<EvmContextType | undefined>(undefined);
 
+// Use Cloudflare's free public RPC as default (no API key needed)
 const ETH_RPC =
   process.env.NEXT_PUBLIC_ETH_RPC ||
-  "https://rpc.ankr.com/eth/e72e410e0fe837717c677b70b6a22bf76d0d5d4b782af06949a39583c3c9a0b2";
+  "https://cloudflare-eth.com";
 
 export function EvmProvider({ children }: { children: ReactNode }) {
   const [address, setAddress] = useState<string | null>(null);
@@ -132,13 +133,21 @@ export function EvmProvider({ children }: { children: ReactNode }) {
           }
         });
 
-        // 3. Fetch balances in batches to avoid rate limiting
-        const BATCH_SIZE = 10;
+        // 3. Fetch balances - prioritize popular/custom tokens first
+        const popularTokens = allTokens.filter(t => t.isPopular);
+        const customTokenAddrs = customTokens.map(ct => ct.address.toLowerCase());
+        const userCustomTokens = allTokens.filter(t => customTokenAddrs.includes(t.address.toLowerCase()));
+        const otherTokens = allTokens.filter(t => !t.isPopular && !customTokenAddrs.includes(t.address.toLowerCase()));
+        
+        // Fetch popular and custom tokens first, then others
+        const priorityTokens = [...popularTokens, ...userCustomTokens.filter(t => !t.isPopular)];
+        const BATCH_SIZE = 5; // Smaller batches for public RPC
         const results: TokenBalance[] = [];
+        let rpcFailed = false;
 
-        for (let i = 0; i < allTokens.length; i += BATCH_SIZE) {
-          const batch = allTokens.slice(i, i + BATCH_SIZE);
-          const batchResults = await Promise.all(
+        // Helper to fetch a batch of tokens
+        const fetchBatch = async (batch: TokenInfo[]) => {
+          return Promise.all(
             batch.map(async (token) => {
               try {
                 // Normalize address to proper checksum format
@@ -167,15 +176,22 @@ export function EvmProvider({ children }: { children: ReactNode }) {
                   customTokenId: customToken?._id,
                   isPopular: token.isPopular,
                 };
-              } catch (e) {
-                // Only log errors for tokens we expect to exist
-                if (i < 10) {
-                  console.error(`Error fetching ${token.symbol} balance:`, e);
+              } catch (e: unknown) {
+                // Check if RPC is completely failing (403, network error)
+                const errorMessage = e instanceof Error ? e.message : String(e);
+                if (errorMessage.includes("403") || errorMessage.includes("forbidden") || errorMessage.includes("network")) {
+                  rpcFailed = true;
                 }
                 return null;
               }
             })
           );
+        };
+
+        // First fetch priority tokens
+        for (let i = 0; i < priorityTokens.length && !rpcFailed; i += BATCH_SIZE) {
+          const batch = priorityTokens.slice(i, i + BATCH_SIZE);
+          const batchResults = await fetchBatch(batch);
 
           // Filter out failed fetches and zero balances (except custom/popular tokens)
           batchResults.forEach((result) => {
