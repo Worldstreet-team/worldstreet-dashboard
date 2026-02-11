@@ -97,10 +97,12 @@ const SidebarContent: MenuItem[] = [
       },
 
       {
-        name: "Convert",
+        name: "Swap",
         icon: 'ph:swap-duotone',
         id: uniqueId(),
-        url: "/",
+        url: "/swap",
+        badge: true,
+        badgeType: "outlined",
       },
     ],
   },
