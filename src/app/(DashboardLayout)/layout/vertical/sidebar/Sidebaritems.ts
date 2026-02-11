@@ -70,6 +70,12 @@ const SidebarContent: MenuItem[] = [
         id: uniqueId(),
         url: "https://social.worldstreetgold.com",
       },
+      {
+        name: "Xstream",
+        icon: 'ph:broadcast-duotone',
+        id: uniqueId(),
+        url: "https://xtreme.worldstreetgold.com",
+      },
     ],
   },
   {
