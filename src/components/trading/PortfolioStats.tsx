@@ -194,26 +194,7 @@ const PortfolioStats = () => {
                 </p>
               </div>
             </div>
-            <div className="flex flex-col gap-2">
-              <WalletModal
-                defaultTab="deposit"
-                trigger={
-                  <Button size="sm" className="bg-success hover:bg-success/90 text-white font-medium rounded-lg px-4 h-8 text-xs">
-                    <Icon icon="solar:arrow-down-bold" className="mr-1.5 h-3 w-3" />
-                    Fund Wallet
-                  </Button>
-                }
-              />
-              <WalletModal
-                defaultTab="withdraw"
-                trigger={
-                  <Button size="sm" variant="outline" className="border-primary/30 text-primary hover:bg-primary/10 font-medium rounded-lg px-4 h-8 text-xs">
-                    <Icon icon="solar:arrow-up-bold" className="mr-1.5 h-3 w-3" />
-                    Withdraw
-                  </Button>
-                }
-              />
-            </div>
+
           </div>
         </CardContent>
       </Card>

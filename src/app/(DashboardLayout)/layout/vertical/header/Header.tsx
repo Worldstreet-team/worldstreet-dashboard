@@ -3,11 +3,8 @@ import React, { useState, useEffect, useContext } from "react";
 import Search from "./Search";
 import { Icon } from "@iconify/react";
 import AppLinks from "./AppLinks";
-import Messages from "./Messages";
 import Profile from "./Profile";
 import { CustomizerContext } from "@/app/context/customizerContext";
-import { Language } from "./Language";
-import MobileHeaderItems from "./MobileHeaderItems";
 import MobileSidebar from "../sidebar/MobileSidebar";
 import HorizontalMenu from "../../horizontal/header/HorizontalMenu";
 import Image from "next/image";
@@ -30,12 +27,6 @@ const Header = ({ layoutType }: HeaderPropsType) => {
   }, []);
 
   const { setIsCollapse, isCollapse, isLayout, setActiveMode, activeMode } = useContext(CustomizerContext);
-  const [mobileMenu, setMobileMenu] = useState("");
-
-  const handleMobileMenu = () => {
-    if (mobileMenu === "active") { setMobileMenu(""); } else { setMobileMenu("active"); }
-  };
-
   const toggleMode = () => {
     setActiveMode((prevMode: string) => prevMode === "light" ? "dark" : "light");
   };
@@ -105,8 +96,6 @@ const Header = ({ layoutType }: HeaderPropsType) => {
               />
             </button>
 
-            <Language />
-            <Messages />
             <AppLinks />
 
             {/* Divider */}
@@ -115,19 +104,6 @@ const Header = ({ layoutType }: HeaderPropsType) => {
             <Profile />
           </div>
 
-          {/* Mobile menu dots */}
-          <button
-            className="h-9 w-9 flex lg:hidden rounded-lg justify-center items-center text-link dark:text-darklink hover:text-primary hover:bg-primary/10 transition-colors duration-200 cursor-pointer"
-            onClick={handleMobileMenu}
-            aria-label="More options"
-          >
-            <Icon icon="tabler:dots" height={21} />
-          </button>
-        </div>
-
-        {/* Mobile header items dropdown */}
-        <div className={`w-full xl:hidden block mobile-header-menu ${mobileMenu}`}>
-          <MobileHeaderItems />
         </div>
 
         {/* Horizontal menu */}
