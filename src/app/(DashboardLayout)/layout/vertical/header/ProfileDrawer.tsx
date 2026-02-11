@@ -2,16 +2,18 @@
 import { CustomizerContext } from "@/app/context/customizerContext";
 import { useAuth } from "@/app/context/authContext";
 import { Icon } from "@iconify/react/dist/iconify.js";
-import React, { useContext } from "react";
+import React, { useContext, useState } from "react";
 import SimpleBar from "simplebar-react";
 import * as profileData from "./Data";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import ProfileEditModal from "@/components/shared/ProfileEditModal";
 
 const ProfileDrawer = () => {
   const { isDrawerOpen, setIsDrawerOpen } = useContext(CustomizerContext);
   const toggleDrawer = () => setIsDrawerOpen(!isDrawerOpen);
   const { user, logout } = useAuth();
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
 
   const displayName = user ? `${user.firstName} ${user.lastName}` : "Trader";
   const displayEmail = user?.email || "trader@example.com";
@@ -69,21 +71,44 @@ const ProfileDrawer = () => {
 
         <SimpleBar style={{ maxHeight: "calc(100vh - 280px)" }}>
           <div className="px-3">
-            {profileData.profileDD.map((items, index) => (
-              <Link key={index} href={items.url} passHref>
-                <div className="px-3 py-3 flex items-center gap-3 rounded-lg hover:bg-muted/30 dark:hover:bg-white/5 transition-colors duration-200 group cursor-pointer">
-                  <div className="h-10 w-10 shrink-0 rounded-lg flex justify-center items-center text-primary bg-primary/10">
-                    <Icon icon={items.img} width={24} />
+            {profileData.profileDD.map((items, index) => {
+              // "My Profile" opens the modal instead of navigating
+              if (items.title === "My Profile") {
+                return (
+                  <button
+                    key={index}
+                    onClick={() => setProfileModalOpen(true)}
+                    className="w-full px-3 py-3 flex items-center gap-3 rounded-lg hover:bg-muted/30 dark:hover:bg-white/5 transition-colors duration-200 group cursor-pointer"
+                  >
+                    <div className="h-10 w-10 shrink-0 rounded-lg flex justify-center items-center text-primary bg-primary/10">
+                      <Icon icon={items.img} width={24} />
+                    </div>
+                    <div className="min-w-0 text-left">
+                      <h5 className="text-sm font-medium text-dark dark:text-white group-hover:text-primary transition-colors">
+                        {items.title}
+                      </h5>
+                      <p className="text-xs text-muted truncate">{items.subtitle}</p>
+                    </div>
+                  </button>
+                );
+              }
+              // Other items use Link
+              return (
+                <Link key={index} href={items.url} passHref>
+                  <div className="px-3 py-3 flex items-center gap-3 rounded-lg hover:bg-muted/30 dark:hover:bg-white/5 transition-colors duration-200 group cursor-pointer">
+                    <div className="h-10 w-10 shrink-0 rounded-lg flex justify-center items-center text-primary bg-primary/10">
+                      <Icon icon={items.img} width={24} />
+                    </div>
+                    <div className="min-w-0">
+                      <h5 className="text-sm font-medium text-dark dark:text-white group-hover:text-primary transition-colors">
+                        {items.title}
+                      </h5>
+                      <p className="text-xs text-muted truncate">{items.subtitle}</p>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <h5 className="text-sm font-medium text-dark dark:text-white group-hover:text-primary transition-colors">
-                      {items.title}
-                    </h5>
-                    <p className="text-xs text-muted truncate">{items.subtitle}</p>
-                  </div>
-                </div>
-              </Link>
-            ))}
+                </Link>
+              );
+            })}
           </div>
         </SimpleBar>
 
@@ -104,6 +129,12 @@ const ProfileDrawer = () => {
           </button>
         </div>
       </div>
+
+      {/* Profile Edit Modal */}
+      <ProfileEditModal
+        isOpen={profileModalOpen}
+        onClose={() => setProfileModalOpen(false)}
+      />
     </>
   );
 };

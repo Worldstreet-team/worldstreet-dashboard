@@ -78,7 +78,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // ignore
     } finally {
       setUser(null);
-      window.location.href = "https://worldstreetgold.com/login";
+      window.location.href = "/";
     }
   }, []);
 

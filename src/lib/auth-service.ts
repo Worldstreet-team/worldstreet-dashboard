@@ -118,3 +118,46 @@ export async function logoutUser(refreshToken: string): Promise<AuthResponse> {
 
   return res.json();
 }
+
+/**
+ * Change user password.
+ * Calls POST /api/auth/change-password on the auth service.
+ */
+export async function changePassword(
+  accessToken: string,
+  currentPassword: string,
+  newPassword: string
+): Promise<AuthResponse> {
+  const res = await fetch(`${AUTH_SERVICE_URL}/api/auth/change-password`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ currentPassword, newPassword }),
+    cache: 'no-store',
+  });
+
+  return res.json();
+}
+
+/**
+ * Update user profile on the auth service.
+ * Calls PATCH /api/auth/profile on the auth service.
+ */
+export async function updateAuthProfile(
+  accessToken: string,
+  updates: { firstName?: string; lastName?: string }
+): Promise<AuthResponse> {
+  const res = await fetch(`${AUTH_SERVICE_URL}/api/auth/profile`, {
+    method: 'PATCH',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(updates),
+    cache: 'no-store',
+  });
+
+  return res.json();
+}

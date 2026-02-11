@@ -14,7 +14,7 @@ import { SolanaProvider } from "@/app/context/solanaContext";
 import { EvmProvider } from "@/app/context/evmContext";
 import { BitcoinProvider } from "@/app/context/bitcoinContext";
 import { SwapProvider } from "@/app/context/swapContext";
-import { PinSetupModal } from "@/components/wallet";
+import { PinSetupModal, WalletAddressSync } from "@/components/wallet";
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { loading } = useAuth();
@@ -51,6 +51,8 @@ export default function Layout({
         <EvmProvider>
         <BitcoinProvider>
         <SwapProvider>
+        {/* Syncs wallet addresses to chain contexts */}
+        <WalletAddressSync />
         <div className="flex w-full min-h-screen">
           <div className="page-wrapper flex w-full">
             {/* Header/sidebar */}
