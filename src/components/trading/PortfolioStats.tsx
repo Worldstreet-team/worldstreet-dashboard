@@ -1,56 +1,132 @@
 "use client";
-import React from "react";
+import React, { useMemo } from "react";
 import { Icon } from "@iconify/react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/app/context/authContext";
+import { useWallet } from "@/app/context/walletContext";
+import { useSolana } from "@/app/context/solanaContext";
+import { useEvm } from "@/app/context/evmContext";
+import { useBitcoin } from "@/app/context/bitcoinContext";
+import { usePrices, getPrice, calculateDailyPnL } from "@/lib/wallet/usePrices";
+import { formatUSD } from "@/lib/wallet/amounts";
 import WalletModal from "./WalletModal";
 
-const portfolioData = [
-  {
-    label: "Total Balance",
-    value: "$24,850.00",
-    change: "+$1,250.00",
-    changePercent: "+5.29%",
-    isPositive: true,
-    icon: "solar:wallet-bold-duotone",
-    iconColor: "text-primary",
-    bgColor: "bg-primary/8",
-  },
-  {
-    label: "Today's P&L",
-    value: "+$892.50",
-    change: "12 trades",
-    changePercent: "+3.72%",
-    isPositive: true,
-    icon: "solar:chart-2-bold-duotone",
-    iconColor: "text-success",
-    bgColor: "bg-success/8",
-  },
-  {
-    label: "Open Positions",
-    value: "5",
-    change: "$4,280 invested",
-    changePercent: "",
-    isPositive: true,
-    icon: "solar:layers-bold-duotone",
-    iconColor: "text-warning",
-    bgColor: "bg-warning/8",
-  },
-  {
-    label: "Available Margin",
-    value: "$20,570.00",
-    change: "82.8% available",
-    changePercent: "",
-    isPositive: true,
-    icon: "solar:safe-circle-bold-duotone",
-    iconColor: "text-info",
-    bgColor: "bg-info/8",
-  },
-];
-
 const PortfolioStats = () => {
-  const userName = "Trader";
+  const { user } = useAuth();
+  const { walletsGenerated } = useWallet();
+  const { balance: solBalance, tokenBalances: solTokens } = useSolana();
+  const { balance: ethBalance, tokenBalances: ethTokens } = useEvm();
+  const { balance: btcBalance } = useBitcoin();
+  const { prices, coins, loading: pricesLoading } = usePrices();
+
+  // Calculate total balance
+  const totalBalance = useMemo(() => {
+    if (!walletsGenerated) return 0;
+    
+    let total = 0;
+    
+    // Native coins
+    total += solBalance * getPrice(prices, "SOL");
+    total += ethBalance * getPrice(prices, "ETH");
+    total += btcBalance * getPrice(prices, "BTC");
+    
+    // Solana tokens
+    solTokens.forEach((token) => {
+      total += token.amount * getPrice(prices, token.symbol);
+    });
+    
+    // ERC20 tokens
+    ethTokens.forEach((token) => {
+      total += token.amount * getPrice(prices, token.symbol);
+    });
+    
+    return total;
+  }, [walletsGenerated, solBalance, ethBalance, btcBalance, solTokens, ethTokens, prices]);
+
+  // Calculate holdings map for P&L
+  const holdings = useMemo(() => {
+    if (!walletsGenerated) return {};
+    
+    const h: Record<string, number> = {};
+    
+    // Native coins
+    h["SOL"] = solBalance;
+    h["ETH"] = ethBalance;
+    h["BTC"] = btcBalance;
+    
+    // Solana tokens
+    solTokens.forEach((token) => {
+      h[token.symbol] = (h[token.symbol] || 0) + token.amount;
+    });
+    
+    // ERC20 tokens
+    ethTokens.forEach((token) => {
+      h[token.symbol] = (h[token.symbol] || 0) + token.amount;
+    });
+    
+    return h;
+  }, [walletsGenerated, solBalance, ethBalance, btcBalance, solTokens, ethTokens]);
+
+  // Calculate 24h P&L
+  const dailyPnL = useMemo(() => {
+    return calculateDailyPnL(holdings, prices, coins);
+  }, [holdings, prices, coins]);
+
+  const pnlPercent = useMemo(() => {
+    if (totalBalance === 0 || dailyPnL === 0) return 0;
+    // P&L % = (pnl / (totalBalance - pnl)) * 100
+    const previousValue = totalBalance - dailyPnL;
+    if (previousValue === 0) return 0;
+    return (dailyPnL / previousValue) * 100;
+  }, [totalBalance, dailyPnL]);
+
+  const userName = user?.firstName || "Trader";
+
+  // Build portfolio data with real values
+  const portfolioData = [
+    {
+      label: "Total Balance",
+      value: formatUSD(totalBalance),
+      change: walletsGenerated ? (pricesLoading ? "Loading..." : "Live prices") : "Set up wallet",
+      changePercent: "",
+      isPositive: true,
+      icon: "solar:wallet-bold-duotone",
+      iconColor: "text-primary",
+      bgColor: "bg-primary/8",
+    },
+    {
+      label: "Today's P&L",
+      value: `${dailyPnL >= 0 ? "+" : ""}${formatUSD(dailyPnL)}`,
+      change: "24h change",
+      changePercent: pnlPercent !== 0 ? `${pnlPercent >= 0 ? "+" : ""}${pnlPercent.toFixed(2)}%` : "",
+      isPositive: dailyPnL >= 0,
+      icon: "solar:chart-2-bold-duotone",
+      iconColor: dailyPnL >= 0 ? "text-success" : "text-error",
+      bgColor: dailyPnL >= 0 ? "bg-success/8" : "bg-error/8",
+    },
+    {
+      label: "Assets",
+      value: String(Object.keys(holdings).filter(k => holdings[k] > 0).length),
+      change: walletsGenerated ? "Active tokens" : "No wallet",
+      changePercent: "",
+      isPositive: true,
+      icon: "solar:layers-bold-duotone",
+      iconColor: "text-warning",
+      bgColor: "bg-warning/8",
+    },
+    {
+      label: "Networks",
+      value: walletsGenerated ? "3" : "0",
+      change: walletsGenerated ? "SOL, ETH, BTC" : "Set up wallet",
+      changePercent: "",
+      isPositive: true,
+      icon: "solar:safe-circle-bold-duotone",
+      iconColor: "text-info",
+      bgColor: "bg-info/8",
+    },
+  ];
 
   return (
     <div className="space-y-5">

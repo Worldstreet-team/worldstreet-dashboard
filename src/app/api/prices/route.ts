@@ -1,17 +1,74 @@
 import { NextResponse } from "next/server";
 
-// In-memory cache
-let cachedPrices: Record<string, number> | null = null;
+// ── Types ──────────────────────────────────────────────────────────────────
+
+export interface CoinData {
+  id: string;
+  symbol: string;
+  name: string;
+  price: number;
+  change24h: number;
+  marketCap: number;
+  volume24h: number;
+  image: string;
+}
+
+export interface PricesResponse {
+  prices: Record<string, number>;
+  coins: CoinData[];
+  globalStats: {
+    totalMarketCap: number;
+    totalVolume: number;
+    btcDominance: number;
+    marketCapChange24h: number;
+  };
+  cached: boolean;
+  stale?: boolean;
+  fetchedAt: number;
+  error?: string;
+}
+
+// ── Cache ──────────────────────────────────────────────────────────────────
+
+let cachedData: Omit<PricesResponse, 'cached' | 'stale'> | null = null;
 let lastFetchedAt = 0;
 const CACHE_TTL = 60_000; // 60 seconds
 
-// CoinGecko ID mapping
-const COINGECKO_IDS: Record<string, string> = {
-  SOL: "solana",
-  ETH: "ethereum",
-  BTC: "bitcoin",
-  USDT: "tether",
-  USDC: "usd-coin",
+// ── CoinGecko mapping ──────────────────────────────────────────────────────
+
+// Core coins we always need for wallet balance calculations
+const CORE_COINS = ["bitcoin", "ethereum", "solana", "tether", "usd-coin"];
+
+// Additional popular coins for watchlist/market overview
+const MARKET_COINS = [
+  "ripple", "cardano", "dogecoin", "polkadot", "chainlink",
+  "avalanche-2", "polygon-matic-token", "litecoin", "uniswap",
+  "stellar", "cosmos", "near", "aptos", "sui"
+];
+
+const ALL_COIN_IDS = [...CORE_COINS, ...MARKET_COINS];
+
+// Symbol mapping (CoinGecko ID → display symbol)
+const ID_TO_SYMBOL: Record<string, string> = {
+  "bitcoin": "BTC",
+  "ethereum": "ETH",
+  "solana": "SOL",
+  "tether": "USDT",
+  "usd-coin": "USDC",
+  "ripple": "XRP",
+  "cardano": "ADA",
+  "dogecoin": "DOGE",
+  "polkadot": "DOT",
+  "chainlink": "LINK",
+  "avalanche-2": "AVAX",
+  "polygon-matic-token": "MATIC",
+  "litecoin": "LTC",
+  "uniswap": "UNI",
+  "stellar": "XLM",
+  "cosmos": "ATOM",
+  "near": "NEAR",
+  "aptos": "APT",
+  "sui": "SUI",
 };
 
 const FALLBACK_PRICES: Record<string, number> = {
@@ -19,65 +76,117 @@ const FALLBACK_PRICES: Record<string, number> = {
   USDC: 1,
 };
 
-async function fetchPricesFromCoinGecko(): Promise<Record<string, number>> {
-  const ids = Object.values(COINGECKO_IDS).join(",");
-  const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`;
+// ── Fetch functions ────────────────────────────────────────────────────────
 
-  const res = await fetch(url, {
+async function fetchMarketData(): Promise<Omit<PricesResponse, 'cached' | 'stale'>> {
+  // Fetch coin market data
+  const coinsUrl = `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ALL_COIN_IDS.join(",")}&order=market_cap_desc&sparkline=false&price_change_percentage=24h`;
+  
+  const coinsRes = await fetch(coinsUrl, {
     headers: { Accept: "application/json" },
-    signal: AbortSignal.timeout(10_000),
+    signal: AbortSignal.timeout(15_000),
   });
 
-  if (!res.ok) {
-    throw new Error(`CoinGecko returned ${res.status}`);
+  if (!coinsRes.ok) {
+    throw new Error(`CoinGecko coins returned ${coinsRes.status}`);
   }
 
-  const data = await res.json();
+  const coinsData = await coinsRes.json();
 
+  // Build prices map and coins array
   const prices: Record<string, number> = {};
-  for (const [symbol, geckoId] of Object.entries(COINGECKO_IDS)) {
-    prices[symbol] = data[geckoId]?.usd ?? FALLBACK_PRICES[symbol] ?? 0;
+  const coins: CoinData[] = [];
+
+  for (const coin of coinsData) {
+    const symbol = ID_TO_SYMBOL[coin.id] || coin.symbol.toUpperCase();
+    prices[symbol] = coin.current_price ?? FALLBACK_PRICES[symbol] ?? 0;
+    
+    coins.push({
+      id: coin.id,
+      symbol,
+      name: coin.name,
+      price: coin.current_price ?? 0,
+      change24h: coin.price_change_percentage_24h ?? 0,
+      marketCap: coin.market_cap ?? 0,
+      volume24h: coin.total_volume ?? 0,
+      image: coin.image ?? "",
+    });
   }
 
-  return prices;
+  // Ensure stablecoins have fallback
+  if (!prices.USDT) prices.USDT = 1;
+  if (!prices.USDC) prices.USDC = 1;
+
+  // Fetch global market data
+  let globalStats = {
+    totalMarketCap: 0,
+    totalVolume: 0,
+    btcDominance: 0,
+    marketCapChange24h: 0,
+  };
+
+  try {
+    const globalRes = await fetch("https://api.coingecko.com/api/v3/global", {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    if (globalRes.ok) {
+      const globalData = await globalRes.json();
+      globalStats = {
+        totalMarketCap: globalData.data?.total_market_cap?.usd ?? 0,
+        totalVolume: globalData.data?.total_volume?.usd ?? 0,
+        btcDominance: globalData.data?.market_cap_percentage?.btc ?? 0,
+        marketCapChange24h: globalData.data?.market_cap_change_percentage_24h_usd ?? 0,
+      };
+    }
+  } catch (e) {
+    console.error("Failed to fetch global stats:", e);
+  }
+
+  return {
+    prices,
+    coins,
+    globalStats,
+    fetchedAt: Date.now(),
+  };
 }
+
+// ── API Route ──────────────────────────────────────────────────────────────
 
 export async function GET() {
   const now = Date.now();
 
-  // Return cached prices if still valid
-  if (cachedPrices && now - lastFetchedAt < CACHE_TTL) {
+  // Return cached data if still valid
+  if (cachedData && now - lastFetchedAt < CACHE_TTL) {
     return NextResponse.json({
-      prices: cachedPrices,
+      ...cachedData,
       cached: true,
-      fetchedAt: lastFetchedAt,
     });
   }
 
   try {
-    const prices = await fetchPricesFromCoinGecko();
-    cachedPrices = prices;
+    const data = await fetchMarketData();
+    cachedData = data;
     lastFetchedAt = now;
 
     return NextResponse.json({
-      prices,
+      ...data,
       cached: false,
-      fetchedAt: lastFetchedAt,
     });
   } catch (error) {
     console.error("Price fetch error:", error);
 
     // If we have stale cache, return it rather than failing
-    if (cachedPrices) {
+    if (cachedData) {
       return NextResponse.json({
-        prices: cachedPrices,
+        ...cachedData,
         cached: true,
         stale: true,
-        fetchedAt: lastFetchedAt,
       });
     }
 
-    // No cache at all — return fallback zeros
+    // No cache at all — return fallback
     return NextResponse.json(
       {
         prices: {
@@ -86,7 +195,15 @@ export async function GET() {
           BTC: 0,
           ...FALLBACK_PRICES,
         },
+        coins: [],
+        globalStats: {
+          totalMarketCap: 0,
+          totalVolume: 0,
+          btcDominance: 0,
+          marketCapChange24h: 0,
+        },
         cached: false,
+        fetchedAt: now,
         error: "Failed to fetch prices",
       },
       { status: 502 }

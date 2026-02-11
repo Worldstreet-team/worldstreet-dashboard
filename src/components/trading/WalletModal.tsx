@@ -1,5 +1,6 @@
 "use client";
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Icon } from "@iconify/react";
 import {
   Dialog,
@@ -18,6 +19,14 @@ import { cn } from "@/lib/utils";
 
 // Payment methods
 const paymentMethods = [
+  {
+    id: "p2p",
+    name: "P2P Trading",
+    icon: "solar:users-group-rounded-bold-duotone",
+    description: "Trade with other users",
+    fee: "Low fees",
+    highlight: true,
+  },
   {
     id: "bank",
     name: "Bank Transfer",
@@ -57,13 +66,15 @@ interface WalletModalProps {
 }
 
 const WalletModal: React.FC<WalletModalProps> = ({ trigger, defaultTab = "deposit" }) => {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<"deposit" | "withdraw">(defaultTab);
   const [amount, setAmount] = useState("");
-  const [selectedMethod, setSelectedMethod] = useState("bank");
+  const [selectedMethod, setSelectedMethod] = useState("p2p");
   const [selectedCrypto, setSelectedCrypto] = useState("btc");
   const [cryptoAddress, setCryptoAddress] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [step, setStep] = useState<"amount" | "method" | "confirm" | "success">("amount");
+  const [isOpen, setIsOpen] = useState(false);
 
   const availableBalance = 24850.00;
 
@@ -80,6 +91,12 @@ const WalletModal: React.FC<WalletModalProps> = ({ trigger, defaultTab = "deposi
     if (step === "amount" && parseFloat(amount) > 0) {
       setStep("method");
     } else if (step === "method") {
+      // If P2P is selected, redirect to the P2P page
+      if (selectedMethod === "p2p") {
+        setIsOpen(false);
+        router.push(activeTab === "deposit" ? "/deposit" : "/withdraw");
+        return;
+      }
       setStep("confirm");
     } else if (step === "confirm") {
       handleSubmit();
@@ -103,7 +120,7 @@ const WalletModal: React.FC<WalletModalProps> = ({ trigger, defaultTab = "deposi
   const resetModal = () => {
     setStep("amount");
     setAmount("");
-    setSelectedMethod("bank");
+    setSelectedMethod("p2p");
     setCryptoAddress("");
   };
 
@@ -120,7 +137,10 @@ const WalletModal: React.FC<WalletModalProps> = ({ trigger, defaultTab = "deposi
   };
 
   return (
-    <Dialog onOpenChange={(open) => !open && resetModal()}>
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      setIsOpen(open);
+      if (!open) resetModal();
+    }}>
       <DialogTrigger asChild>
         {trigger || (
           <Button className="bg-primary hover:bg-primary/90">
@@ -284,7 +304,14 @@ const WalletModal: React.FC<WalletModalProps> = ({ trigger, defaultTab = "deposi
                       />
                     </div>
                     <div className="flex-1 text-left">
-                      <p className="font-semibold text-dark dark:text-white">{method.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-dark dark:text-white">{method.name}</p>
+                        {"highlight" in method && method.highlight && (
+                          <Badge className="bg-primary text-white text-[10px] px-1.5 py-0">
+                            Recommended
+                          </Badge>
+                        )}
+                      </div>
                       <p className="text-xs text-muted">{method.description}</p>
                     </div>
                     <Badge 
@@ -293,6 +320,8 @@ const WalletModal: React.FC<WalletModalProps> = ({ trigger, defaultTab = "deposi
                         "text-xs border-0 rounded-full",
                         method.fee === "Free" 
                           ? "bg-success/10 text-success" 
+                          : method.fee === "Low fees"
+                          ? "bg-primary/10 text-primary"
                           : "bg-gray-100 dark:bg-darkgray/50 text-muted"
                       )}
                     >
