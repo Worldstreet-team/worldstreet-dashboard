@@ -184,31 +184,6 @@ const SidebarContent: MenuItem[] = [
       },
     ],
   },
-  {
-    heading: "Earn",
-    children: [
-      {
-        name: "Staking",
-        icon: 'ph:coins-duotone',
-        id: uniqueId(),
-        url: "/",
-      },
-      {
-        name: "Savings",
-        icon: 'ph:piggy-bank-duotone',
-        id: uniqueId(),
-        url: "/",
-      },
-      {
-        name: "Launchpool",
-        icon: 'ph:rocket-launch-duotone',
-        id: uniqueId(),
-        url: "/",
-        badge: true,
-        badgeType: "filled",
-      },
-    ],
-  },
 
   {
     heading: "Account",

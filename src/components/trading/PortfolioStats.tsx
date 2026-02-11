@@ -1,5 +1,6 @@
 "use client";
 import React, { useMemo } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import { Icon } from "@iconify/react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -195,6 +196,21 @@ const PortfolioStats = () => {
               </div>
             </div>
 
+            {/* QR Code */}
+            {walletsGenerated && addresses?.solana && (
+              <div className="flex flex-col items-center gap-1.5">
+                <div className="p-2 bg-white rounded-xl shadow-sm border border-border/50">
+                  <QRCodeSVG
+                    value={addresses.solana}
+                    size={80}
+                    bgColor="#ffffff"
+                    fgColor="#000000"
+                    level="M"
+                  />
+                </div>
+                <p className="text-[9px] text-muted font-medium">Scan to receive</p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

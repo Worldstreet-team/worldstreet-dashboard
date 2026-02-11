@@ -1,7 +1,6 @@
 import { Icon } from "@iconify/react";
 import Profile from "./Profile";
 import { Navbar } from "flowbite-react";
-import AppLinks from "./AppLinks";
 import { CustomizerContext } from "@/app/context/customizerContext";
 import { useContext } from "react";
 
@@ -53,11 +52,6 @@ const MobileHeaderItems = () => {
               </span>
             </div>
           )}
-
-          {/* Notification Dropdown */}
-
-          {/* App Link Dropdown   */}
-          <AppLinks />
 
           {/* Profile Dropdown */}
           <Profile />

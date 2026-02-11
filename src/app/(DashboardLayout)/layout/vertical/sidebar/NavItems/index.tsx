@@ -15,7 +15,9 @@ interface NavItemsProps {
 const NavItems: React.FC<NavItemsProps> = ({ item, handleClose }) => {
   const pathname = usePathname();
   const { t } = useTranslation();
-  const isActive = pathname === item.url;
+  // Only highlight if this is a real unique route (not "/" unless we're actually on the dashboard)
+  const isExternal = item.url?.startsWith("http");
+  const isActive = !isExternal && item.url !== undefined && item.url !== "" && pathname === item.url;
 
   const handleClick = () => {
     if (!item.disabled && handleClose) {

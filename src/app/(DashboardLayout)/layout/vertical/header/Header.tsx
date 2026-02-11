@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useContext } from "react";
 import Search from "./Search";
 import { Icon } from "@iconify/react";
-import AppLinks from "./AppLinks";
 import Profile from "./Profile";
 import { CustomizerContext } from "@/app/context/customizerContext";
 import MobileSidebar from "../sidebar/MobileSidebar";
@@ -95,8 +94,6 @@ const Header = ({ layoutType }: HeaderPropsType) => {
                 width={20}
               />
             </button>
-
-            <AppLinks />
 
             {/* Divider */}
             <div className="w-px h-8 bg-border dark:bg-darkborder mx-2" />
