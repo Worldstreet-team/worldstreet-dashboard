@@ -8,7 +8,7 @@ import { useWallet } from "@/app/context/walletContext";
 import { formatAmount, formatUSD } from "@/lib/wallet/amounts";
 import { usePrices, getPrice } from "@/lib/wallet/usePrices";
 import Footer from "@/components/dashboard/Footer";
-import { ReceiveModal, SendModal } from "@/components/wallet";
+import { ReceiveModal, SendModal, AddTokenModal } from "@/components/wallet";
 
 // Asset type definition
 interface Asset {
@@ -22,6 +22,8 @@ interface Asset {
   chain: "solana" | "ethereum" | "bitcoin";
   address?: string; // Token address for SPL/ERC20
   icon: string;
+  isCustom?: boolean;
+  customTokenId?: string;
 }
 
 // Chain icons
@@ -35,13 +37,40 @@ const CHAIN_ICONS: Record<string, string> = {
 
 const AssetsPage = () => {
   const { addresses, walletsGenerated, getEncryptedKeys } = useWallet();
-  const { balance: solBalance, tokenBalances: solTokens, loading: solLoading, fetchBalance: fetchSolBalance } = useSolana();
-  const { balance: ethBalance, tokenBalances: ethTokens, loading: ethLoading, fetchBalance: fetchEthBalance } = useEvm();
+  const { balance: solBalance, tokenBalances: solTokens, loading: solLoading, fetchBalance: fetchSolBalance, refreshCustomTokens: refreshSolCustom } = useSolana();
+  const { balance: ethBalance, tokenBalances: ethTokens, loading: ethLoading, fetchBalance: fetchEthBalance, refreshCustomTokens: refreshEthCustom } = useEvm();
   const { balance: btcBalance, loading: btcLoading, fetchBalance: fetchBtcBalance } = useBitcoin();
   const { prices } = usePrices();
 
   const [receiveModal, setReceiveModal] = useState<{ open: boolean; chain?: string; address?: string }>({ open: false });
   const [sendModal, setSendModal] = useState<{ open: boolean; asset?: Asset }>({ open: false });
+  const [addTokenModal, setAddTokenModal] = useState(false);
+  const [removingTokenId, setRemovingTokenId] = useState<string | null>(null);
+
+  // Handle token added - refresh custom tokens lists
+  const handleTokenAdded = useCallback(async () => {
+    await Promise.all([refreshSolCustom(), refreshEthCustom()]);
+    // Re-fetch balances
+    if (addresses?.solana) fetchSolBalance(addresses.solana);
+    if (addresses?.ethereum) fetchEthBalance(addresses.ethereum);
+  }, [refreshSolCustom, refreshEthCustom, addresses, fetchSolBalance, fetchEthBalance]);
+
+  // Handle remove custom token
+  const handleRemoveToken = useCallback(async (tokenId: string) => {
+    setRemovingTokenId(tokenId);
+    try {
+      const response = await fetch(`/api/tokens/custom?tokenId=${tokenId}`, {
+        method: "DELETE",
+      });
+      if (response.ok) {
+        await handleTokenAdded();
+      }
+    } catch (error) {
+      console.error("Error removing token:", error);
+    } finally {
+      setRemovingTokenId(null);
+    }
+  }, [handleTokenAdded]);
 
   // Combine all assets into unified list
   const assets = useMemo<Asset[]>(() => {
@@ -74,7 +103,9 @@ const AssetsPage = () => {
         usdValue: token.amount * getPrice(prices, token.symbol),
         chain: "solana",
         address: token.mint,
-        icon: CHAIN_ICONS[token.symbol] || CHAIN_ICONS.solana,
+        icon: token.logoURI || CHAIN_ICONS[token.symbol] || CHAIN_ICONS.solana,
+        isCustom: token.isCustom,
+        customTokenId: token.customTokenId,
       });
     });
 
@@ -105,7 +136,9 @@ const AssetsPage = () => {
         usdValue: token.amount * getPrice(prices, token.symbol),
         chain: "ethereum",
         address: token.address,
-        icon: CHAIN_ICONS[token.symbol] || CHAIN_ICONS.ethereum,
+        icon: token.logoURI || CHAIN_ICONS[token.symbol] || CHAIN_ICONS.ethereum,
+        isCustom: token.isCustom,
+        customTokenId: token.customTokenId,
       });
     });
 
@@ -197,7 +230,7 @@ const AssetsPage = () => {
             </div>
 
             {/* Quick Actions */}
-            <div className="flex gap-3">
+            <div className="flex gap-3 flex-wrap">
               <button
                 onClick={() => setReceiveModal({ open: true, chain: "ethereum", address: addresses?.ethereum })}
                 className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors"
@@ -215,6 +248,15 @@ const AssetsPage = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
                 </svg>
                 Send
+              </button>
+              <button
+                onClick={() => setAddTokenModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-green-500/10 text-green-600 dark:text-green-400 rounded-lg hover:bg-green-500/20 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Add Token
               </button>
             </div>
           </div>
@@ -282,7 +324,18 @@ const AssetsPage = () => {
         {/* Assets List */}
         <div className="col-span-12">
           <div className="bg-white dark:bg-black border border-border/50 dark:border-darkborder rounded-2xl p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-dark dark:text-white mb-4">Assets</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-dark dark:text-white">Assets</h2>
+              <button
+                onClick={() => setAddTokenModal(true)}
+                className="text-sm text-primary hover:text-primary/80 flex items-center gap-1"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Add Token
+              </button>
+            </div>
             
             {isLoading && assets.length === 0 ? (
               <div className="flex items-center justify-center py-12">
@@ -297,10 +350,12 @@ const AssetsPage = () => {
                 {assets.map((asset) => (
                   <div
                     key={asset.id}
-                    className="flex items-center justify-between p-4 bg-muted/30 dark:bg-white/5 rounded-xl hover:bg-muted/40 dark:hover:bg-white/10 transition-colors cursor-pointer"
-                    onClick={() => setSendModal({ open: true, asset })}
+                    className="flex items-center justify-between p-4 bg-muted/30 dark:bg-white/5 rounded-xl hover:bg-muted/40 dark:hover:bg-white/10 transition-colors group"
                   >
-                    <div className="flex items-center gap-3">
+                    <div 
+                      className="flex items-center gap-3 flex-1 cursor-pointer"
+                      onClick={() => setSendModal({ open: true, asset })}
+                    >
                       <div className="relative">
                         <img
                           src={asset.icon}
@@ -318,13 +373,43 @@ const AssetsPage = () => {
                         />
                       </div>
                       <div>
-                        <p className="font-medium text-dark dark:text-white">{asset.symbol}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-dark dark:text-white">{asset.symbol}</p>
+                          {asset.isCustom && (
+                            <span className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary rounded">Custom</span>
+                          )}
+                        </div>
                         <p className="text-sm text-muted">{asset.name}</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-medium text-dark dark:text-white">{formatAmount(asset.balance)}</p>
-                      <p className="text-sm text-muted">{formatUSD(asset.usdValue)}</p>
+                    <div className="flex items-center gap-3">
+                      <div 
+                        className="text-right cursor-pointer"
+                        onClick={() => setSendModal({ open: true, asset })}
+                      >
+                        <p className="font-medium text-dark dark:text-white">{formatAmount(asset.balance)}</p>
+                        <p className="text-sm text-muted">{formatUSD(asset.usdValue)}</p>
+                      </div>
+                      {/* Remove button for custom tokens */}
+                      {asset.isCustom && asset.customTokenId && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveToken(asset.customTokenId!);
+                          }}
+                          disabled={removingTokenId === asset.customTokenId}
+                          className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all disabled:opacity-50"
+                          title="Remove token"
+                        >
+                          {removingTokenId === asset.customTokenId ? (
+                            <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          )}
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -351,6 +436,13 @@ const AssetsPage = () => {
         isOpen={sendModal.open}
         onClose={() => setSendModal({ open: false })}
         asset={sendModal.asset}
+      />
+
+      {/* Add Token Modal */}
+      <AddTokenModal
+        isOpen={addTokenModal}
+        onClose={() => setAddTokenModal(false)}
+        onTokenAdded={handleTokenAdded}
       />
     </>
   );

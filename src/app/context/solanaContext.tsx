@@ -25,10 +25,19 @@ import {
 } from "@solana/spl-token";
 import { convertRawToDisplay, convertDisplayToRaw } from "@/lib/wallet/amounts";
 import { decryptWithPIN } from "@/lib/wallet/encryption";
+import { SOLANA_TOKENS, getTokenByAddress } from "@/lib/wallet/tokenLists";
 
-// Known token mints on mainnet
-const USDT_MINT = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
-const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+// Custom token from user's saved list
+interface CustomToken {
+  _id: string;
+  chain: string;
+  address: string;
+  symbol: string;
+  name: string;
+  decimals: number;
+  logoURI?: string;
+  coingeckoId?: string;
+}
 
 export interface TokenBalance {
   mint: string;
@@ -38,16 +47,20 @@ export interface TokenBalance {
   symbol: string;
   name?: string;
   logoURI?: string;
+  isCustom?: boolean;
+  customTokenId?: string;
 }
 
 interface SolanaContextType {
   address: string | null;
   balance: number;
   tokenBalances: TokenBalance[];
+  customTokens: CustomToken[];
   loading: boolean;
   lastTx: string | null;
   setAddress: (address: string | null) => void;
   fetchBalance: (address?: string) => Promise<void>;
+  refreshCustomTokens: () => Promise<void>;
   sendTransaction: (
     encryptedKey: string,
     pin: string,
@@ -74,10 +87,28 @@ export function SolanaProvider({ children }: { children: ReactNode }) {
   const [address, setAddress] = useState<string | null>(null);
   const [balance, setBalance] = useState(0);
   const [tokenBalances, setTokenBalances] = useState<TokenBalance[]>([]);
+  const [customTokens, setCustomTokens] = useState<CustomToken[]>([]);
   const [loading, setLoading] = useState(false);
   const [lastTx, setLastTx] = useState<string | null>(null);
 
   const connection = useMemo(() => new Connection(SOL_RPC), []);
+
+  // Fetch user's custom tokens from API
+  const refreshCustomTokens = useCallback(async () => {
+    try {
+      const response = await fetch("/api/tokens/custom");
+      if (response.ok) {
+        const data = await response.json();
+        // Filter only Solana tokens
+        const solTokens = (data.tokens || []).filter(
+          (t: CustomToken) => t.chain === "solana"
+        );
+        setCustomTokens(solTokens);
+      }
+    } catch (error) {
+      console.error("Error fetching custom tokens:", error);
+    }
+  }, []);
 
   const fetchBalance = useCallback(
     async (addr?: string) => {
@@ -92,7 +123,8 @@ export function SolanaProvider({ children }: { children: ReactNode }) {
         setBalance(parseFloat(convertRawToDisplay(lamports, 9)));
 
         // 2. Fetch SPL Token Balances
-        let processedTokens: TokenBalance[] = [];
+        const processedTokens: TokenBalance[] = [];
+        const foundMints = new Set<string>();
 
         try {
           const [tokenAccounts, token2022Accounts] = await Promise.all([
@@ -113,52 +145,62 @@ export function SolanaProvider({ children }: { children: ReactNode }) {
             ...token2022Accounts.value,
           ];
 
-          processedTokens = allAccounts
-            .map((account): TokenBalance | null => {
-              const parsedData = account.account.data.parsed;
-              if (!parsedData || parsedData.type !== "account") return null;
+          allAccounts.forEach((account) => {
+            const parsedData = account.account.data.parsed;
+            if (!parsedData || parsedData.type !== "account") return;
 
-              const info = parsedData.info;
-              const mint = info.mint;
-              const uiAmount = info.tokenAmount.uiAmount || 0;
+            const info = parsedData.info;
+            const mint = info.mint;
+            const uiAmount = info.tokenAmount.uiAmount || 0;
+            const decimals = info.tokenAmount.decimals;
 
-              let symbol = "Unknown";
-              let name = "Unknown Token";
-              if (mint === USDT_MINT) {
-                symbol = "USDT";
-                name = "Tether USD";
-              } else if (mint === USDC_MINT) {
-                symbol = "USDC";
-                name = "USD Coin";
-              }
+            // Look up in our known token list
+            const knownToken = getTokenByAddress(mint, "solana");
+            
+            // Check if this is a custom token
+            const customToken = customTokens.find(
+              (ct) => ct.address.toLowerCase() === mint.toLowerCase()
+            );
 
-              return {
+            // Get symbol and name from known list, custom token, or use defaults
+            const symbol = knownToken?.symbol || customToken?.symbol || "Unknown";
+            const name = knownToken?.name || customToken?.name || "Unknown Token";
+            const logoURI = knownToken?.logoURI || customToken?.logoURI;
+
+            foundMints.add(mint);
+
+            // Only include tokens with balance > 0, OR known tokens, OR custom tokens
+            if (uiAmount > 0 || knownToken || customToken) {
+              processedTokens.push({
                 mint,
                 address: mint,
                 amount: uiAmount,
-                decimals: info.tokenAmount.decimals,
+                decimals,
                 symbol,
                 name,
-              };
-            })
-            .filter(
-              (t): t is TokenBalance =>
-                t !== null && (t.amount > 0 || t.mint === USDT_MINT || t.mint === USDC_MINT)
-            );
+                logoURI,
+                isCustom: !!customToken,
+                customTokenId: customToken?._id,
+              });
+            }
+          });
         } catch (e) {
           console.error("Token Balance fetch error:", e);
         }
 
-        // Ensure USDT/USDC entries exist for UI
-        [USDT_MINT, USDC_MINT].forEach((mint) => {
-          if (!processedTokens.find((t) => t.mint === mint)) {
+        // Add custom tokens that weren't found (0 balance)
+        customTokens.forEach((ct) => {
+          if (!foundMints.has(ct.address)) {
             processedTokens.push({
-              mint,
-              address: mint,
+              mint: ct.address,
+              address: ct.address,
               amount: 0,
-              symbol: mint === USDT_MINT ? "USDT" : "USDC",
-              name: mint === USDT_MINT ? "Tether USD" : "USD Coin",
-              decimals: 6,
+              decimals: ct.decimals,
+              symbol: ct.symbol,
+              name: ct.name,
+              logoURI: ct.logoURI,
+              isCustom: true,
+              customTokenId: ct._id,
             });
           }
         });
@@ -168,8 +210,13 @@ export function SolanaProvider({ children }: { children: ReactNode }) {
         console.error("Solana fetchBalance error:", error);
       }
     },
-    [address, connection]
+    [address, connection, customTokens]
   );
+
+  // Fetch custom tokens on mount
+  useEffect(() => {
+    refreshCustomTokens();
+  }, [refreshCustomTokens]);
 
   useEffect(() => {
     if (address) {
@@ -302,10 +349,12 @@ export function SolanaProvider({ children }: { children: ReactNode }) {
         address,
         balance,
         tokenBalances,
+        customTokens,
         loading,
         lastTx,
         setAddress,
         fetchBalance,
+        refreshCustomTokens,
         sendTransaction,
         sendTokenTransaction,
       }}

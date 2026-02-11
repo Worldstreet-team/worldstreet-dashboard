@@ -11,6 +11,7 @@ import React, {
 import { ethers } from "ethers";
 import { convertRawToDisplay, convertDisplayToRaw } from "@/lib/wallet/amounts";
 import { decryptWithPIN } from "@/lib/wallet/encryption";
+import { ETHEREUM_TOKENS, TokenInfo } from "@/lib/wallet/tokenLists";
 
 // ERC20 ABI (minimal)
 const ERC20_ABI = [
@@ -20,21 +21,17 @@ const ERC20_ABI = [
   "function transfer(address to, uint256 amount) returns (bool)",
 ];
 
-// Common mainnet tokens
-const COMMON_TOKENS = [
-  {
-    symbol: "USDT",
-    name: "Tether USD",
-    address: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
-    decimals: 6,
-  },
-  {
-    symbol: "USDC",
-    name: "USD Coin",
-    address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-    decimals: 6,
-  },
-];
+// Custom token from user's saved list
+interface CustomToken {
+  _id: string;
+  chain: string;
+  address: string;
+  symbol: string;
+  name: string;
+  decimals: number;
+  logoURI?: string;
+  coingeckoId?: string;
+}
 
 export interface TokenBalance {
   address: string;
@@ -43,16 +40,20 @@ export interface TokenBalance {
   symbol: string;
   name?: string;
   logoURI?: string;
+  isCustom?: boolean;
+  customTokenId?: string;
 }
 
 interface EvmContextType {
   address: string | null;
   balance: number;
   tokenBalances: TokenBalance[];
+  customTokens: CustomToken[];
   loading: boolean;
   lastTx: string | null;
   setAddress: (address: string | null) => void;
   fetchBalance: (address?: string) => Promise<void>;
+  refreshCustomTokens: () => Promise<void>;
   sendTransaction: (
     encryptedKey: string,
     pin: string,
@@ -79,10 +80,28 @@ export function EvmProvider({ children }: { children: ReactNode }) {
   const [address, setAddress] = useState<string | null>(null);
   const [balance, setBalance] = useState(0);
   const [tokenBalances, setTokenBalances] = useState<TokenBalance[]>([]);
+  const [customTokens, setCustomTokens] = useState<CustomToken[]>([]);
   const [loading, setLoading] = useState(false);
   const [lastTx, setLastTx] = useState<string | null>(null);
 
   const provider = new ethers.JsonRpcProvider(ETH_RPC);
+
+  // Fetch user's custom tokens from API
+  const refreshCustomTokens = useCallback(async () => {
+    try {
+      const response = await fetch("/api/tokens/custom");
+      if (response.ok) {
+        const data = await response.json();
+        // Filter only Ethereum tokens
+        const ethTokens = (data.tokens || []).filter(
+          (t: CustomToken) => t.chain === "ethereum"
+        );
+        setCustomTokens(ethTokens);
+      }
+    } catch (error) {
+      console.error("Error fetching custom tokens:", error);
+    }
+  }, []);
 
   const fetchBalance = useCallback(
     async (addr?: string) => {
@@ -95,39 +114,93 @@ export function EvmProvider({ children }: { children: ReactNode }) {
         const balanceEth = convertRawToDisplay(balanceWei, 18);
         setBalance(parseFloat(balanceEth));
 
-        // 2. Token Balances
-        const results = await Promise.all(
-          COMMON_TOKENS.map(async (token) => {
-            try {
-              const contract = new ethers.Contract(
-                token.address,
-                ERC20_ABI,
-                provider
-              );
-              const bal = await contract.balanceOf(targetAddr);
-              return {
-                ...token,
-                amount: parseFloat(convertRawToDisplay(bal, token.decimals)),
-              };
-            } catch (e) {
-              console.error(`Error fetching ${token.symbol} balance:`, e);
-              return { ...token, amount: 0 };
+        // 2. Combine pre-loaded tokens with custom tokens
+        const allTokens: TokenInfo[] = [...ETHEREUM_TOKENS];
+        
+        // Add custom tokens that aren't already in the list
+        customTokens.forEach((ct) => {
+          if (!allTokens.find((t) => t.address.toLowerCase() === ct.address.toLowerCase())) {
+            allTokens.push({
+              symbol: ct.symbol,
+              name: ct.name,
+              address: ct.address,
+              decimals: ct.decimals,
+              logoURI: ct.logoURI,
+              coingeckoId: ct.coingeckoId,
+            });
+          }
+        });
+
+        // 3. Fetch balances in batches to avoid rate limiting
+        const BATCH_SIZE = 10;
+        const results: TokenBalance[] = [];
+
+        for (let i = 0; i < allTokens.length; i += BATCH_SIZE) {
+          const batch = allTokens.slice(i, i + BATCH_SIZE);
+          const batchResults = await Promise.all(
+            batch.map(async (token) => {
+              try {
+                const contract = new ethers.Contract(
+                  token.address,
+                  ERC20_ABI,
+                  provider
+                );
+                const bal = await contract.balanceOf(targetAddr);
+                const amount = parseFloat(convertRawToDisplay(bal, token.decimals));
+                
+                // Check if this is a custom token
+                const customToken = customTokens.find(
+                  (ct) => ct.address.toLowerCase() === token.address.toLowerCase()
+                );
+
+                return {
+                  address: token.address,
+                  symbol: token.symbol,
+                  name: token.name,
+                  decimals: token.decimals,
+                  logoURI: token.logoURI,
+                  amount,
+                  isCustom: !!customToken,
+                  customTokenId: customToken?._id,
+                };
+              } catch (e) {
+                // Only log errors for tokens we expect to exist
+                if (i < 10) {
+                  console.error(`Error fetching ${token.symbol} balance:`, e);
+                }
+                return null;
+              }
+            })
+          );
+
+          // Filter out failed fetches and zero balances (except custom tokens)
+          batchResults.forEach((result) => {
+            if (result) {
+              // Always show custom tokens, only show pre-loaded tokens with balance
+              if (result.isCustom || result.amount > 0) {
+                results.push(result);
+              }
             }
-          })
-        );
+          });
+        }
 
         setTokenBalances(results);
       } catch (error) {
         console.error("EVM fetchBalance error:", error);
       }
     },
-    [address, provider]
+    [address, provider, customTokens]
   );
+
+  // Fetch custom tokens on mount
+  useEffect(() => {
+    refreshCustomTokens();
+  }, [refreshCustomTokens]);
 
   useEffect(() => {
     if (address) {
       fetchBalance(address);
-      const interval = setInterval(() => fetchBalance(address), 15000);
+      const interval = setInterval(() => fetchBalance(address), 30000); // Increased to 30s
       return () => clearInterval(interval);
     }
   }, [address, fetchBalance]);
@@ -199,10 +272,12 @@ export function EvmProvider({ children }: { children: ReactNode }) {
         address,
         balance,
         tokenBalances,
+        customTokens,
         loading,
         lastTx,
         setAddress,
         fetchBalance,
+        refreshCustomTokens,
         sendTransaction,
         sendTokenTransaction,
       }}
