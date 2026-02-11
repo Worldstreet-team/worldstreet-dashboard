@@ -111,6 +111,13 @@ const SidebarContent: MenuItem[] = [
         url: "https://portal.worldstreet.app",
         subtitle: "Trade global currency pairs",
       },
+      {
+        name: "Vivid AI",
+        icon: 'ph:sparkle-duotone',
+        id: uniqueId(),
+        url: "#",
+        subtitle: "AI-powered trading insights",
+      },
     ],
   },
   {
