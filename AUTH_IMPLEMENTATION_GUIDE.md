@@ -2,7 +2,7 @@
 
 This document describes how to integrate with the WorldStreet external authentication service.
 
-## External Auth Service
+## External Auth Service .
 
 **Base URL:** `https://api.worldstreetgold.com`
 

@@ -49,6 +49,7 @@ export interface TokenBalance {
   logoURI?: string;
   isCustom?: boolean;
   customTokenId?: string;
+  isPopular?: boolean;
 }
 
 interface SolanaContextType {
@@ -181,12 +182,30 @@ export function SolanaProvider({ children }: { children: ReactNode }) {
                 logoURI,
                 isCustom: !!customToken,
                 customTokenId: customToken?._id,
+                isPopular: knownToken?.isPopular,
               });
             }
           });
         } catch (e) {
           console.error("Token Balance fetch error:", e);
         }
+
+        // Add popular tokens that weren't found (0 balance)
+        SOLANA_TOKENS.filter(t => t.isPopular).forEach((token) => {
+          if (!foundMints.has(token.address)) {
+            processedTokens.push({
+              mint: token.address,
+              address: token.address,
+              amount: 0,
+              decimals: token.decimals,
+              symbol: token.symbol,
+              name: token.name,
+              logoURI: token.logoURI,
+              isCustom: false,
+              isPopular: true,
+            });
+          }
+        });
 
         // Add custom tokens that weren't found (0 balance)
         customTokens.forEach((ct) => {

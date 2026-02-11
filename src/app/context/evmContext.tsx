@@ -42,6 +42,7 @@ export interface TokenBalance {
   logoURI?: string;
   isCustom?: boolean;
   customTokenId?: string;
+  isPopular?: boolean;
 }
 
 interface EvmContextType {
@@ -162,6 +163,7 @@ export function EvmProvider({ children }: { children: ReactNode }) {
                   amount,
                   isCustom: !!customToken,
                   customTokenId: customToken?._id,
+                  isPopular: token.isPopular,
                 };
               } catch (e) {
                 // Only log errors for tokens we expect to exist
@@ -173,11 +175,11 @@ export function EvmProvider({ children }: { children: ReactNode }) {
             })
           );
 
-          // Filter out failed fetches and zero balances (except custom tokens)
+          // Filter out failed fetches and zero balances (except custom/popular tokens)
           batchResults.forEach((result) => {
             if (result) {
-              // Always show custom tokens, only show pre-loaded tokens with balance
-              if (result.isCustom || result.amount > 0) {
+              // Always show custom tokens and popular tokens, only show others with balance
+              if (result.isCustom || result.isPopular || result.amount > 0) {
                 results.push(result);
               }
             }

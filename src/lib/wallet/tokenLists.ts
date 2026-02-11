@@ -10,11 +10,12 @@ export interface TokenInfo {
   decimals: number;
   logoURI?: string;
   coingeckoId?: string;
+  isPopular?: boolean; // Popular tokens are always shown even with 0 balance
 }
 
 // Ethereum Mainnet Tokens (50+)
 export const ETHEREUM_TOKENS: TokenInfo[] = [
-  // Stablecoins
+  // Stablecoins (Popular)
   {
     symbol: "USDT",
     name: "Tether USD",
@@ -22,6 +23,7 @@ export const ETHEREUM_TOKENS: TokenInfo[] = [
     decimals: 6,
     logoURI: "https://assets.coingecko.com/coins/images/325/small/Tether.png",
     coingeckoId: "tether",
+    isPopular: true,
   },
   {
     symbol: "USDC",
@@ -30,6 +32,7 @@ export const ETHEREUM_TOKENS: TokenInfo[] = [
     decimals: 6,
     logoURI: "https://assets.coingecko.com/coins/images/6319/small/usdc.png",
     coingeckoId: "usd-coin",
+    isPopular: true,
   },
   {
     symbol: "DAI",
@@ -38,6 +41,7 @@ export const ETHEREUM_TOKENS: TokenInfo[] = [
     decimals: 18,
     logoURI: "https://assets.coingecko.com/coins/images/9956/small/dai-multi-collateral-mcd.png",
     coingeckoId: "dai",
+    isPopular: true,
   },
   {
     symbol: "BUSD",
@@ -55,7 +59,7 @@ export const ETHEREUM_TOKENS: TokenInfo[] = [
     logoURI: "https://assets.coingecko.com/coins/images/13422/small/FRAX_icon.png",
     coingeckoId: "frax",
   },
-  // Wrapped Assets
+  // Wrapped Assets (Popular)
   {
     symbol: "WETH",
     name: "Wrapped Ether",
@@ -63,6 +67,7 @@ export const ETHEREUM_TOKENS: TokenInfo[] = [
     decimals: 18,
     logoURI: "https://assets.coingecko.com/coins/images/2518/small/weth.png",
     coingeckoId: "weth",
+    isPopular: true,
   },
   {
     symbol: "WBTC",
@@ -71,6 +76,7 @@ export const ETHEREUM_TOKENS: TokenInfo[] = [
     decimals: 8,
     logoURI: "https://assets.coingecko.com/coins/images/7598/small/wrapped_bitcoin_wbtc.png",
     coingeckoId: "wrapped-bitcoin",
+    isPopular: true,
   },
   {
     symbol: "stETH",
@@ -88,7 +94,7 @@ export const ETHEREUM_TOKENS: TokenInfo[] = [
     logoURI: "https://assets.coingecko.com/coins/images/20764/small/reth.png",
     coingeckoId: "rocket-pool-eth",
   },
-  // DeFi Blue Chips
+  // DeFi Blue Chips (Popular)
   {
     symbol: "LINK",
     name: "Chainlink",
@@ -96,6 +102,7 @@ export const ETHEREUM_TOKENS: TokenInfo[] = [
     decimals: 18,
     logoURI: "https://assets.coingecko.com/coins/images/877/small/chainlink-new-logo.png",
     coingeckoId: "chainlink",
+    isPopular: true,
   },
   {
     symbol: "UNI",
@@ -104,6 +111,7 @@ export const ETHEREUM_TOKENS: TokenInfo[] = [
     decimals: 18,
     logoURI: "https://assets.coingecko.com/coins/images/12504/small/uni.jpg",
     coingeckoId: "uniswap",
+    isPopular: true,
   },
   {
     symbol: "AAVE",
@@ -112,6 +120,7 @@ export const ETHEREUM_TOKENS: TokenInfo[] = [
     decimals: 18,
     logoURI: "https://assets.coingecko.com/coins/images/12645/small/AAVE.png",
     coingeckoId: "aave",
+    isPopular: true,
   },
   {
     symbol: "MKR",
@@ -226,7 +235,7 @@ export const ETHEREUM_TOKENS: TokenInfo[] = [
     logoURI: "https://assets.coingecko.com/coins/images/17233/small/immutableX-symbol-BLK-RGB.png",
     coingeckoId: "immutable-x",
   },
-  // Meme Coins
+  // Meme Coins (Popular)
   {
     symbol: "SHIB",
     name: "Shiba Inu",
@@ -234,6 +243,7 @@ export const ETHEREUM_TOKENS: TokenInfo[] = [
     decimals: 18,
     logoURI: "https://assets.coingecko.com/coins/images/11939/small/shiba.png",
     coingeckoId: "shiba-inu",
+    isPopular: true,
   },
   {
     symbol: "PEPE",
@@ -242,6 +252,7 @@ export const ETHEREUM_TOKENS: TokenInfo[] = [
     decimals: 18,
     logoURI: "https://assets.coingecko.com/coins/images/29850/small/pepe-token.jpeg",
     coingeckoId: "pepe",
+    isPopular: true,
   },
   {
     symbol: "FLOKI",
@@ -426,7 +437,7 @@ export const ETHEREUM_TOKENS: TokenInfo[] = [
 
 // Solana Mainnet Tokens (50+)
 export const SOLANA_TOKENS: TokenInfo[] = [
-  // Stablecoins
+  // Stablecoins (Popular)
   {
     symbol: "USDT",
     name: "Tether USD",
@@ -434,6 +445,7 @@ export const SOLANA_TOKENS: TokenInfo[] = [
     decimals: 6,
     logoURI: "https://assets.coingecko.com/coins/images/325/small/Tether.png",
     coingeckoId: "tether",
+    isPopular: true,
   },
   {
     symbol: "USDC",
@@ -442,6 +454,7 @@ export const SOLANA_TOKENS: TokenInfo[] = [
     decimals: 6,
     logoURI: "https://assets.coingecko.com/coins/images/6319/small/usdc.png",
     coingeckoId: "usd-coin",
+    isPopular: true,
   },
   {
     symbol: "PYUSD",
@@ -459,7 +472,7 @@ export const SOLANA_TOKENS: TokenInfo[] = [
     logoURI: "https://assets.coingecko.com/coins/images/23721/small/usdh.png",
     coingeckoId: "usdh",
   },
-  // Wrapped Assets
+  // Wrapped Assets (Popular)
   {
     symbol: "WBTC",
     name: "Wrapped BTC (Portal)",
@@ -467,6 +480,7 @@ export const SOLANA_TOKENS: TokenInfo[] = [
     decimals: 8,
     logoURI: "https://assets.coingecko.com/coins/images/7598/small/wrapped_bitcoin_wbtc.png",
     coingeckoId: "wrapped-bitcoin",
+    isPopular: true,
   },
   {
     symbol: "WETH",
@@ -475,6 +489,7 @@ export const SOLANA_TOKENS: TokenInfo[] = [
     decimals: 8,
     logoURI: "https://assets.coingecko.com/coins/images/2518/small/weth.png",
     coingeckoId: "weth",
+    isPopular: true,
   },
   {
     symbol: "mSOL",
@@ -508,7 +523,7 @@ export const SOLANA_TOKENS: TokenInfo[] = [
     logoURI: "https://assets.coingecko.com/coins/images/26636/small/blazesolana.png",
     coingeckoId: "blazestake-staked-sol",
   },
-  // DeFi & Ecosystem
+  // DeFi & Ecosystem (Popular)
   {
     symbol: "RAY",
     name: "Raydium",
@@ -516,6 +531,7 @@ export const SOLANA_TOKENS: TokenInfo[] = [
     decimals: 6,
     logoURI: "https://assets.coingecko.com/coins/images/13928/small/PSigc4ie_400x400.jpg",
     coingeckoId: "raydium",
+    isPopular: true,
   },
   {
     symbol: "JTO",
@@ -524,6 +540,7 @@ export const SOLANA_TOKENS: TokenInfo[] = [
     decimals: 9,
     logoURI: "https://assets.coingecko.com/coins/images/33228/small/jto.png",
     coingeckoId: "jito-governance-token",
+    isPopular: true,
   },
   {
     symbol: "JUP",
@@ -532,6 +549,7 @@ export const SOLANA_TOKENS: TokenInfo[] = [
     decimals: 6,
     logoURI: "https://assets.coingecko.com/coins/images/34188/small/jup.png",
     coingeckoId: "jupiter-exchange-solana",
+    isPopular: true,
   },
   {
     symbol: "ORCA",
@@ -573,7 +591,7 @@ export const SOLANA_TOKENS: TokenInfo[] = [
     logoURI: "https://assets.coingecko.com/coins/images/11636/small/rndr.png",
     coingeckoId: "render-token",
   },
-  // Meme Coins
+  // Meme Coins (Popular)
   {
     symbol: "BONK",
     name: "Bonk",
@@ -581,6 +599,7 @@ export const SOLANA_TOKENS: TokenInfo[] = [
     decimals: 5,
     logoURI: "https://assets.coingecko.com/coins/images/28600/small/bonk.jpg",
     coingeckoId: "bonk",
+    isPopular: true,
   },
   {
     symbol: "WIF",
@@ -589,6 +608,7 @@ export const SOLANA_TOKENS: TokenInfo[] = [
     decimals: 6,
     logoURI: "https://assets.coingecko.com/coins/images/33566/small/dogwifhat.jpg",
     coingeckoId: "dogwifcoin",
+    isPopular: true,
   },
   {
     symbol: "POPCAT",
