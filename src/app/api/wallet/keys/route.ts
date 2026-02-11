@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import DashboardProfile from "@/models/DashboardProfile";
 import { verifyToken } from "@/lib/auth-service";
+import { verifyPIN } from "@/lib/wallet/encryption";
 
 /**
  * Helper: extract and verify the authenticated user from the request cookies.
@@ -24,9 +25,9 @@ async function getAuthUser(request: NextRequest) {
  * Requires PIN verification via the stored hash.
  * 
  * The actual decryption happens CLIENT-SIDE with the user's PIN.
- * This endpoint just validates the PIN matches and returns the encrypted blobs.
+ * This endpoint validates the PIN matches and returns the encrypted blobs.
  * 
- * Body: { pinHash: string }
+ * Body: { pin: string }
  * 
  * Returns: { wallets: { solana, ethereum, bitcoin } } with encryptedPrivateKey
  */
@@ -41,11 +42,11 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { pinHash } = body;
+    const { pin } = body;
 
-    if (!pinHash) {
+    if (!pin) {
       return NextResponse.json(
-        { success: false, message: "PIN hash is required" },
+        { success: false, message: "PIN is required" },
         { status: 400 }
       );
     }
@@ -70,8 +71,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify the PIN hash matches
-    if (profile.walletPinHash !== pinHash) {
+    // Verify the PIN against stored hash using proper verification
+    if (!profile.walletPinHash || !verifyPIN(pin, profile.walletPinHash)) {
       return NextResponse.json(
         { success: false, message: "Incorrect PIN" },
         { status: 401 }

@@ -49,7 +49,7 @@ interface WalletContextType {
   onWalletSetupComplete: (addresses: WalletAddresses) => void;
   
   // Get encrypted keys (requires PIN verification)
-  getEncryptedKeys: (pinHash: string) => Promise<WalletsWithKeys | null>;
+  getEncryptedKeys: (pin: string) => Promise<WalletsWithKeys | null>;
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
@@ -158,7 +158,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
   }, []);
 
   // Get encrypted keys for signing (requires PIN verification)
-  const getEncryptedKeys = useCallback(async (pinHash: string): Promise<WalletsWithKeys | null> => {
+  const getEncryptedKeys = useCallback(async (pin: string): Promise<WalletsWithKeys | null> => {
     try {
       const response = await fetch("/api/wallet/keys", {
         method: "POST",
@@ -166,7 +166,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ pinHash }),
+        body: JSON.stringify({ pin }),
       });
       
       if (!response.ok) {

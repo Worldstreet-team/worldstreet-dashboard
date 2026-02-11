@@ -7,7 +7,6 @@ import { useBitcoin } from "@/app/context/bitcoinContext";
 import { useWallet } from "@/app/context/walletContext";
 import { formatAmount, formatUSD } from "@/lib/wallet/amounts";
 import { usePrices, getPrice } from "@/lib/wallet/usePrices";
-import CryptoJS from "crypto-js";
 
 interface Asset {
   id: string;
@@ -135,11 +134,8 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
     const pinString = pin.join("");
 
     try {
-      // Hash the PIN for verification
-      const pinHash = CryptoJS.SHA256(pinString).toString();
-      
-      // Get encrypted keys (this verifies the PIN)
-      const encryptedKeys = await getEncryptedKeys(pinHash);
+      // Get encrypted keys (PIN is verified server-side)
+      const encryptedKeys = await getEncryptedKeys(pinString);
       if (!encryptedKeys) {
         throw new Error("Invalid PIN or failed to get wallet keys");
       }

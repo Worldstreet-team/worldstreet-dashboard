@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useWallet } from "@/app/context/walletContext";
-import { hashPIN } from "@/lib/wallet/encryption";
 
 interface PinEntryModalProps {
   onSuccess: (pinHash: string, pin: string) => void;
@@ -159,13 +158,12 @@ export function PinEntryModal({
     setError(null);
 
     try {
-      const pinHash = hashPIN(pinValue);
-      
+      // Send raw PIN to server for verification
       const response = await fetch("/api/wallet/keys", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pinHash }),
+        body: JSON.stringify({ pin: pinValue }),
       });
 
       const data = await response.json();
@@ -174,7 +172,7 @@ export function PinEntryModal({
         throw new Error(data.message || "Incorrect PIN");
       }
 
-      onSuccess(pinHash, pinValue);
+      onSuccess(pinValue, pinValue);
       closePinEntryModal();
       
     } catch (err) {
