@@ -23,22 +23,9 @@ export async function POST(request: NextRequest) {
     message: 'Logged out successfully',
   });
 
-  // Clear both cookies
-  response.cookies.set('accessToken', '', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/',
-    maxAge: 0,
-  });
-
-  response.cookies.set('refreshToken', '', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/',
-    maxAge: 0,
-  });
+  // Delete both cookies
+  response.cookies.delete('accessToken');
+  response.cookies.delete('refreshToken');
 
   return response;
 }

@@ -70,16 +70,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const logout = useCallback(async () => {
     try {
-      await fetch("/api/auth/logout", {
+      const res = await fetch("/api/auth/logout", {
         method: "POST",
         credentials: "include",
       });
+      // Wait for response to ensure cookies are cleared
+      await res.json();
     } catch {
       // ignore
-    } finally {
-      setUser(null);
-      window.location.href = "/";
     }
+    setUser(null);
+    // Small delay to ensure cookies are cleared before redirect
+    setTimeout(() => {
+      window.location.href = "/";
+    }, 100);
   }, []);
 
   useEffect(() => {
