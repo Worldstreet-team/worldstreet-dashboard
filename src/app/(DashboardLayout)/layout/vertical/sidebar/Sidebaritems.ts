@@ -76,6 +76,12 @@ const SidebarContent: MenuItem[] = [
         id: uniqueId(),
         url: "https://xtreme.worldstreetgold.com",
       },
+      {
+        name: "Forex Trading",
+        icon: 'ph:currency-dollar-duotone',
+        id: uniqueId(),
+        url: "https://portal.worldstreet.app",
+      },
     ],
   },
   {
