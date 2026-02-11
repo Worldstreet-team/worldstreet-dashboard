@@ -215,13 +215,13 @@ export function SolanaProvider({ children }: { children: ReactNode }) {
         );
 
         setLastTx(signature);
-        await fetchBalance(address);
+        await fetchBalance(fromAddress);
         return signature;
       } finally {
         setLoading(false);
       }
     },
-    [address, connection, fetchBalance]
+    [connection, fetchBalance]
   );
 
   const sendTokenTransaction = useCallback(
@@ -287,13 +287,13 @@ export function SolanaProvider({ children }: { children: ReactNode }) {
         );
 
         setLastTx(signature);
-        await fetchBalance(address);
+        await fetchBalance(fromAddress);
         return signature;
       } finally {
         setLoading(false);
       }
     },
-    [address, connection, fetchBalance]
+    [connection, fetchBalance]
   );
 
   return (
