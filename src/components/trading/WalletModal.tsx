@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@iconify/react";
 import {
@@ -16,6 +16,10 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { useSolana } from "@/app/context/solanaContext";
+
+// Minimum deposit/withdrawal amount
+const MIN_AMOUNT = 5;
 
 // Payment methods
 const paymentMethods = [
@@ -67,6 +71,8 @@ interface WalletModalProps {
 
 const WalletModal: React.FC<WalletModalProps> = ({ trigger, defaultTab = "deposit" }) => {
   const router = useRouter();
+  const { tokenBalances } = useSolana();
+  
   const [activeTab, setActiveTab] = useState<"deposit" | "withdraw">(defaultTab);
   const [amount, setAmount] = useState("");
   const [selectedMethod, setSelectedMethod] = useState("p2p");
@@ -76,7 +82,14 @@ const WalletModal: React.FC<WalletModalProps> = ({ trigger, defaultTab = "deposi
   const [step, setStep] = useState<"amount" | "method" | "confirm" | "success">("amount");
   const [isOpen, setIsOpen] = useState(false);
 
-  const availableBalance = 24850.00;
+  // Get USDT balance from Solana network (main wallet)
+  const usdtBalance = useMemo(() => {
+    const usdtToken = tokenBalances.find(t => t.symbol === "USDT");
+    return usdtToken?.amount ?? 0;
+  }, [tokenBalances]);
+
+  // USDT is pegged to USD, so balance in USD = token amount
+  const availableBalance = usdtBalance;
 
   const handleQuickAmount = (value: number) => {
     setAmount(value.toString());
@@ -88,13 +101,26 @@ const WalletModal: React.FC<WalletModalProps> = ({ trigger, defaultTab = "deposi
   };
 
   const handleContinue = () => {
-    if (step === "amount" && parseFloat(amount) > 0) {
+    const parsedAmount = parseFloat(amount) || 0;
+    
+    if (step === "amount") {
+      // Validate minimum amount
+      if (parsedAmount < MIN_AMOUNT) {
+        return; // Don't proceed if below minimum
+      }
+      // For withdrawals, also check sufficient balance
+      if (activeTab === "withdraw" && parsedAmount > availableBalance) {
+        return;
+      }
       setStep("method");
     } else if (step === "method") {
-      // If P2P is selected, redirect to the P2P page
+      // If P2P is selected, redirect to the P2P page with amount
       if (selectedMethod === "p2p") {
         setIsOpen(false);
-        router.push(activeTab === "deposit" ? "/deposit" : "/withdraw");
+        const url = activeTab === "deposit" 
+          ? `/deposit?amount=${parsedAmount}` 
+          : `/withdraw?amount=${parsedAmount}`;
+        router.push(url);
         return;
       }
       setStep("confirm");
@@ -230,6 +256,12 @@ const WalletModal: React.FC<WalletModalProps> = ({ trigger, defaultTab = "deposi
                     className="pl-10 pr-4 h-16 text-3xl font-bold border-2 border-gray-200 dark:border-darkborder rounded-2xl focus:border-primary dark:bg-darkgray/30 text-dark dark:text-white"
                   />
                 </div>
+                {parseFloat(amount) > 0 && parseFloat(amount) < MIN_AMOUNT && (
+                  <p className="text-xs text-error flex items-center gap-1">
+                    <Icon icon="solar:danger-circle-bold" className="h-4 w-4" />
+                    Minimum amount is ${MIN_AMOUNT}
+                  </p>
+                )}
                 {activeTab === "withdraw" && parseFloat(amount) > availableBalance && (
                   <p className="text-xs text-error flex items-center gap-1">
                     <Icon icon="solar:danger-circle-bold" className="h-4 w-4" />

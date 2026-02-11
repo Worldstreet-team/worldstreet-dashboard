@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { useWallet } from "@/app/context/walletContext";
 import { useSolana } from "@/app/context/solanaContext";
 import Footer from "@/components/dashboard/Footer";
@@ -121,10 +122,15 @@ function WithdrawSteps({ currentStep }: { currentStep: number }) {
 export default function WithdrawPage() {
   const { walletsGenerated, getEncryptedKeys } = useWallet();
   const { sendTokenTransaction } = useSolana();
+  const searchParams = useSearchParams();
 
   // UI state
   const [fiatCurrency] = useState<FiatCurrency>("NGN");
-  const [usdtAmount, setUsdtAmount] = useState("");
+  const [usdtAmount, setUsdtAmount] = useState(() => {
+    // Pre-fill from URL query param if present
+    const urlAmount = searchParams.get("amount");
+    return urlAmount && !isNaN(parseFloat(urlAmount)) ? urlAmount : "";
+  });
   const [rates, setRates] = useState<Record<string, Rate>>({});
   const [ratesLoading, setRatesLoading] = useState(true);
 

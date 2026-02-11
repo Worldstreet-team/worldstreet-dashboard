@@ -15,11 +15,17 @@ import WalletModal from "./WalletModal";
 
 const PortfolioStats = () => {
   const { user } = useAuth();
-  const { walletsGenerated } = useWallet();
+  const { walletsGenerated, addresses } = useWallet();
   const { balance: solBalance, tokenBalances: solTokens } = useSolana();
   const { balance: ethBalance, tokenBalances: ethTokens } = useEvm();
   const { balance: btcBalance } = useBitcoin();
   const { prices, coins, loading: pricesLoading } = usePrices();
+
+  // Get USDT balance from Solana network (Main Wallet)
+  const mainWalletBalance = useMemo(() => {
+    const usdtToken = solTokens.find(t => t.symbol === "USDT");
+    return usdtToken?.amount ?? 0;
+  }, [solTokens]);
 
   // Calculate total balance
   const totalBalance = useMemo(() => {
@@ -161,6 +167,56 @@ const PortfolioStats = () => {
           />
         </div>
       </div>
+
+      {/* Main Wallet Card - USDT on Solana */}
+      <Card className="border-2 border-primary/20 shadow-md dark:bg-gradient-to-br dark:from-black dark:to-primary/5 dark:border-primary/30 overflow-hidden animate-fade-in-up">
+        <CardContent className="p-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-[#26A17B] to-[#1a7a5c] flex items-center justify-center shadow-lg">
+                <Icon icon="cryptocurrency-color:usdt" className="h-8 w-8" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <p className="text-xs text-muted font-medium uppercase tracking-wider">Main Wallet</p>
+                  <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">
+                    USDT • Solana
+                  </span>
+                </div>
+                <h3 className="text-3xl font-bold text-dark dark:text-white tracking-tight">
+                  ${mainWalletBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </h3>
+                <p className="text-xs text-muted mt-1">
+                  {walletsGenerated && addresses?.solana 
+                    ? `${addresses.solana.slice(0, 6)}...${addresses.solana.slice(-4)}`
+                    : "Set up wallet to view address"
+                  }
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              <WalletModal
+                defaultTab="deposit"
+                trigger={
+                  <Button size="sm" className="bg-success hover:bg-success/90 text-white font-medium rounded-lg px-4 h-8 text-xs">
+                    <Icon icon="solar:arrow-down-bold" className="mr-1.5 h-3 w-3" />
+                    Fund Wallet
+                  </Button>
+                }
+              />
+              <WalletModal
+                defaultTab="withdraw"
+                trigger={
+                  <Button size="sm" variant="outline" className="border-primary/30 text-primary hover:bg-primary/10 font-medium rounded-lg px-4 h-8 text-xs">
+                    <Icon icon="solar:arrow-up-bold" className="mr-1.5 h-3 w-3" />
+                    Withdraw
+                  </Button>
+                }
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Stats Cards */}
       <div className="grid xl:grid-cols-4 md:grid-cols-2 grid-cols-1 gap-4 stagger-children">
