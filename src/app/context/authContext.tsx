@@ -82,7 +82,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUser(null);
     // Small delay to ensure cookies are cleared before redirect
     setTimeout(() => {
-      window.location.href = "/";
+      window.location.href = "https://worldstreetgold.com/login";
     }, 100);
   }, []);
 
