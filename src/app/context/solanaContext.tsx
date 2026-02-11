@@ -25,7 +25,6 @@ import {
 } from "@solana/spl-token";
 import { convertRawToDisplay, convertDisplayToRaw } from "@/lib/wallet/amounts";
 import { decryptWithPIN } from "@/lib/wallet/encryption";
-import bs58 from "bs58";
 
 // Known token mints on mainnet
 const USDT_MINT = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
@@ -189,9 +188,9 @@ export function SolanaProvider({ children }: { children: ReactNode }) {
     ): Promise<string> => {
       setLoading(true);
       try {
-        // Decrypt the private key with PIN
-        const privateKeyBase58 = decryptWithPIN(encryptedKey, pin);
-        const secretKey = bs58.decode(privateKeyBase58);
+        // Decrypt the private key with PIN (stored as Base64)
+        const privateKeyBase64 = decryptWithPIN(encryptedKey, pin);
+        const secretKey = new Uint8Array(Buffer.from(privateKeyBase64, "base64"));
         const keypair = Keypair.fromSecretKey(secretKey);
         const fromAddress = keypair.publicKey.toBase58();
 
@@ -235,8 +234,9 @@ export function SolanaProvider({ children }: { children: ReactNode }) {
     ): Promise<string> => {
       setLoading(true);
       try {
-        const privateKeyBase58 = decryptWithPIN(encryptedKey, pin);
-        const secretKey = bs58.decode(privateKeyBase58);
+        // Decrypt the private key with PIN (stored as Base64)
+        const privateKeyBase64 = decryptWithPIN(encryptedKey, pin);
+        const secretKey = new Uint8Array(Buffer.from(privateKeyBase64, "base64"));
         const keypair = Keypair.fromSecretKey(secretKey);
         const fromAddress = keypair.publicKey.toBase58();
 
