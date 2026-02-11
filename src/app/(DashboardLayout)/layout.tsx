@@ -13,7 +13,7 @@ import { WalletProvider } from "@/app/context/walletContext";
 import { SolanaProvider } from "@/app/context/solanaContext";
 import { EvmProvider } from "@/app/context/evmContext";
 import { BitcoinProvider } from "@/app/context/bitcoinContext";
-import { PinSetupModal } from "@/components/wallet";
+import { PinSetupModal, WalletAddressSync } from "@/components/wallet";
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { loading } = useAuth();
@@ -85,6 +85,8 @@ export default function Layout({
         </div>
         {/* Wallet PIN Setup Modal */}
         <PinSetupModal />
+        {/* Sync wallet addresses to chain contexts */}
+        <WalletAddressSync />
         </BitcoinProvider>
         </EvmProvider>
         </SolanaProvider>
