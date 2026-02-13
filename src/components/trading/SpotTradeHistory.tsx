@@ -100,7 +100,7 @@ const SpotTradeHistory = ({ pair = "SOL/USDC" }: { pair?: string; midPrice?: num
             setError(null);
         } catch (err) {
             console.error("[SpotTradeHistory] Fetch error:", err);
-            setError("Failed to load trades");
+            setError((prev) => prev !== "Disconnected" ? "Disconnected" : prev);
         } finally {
             setLoading(false);
         }
@@ -114,9 +114,11 @@ const SpotTradeHistory = ({ pair = "SOL/USDC" }: { pair?: string; midPrice?: num
         fetchTrades(true);
     }, [fetchTrades]);
 
-    // Poll for new trades every 3s
+    // Poll for new trades every 5s (slower is better for stability)
     useEffect(() => {
-        const interval = setInterval(() => fetchTrades(false), 3000);
+        const interval = setInterval(() => {
+            fetchTrades(false);
+        }, 5000);
         return () => clearInterval(interval);
     }, [fetchTrades]);
 

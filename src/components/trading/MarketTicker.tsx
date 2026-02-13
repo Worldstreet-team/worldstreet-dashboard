@@ -70,7 +70,11 @@ const MarketTicker = ({
                 const responses = await Promise.allSettled(
                     binanceSymbols.map((sym) =>
                         fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${sym}`)
-                            .then((r) => r.json())
+                            .then((r) => {
+                                if (!r.ok) return {};
+                                return r.json();
+                            })
+                            .catch(() => ({}))
                     )
                 );
 
@@ -78,11 +82,14 @@ const MarketTicker = ({
                 const pairSymbols = ["SOL", "ETH", "BTC", "XRP", "LINK"];
 
                 responses.forEach((result, i) => {
-                    if (result.status === "fulfilled" && result.value.highPrice) {
-                        stats[pairSymbols[i]] = {
-                            high: parseFloat(result.value.highPrice),
-                            low: parseFloat(result.value.lowPrice),
-                        };
+                    if (result.status === "fulfilled" && result.value) {
+                        const val = result.value as any;
+                        if (val.highPrice) {
+                            stats[pairSymbols[i]] = {
+                                high: parseFloat(val.highPrice),
+                                low: parseFloat(val.lowPrice),
+                            };
+                        }
                     }
                 });
 
@@ -93,7 +100,8 @@ const MarketTicker = ({
         };
 
         fetchBinanceStats();
-        const interval = setInterval(fetchBinanceStats, 60_000); // Refresh every 60s
+        // Use a longer interval for tickers (5 mins) since we have CoinGecko as primary
+        const interval = setInterval(fetchBinanceStats, 300_000);
         return () => clearInterval(interval);
     }, []);
 

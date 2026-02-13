@@ -124,8 +124,10 @@ const OrderBook = ({
                 setError(null);
             }
         } catch (err) {
+            // If it's a network error, don't spam state updates too fast
             console.error("[OrderBook] Fetch error:", err);
-            setError("Failed to load order book");
+            setError((prev) => prev !== "Disconnected" ? "Disconnected" : prev);
+            // Slow down polling on failure
         } finally {
             setLoading(false);
         }
@@ -135,8 +137,17 @@ const OrderBook = ({
     useEffect(() => {
         setLoading(true);
         fetchOrderBook();
-        const interval = setInterval(fetchOrderBook, 2000);
-        return () => clearInterval(interval);
+
+        let interval: any;
+
+        // Only start polling if there isn't a critical network error blocking DNS
+        interval = setInterval(() => {
+            fetchOrderBook();
+        }, 5000); // 5s is safer than 2s during instability
+
+        return () => {
+            if (interval) clearInterval(interval);
+        };
     }, [fetchOrderBook]);
 
     // Reset on pair change
