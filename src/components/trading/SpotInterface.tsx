@@ -1,95 +1,128 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
-import { LoaderIcon, ChevronDown, Repeat, Info, Wallet, ArrowDownUp } from "lucide-react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { LoaderIcon, Info, Wallet } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSolana } from "@/app/context/solanaContext";
 import { useEvm } from "@/app/context/evmContext";
-import { useSwap, SwapToken, ChainKey, SWAP_CHAINS } from "@/app/context/swapContext";
+import { useSwap, SwapToken, ChainKey } from "@/app/context/swapContext";
 import { cn } from "@/lib/utils";
 import { formatAmount as formatTokenAmount } from "@/lib/wallet/amounts";
-import { TokenSelectModal } from "@/components/swap/TokenSelectModal";
-import { SwapQuoteCard } from "@/components/swap/SwapQuoteCard";
 import { PinConfirmModal } from "@/components/swap/PinConfirmModal";
+import { usePrices } from "@/lib/wallet/usePrices";
 
-const SpotInterface = () => {
+interface SpotInterfaceProps {
+    pair: string;
+}
+
+const SpotInterface = ({ pair }: SpotInterfaceProps) => {
+    const [baseSymbol, quoteSymbol] = pair.split("/");
     const { address: solAddress, balance: solBalance, tokenBalances: solTokens } = useSolana();
     const { address: evmAddress, balance: ethBalance, tokenBalances: ethTokens } = useEvm();
-    const { getQuote, executeSwap, quote, quoteLoading, quoteError, executing, swapStatus } = useSwap();
-
-    // Selected tokens & chains
-    const [fromChain, setFromChain] = useState<ChainKey>("solana");
-    const [toChain, setToChain] = useState<ChainKey>("solana");
-    const [fromToken, setFromToken] = useState<SwapToken | null>(null);
-    const [toToken, setToToken] = useState<SwapToken | null>(null);
+    const { getQuote, executeSwap, quote, quoteLoading, quoteError, executing } = useSwap();
+    const { coins } = usePrices();
 
     // UI state
     const [side, setSide] = useState<"buy" | "sell">("buy");
+    const [orderType, setOrderType] = useState<"limit" | "market">("market");
     const [amount, setAmount] = useState("");
-    const [showTokenSelect, setShowTokenSelect] = useState<{ open: boolean; side: "from" | "to" }>({ open: false, side: "from" });
+    const [total, setTotal] = useState("");
+    const [price, setPrice] = useState("");
     const [showPinModal, setShowPinModal] = useState(false);
 
-    // Initialize default tokens
+    // Derived tokens
+    const currentPrice = useMemo(() => {
+        const coin = coins.find(c => c.symbol === baseSymbol);
+        return coin?.price || 0;
+    }, [coins, baseSymbol]);
+
     useEffect(() => {
-        const solToken = {
-            chainId: 1151111081099710,
-            address: "11111111111111111111111111111111",
-            symbol: "SOL",
-            name: "Solana",
-            decimals: 9,
-            logoURI: "https://static.debank.com/image/coin/logo_url/sol/1e6d4c14106579294f997c02b37be801.png"
-        };
+        if (orderType === "market") {
+            setPrice(currentPrice.toString());
+        }
+    }, [currentPrice, orderType]);
 
-        const usdcToken = {
-            chainId: 1151111081099710,
-            address: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-            symbol: "USDC",
-            name: "USD Coin",
-            decimals: 6,
-            logoURI: "https://static.debank.com/image/coin/logo_url/usdc/c513738128ca7ed637c356191a329ecb.png"
-        };
+    // Token mapping (simplification for the UI)
+    const baseToken: SwapToken = useMemo(() => ({
+        chainId: 1151111081099710,
+        address: baseSymbol === "SOL" ? "11111111111111111111111111111111" : "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", // Placeholder logic
+        symbol: baseSymbol,
+        name: baseSymbol,
+        decimals: baseSymbol === "SOL" ? 9 : 6,
+        logoURI: ""
+    }), [baseSymbol]);
 
-        setFromToken(side === "buy" ? usdcToken : solToken);
-        setToToken(side === "buy" ? solToken : usdcToken);
-    }, [side]);
+    const quoteToken: SwapToken = useMemo(() => ({
+        chainId: 1151111081099710,
+        address: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", // USDC usually
+        symbol: quoteSymbol,
+        name: quoteSymbol,
+        decimals: 6,
+        logoURI: ""
+    }), [quoteSymbol]);
+
+    const fromToken = side === "buy" ? quoteToken : baseToken;
+    const toToken = side === "buy" ? baseToken : quoteToken;
+
+    // Balance calc
+    const baseBalance = useMemo(() => {
+        if (baseSymbol === "SOL") return solBalance;
+        return solTokens.find(t => t.symbol === baseSymbol)?.amount || 0;
+    }, [baseSymbol, solBalance, solTokens]);
+
+    const quoteBalance = useMemo(() => {
+        if (quoteSymbol === "USDC") {
+            // Simplified
+            return solTokens.find(t => t.symbol === "USDC")?.amount || 0;
+        }
+        return 0;
+    }, [quoteSymbol, solTokens]);
+
+    const availableBalance = side === "buy" ? quoteBalance : baseBalance;
+
+    // Handle inputs
+    const handleAmountChange = (val: string) => {
+        setAmount(val);
+        if (val && !isNaN(parseFloat(val)) && currentPrice > 0) {
+            setTotal((parseFloat(val) * currentPrice).toFixed(2));
+        } else {
+            setTotal("");
+        }
+    };
+
+    const handleTotalChange = (val: string) => {
+        setTotal(val);
+        if (val && !isNaN(parseFloat(val)) && currentPrice > 0) {
+            setAmount((parseFloat(val) / currentPrice).toFixed(6));
+        } else {
+            setAmount("");
+        }
+    };
 
     // Debounced quote fetch
     useEffect(() => {
         const timer = setTimeout(() => {
-            if (fromToken && toToken && amount && parseFloat(amount) > 0) {
-                const fromAddress = fromChain === "solana" ? solAddress : (fromChain === "ethereum" ? evmAddress : null);
-                const toAddress = toChain === "solana" ? solAddress : (toChain === "ethereum" ? evmAddress : null);
+            if (amount && parseFloat(amount) > 0) {
+                const swapAmount = side === "buy" ? total : amount;
+                const token = side === "buy" ? quoteToken : baseToken;
 
-                if (fromAddress) {
+                if (solAddress && swapAmount) {
                     getQuote({
-                        fromChain,
-                        toChain,
+                        fromChain: "solana",
+                        toChain: "solana",
                         fromToken: fromToken.address,
                         toToken: toToken.address,
-                        fromAmount: (parseFloat(amount) * Math.pow(10, fromToken.decimals)).toFixed(0),
-                        fromAddress,
-                        toAddress: toAddress || fromAddress,
+                        fromAmount: (parseFloat(swapAmount) * Math.pow(10, fromToken.decimals)).toFixed(0),
+                        fromAddress: solAddress,
+                        toAddress: solAddress,
                     });
                 }
             }
         }, 1000);
         return () => clearTimeout(timer);
-    }, [fromToken, toToken, amount, fromChain, toChain, solAddress, evmAddress, getQuote]);
-
-    // Balance calculation
-    const currentBalance = useMemo(() => {
-        if (!fromToken) return 0;
-        if (fromChain === "solana") {
-            if (fromToken.address === "11111111111111111111111111111111" || fromToken.address === "So11111111111111111111111111111111111111112") return solBalance;
-            return solTokens.find(t => t.mint === fromToken.address)?.amount || 0;
-        } else if (fromChain === "ethereum") {
-            if (fromToken.address === "0x0000000000000000000000000000000000000000") return ethBalance;
-            return ethTokens.find(t => t.address === fromToken.address)?.amount || 0;
-        }
-        return 0;
-    }, [fromToken, fromChain, solBalance, solTokens, ethBalance, ethTokens]);
+    }, [amount, total, side, fromToken, toToken, solAddress, getQuote, baseToken, quoteToken]);
 
     const handleExecute = () => {
         if (!quote) return;
@@ -102,195 +135,149 @@ const SpotInterface = () => {
             await executeSwap(quote, pin);
             setShowPinModal(false);
             setAmount("");
+            setTotal("");
         } catch (err) {
             console.error("Swap failed:", err);
         }
     };
 
-    const handleSwapValues = () => {
-        const tempToken = fromToken;
-        const tempChain = fromChain;
-        setFromToken(toToken);
-        setFromChain(toChain);
-        setToToken(tempToken);
-        setToChain(tempChain);
-    };
-
     return (
-        <Card className="border border-border/50 shadow-xl dark:bg-black dark:border-darkborder h-full overflow-hidden flex flex-col animate-fade-in-up" style={{ animationDelay: "150ms" }}>
-            <CardHeader className="pb-4 border-b border-border/10 dark:border-white/5 bg-muted/5">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-primary/10 rounded-xl">
-                            <Repeat className="w-5 h-5 text-primary" />
-                        </div>
-                        <div>
-                            <h3 className="text-sm font-bold text-dark dark:text-white leading-tight">
-                                Spot Trading
-                            </h3>
-                            <p className="text-[10px] text-muted font-medium uppercase tracking-widest">Universal Asset Bridge</p>
-                        </div>
-                    </div>
-                    <div className="flex gap-2 p-1 bg-muted/20 dark:bg-white/5 rounded-lg border border-border/10">
-                        {(["solana", "ethereum"] as ChainKey[]).map((c) => (
-                            <button
-                                key={c}
-                                onClick={() => { setFromChain(c); setFromToken(null); }}
-                                className={cn(
-                                    "px-3 py-1 text-[10px] font-bold rounded-md transition-all uppercase tracking-tighter",
-                                    fromChain === c ? "bg-primary text-white shadow-sm" : "text-muted hover:text-white"
-                                )}
-                            >
-                                {c}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            </CardHeader>
+        <Card className="border-0 shadow-none dark:bg-[#1a1a1a] bg-white h-full flex flex-col font-sans">
+            <div className="flex p-1 bg-muted/20 dark:bg-white/5 rounded-t-xl">
+                <button
+                    onClick={() => setSide("buy")}
+                    className={cn(
+                        "flex-1 py-2 text-xs font-bold transition-all rounded-lg",
+                        side === "buy" ? "bg-success text-white" : "text-muted hover:text-white"
+                    )}
+                >
+                    Buy
+                </button>
+                <button
+                    onClick={() => setSide("sell")}
+                    className={cn(
+                        "flex-1 py-2 text-xs font-bold transition-all rounded-lg",
+                        side === "sell" ? "bg-error text-white" : "text-muted hover:text-white"
+                    )}
+                >
+                    Sell
+                </button>
+            </div>
 
-            <CardContent className="pt-6 flex-1 flex flex-col gap-5">
-                {/* Buy/Sell Toggles */}
-                <div className="grid grid-cols-2 gap-2 p-1 bg-muted/20 dark:bg-white/5 rounded-xl border border-border/5">
-                    <button onClick={() => setSide("buy")} className={cn("py-2 text-[11px] font-black rounded-lg transition-all", side === "buy" ? "bg-success text-white shadow-lg shadow-success/20" : "text-muted hover:text-white")}>BUY</button>
-                    <button onClick={() => setSide("sell")} className={cn("py-2 text-[11px] font-black rounded-lg transition-all", side === "sell" ? "bg-error text-white shadow-lg shadow-error/20" : "text-muted hover:text-white")}>SELL</button>
-                </div>
-
-                {/* Amount Input Section */}
-                <div className="space-y-2">
-                    <div className="flex justify-between items-center px-1">
-                        <span className="text-[11px] font-bold text-muted uppercase tracking-tighter">Amount</span>
-                        <div className="flex items-center gap-1.5 text-[11px] font-bold text-muted">
-                            <Wallet className="w-3 h-3" />
-                            <span>{formatTokenAmount(currentBalance)} {fromToken?.symbol}</span>
-                        </div>
-                    </div>
-
-                    <div className="bg-muted/10 dark:bg-white/3 border border-border/20 dark:border-white/5 rounded-2xl p-4 transition-all hover:border-primary/30 focus-within:border-primary/50">
-                        <div className="flex items-center justify-between gap-4">
-                            <Input
-                                type="number"
-                                placeholder="0.00"
-                                value={amount}
-                                onChange={(e) => setAmount(e.target.value)}
-                                className="bg-transparent border-0 p-0 text-3xl font-black focus-visible:ring-0 placeholder:text-muted/50 h-auto"
-                            />
-                            <button
-                                onClick={() => setShowTokenSelect({ open: true, side: "from" })}
-                                className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-white/10 rounded-xl border border-border/50 hover:bg-muted/10 transition-all group shrink-0"
-                            >
-                                {fromToken?.logoURI && <img src={fromToken.logoURI} className="w-6 h-6 rounded-full" alt="" />}
-                                <span className="font-bold text-sm">{fromToken?.symbol || "Select"}</span>
-                                <ChevronDown className="w-4 h-4 text-muted group-hover:text-primary transition-colors" />
-                            </button>
-                        </div>
-                        <div className="flex gap-2 mt-4">
-                            {[0.25, 0.5, 0.75, 1].map((p) => (
-                                <button
-                                    key={p}
-                                    onClick={() => setAmount((currentBalance * p).toFixed(fromToken?.decimals || 6))}
-                                    className="flex-1 py-1.5 text-[10px] font-bold bg-white/5 dark:bg-white/5 border border-border/10 rounded-lg hover:border-primary/50 hover:text-primary transition-all uppercase"
-                                >
-                                    {p === 1 ? 'MAX' : `${p * 100}%`}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-
-                <div className="flex justify-center -my-6 relative z-10">
-                    <button onClick={handleSwapValues} className="p-3 bg-white dark:bg-[#0a0a0a] border-2 border-border/50 dark:border-white/10 rounded-2xl shadow-xl hover:scale-110 active:scale-95 transition-all text-primary hover:bg-primary hover:text-white group">
-                        <ArrowDownUp className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" />
+            <CardContent className="pt-4 px-4 space-y-4">
+                {/* Order Type Tabs */}
+                <div className="flex gap-4 border-b border-border/10 pb-2">
+                    <button
+                        onClick={() => setOrderType("limit")}
+                        className={cn("text-xs font-bold pb-2 transition-all border-b-2", orderType === "limit" ? "text-primary border-primary" : "text-muted border-transparent")}
+                    >
+                        Limit
+                    </button>
+                    <button
+                        onClick={() => setOrderType("market")}
+                        className={cn("text-xs font-bold pb-2 transition-all border-b-2", orderType === "market" ? "text-primary border-primary" : "text-muted border-transparent")}
+                    >
+                        Market
                     </button>
                 </div>
 
-                {/* Receiving Section */}
-                <div className="space-y-2">
-                    <div className="flex justify-between items-center px-1">
-                        <span className="text-[11px] font-bold text-muted uppercase tracking-tighter">Receiving</span>
-                    </div>
+                <div className="flex justify-between items-center text-[10px] text-muted">
+                    <span>Available</span>
+                    <span className="text-dark dark:text-white font-bold">{formatTokenAmount(availableBalance)} {side === "buy" ? quoteSymbol : baseSymbol}</span>
+                </div>
 
-                    <div className="bg-muted/10 dark:bg-white/3 border border-border/20 dark:border-white/5 rounded-2xl p-4">
-                        <div className="flex items-center justify-between gap-4">
-                            <div className="text-3xl font-black text-dark dark:text-white overflow-hidden text-ellipsis">
-                                {quote ? (parseFloat(quote.toAmount) / Math.pow(10, quote.toToken.decimals)).toFixed(6) : "0.00"}
-                            </div>
-                            <button
-                                onClick={() => setShowTokenSelect({ open: true, side: "to" })}
-                                className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-white/10 rounded-xl border border-border/50 hover:bg-muted/10 transition-all group shrink-0"
-                            >
-                                {toToken?.logoURI && <img src={toToken.logoURI} className="w-6 h-6 rounded-full" alt="" />}
-                                <span className="font-bold text-sm">{toToken?.symbol || "Select"}</span>
-                                <ChevronDown className="w-4 h-4 text-muted group-hover:text-primary transition-colors" />
-                            </button>
-                        </div>
+                {/* Price Input */}
+                <div className="space-y-1.5">
+                    <p className="text-[10px] font-bold text-muted uppercase">Price</p>
+                    <div className="relative">
+                        <Input
+                            value={orderType === "market" ? "Market Price" : price}
+                            onChange={(e) => setPrice(e.target.value)}
+                            disabled={orderType === "market"}
+                            className="bg-muted/10 dark:bg-white/5 border-border/20 text-right pr-12 font-bold tabular-nums h-9 text-xs"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-muted">{quoteSymbol}</span>
                     </div>
                 </div>
 
-                {/* Under the Hood */}
-                <div className="flex-1 space-y-4">
-                    <div className="flex items-center gap-2 text-[11px] font-black text-muted uppercase tracking-widest px-1">
-                        <Info className="w-3.5 h-3.5" />
-                        <span>Under the Hood</span>
-                        <div className="flex-1 h-px bg-border/20 dark:bg-white/5 ml-2" />
+                {/* Amount Input */}
+                <div className="space-y-1.5">
+                    <p className="text-[10px] font-bold text-muted uppercase">Amount</p>
+                    <div className="relative">
+                        <Input
+                            type="number"
+                            value={amount}
+                            onChange={(e) => handleAmountChange(e.target.value)}
+                            placeholder="0.00"
+                            className="bg-muted/10 dark:bg-white/5 border-border/20 text-right pr-12 font-bold tabular-nums h-9 text-xs"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-muted">{baseSymbol}</span>
                     </div>
+                </div>
 
-                    {quoteLoading ? (
-                        <div className="py-8 flex flex-col items-center justify-center gap-3 animate-pulse">
-                            <LoaderIcon className="w-6 h-6 animate-spin text-primary/50" />
-                            <p className="text-[10px] font-bold text-muted">Analyzing Optimal Routes...</p>
-                        </div>
-                    ) : quoteError ? (
-                        <div className="p-4 bg-error/5 border border-error/20 rounded-2xl text-center">
-                            <p className="text-xs font-bold text-error">{quoteError}</p>
-                        </div>
-                    ) : quote ? (
-                        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                            <SwapQuoteCard quote={quote} fromDecimals={fromToken?.decimals || 18} toDecimals={toToken?.decimals || 18} />
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="p-3 bg-muted/5 border border-border/10 rounded-xl">
-                                    <p className="text-[9px] font-black text-muted uppercase mb-1">Bridge Provider</p>
-                                    <p className="text-xs font-bold text-dark dark:text-white capitalize">{quote.toolDetails?.name || 'Li.Fi'}</p>
-                                </div>
-                                <div className="p-3 bg-muted/5 border border-border/10 rounded-xl">
-                                    <p className="text-[9px] font-black text-muted uppercase mb-1">Max Slippage</p>
-                                    <p className="text-xs font-bold text-dark dark:text-white">0.50%</p>
-                                </div>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="py-8 flex flex-col items-center justify-center gap-3 bg-muted/5 rounded-2xl border border-dashed border-border/20">
-                            <Repeat className="w-6 h-6 text-muted/30" />
-                            <p className="text-[10px] font-bold text-muted">Enter an amount to see routing</p>
+                {/* Percentage Buttons */}
+                <div className="grid grid-cols-4 gap-1.5">
+                    {[25, 50, 75, 100].map(p => (
+                        <button
+                            key={p}
+                            onClick={() => {
+                                const val = (availableBalance * (p / 100)).toFixed(baseToken.decimals);
+                                if (side === "sell") handleAmountChange(val);
+                                else handleTotalChange(val);
+                            }}
+                            className="py-1 text-[9px] font-bold bg-muted/20 dark:bg-white/5 rounded hover:bg-primary/20 transition-all text-muted hover:text-primary"
+                        >
+                            {p}%
+                        </button>
+                    ))}
+                </div>
+
+                {/* Total/Value Input */}
+                <div className="space-y-1.5">
+                    <p className="text-[10px] font-bold text-muted uppercase">Order Value</p>
+                    <div className="relative">
+                        <Input
+                            type="number"
+                            value={total}
+                            onChange={(e) => handleTotalChange(e.target.value)}
+                            placeholder="0.00"
+                            className="bg-muted/10 dark:bg-white/5 border-border/20 text-right pr-12 font-bold tabular-nums h-9 text-xs"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-muted">{quoteSymbol}</span>
+                    </div>
+                </div>
+
+                {/* Execution Info */}
+                <div className="py-2 space-y-1.5 border-t border-border/10 mt-2">
+                    <div className="flex justify-between text-[10px]">
+                        <span className="text-muted">Est. Fee</span>
+                        <span className="text-dark dark:text-white font-medium">0.1%</span>
+                    </div>
+                    {quote && (
+                        <div className="flex justify-between text-[10px]">
+                            <span className="text-muted">Rate</span>
+                            <span className="text-dark dark:text-white font-medium">1 {baseSymbol} ≈ {currentPrice.toFixed(2)} {quoteSymbol}</span>
                         </div>
                     )}
                 </div>
 
                 <Button
                     onClick={handleExecute}
-                    disabled={!quote || quoteLoading || executing}
+                    disabled={!amount || quoteLoading || executing}
                     className={cn(
-                        "w-full h-14 text-sm font-black tracking-[0.2em] uppercase transition-all duration-300 rounded-2xl",
-                        side === "buy" ? "bg-success hover:bg-success/90 text-white shadow-xl shadow-success/20" : "bg-error hover:bg-error/90 text-white shadow-xl shadow-error/20",
-                        (!quote || quoteLoading || executing) && "opacity-50 grayscale"
+                        "w-full h-10 text-xs font-black uppercase tracking-wider rounded-lg transition-all shadow-lg",
+                        side === "buy" ? "bg-success hover:bg-success/90 text-white shadow-success/20" : "bg-error hover:bg-error/90 text-white shadow-error/20",
+                        executing && "opacity-70 animate-pulse"
                     )}
                 >
-                    {executing ? (
-                        <div className="flex items-center gap-3"><LoaderIcon className="w-5 h-5 animate-spin" /><span>Verifying Order...</span></div>
-                    ) : (
-                        `${side === 'buy' ? 'CONFIRM PURCHASE' : 'EXECUTE LIQUIDATION'}`
-                    )}
+                    {executing ? <LoaderIcon className="w-4 h-4 animate-spin mr-2" /> : null}
+                    {side === "buy" ? `Buy ${baseSymbol}` : `Sell ${baseSymbol}`}
                 </Button>
-            </CardContent>
 
-            <TokenSelectModal
-                isOpen={showTokenSelect.open}
-                onClose={() => setShowTokenSelect({ ...showTokenSelect, open: false })}
-                onSelect={(token) => {
-                    if (showTokenSelect.side === "from") setFromToken(token);
-                    else setToToken(token);
-                }}
-                chain={showTokenSelect.side === "from" ? fromChain : toChain}
-            />
+                {quoteError && (
+                    <p className="text-[9px] text-error font-bold text-center mt-2">{quoteError}</p>
+                )}
+            </CardContent>
 
             <PinConfirmModal
                 isOpen={showPinModal}

@@ -24,15 +24,15 @@ const TradingViewChart = ({ symbol, theme = 'dark' }: TradingViewChartProps) => 
         script.type = "text/javascript";
         script.async = true;
 
-        // TradingView uses pairs like BINANCE:BTCUSDT
-        // Map our symbols if necessary. 
-        // Most common: BTC/USD -> BITSTAMP:BTCUSD or BINANCE:BTCUSDT
+        // Map our symbols to TradingView symbols
+        // Default to BINANCE:SYMBOLUSDT which is common
         let tvSymbol = symbol.replace("/", "");
         if (!tvSymbol.includes(":")) {
-            // Default to Binance for crypto pairs if no exchange specified
-            tvSymbol = `BINANCE:${tvSymbol}`;
-            // If it's something like BTCUSDC, it should be fine. 
-            // If it's BTC/USD, it became BTCUSD.
+            tvSymbol = `BINANCE:${tvSymbol}T`; // e.g. BTCUSDC -> BTCUSDCT
+            // More common mapping
+            if (tvSymbol === "BINANCE:SOLUSDC") tvSymbol = "BINANCE:SOLUSDT";
+            if (tvSymbol === "BINANCE:BTCUSDC") tvSymbol = "BINANCE:BTCUSDT";
+            if (tvSymbol === "BINANCE:ETHUSDC") tvSymbol = "BINANCE:ETHUSDT";
         }
 
         script.innerHTML = JSON.stringify({
@@ -44,11 +44,16 @@ const TradingViewChart = ({ symbol, theme = 'dark' }: TradingViewChartProps) => 
             "style": "1", // 1 is Candlesticks
             "locale": "en",
             "enable_publishing": false,
-            "allow_symbol_change": false,
+            "backgroundColor": theme === "dark" ? "rgba(26, 26, 26, 1)" : "rgba(255, 255, 255, 1)",
+            "gridColor": theme === "dark" ? "rgba(42, 46, 57, 0.06)" : "rgba(240, 243, 250, 0.06)",
+            "withdateranges": true,
+            "hide_side_toolbar": false,
+            "allow_symbol_change": true,
+            "save_image": false,
+            "details": true,
+            "hotlist": true,
             "calendar": false,
             "support_host": "https://www.tradingview.com",
-            "hide_top_toolbar": false,
-            "save_image": false,
             "container_id": "tradingview_chart_container"
         });
 
@@ -60,13 +65,10 @@ const TradingViewChart = ({ symbol, theme = 'dark' }: TradingViewChartProps) => 
         currentContainer.appendChild(widgetDiv);
         currentContainer.appendChild(script);
 
-        return () => {
-            // Cleanup happens on next effect run
-        };
     }, [symbol, theme]);
 
     return (
-        <div className="tradingview-widget-container" ref={container} style={{ height: "800px", width: "100%" }}>
+        <div className="tradingview-widget-container h-full w-full" ref={container}>
         </div>
     );
 }

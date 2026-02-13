@@ -215,48 +215,31 @@ const OrderBook = ({
 
     return (
         <Card className="border border-border/50 shadow-xl dark:bg-black dark:border-darkborder h-full overflow-hidden flex flex-col animate-fade-in-up">
-            <CardHeader className="pb-3 border-b border-border/10 dark:border-white/5">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                        <div className="p-1.5 bg-primary/10 rounded-lg">
-                            <Layers className="w-4 h-4 text-primary" />
-                        </div>
-                        <div>
-                            <h3 className="text-sm font-bold text-dark dark:text-white leading-tight">
-                                Order Book
-                            </h3>
-                            <p className="text-[9px] text-muted font-medium uppercase tracking-widest">
-                                {error ? "Reconnecting..." : "Binance Live"}
-                            </p>
-                        </div>
-                    </div>
-
-                    {/* View Toggles */}
-                    <div className="flex gap-1 p-0.5 bg-muted/10 dark:bg-white/5 rounded-lg border border-border/10">
-                        {(
-                            [
-                                { key: "both", label: "Both", icon: <ArrowUpDown className="w-3 h-3" /> },
-                                { key: "bids", label: "Bids", icon: <BarChart3 className="w-3 h-3 text-success" /> },
-                                { key: "asks", label: "Asks", icon: <BarChart3 className="w-3 h-3 text-error rotate-180" /> },
-                            ] as const
-                        ).map((v) => (
-                            <button
-                                key={v.key}
-                                onClick={() => setView(v.key)}
-                                className={cn(
-                                    "p-1.5 rounded-md transition-all",
-                                    view === v.key
-                                        ? "bg-white dark:bg-white/10 shadow-sm"
-                                        : "hover:bg-white/50 dark:hover:bg-white/5"
-                                )}
-                                title={v.label}
-                            >
-                                {v.icon}
-                            </button>
-                        ))}
-                    </div>
+            <div className="flex items-center justify-between px-3 py-2 bg-[#F9FAFB] dark:bg-[#1f1f1f] border-b border-border/10">
+                <span className="text-[11px] font-bold text-dark dark:text-white uppercase tracking-wider">Order Book</span>
+                <div className="flex gap-1">
+                    {(
+                        [
+                            { key: "both", label: "Both", icon: <ArrowUpDown className="w-3 h-3" /> },
+                            { key: "bids", label: "Bids", icon: <BarChart3 className="w-3 h-3 text-success" /> },
+                            { key: "asks", label: "Asks", icon: <BarChart3 className="w-3 h-3 text-error rotate-180" /> },
+                        ] as const
+                    ).map((v) => (
+                        <button
+                            key={v.key}
+                            onClick={() => setView(v.key)}
+                            className={cn(
+                                "p-1 rounded transition-all",
+                                view === v.key
+                                    ? "bg-white dark:bg-white/10 shadow-sm"
+                                    : "hover:bg-white/50 dark:hover:bg-white/5 opacity-50"
+                            )}
+                        >
+                            {v.icon}
+                        </button>
+                    ))}
                 </div>
-            </CardHeader>
+            </div>
 
             <CardContent className="p-0 flex-1 flex flex-col overflow-hidden">
                 {/* Column Headers */}
@@ -293,11 +276,11 @@ const OrderBook = ({
                         )}
 
                         {/* Spread / Last Price Indicator */}
-                        <div className="flex items-center justify-between px-3 py-2 bg-muted/5 dark:bg-white/3 border-y border-border/10 dark:border-white/5">
+                        <div className="flex items-center justify-between px-3 py-1.5 bg-muted/5 dark:bg-white/3 border-y border-border/10 dark:border-white/5">
                             <div className="flex items-center gap-2">
                                 <span
                                     className={cn(
-                                        "text-lg font-black tabular-nums transition-colors",
+                                        "text-base font-black tabular-nums transition-colors",
                                         priceDirection === "up"
                                             ? "text-success"
                                             : priceDirection === "down"
@@ -307,21 +290,10 @@ const OrderBook = ({
                                 >
                                     {formatPrice(lastPrice)}
                                 </span>
-                                {priceDirection !== "neutral" && (
-                                    <span
-                                        className={cn(
-                                            "text-xs",
-                                            priceDirection === "up" ? "text-success" : "text-error"
-                                        )}
-                                    >
-                                        {priceDirection === "up" ? "↑" : "↓"}
-                                    </span>
-                                )}
                             </div>
                             <div className="text-right">
-                                <p className="text-[9px] font-black text-muted uppercase">Spread</p>
                                 <p className="text-[10px] font-bold text-muted tabular-nums">
-                                    ${spread.value < 0.01 ? spread.value.toFixed(4) : spread.value.toFixed(2)} ({spread.pct}%)
+                                    {spread.pct}%
                                 </p>
                             </div>
                         </div>
