@@ -23,7 +23,7 @@ export default function SpotTradingPage() {
             <div className="grid grid-cols-12 gap-5">
                 {/* Chart - Main Area */}
                 <div className="col-span-12 xl:col-span-8 2xl:col-span-9">
-                    <TradingChart />
+                    <TradingChart pair={selectedPair} />
                 </div>
 
                 {/* Spot Interface - Right Side */}

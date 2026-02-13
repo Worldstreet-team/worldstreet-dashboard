@@ -1,8 +1,6 @@
 "use client";
 import React, { useContext, useState, useEffect, useCallback, useRef } from "react";
-import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { ApexOptions } from "apexcharts";
 import { Icon } from "@iconify/react";
 import { CustomizerContext } from "@/app/context/customizerContext";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -10,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
-const Chart = dynamic(() => import("react-apexcharts"), { ssr: false });
+import TradingViewChart from "./TradingViewChart";
 
 // ── Asset definitions (crypto only) ────────────────────────────────────────
 
@@ -22,9 +20,11 @@ interface AssetInfo {
 }
 
 const CRYPTO_ASSETS: AssetInfo[] = [
-  { symbol: "BTC", pair: "BTC/USD", icon: "cryptocurrency-color:btc", bgColor: "bg-amber-500/10" },
+  { symbol: "SOL", pair: "SOL/USDC", icon: "cryptocurrency-color:sol", bgColor: "bg-purple-500/10" },
   { symbol: "ETH", pair: "ETH/USD", icon: "cryptocurrency-color:eth", bgColor: "bg-indigo-500/10" },
+  { symbol: "BTC", pair: "BTC/USD", icon: "cryptocurrency-color:btc", bgColor: "bg-amber-500/10" },
   { symbol: "XRP", pair: "XRP/USD", icon: "cryptocurrency-color:xrp", bgColor: "bg-gray-500/10" },
+  { symbol: "LINK", pair: "LINK/USD", icon: "cryptocurrency-color:link", bgColor: "bg-blue-500/10" },
 ];
 
 const TIMEFRAMES = ["1H", "4H", "1D", "1W", "1M"] as const;
@@ -49,7 +49,7 @@ interface ChartApiResponse {
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-const TradingChart = () => {
+const TradingChart = ({ pair }: { pair?: string }) => {
   const { activeMode } = useContext(CustomizerContext);
   const router = useRouter();
   const [selectedSymbol, setSelectedSymbol] = useState("BTC");
@@ -100,6 +100,13 @@ const TradingChart = () => {
 
   // Re-fetch when asset or timeframe changes
   useEffect(() => {
+    if (pair) {
+      const symbol = pair.split('/')[0];
+      setSelectedSymbol(symbol);
+    }
+  }, [pair]);
+
+  useEffect(() => {
     fetchChartData(selectedSymbol, timeframe);
   }, [selectedSymbol, timeframe, fetchChartData]);
 
@@ -112,80 +119,6 @@ const TradingChart = () => {
   }, [selectedSymbol, timeframe, fetchChartData]);
 
   const isPositive = stats.change >= 0;
-
-  // Format timestamps for x-axis labels
-  const dateLabels = chartData.map((point) => {
-    const d = new Date(point.timestamp);
-    if (timeframe === "1H" || timeframe === "4H" || timeframe === "1D") {
-      return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    }
-    return d.toLocaleDateString([], { month: "short", day: "numeric" });
-  });
-
-  const priceValues = chartData.map((point) => point.price);
-
-  // Chart config
-  const chartOptions: ApexOptions = {
-    chart: {
-      type: "area",
-      height: 350,
-      fontFamily: "inherit",
-      foreColor: activeMode === "dark" ? "#94a3b8" : "#64748b",
-      toolbar: { show: false },
-      sparkline: { enabled: false },
-      animations: { enabled: true, speed: 600, dynamicAnimation: { speed: 350 } },
-    },
-    dataLabels: { enabled: false },
-    stroke: {
-      curve: "smooth",
-      width: 2,
-      colors: [isPositive ? "var(--color-success)" : "var(--color-error)"],
-    },
-    fill: {
-      type: "gradient",
-      gradient: {
-        shadeIntensity: 1,
-        opacityFrom: 0.3,
-        opacityTo: 0.05,
-        stops: [0, 90, 100],
-        colorStops: [
-          { offset: 0, color: isPositive ? "var(--color-success)" : "var(--color-error)", opacity: 0.3 },
-          { offset: 100, color: isPositive ? "var(--color-success)" : "var(--color-error)", opacity: 0.05 },
-        ],
-      },
-    },
-    xaxis: {
-      categories: dateLabels,
-      labels: {
-        style: { colors: activeMode === "dark" ? "#94a3b8" : "#64748b", fontSize: "11px" },
-        rotate: 0,
-        maxHeight: 30,
-      },
-      axisBorder: { show: false },
-      axisTicks: { show: false },
-      tickAmount: Math.min(dateLabels.length, 10),
-    },
-    yaxis: {
-      labels: {
-        style: { colors: activeMode === "dark" ? "#94a3b8" : "#64748b", fontSize: "11px" },
-        formatter: (val) => formatPrice(val, selectedSymbol),
-      },
-    },
-    grid: {
-      borderColor: activeMode === "dark" ? "#1e293b" : "#f1f5f9",
-      strokeDashArray: 4,
-      xaxis: { lines: { show: false } },
-    },
-    tooltip: {
-      theme: activeMode === "dark" ? "dark" : "light",
-      x: { show: true },
-      y: {
-        formatter: (val) => formatPrice(val, selectedSymbol),
-      },
-    },
-  };
-
-  const chartSeries = [{ name: `${selectedSymbol}/USD`, data: priceValues }];
 
   return (
     <Card className="border border-border/50 shadow-sm dark:bg-black dark:border-darkborder overflow-hidden animate-fade-in-up">
@@ -323,7 +256,12 @@ const TradingChart = () => {
             </div>
           </div>
         ) : (
-          <Chart options={chartOptions} series={chartSeries} type="area" height={300} width="100%" />
+          <div className="min-h-[450px]">
+            <TradingViewChart
+              symbol={selectedSymbol + "USDC"}
+              theme={activeMode === "dark" ? "dark" : "light"}
+            />
+          </div>
         )}
       </CardContent>
 
