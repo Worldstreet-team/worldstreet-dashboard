@@ -9,6 +9,7 @@ import { formatAmount, formatUSD } from "@/lib/wallet/amounts";
 import { usePrices, getPrice } from "@/lib/wallet/usePrices";
 import Footer from "@/components/dashboard/Footer";
 import { ReceiveModal, SendModal, AddTokenModal } from "@/components/wallet";
+import SpotInterface from "@/components/trading/SpotInterface";
 
 // Asset type definition
 interface Asset {
@@ -321,9 +322,9 @@ const AssetsPage = () => {
           </div>
         </div>
 
-        {/* Assets List */}
-        <div className="col-span-12">
-          <div className="bg-white dark:bg-black border border-border/50 dark:border-darkborder rounded-2xl p-6 shadow-sm">
+        {/* Assets List and Spot Trading */}
+        <div className="col-span-12 lg:col-span-8">
+          <div className="bg-white dark:bg-black border border-border/50 dark:border-darkborder rounded-2xl p-6 shadow-sm h-full">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-dark dark:text-white">Assets</h2>
               <button
@@ -336,7 +337,7 @@ const AssetsPage = () => {
                 Add Token
               </button>
             </div>
-            
+
             {isLoading && assets.length === 0 ? (
               <div className="flex items-center justify-center py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -352,7 +353,7 @@ const AssetsPage = () => {
                     key={asset.id}
                     className="flex items-center justify-between p-4 bg-muted/30 dark:bg-white/5 rounded-xl hover:bg-muted/40 dark:hover:bg-white/10 transition-colors group"
                   >
-                    <div 
+                    <div
                       className="flex items-center gap-3 flex-1 cursor-pointer"
                       onClick={() => setSendModal({ open: true, asset })}
                     >
@@ -383,7 +384,7 @@ const AssetsPage = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <div 
+                      <div
                         className="text-right cursor-pointer"
                         onClick={() => setSendModal({ open: true, asset })}
                       >
@@ -416,6 +417,11 @@ const AssetsPage = () => {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Spot Trading Interface */}
+        <div className="col-span-12 lg:col-span-4">
+          <SpotInterface />
         </div>
 
         <div className="col-span-12">
