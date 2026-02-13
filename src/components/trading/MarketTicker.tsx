@@ -153,7 +153,7 @@ const MarketTicker = ({
     }
 
     return (
-        <div className="bg-white dark:bg-black border border-border/50 dark:border-darkborder rounded-2xl overflow-hidden animate-fade-in-up">
+        <div className="bg-white dark:bg-black border border-border/50 dark:border-darkborder rounded-2xl overflow-hidden animate-fade-in-up z-9999">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-0 p-4 sm:px-6 sm:py-4">
                 {/* Pair Selector */}
                 <div className="relative">
