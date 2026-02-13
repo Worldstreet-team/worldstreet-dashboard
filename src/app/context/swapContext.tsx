@@ -29,13 +29,22 @@ export const SWAP_CHAINS = {
     id: 1,
     name: "Ethereum",
     symbol: "ETH",
-    logo: "https://raw.githubusercontent.com/lifinance/types/main/src/assets/icons/chains/ethereum.svg",
+    logo: "https://static.debank.com/image/chain/logo_url/eth/265c6ad30399940c562599eb8a183296.png",
+    type: "EVM",
   },
   solana: {
     id: 1151111081099710,
     name: "Solana",
     symbol: "SOL",
-    logo: "https://raw.githubusercontent.com/lifinance/types/main/src/assets/icons/chains/solana.svg",
+    logo: "https://static.debank.com/image/chain/logo_url/sol/1e6d4c14106579294f997c02b37be801.png",
+    type: "SVM",
+  },
+  bitcoin: {
+    id: 20000000000001,
+    name: "Bitcoin",
+    symbol: "BTC",
+    logo: "https://static.debank.com/image/coin/logo_url/btc/c543666657934440537e2315fa763c37.png",
+    type: "UTXO",
   },
 } as const;
 
@@ -104,86 +113,28 @@ export interface SwapStatus {
 // ── Format swap errors into user-friendly messages ─────────────────────────
 // Ported from crypto-test-1 formatSwapError + extended with Solana-specific errors
 export function formatSwapError(err: unknown, chainName?: string): string {
-  const msg =
-    err instanceof Error ? err.message : typeof err === "string" ? err : String(err);
-  const chain = chainName || "Network";
+  const msg = err instanceof Error ? err.message : typeof err === "string" ? err : String(err);
+  const chain = chainName || "Swap";
 
-  // --- Solana-specific errors ---
-  if (
-    msg.includes("TransactionExpiredTimeoutError") ||
-    msg.includes("Transaction was not confirmed in")
-  ) {
-    return "Transaction timed out waiting for confirmation. It may still succeed — check your wallet in a few minutes.";
+  if (msg.includes("insufficient") || msg.includes("Attempt to debit an account")) {
+    return `Insufficient ${chain} balance. Your wallet might be empty or missing funds for gas.`;
   }
-  if (msg.includes("TransactionExpiredBlockheightExceededError") || msg.includes("block height exceeded")) {
-    return "Transaction expired because the network was too busy. Please try again.";
+  if (msg.includes("Simulation failed")) {
+    return `Transaction simulation failed on ${chain}. This usually means insufficient funds or an invalid transaction state.`;
   }
-  if (msg.includes("Simulation failed") || msg.includes("SimulationFailed")) {
-    return `Transaction simulation failed on ${chain}. This usually means insufficient funds or the swap route has expired. Try getting a new quote.`;
-  }
-  if (msg.includes("Blockhash not found") || msg.includes("blockhash")) {
-    return "Transaction blockhash expired. Please try the swap again.";
-  }
-  if (msg.includes("Non-base58 character") || msg.includes("non-base58") || msg.includes("not base58")) {
-    return "Transaction data format error. The swap route may not be compatible — try a different token pair or amount.";
-  }
-  if (msg.includes("could not find mint")) {
-    return "Token mint account not found on Solana. The token may not exist on this network.";
-  }
-  if (msg.includes("insufficient lamports") || msg.includes("Attempt to debit an account")) {
-    return `Insufficient SOL balance for transaction fees. You need a small amount of SOL to cover gas.`;
-  }
-  if (msg.includes("rent-exempt") || msg.includes("rent exempt")) {
-    return "Insufficient SOL for account rent. You need at least 0.002 SOL to create token accounts.";
-  }
-  if (msg.includes("VersionedTransaction") || msg.includes("deserialize")) {
-    return "Failed to process the swap transaction data. The route may have changed — try refreshing the quote.";
-  }
-  if (msg.includes("AccountNotFound") || msg.includes("Account does not exist")) {
-    return "Token account not found. Ensure your wallet has been properly initialized.";
-  }
-
-  // --- EVM-specific errors ---
-  if (msg.includes("insufficient funds") || msg.includes("INSUFFICIENT_FUNDS")) {
-    return `Insufficient ${chain} balance. Make sure you have enough ETH for gas fees.`;
-  }
-  if (msg.includes("nonce") || msg.includes("NONCE_EXPIRED")) {
-    return "Transaction nonce conflict. Please wait a moment and try again.";
-  }
-  if (msg.includes("replacement fee too low") || msg.includes("REPLACEMENT_UNDERPRICED")) {
-    return "A pending transaction is blocking this one. Wait for it to confirm or increase gas.";
-  }
-  if (msg.includes("execution reverted") || msg.includes("CALL_EXCEPTION")) {
-    return "Swap transaction reverted on-chain. The route may have expired — try a new quote.";
-  }
-
-  // --- General errors ---
   if (msg.includes("Could not find token")) {
-    return "Li.Fi could not locate the token on the destination chain. Try a different token or route.";
+    return `Asset identification error: Li.Fi could not locate the token on the destination chain.`;
   }
   if (msg.includes("rejected") || msg.includes("cancelled") || msg.includes("denied")) {
-    return "Transaction was rejected.";
+    return "Transaction was rejected by the user.";
   }
-  if (msg.includes("network") || msg.includes("NETWORK_ERROR") || msg.includes("fetch")) {
-    return "Network connection error. Please check your internet and try again.";
+  if (msg.includes("network") || msg.includes("connection") || msg.includes("fetch")) {
+    return `Network connection error. Please check your internet.`;
   }
-  if (msg.includes("slippage") || msg.includes("price") || msg.includes("SLIPPAGE")) {
-    return "Swap failed due to high price slippage. Try increasing your slippage tolerance in settings.";
-  }
-  if (msg.includes("No transaction data")) {
-    return "The quote didn't include transaction data. This route may not be available — try a different pair.";
-  }
-  if (msg.includes("wallet keys") || msg.includes("wallet not available")) {
-    return "Wallet not available. Please ensure your wallet is set up and try again.";
-  }
-  if (msg.includes("Incorrect PIN") || msg.includes("Failed to retrieve")) {
-    return "Failed to unlock wallet. Check your PIN and try again.";
-  }
-  if (msg.includes("timeout") || msg.includes("TIMEOUT")) {
-    return "Request timed out. The network might be congested — please try again.";
+  if (msg.includes("slippage") || msg.includes("price")) {
+    return "Swap failed due to high price slippage.";
   }
 
-  // Fallback
   return `${chain} Error: ${msg.length > 200 ? msg.slice(0, 200) + "..." : msg}`;
 }
 
@@ -283,6 +234,7 @@ export function SwapProvider({ children }: { children: ReactNode }) {
   const [tokens, setTokens] = useState<Record<ChainKey, SwapToken[]>>({
     ethereum: [],
     solana: [],
+    bitcoin: [],
   });
   const [tokensLoading, setTokensLoading] = useState(false);
   const [quote, setQuote] = useState<SwapQuote | null>(null);
