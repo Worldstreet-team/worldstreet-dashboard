@@ -1,0 +1,232 @@
+"use client";
+
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
+import { Clock, TrendingUp, Loader2, WifiOff } from "lucide-react";
+
+interface Trade {
+    id: string;
+    price: number;
+    size: number;
+    side: "buy" | "sell";
+    time: Date;
+    isNew?: boolean;
+}
+
+// Map our pair symbols to Binance symbols
+const PAIR_TO_BINANCE: Record<string, string> = {
+    "SOL/USDC": "SOLUSDC",
+    "ETH/USDC": "ETHUSDC",
+    "BTC/USDC": "BTCUSDC",
+    "XRP/USDC": "XRPUSDC",
+    "LINK/USDC": "LINKUSDC",
+    SOL: "SOLUSDC",
+    ETH: "ETHUSDC",
+    BTC: "BTCUSDC",
+    XRP: "XRPUSDC",
+    LINK: "LINKUSDC",
+};
+
+const SpotTradeHistory = ({ pair = "SOL/USDC" }: { pair?: string; midPrice?: number }) => {
+    const [trades, setTrades] = useState<Trade[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const lastTradeIdRef = useRef<string | null>(null);
+    const maxTrades = 50;
+
+    const binanceSymbol = PAIR_TO_BINANCE[pair] || PAIR_TO_BINANCE[pair.split("/")[0]] || "SOLUSDC";
+
+    // Fetch recent trades from Binance
+    const fetchTrades = useCallback(async (isInitial = false) => {
+        try {
+            const limit = isInitial ? 40 : 20;
+            const res = await fetch(
+                `https://api.binance.com/api/v3/trades?symbol=${binanceSymbol}&limit=${limit}`
+            );
+
+            if (!res.ok) {
+                throw new Error(`Binance API returned ${res.status}`);
+            }
+
+            const data = await res.json();
+
+            if (!Array.isArray(data) || data.length === 0) return;
+
+            const newTrades: Trade[] = data.map((t: {
+                id: number;
+                price: string;
+                qty: string;
+                isBuyerMaker: boolean;
+                time: number;
+            }) => ({
+                id: String(t.id),
+                price: parseFloat(t.price),
+                size: parseFloat(t.qty),
+                // isBuyerMaker=true means the buyer placed the order as a maker,
+                // so the trade was a sell (taker sold into the bid)
+                side: t.isBuyerMaker ? "sell" : "buy" as "buy" | "sell",
+                time: new Date(t.time),
+                isNew: false,
+            }));
+
+            // Sort newest first
+            newTrades.sort((a, b) => b.time.getTime() - a.time.getTime());
+
+            if (isInitial) {
+                setTrades(newTrades.slice(0, maxTrades));
+                lastTradeIdRef.current = newTrades[0]?.id || null;
+            } else {
+                // Only add trades newer than what we already have
+                setTrades((prev) => {
+                    const existingIds = new Set(prev.map((t) => t.id));
+                    const fresh = newTrades
+                        .filter((t) => !existingIds.has(t.id))
+                        .map((t) => ({ ...t, isNew: true }));
+
+                    if (fresh.length === 0) return prev;
+
+                    // Mark all existing as not new
+                    const updated = prev.map((t) => ({ ...t, isNew: false }));
+                    return [...fresh, ...updated].slice(0, maxTrades);
+                });
+
+                if (newTrades[0]) {
+                    lastTradeIdRef.current = newTrades[0].id;
+                }
+            }
+
+            setError(null);
+        } catch (err) {
+            console.error("[SpotTradeHistory] Fetch error:", err);
+            setError("Failed to load trades");
+        } finally {
+            setLoading(false);
+        }
+    }, [binanceSymbol]);
+
+    // Initial fetch
+    useEffect(() => {
+        setLoading(true);
+        setTrades([]);
+        setError(null);
+        fetchTrades(true);
+    }, [fetchTrades]);
+
+    // Poll for new trades every 3s
+    useEffect(() => {
+        const interval = setInterval(() => fetchTrades(false), 3000);
+        return () => clearInterval(interval);
+    }, [fetchTrades]);
+
+    const formatTime = (date: Date) => {
+        return date.toLocaleTimeString("en-US", {
+            hour12: false,
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+        });
+    };
+
+    const formatSize = (size: number) => {
+        if (size >= 1000) return size.toFixed(1);
+        if (size >= 100) return size.toFixed(2);
+        if (size >= 1) return size.toFixed(4);
+        return size.toFixed(6);
+    };
+
+    const formatPrice = (price: number) => {
+        if (price >= 10000) return price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        if (price >= 100) return price.toFixed(2);
+        if (price >= 1) return price.toFixed(4);
+        return price.toFixed(6);
+    };
+
+    return (
+        <Card className="border border-border/50 shadow-xl dark:bg-black dark:border-darkborder h-full overflow-hidden flex flex-col animate-fade-in-up" style={{ animationDelay: "100ms" }}>
+            <CardHeader className="pb-3 border-b border-border/10 dark:border-white/5">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                        <div className="p-1.5 bg-warning/10 rounded-lg">
+                            <TrendingUp className="w-4 h-4 text-warning" />
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-bold text-dark dark:text-white leading-tight">
+                                Recent Trades
+                            </h3>
+                            <p className="text-[9px] text-muted font-medium uppercase tracking-widest">
+                                {error ? "Reconnecting..." : "Binance Live"}
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[10px] text-muted">
+                        <Clock className="w-3 h-3" />
+                        <span className="font-medium">Live</span>
+                        <span className={cn(
+                            "w-1.5 h-1.5 rounded-full animate-pulse",
+                            error ? "bg-error" : "bg-success"
+                        )} />
+                    </div>
+                </div>
+            </CardHeader>
+
+            <CardContent className="p-0 flex-1 flex flex-col overflow-hidden">
+                {/* Column Headers */}
+                <div className="flex items-center text-[9px] font-black text-muted uppercase tracking-widest px-3 py-2 border-b border-border/10 dark:border-white/5">
+                    <span className="w-[34%]">Price (USD)</span>
+                    <span className="w-[33%] text-right">Size</span>
+                    <span className="w-[33%] text-right">Time</span>
+                </div>
+
+                {loading && !trades.length ? (
+                    <div className="flex-1 flex items-center justify-center">
+                        <div className="flex flex-col items-center gap-3">
+                            <Loader2 className="w-6 h-6 text-primary animate-spin" />
+                            <p className="text-[10px] font-bold text-muted">Loading trades...</p>
+                        </div>
+                    </div>
+                ) : error && !trades.length ? (
+                    <div className="flex-1 flex items-center justify-center">
+                        <div className="flex flex-col items-center gap-3 p-6 text-center">
+                            <WifiOff className="w-6 h-6 text-muted/40" />
+                            <p className="text-[10px] font-bold text-muted">Trades unavailable</p>
+                            <p className="text-[9px] text-muted/60">Retrying automatically...</p>
+                        </div>
+                    </div>
+                ) : (
+                    <ScrollArea className="flex-1">
+                        <div className="pb-1">
+                            {trades.map((trade) => (
+                                <div
+                                    key={trade.id}
+                                    className={cn(
+                                        "flex items-center text-[11px] font-mono h-[26px] px-3 transition-all duration-500 hover:bg-white/5 cursor-pointer",
+                                        trade.isNew && "bg-primary/5 animate-fade-in"
+                                    )}
+                                >
+                                    <span
+                                        className={cn(
+                                            "w-[34%] tabular-nums font-semibold",
+                                            trade.side === "buy" ? "text-success" : "text-error"
+                                        )}
+                                    >
+                                        {formatPrice(trade.price)}
+                                    </span>
+                                    <span className="w-[33%] text-right tabular-nums text-dark/80 dark:text-white/70">
+                                        {formatSize(trade.size)}
+                                    </span>
+                                    <span className="w-[33%] text-right tabular-nums text-muted">
+                                        {formatTime(trade.time)}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </ScrollArea>
+                )}
+            </CardContent>
+        </Card>
+    );
+};
+
+export default SpotTradeHistory;

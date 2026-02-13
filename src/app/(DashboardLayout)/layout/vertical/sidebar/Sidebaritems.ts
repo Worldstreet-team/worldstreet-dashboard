@@ -127,7 +127,7 @@ const SidebarContent: MenuItem[] = [
         name: "Spot Trading",
         icon: 'ph:chart-line-up-duotone',
         id: uniqueId(),
-        url: "/",
+        url: "/spot",
       },
       {
         name: "Futures",
