@@ -239,14 +239,14 @@ const TradingChart = ({ pair }: { pair?: string }) => {
 
       <CardContent className="pt-2 pb-1">
         {loading && chartData.length === 0 ? (
-          <div className="h-[600px] flex items-center justify-center">
+          <div className="h-[800px] flex items-center justify-center">
             <div className="flex flex-col items-center gap-2">
               <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
               <p className="text-xs text-muted">Loading chart data...</p>
             </div>
           </div>
         ) : error && chartData.length === 0 ? (
-          <div className="h-[600px] flex items-center justify-center">
+          <div className="h-[800px] flex items-center justify-center">
             <div className="flex flex-col items-center gap-2 text-center">
               <Icon icon="solar:danger-triangle-bold-duotone" className="h-8 w-8 text-warning" />
               <p className="text-sm text-muted">{error}</p>

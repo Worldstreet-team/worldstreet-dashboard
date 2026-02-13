@@ -54,7 +54,7 @@ const TradingViewChart = ({ symbol, theme = 'dark' }: TradingViewChartProps) => 
 
         const widgetDiv = document.createElement("div");
         widgetDiv.id = "tradingview_chart_container";
-        widgetDiv.style.height = "400%";
+        widgetDiv.style.height = "100%";
         widgetDiv.style.width = "100%";
 
         currentContainer.appendChild(widgetDiv);
