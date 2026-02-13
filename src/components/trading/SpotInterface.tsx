@@ -18,7 +18,7 @@ interface SpotInterfaceProps {
 }
 
 const SpotInterface = ({ pair }: SpotInterfaceProps) => {
-    const [baseSymbol, quoteSymbol] = pair.split("/");
+    const [baseSymbol, quoteSymbol] = (pair || "BTC/USDC").split("/");
     const { address: solAddress, balance: solBalance, tokenBalances: solTokens } = useSolana();
     const { address: evmAddress, balance: ethBalance, tokenBalances: ethTokens } = useEvm();
     const { getQuote, executeSwap, quote, quoteLoading, quoteError, executing } = useSwap();

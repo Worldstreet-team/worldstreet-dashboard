@@ -36,7 +36,7 @@ const SpotTradeHistory = ({ pair = "SOL/USDC" }: { pair?: string; midPrice?: num
     const lastTradeIdRef = useRef<string | null>(null);
     const maxTrades = 50;
 
-    const binanceSymbol = PAIR_TO_BINANCE[pair] || PAIR_TO_BINANCE[pair.split("/")[0]] || "SOLUSDC";
+    const binanceSymbol = PAIR_TO_BINANCE[pair] || PAIR_TO_BINANCE[(pair || "BTC/USDC").split("/")[0]] || "BTCUSDC";
 
     // Fetch recent trades from Binance
     const fetchTrades = useCallback(async (isInitial = false) => {

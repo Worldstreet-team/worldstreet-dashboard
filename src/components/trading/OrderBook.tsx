@@ -83,8 +83,7 @@ const OrderBook = ({
 
     const LEVELS = view === "both" ? 14 : 24;
 
-    const binanceSymbol = PAIR_TO_BINANCE[pair] || PAIR_TO_BINANCE[pair.split("/")[0]] || "SOLUSDC";
-
+    const binanceSymbol = PAIR_TO_BINANCE[pair] || PAIR_TO_BINANCE[(pair || "BTC/USDC").split("/")[0]] || "BTCUSDC";
     // Fetch order book from Binance
     const fetchOrderBook = useCallback(async () => {
         try {
