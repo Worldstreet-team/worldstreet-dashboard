@@ -9,6 +9,7 @@ interface TradingViewChartProps {
 
 const TradingViewChart = ({ symbol, theme = 'dark' }: TradingViewChartProps) => {
     const container = useRef<HTMLDivElement>(null);
+    const widgetRef = useRef<any>(null);
 
     useEffect(() => {
         if (!container.current) return;
@@ -25,50 +26,66 @@ const TradingViewChart = ({ symbol, theme = 'dark' }: TradingViewChartProps) => 
         script.async = true;
 
         // Map our symbols to TradingView symbols
-        // Default to BINANCE:SYMBOLUSDT which is common
         let tvSymbol = symbol.replace("/", "");
         if (!tvSymbol.includes(":")) {
-            tvSymbol = `BINANCE:${tvSymbol}T`; // e.g. BTCUSDC -> BTCUSDCT
-            // More common mapping
-            if (tvSymbol === "BINANCE:SOLUSDC") tvSymbol = "BINANCE:SOLUSDT";
-            if (tvSymbol === "BINANCE:BTCUSDC") tvSymbol = "BINANCE:BTCUSDT";
-            if (tvSymbol === "BINANCE:ETHUSDC") tvSymbol = "BINANCE:ETHUSDT";
+            // Default to BINANCE for crypto
+            if (tvSymbol.includes("SOL")) tvSymbol = "BINANCE:SOLUSDT";
+            else if (tvSymbol.includes("BTC")) tvSymbol = "BINANCE:BTCUSDT";
+            else if (tvSymbol.includes("ETH")) tvSymbol = "BINANCE:ETHUSDT";
+            else if (tvSymbol.includes("XRP")) tvSymbol = "BINANCE:XRPUSDT";
+            else if (tvSymbol.includes("LINK")) tvSymbol = "BINANCE:LINKUSDT";
+            else tvSymbol = `BINANCE:${tvSymbol}T`;
         }
 
-        script.innerHTML = JSON.stringify({
+        const config = {
             "autosize": true,
             "symbol": tvSymbol,
             "interval": "D",
             "timezone": "Etc/UTC",
             "theme": theme,
-            "style": "1", // 1 is Candlesticks
+            "style": "1",
             "locale": "en",
             "enable_publishing": false,
-            "backgroundColor": theme === "dark" ? "rgba(26, 26, 26, 1)" : "rgba(255, 255, 255, 1)",
-            "gridColor": theme === "dark" ? "rgba(42, 46, 57, 0.06)" : "rgba(240, 243, 250, 0.06)",
-            "withdateranges": true,
-            "hide_side_toolbar": false,
-            "allow_symbol_change": true,
+            "backgroundColor": theme === "dark" ? "rgba(10, 10, 10, 1)" : "rgba(255, 255, 255, 1)",
+            "gridColor": theme === "dark" ? "rgba(42, 46, 57, 0.05)" : "rgba(240, 243, 250, 0.05)",
+            "withdateranges": false, // Disable for mobile performance
+            "hide_side_toolbar": true, // Disable for mobile performance
+            "allow_symbol_change": false, // Disable for mobile performance
             "save_image": false,
-            "details": true,
-            "hotlist": true,
+            "details": false, // Disable for mobile performance
+            "hotlist": false, // Disable for mobile performance
             "calendar": false,
+            "show_popup_button": true,
+            "popup_width": "1000",
+            "popup_height": "650",
             "support_host": "https://www.tradingview.com",
             "container_id": "tradingview_chart_container"
-        });
+        };
+
+        script.innerHTML = JSON.stringify(config);
 
         const widgetDiv = document.createElement("div");
         widgetDiv.id = "tradingview_chart_container";
+        widgetDiv.className = "tradingview-widget-container__widget";
         widgetDiv.style.height = "100%";
         widgetDiv.style.width = "100%";
 
         currentContainer.appendChild(widgetDiv);
         currentContainer.appendChild(script);
 
+        return () => {
+            // Cleanup
+            if (currentContainer) {
+                while (currentContainer.firstChild) {
+                    currentContainer.removeChild(currentContainer.firstChild);
+                }
+            }
+        };
+
     }, [symbol, theme]);
 
     return (
-        <div className="tradingview-widget-container h-full w-full" ref={container}>
+        <div className="tradingview-widget-container h-full w-full relative overflow-hidden" ref={container}>
         </div>
     );
 }

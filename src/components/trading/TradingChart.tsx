@@ -9,7 +9,7 @@ interface TradingChartProps {
 
 const TradingChart = ({ pair }: TradingChartProps) => {
   const { activeMode } = useContext(CustomizerContext);
-  const symbol = pair.split('/')[0];
+  const symbol = React.useMemo(() => pair.split('/')[0], [pair]);
 
   return (
     <div className="w-full h-full bg-white dark:bg-[#1a1a1a] flex flex-col">
