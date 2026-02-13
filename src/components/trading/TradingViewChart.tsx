@@ -54,7 +54,7 @@ const TradingViewChart = ({ symbol, theme = 'dark' }: TradingViewChartProps) => 
 
         const widgetDiv = document.createElement("div");
         widgetDiv.id = "tradingview_chart_container";
-        widgetDiv.style.height = "100%";
+        widgetDiv.style.height = "400%";
         widgetDiv.style.width = "100%";
 
         currentContainer.appendChild(widgetDiv);
@@ -66,7 +66,7 @@ const TradingViewChart = ({ symbol, theme = 'dark' }: TradingViewChartProps) => 
     }, [symbol, theme]);
 
     return (
-        <div className="tradingview-widget-container" ref={container} style={{ height: "600px", width: "100%" }}>
+        <div className="tradingview-widget-container" ref={container} style={{ height: "800px", width: "100%" }}>
         </div>
     );
 }
