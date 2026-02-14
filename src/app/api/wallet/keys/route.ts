@@ -1,22 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import DashboardProfile from "@/models/DashboardProfile";
-import { verifyToken } from "@/lib/auth-service";
+import { getAuthUser } from "@/lib/auth";
 import { verifyPIN } from "@/lib/wallet/encryption";
-
-/**
- * Helper: extract and verify the authenticated user from the request cookies.
- */
-async function getAuthUser(request: NextRequest) {
-  const accessToken = request.cookies.get("accessToken")?.value;
-  if (!accessToken) return null;
-
-  const result = await verifyToken(accessToken);
-  if (result.success && result.data?.user) {
-    return result.data.user;
-  }
-  return null;
-}
 
 /**
  * POST /api/wallet/keys
@@ -33,7 +19,7 @@ async function getAuthUser(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const authUser = await getAuthUser(request);
+    const authUser = await getAuthUser();
     if (!authUser) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },

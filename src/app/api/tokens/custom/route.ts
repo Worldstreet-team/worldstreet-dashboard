@@ -1,20 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import UserToken from "@/models/UserToken";
-import { verifyToken } from "@/lib/auth-service";
-
-// ── Helper: Get authenticated user ─────────────────────────────────────────
-
-async function getAuthUser(request: NextRequest) {
-  const accessToken = request.cookies.get("accessToken")?.value;
-  if (!accessToken) return null;
-
-  const result = await verifyToken(accessToken);
-  if (result.success && result.data?.user) {
-    return result.data.user;
-  }
-  return null;
-}
+import { getAuthUser } from "@/lib/auth";
 
 /**
  * GET /api/tokens/custom
@@ -22,7 +9,7 @@ async function getAuthUser(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    const user = await getAuthUser(request);
+    const user = await getAuthUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -50,7 +37,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const user = await getAuthUser(request);
+    const user = await getAuthUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -123,7 +110,7 @@ export async function POST(request: NextRequest) {
  */
 export async function PATCH(request: NextRequest) {
   try {
-    const user = await getAuthUser(request);
+    const user = await getAuthUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -163,7 +150,7 @@ export async function PATCH(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
-    const user = await getAuthUser(request);
+    const user = await getAuthUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

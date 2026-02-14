@@ -1,24 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import P2POrder from "@/models/P2POrder";
-import { verifyToken } from "@/lib/auth-service";
+import { getAuthUser } from "@/lib/auth";
 
 // ── Admin emails (hardcoded for now — move to env/db later) ────────────────
 const ADMIN_EMAILS = (process.env.P2P_ADMIN_EMAILS || "").split(",").map((e) => e.trim().toLowerCase());
 
-// ── Auth helper ────────────────────────────────────────────────────────────
+// ── Admin auth helper ──────────────────────────────────────────────────────
 
-async function getAdminUser(request: NextRequest) {
-  const accessToken = request.cookies.get("accessToken")?.value;
-  if (!accessToken) return null;
+async function getAdminUser() {
+  const user = await getAuthUser();
+  if (!user) return null;
 
-  const result = await verifyToken(accessToken);
-  if (!result.success || !result.data?.user) return null;
-
-  const user = result.data.user;
   const email = (user.email || "").toLowerCase();
-
-  // Check if user is admin
   if (!ADMIN_EMAILS.includes(email)) return null;
 
   return user;
@@ -28,7 +22,7 @@ async function getAdminUser(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const admin = await getAdminUser(request);
+    const admin = await getAdminUser();
     if (!admin) {
       return NextResponse.json({ success: false, message: "Forbidden" }, { status: 403 });
     }
@@ -76,7 +70,7 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const admin = await getAdminUser(request);
+    const admin = await getAdminUser();
     if (!admin) {
       return NextResponse.json({ success: false, message: "Forbidden" }, { status: 403 });
     }

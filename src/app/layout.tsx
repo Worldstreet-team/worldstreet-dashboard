@@ -3,10 +3,10 @@ import type { Metadata } from "next";
 import { Outfit } from "next/font/google";
 import "./css/globals.css";
 import { ThemeModeScript } from "flowbite-react";
-import customTheme from "@/utils/theme/custom-theme";
 import { CustomizerContextProvider } from "@/app/context/customizerContext";
 import "../utils/i18n";
 import NextTopLoader from "nextjs-toploader";
+import { ClerkProvider } from "@clerk/nextjs";
 const font = Outfit({ subsets: ["latin"], weight: ["300", "400", "500", "600", "700"] });
 
 export const metadata: Metadata = {
@@ -30,10 +30,16 @@ export default function RootLayout({
         <ThemeModeScript />
       </head>
       <body className={`${font.className}`}>
-        <NextTopLoader color="var(--color-primary)" />
-        <CustomizerContextProvider>
-          {children}
-        </CustomizerContextProvider>
+        <ClerkProvider
+          domain="worldstreetgold.com"
+          isSatellite={true}
+          signInUrl="https://www.worldstreetgold.com/login"
+        >
+          <NextTopLoader color="var(--color-primary)" />
+          <CustomizerContextProvider>
+            {children}
+          </CustomizerContextProvider>
+        </ClerkProvider>
       </body>
     </html>
   );

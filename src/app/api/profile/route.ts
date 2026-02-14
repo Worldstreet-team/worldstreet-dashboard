@@ -1,22 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import DashboardProfile from "@/models/DashboardProfile";
-import { verifyToken } from "@/lib/auth-service";
-
-/**
- * Helper: extract and verify the authenticated user from the request cookies.
- * Returns the auth user object or null.
- */
-async function getAuthUser(request: NextRequest) {
-  const accessToken = request.cookies.get("accessToken")?.value;
-  if (!accessToken) return null;
-
-  const result = await verifyToken(accessToken);
-  if (result.success && result.data?.user) {
-    return result.data.user;
-  }
-  return null;
-}
+import { getAuthUser } from "@/lib/auth";
 
 /**
  * GET /api/profile
@@ -25,7 +10,7 @@ async function getAuthUser(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    const authUser = await getAuthUser(request);
+    const authUser = await getAuthUser();
     if (!authUser) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
@@ -63,7 +48,7 @@ export async function GET(request: NextRequest) {
  */
 export async function PATCH(request: NextRequest) {
   try {
-    const authUser = await getAuthUser(request);
+    const authUser = await getAuthUser();
     if (!authUser) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
+import React, { createContext, useContext, useEffect, ReactNode, useCallback, useMemo } from "react";
+import { useUser, useClerk } from "@clerk/nextjs";
 import { useProfile } from "@/app/context/profileContext";
 
 export interface AuthUser {
@@ -32,71 +33,52 @@ const AuthContext = createContext<AuthContextState>({
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { isLoaded, isSignedIn, user: clerkUser } = useUser();
+  const { signOut } = useClerk();
   const { fetchProfile } = useProfile();
 
-  const verifyUser = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  // Map Clerk user to the AuthUser shape the rest of the app expects
+  const user: AuthUser | null = useMemo(() => {
+    if (!isLoaded || !isSignedIn || !clerkUser) return null;
 
-      // Call our internal API route which reads cookies and talks to auth service
-      const res = await fetch("/api/auth/verify", { credentials: "include" });
-      const data = await res.json();
+    return {
+      userId: clerkUser.id,
+      email: clerkUser.emailAddresses[0]?.emailAddress || "",
+      firstName: clerkUser.firstName || "",
+      lastName: clerkUser.lastName || "",
+      role: (clerkUser.publicMetadata?.role as string) || "user",
+      isVerified: clerkUser.emailAddresses[0]?.verification?.status === "verified",
+      createdAt: clerkUser.createdAt?.toISOString() || "",
+    };
+  }, [isLoaded, isSignedIn, clerkUser]);
 
-      if (data.success && data.user) {
-        setUser(data.user);
-        // Auto-fetch (or auto-create) the dashboard profile
-        await fetchProfile();
-      } else if (data.refreshed && data.user) {
-        // Token was refreshed successfully, user is still valid
-        setUser(data.user);
-        await fetchProfile();
-      } else {
-        // Verification failed, redirect to login
-        setUser(null);
-        window.location.href = "https://worldstreetgold.com/login";
-      }
-    } catch (err) {
-      setUser(null);
-      setError("Failed to verify identity");
-      window.location.href = "https://worldstreetgold.com/login";
-    } finally {
-      setLoading(false);
+  // Auto-fetch profile when user signs in
+  useEffect(() => {
+    if (user) {
+      fetchProfile();
     }
-  }, [fetchProfile]);
+  }, [user, fetchProfile]);
+
+  const refreshUser = useCallback(async () => {
+    if (clerkUser) {
+      await clerkUser.reload();
+      await fetchProfile();
+    }
+  }, [clerkUser, fetchProfile]);
 
   const logout = useCallback(async () => {
-    try {
-      const res = await fetch("/api/auth/logout", {
-        method: "POST",
-        credentials: "include",
-      });
-      // Wait for response to ensure cookies are cleared
-      await res.json();
-    } catch {
-      // ignore
-    }
-    setUser(null);
-    // Small delay to ensure cookies are cleared before redirect
-    setTimeout(() => {
-      window.location.href = "https://worldstreetgold.com/login";
-    }, 100);
-  }, []);
+    await signOut({ redirectUrl: "https://www.worldstreetgold.com/login" });
+  }, [signOut]);
 
-  useEffect(() => {
-    verifyUser();
-  }, [verifyUser]);
+  const loading = !isLoaded;
 
   return (
     <AuthContext.Provider
       value={{
         user,
         loading,
-        error,
-        refreshUser: verifyUser,
+        error: null,
+        refreshUser,
         logout,
       }}
     >

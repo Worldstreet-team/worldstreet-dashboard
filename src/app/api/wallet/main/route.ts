@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import DashboardProfile from "@/models/DashboardProfile";
-import { verifyToken } from "@/lib/auth-service";
+import { getAuthUser } from "@/lib/auth";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
@@ -27,16 +27,7 @@ export interface MainWalletResponse {
 
 // ── Helper: Get authenticated user ─────────────────────────────────────────
 
-async function getAuthUser(request: NextRequest) {
-  const accessToken = request.cookies.get("accessToken")?.value;
-  if (!accessToken) return null;
-
-  const result = await verifyToken(accessToken);
-  if (result.success && result.data?.user) {
-    return result.data.user;
-  }
-  return null;
-}
+// Uses shared Clerk auth helper from @/lib/auth
 
 // ── Helper: Fetch USDT balance from Solana ─────────────────────────────────
 
@@ -94,7 +85,7 @@ async function getUSDTBalance(solanaAddress: string): Promise<{ balance: number;
 export async function GET(request: NextRequest): Promise<NextResponse<MainWalletResponse>> {
   try {
     // Verify authentication
-    const authUser = await getAuthUser(request);
+    const authUser = await getAuthUser();
     if (!authUser) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },

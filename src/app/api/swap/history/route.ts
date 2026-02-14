@@ -1,27 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import SwapTransaction from "@/models/SwapTransaction";
-import { verifyToken } from "@/lib/auth-service";
+import { getAuthUser } from "@/lib/auth";
 import { SWAP_CHAINS, ChainKey } from "@/app/context/swapContext";
-
-// ── Helper: Get authenticated user ─────────────────────────────────────────
-
-async function getAuthUser(request: NextRequest) {
-  const accessToken = request.cookies.get("accessToken")?.value;
-  if (!accessToken) return null;
-
-  const result = await verifyToken(accessToken);
-  if (result.success && result.data?.user) {
-    return result.data.user;
-  }
-  return null;
-}
 
 // ── GET: Fetch swap history ────────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getAuthUser(request);
+    const user = await getAuthUser();
     if (!user) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
@@ -74,7 +61,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getAuthUser(request);
+    const user = await getAuthUser();
     if (!user) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
@@ -165,7 +152,7 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const user = await getAuthUser(request);
+    const user = await getAuthUser();
     if (!user) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },

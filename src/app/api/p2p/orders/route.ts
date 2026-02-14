@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import P2POrder from "@/models/P2POrder";
 import DashboardProfile from "@/models/DashboardProfile";
-import { verifyToken } from "@/lib/auth-service";
+import { getAuthUser } from "@/lib/auth";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -19,24 +19,13 @@ const PLATFORM_BANK_DETAILS: Record<string, { bankName: string; accountNumber: s
   },
 };
 
-// ── Auth helper ────────────────────────────────────────────────────────────
-
-async function getAuthUser(request: NextRequest) {
-  const accessToken = request.cookies.get("accessToken")?.value;
-  if (!accessToken) return null;
-
-  const result = await verifyToken(accessToken);
-  if (result.success && result.data?.user) {
-    return result.data.user;
-  }
-  return null;
-}
+// ── Auth: uses shared Clerk helper from @/lib/auth ──────────────────────────────
 
 // ── GET: List user's P2P orders ────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
   try {
-    const authUser = await getAuthUser(request);
+    const authUser = await getAuthUser();
     if (!authUser) {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
@@ -73,7 +62,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const authUser = await getAuthUser(request);
+    const authUser = await getAuthUser();
     if (!authUser) {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
