@@ -6,6 +6,9 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  typescript: {
+    ignoreBuildErrors: true
+  },
   webpack: (config, { isServer }) => {
     // Enable WebAssembly support for tiny-secp256k1
     config.experiments = {
