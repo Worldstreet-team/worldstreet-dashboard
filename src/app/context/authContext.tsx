@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, ReactNode, useCallback, useMemo } from "react";
+import React, { createContext, useContext, useEffect, ReactNode, useCallback, useMemo, useRef } from "react";
 import { useUser, useClerk } from "@clerk/nextjs";
 import { useProfile } from "@/app/context/profileContext";
 
@@ -36,6 +36,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const { isLoaded, isSignedIn, user: clerkUser } = useUser();
   const { signOut } = useClerk();
   const { fetchProfile } = useProfile();
+  const lastFetchedProfileUserId = useRef<string | null>(null);
 
   // Map Clerk user to the AuthUser shape the rest of the app expects
   const user: AuthUser | null = useMemo(() => {
@@ -54,14 +55,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Auto-fetch profile when user signs in
   useEffect(() => {
-    if (user) {
+    if (!isLoaded) return;
+
+    if (!isSignedIn || !clerkUser?.id) {
+      lastFetchedProfileUserId.current = null;
+      return;
+    }
+
+    if (lastFetchedProfileUserId.current !== clerkUser.id) {
+      lastFetchedProfileUserId.current = clerkUser.id;
       fetchProfile();
     }
-  }, [user, fetchProfile]);
+  }, [isLoaded, isSignedIn, clerkUser?.id, fetchProfile]);
 
   const refreshUser = useCallback(async () => {
     if (clerkUser) {
-      await clerkUser.reload();
       await fetchProfile();
     }
   }, [clerkUser, fetchProfile]);
