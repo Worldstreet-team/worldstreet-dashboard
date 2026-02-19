@@ -160,10 +160,10 @@ const MarketTicker = ({
     }
 
     return (
-        <div className="bg-white dark:bg-black border border-border/50 dark:border-darkborder rounded-2xl animate-fade-in-up z-[100] relative">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-0 p-4 sm:px-6 sm:py-4">
-                {/* Pair Selector */}
-                <div className="relative">
+        <div className="bg-white dark:bg-black border-b border-border/50 dark:border-darkborder animate-fade-in-up relative">
+            <div className="flex flex-row items-center h-14 sm:h-16 px-4 sm:px-6">
+                {/* Pair Selector - Always Visible & Not Clipped */}
+                <div className="relative z-[60]">
                     <button
                         onClick={() => setDropdownOpen(!dropdownOpen)}
                         className="flex items-center gap-3 hover:bg-muted/10 dark:hover:bg-white/5 rounded-xl px-3 py-2 transition-colors -ml-3"
@@ -238,80 +238,79 @@ const MarketTicker = ({
                     )}
                 </div>
 
-                {/* Divider */}
-                <div className="hidden sm:block w-px h-10 bg-border/30 dark:bg-white/5 mx-5" />
+                {/* Scrollable Stats Area */}
+                <div className="flex-1 flex flex-row items-center overflow-x-auto overflow-y-hidden scrollbar-hide ml-4 h-full">
+                    {/* Divider */}
+                    <div className="hidden sm:block w-px h-8 bg-border/30 dark:bg-white/5 mr-4 shrink-0" />
 
-                {/* Price */}
-                <div className="flex items-center gap-4 sm:gap-6 flex-wrap">
-                    <div>
-                        <p
-                            className={cn(
-                                "text-2xl font-black tabular-nums transition-colors",
-                                isPositive ? "text-success" : "text-error"
-                            )}
-                        >
-                            ${formatPrice(currentPair.price)}
-                        </p>
-                    </div>
-
-                    {/* Change */}
-                    <div className="flex items-center gap-1.5">
-                        {isPositive ? (
-                            <TrendingUp className="w-4 h-4 text-success" />
-                        ) : (
-                            <TrendingDown className="w-4 h-4 text-error" />
-                        )}
-                        <div>
+                    {/* Price & Change - Mobile Optimized */}
+                    <div className="flex items-center gap-4 sm:gap-6 shrink-0 pr-4 sm:pr-0">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-0 sm:gap-4">
                             <p
                                 className={cn(
-                                    "text-sm font-black tabular-nums",
+                                    "text-base sm:text-2xl font-black tabular-nums transition-colors leading-none",
                                     isPositive ? "text-success" : "text-error"
                                 )}
                             >
-                                {isPositive ? "+" : ""}
-                                {currentPair.change24h.toFixed(2)}%
+                                ${formatPrice(currentPair.price)}
                             </p>
-                            <p className="text-[9px] text-muted font-bold uppercase">24h</p>
+
+                            <div className="flex items-center gap-1.5 mt-0.5 sm:mt-0">
+                                {isPositive ? (
+                                    <TrendingUp className="w-3 h-3 sm:w-4 h-4 text-success" />
+                                ) : (
+                                    <TrendingDown className="w-3 h-3 sm:w-4 h-4 text-error" />
+                                )}
+                                <p
+                                    className={cn(
+                                        "text-[10px] sm:text-sm font-black tabular-nums",
+                                        isPositive ? "text-success" : "text-error"
+                                    )}
+                                >
+                                    {isPositive ? "+" : ""}
+                                    {currentPair.change24h.toFixed(2)}%
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Divider */}
+                        <div className="hidden lg:block w-px h-8 bg-border/30 dark:bg-white/5" />
+
+                        {/* Stats - Hidden on Mobile to prevent overlap */}
+                        <div className="hidden lg:flex items-center gap-6 shrink-0">
+                            <div>
+                                <p className="text-[9px] text-muted font-black uppercase tracking-wider">
+                                    24h High
+                                </p>
+                                <p className="text-sm font-bold text-dark dark:text-white tabular-nums">
+                                    ${formatPrice(currentPair.high24h)}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-[9px] text-muted font-black uppercase tracking-wider">
+                                    24h Low
+                                </p>
+                                <p className="text-sm font-bold text-dark dark:text-white tabular-nums">
+                                    ${formatPrice(currentPair.low24h)}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-[9px] text-muted font-black uppercase tracking-wider">
+                                    24h Volume
+                                </p>
+                                <p className="text-sm font-bold text-dark dark:text-white tabular-nums">
+                                    {formatVolume(currentPair.volume24h)}
+                                </p>
+                            </div>
                         </div>
                     </div>
 
-                    {/* Divider */}
-                    <div className="hidden lg:block w-px h-8 bg-border/30 dark:bg-white/5" />
-
-                    {/* Stats */}
-                    <div className="hidden lg:flex items-center gap-6">
-                        <div>
-                            <p className="text-[9px] text-muted font-black uppercase tracking-wider">
-                                24h High
-                            </p>
-                            <p className="text-sm font-bold text-dark dark:text-white tabular-nums">
-                                ${formatPrice(currentPair.high24h)}
-                            </p>
-                        </div>
-                        <div>
-                            <p className="text-[9px] text-muted font-black uppercase tracking-wider">
-                                24h Low
-                            </p>
-                            <p className="text-sm font-bold text-dark dark:text-white tabular-nums">
-                                ${formatPrice(currentPair.low24h)}
-                            </p>
-                        </div>
-                        <div>
-                            <p className="text-[9px] text-muted font-black uppercase tracking-wider">
-                                24h Volume
-                            </p>
-                            <p className="text-sm font-bold text-dark dark:text-white tabular-nums">
-                                {formatVolume(currentPair.volume24h)}
-                            </p>
-                        </div>
+                    {/* Activity indicator - Only on Desktop */}
+                    <div className="hidden xl:flex items-center gap-2 ml-auto px-3 py-1.5 bg-success/5 border border-success/10 rounded-full shrink-0">
+                        <Activity className="w-3.5 h-3.5 text-success" />
+                        <span className="text-[10px] font-bold text-success">Market Open</span>
+                        <span className="w-1.5 h-1.5 bg-success rounded-full animate-pulse" />
                     </div>
-                </div>
-
-                {/* Activity indicator */}
-                <div className="hidden xl:flex items-center gap-2 ml-auto px-3 py-1.5 bg-success/5 border border-success/10 rounded-full">
-                    <Activity className="w-3.5 h-3.5 text-success" />
-                    <span className="text-[10px] font-bold text-success">Market Open</span>
-                    <span className="w-1.5 h-1.5 bg-success rounded-full animate-pulse" />
                 </div>
             </div>
         </div>
