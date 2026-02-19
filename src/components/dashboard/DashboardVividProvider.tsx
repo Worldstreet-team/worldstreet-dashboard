@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { VividProvider, VividWidget } from '@worldstreet/vivid-voice'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/app/context/authContext'
@@ -21,15 +21,6 @@ export default function DashboardVividProvider({
   const router = useRouter()
   const { user: authUser } = useAuth()
   const { profile } = useProfile()
-  const [isMobile, setIsMobile] = useState(false)
-
-  // Detect mobile viewport
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 640)
-    handleResize()
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
 
   // Listen for vivid:navigate events dispatched by the navigateToPage function
   useEffect(() => {
@@ -105,11 +96,11 @@ ${portfolioContext}
       {children as any}
       <VividWidget
         showTranscript={true}
-        size={isMobile ? 'sm' : 'md'}
-        position={{ bottom: isMobile ? '16px' : '24px', right: isMobile ? '16px' : '24px' }}
+        size="md"
+        position={{ bottom: '24px', right: '24px' }}
         classNames={{
           container:
-            'fixed z-50 flex flex-col items-end gap-3 max-w-[calc(100vw-32px)]',
+            'fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3 max-sm:scale-[0.625] max-sm:origin-bottom-right max-sm:!bottom-4 max-sm:!right-4',
         }}
       />
     </VividProvider>

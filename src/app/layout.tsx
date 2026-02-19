@@ -25,6 +25,8 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const isProduction = process.env.NODE_ENV === "production";
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -32,9 +34,13 @@ export default function RootLayout({
       </head>
       <body className={`${font.className}`}>
         <ClerkProvider
-          domain="worldstreetgold.com"
-          isSatellite={true}
-          signInUrl="https://www.worldstreetgold.com/login"
+          {...(isProduction
+            ? {
+                domain: "worldstreetgold.com",
+                isSatellite: true,
+                signInUrl: "https://www.worldstreetgold.com/login",
+              }
+            : {})}
         >
           <NextTopLoader color="var(--color-primary)" />
           <CustomizerContextProvider>
