@@ -146,9 +146,9 @@ const MarketOverview = () => {
         {/* Market Stats */}
         <div className="grid grid-cols-3 gap-2">
           {marketStats.map((stat, index) => (
-            <div key={index} className="text-center p-2.5 rounded-lg bg-muted/20 dark:bg-white/3">
-              <p className="text-[10px] text-muted mb-1 leading-tight">{stat.label}</p>
-              <p className="font-bold text-sm text-dark dark:text-white">{stat.value}</p>
+            <div key={index} className="text-center p-2.5 rounded-lg bg-muted/20 dark:bg-white/3 overflow-hidden">
+              <p className="text-[10px] text-muted mb-1 leading-tight truncate">{stat.label}</p>
+              <p className="font-bold text-sm text-dark dark:text-white truncate">{stat.value}</p>
               {stat.change && (
                 <p className={cn("text-[10px] font-medium mt-0.5", 
                   stat.change.startsWith("+") ? "text-success" : 
@@ -162,11 +162,11 @@ const MarketOverview = () => {
         {/* Market Cap Distribution */}
         <div>
           <h6 className="text-xs font-semibold text-dark dark:text-white mb-2 uppercase tracking-wider">Market Cap Distribution</h6>
-          <div className="flex items-center gap-3">
-            <div className="flex-1">
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            <div className="flex-1 w-full min-w-0">
               <Chart options={allocationOptions} series={allocationData.series} type="donut" height={150} />
             </div>
-            <div className="space-y-2">
+            <div className="w-full sm:w-auto grid grid-cols-2 sm:grid-cols-1 gap-2 pt-2 sm:pt-0 shrink-0">
               {[
                 { label: "Bitcoin", color: "bg-[#f7931a]", value: `${allocationData.series[0]}%` },
                 { label: "Ethereum", color: "bg-[#627eea]", value: `${allocationData.series[1]}%` },
@@ -200,12 +200,12 @@ const MarketOverview = () => {
                         <Icon icon={icon} className="h-4 w-4" />
                       )}
                     </div>
-                    <div>
-                      <p className="font-medium text-xs text-dark dark:text-white">{mover.symbol}</p>
-                      <p className="text-[10px] text-muted">{mover.name}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-xs text-dark dark:text-white truncate">{mover.symbol}</p>
+                      <p className="text-[10px] text-muted truncate">{mover.name}</p>
                     </div>
                   </div>
-                  <Badge variant="outline" className={cn("text-[10px] font-semibold border-0 rounded px-1.5",
+                  <Badge variant="outline" className={cn("text-[10px] font-semibold border-0 rounded px-1.5 shrink-0 ml-2",
                     isPositive ? "bg-success/10 text-success" : "bg-error/10 text-error")}>
                     <Icon icon={isPositive ? "solar:arrow-up-linear" : "solar:arrow-down-linear"} className="h-2.5 w-2.5 mr-0.5" />
                     {Math.abs(mover.change24h).toFixed(1)}%
