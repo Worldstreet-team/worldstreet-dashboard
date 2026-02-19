@@ -29,6 +29,20 @@ const PAIR_TO_KUCOIN: Record<string, string> = {
     LINK: "LINK-USDC",
 };
 
+// Map our pair symbols to Binance symbols
+const PAIR_TO_BINANCE: Record<string, string> = {
+    "SOL/USDC": "SOLUSDC",
+    "ETH/USDC": "ETHUSDC",
+    "BTC/USDC": "BTCUSDC",
+    "XRP/USDC": "XRPUSDC",
+    "LINK/USDC": "LINKUSDC",
+    SOL: "SOLUSDC",
+    ETH: "ETHUSDC",
+    BTC: "BTCUSDC",
+    XRP: "XRPUSDC",
+    LINK: "LINKUSDC",
+};
+
 const SpotTradeHistory = ({ pair = "SOL/USDC" }: { pair?: string; midPrice?: number }) => {
     const [trades, setTrades] = useState<Trade[]>([]);
     const [loading, setLoading] = useState(true);
@@ -37,38 +51,61 @@ const SpotTradeHistory = ({ pair = "SOL/USDC" }: { pair?: string; midPrice?: num
     const maxTrades = 50;
 
     const kucoinSymbol = PAIR_TO_KUCOIN[pair] || PAIR_TO_KUCOIN[(pair || "BTC/USDC").split("/")[0]] || "BTC-USDC";
+    const binanceSymbol = PAIR_TO_BINANCE[pair] || PAIR_TO_BINANCE[(pair || "BTC/USDC").split("/")[0]] || "BTCUSDC";
 
-    // Fetch recent trades from KuCoin
+    // Fetch recent trades with fallback logic
     const fetchTrades = useCallback(async (isInitial = false) => {
         try {
-            const res = await fetch(
-                `https://api.kucoin.com/api/v1/market/histories?symbol=${kucoinSymbol}`
-            );
+            let rawTrades: any[] = [];
+            let source: "binance" | "kucoin" | null = null;
 
-            if (!res.ok) {
-                throw new Error(`KuCoin API returned ${res.status}`);
+            // 1. Try Binance first
+            try {
+                const res = await fetch(`https://api.binance.com/api/v3/trades?symbol=${binanceSymbol}&limit=${maxTrades}`);
+                if (res.ok) {
+                    rawTrades = await res.json();
+                    source = "binance";
+                }
+            } catch (e) {
+                console.warn("[SpotTradeHistory] Binance fetch failed, falling back...");
             }
 
-            const json = await res.json();
-            const data = json.data;
+            // 2. Fallback to KuCoin
+            if (rawTrades.length === 0) {
+                try {
+                    const res = await fetch(`https://api.kucoin.com/api/v1/market/histories?symbol=${kucoinSymbol}`);
+                    if (res.ok) {
+                        const json = await res.json();
+                        rawTrades = json.data;
+                        source = "kucoin";
+                    }
+                } catch (e) {
+                    console.warn("[SpotTradeHistory] KuCoin fetch failed.");
+                }
+            }
 
-            if (!Array.isArray(data) || data.length === 0) return;
+            if (!Array.isArray(rawTrades) || rawTrades.length === 0) {
+                if (isInitial) throw new Error("No trade data available from any provider");
+                return;
+            }
 
-            const newTrades: Trade[] = data.map((t: {
-                sequence: string;
-                price: string;
-                size: string;
-                side: "buy" | "sell";
-                time: number;
-            }) => ({
-                id: String(t.sequence),
-                price: parseFloat(t.price),
-                size: parseFloat(t.size),
-                side: t.side,
-                // KuCoin time is in nanoseconds, convert to milliseconds for JS Date
-                time: new Date(Math.floor(t.time / 1000000)),
-                isNew: false,
-            }));
+            const newTrades: Trade[] = source === "binance"
+                ? rawTrades.map((t: any) => ({
+                    id: String(t.id),
+                    price: parseFloat(t.price),
+                    size: parseFloat(t.qty),
+                    side: t.isBuyerMaker ? "sell" : "buy",
+                    time: new Date(t.time),
+                    isNew: false,
+                }))
+                : rawTrades.map((t: any) => ({
+                    id: String(t.sequence),
+                    price: parseFloat(t.price),
+                    size: parseFloat(t.size),
+                    side: t.side,
+                    time: new Date(Math.floor(t.time / 1000000)),
+                    isNew: false,
+                }));
 
             // Sort newest first
             newTrades.sort((a, b) => b.time.getTime() - a.time.getTime());
@@ -98,12 +135,12 @@ const SpotTradeHistory = ({ pair = "SOL/USDC" }: { pair?: string; midPrice?: num
 
             setError(null);
         } catch (err) {
-            console.error("[SpotTradeHistory] Fetch error:", err);
+            console.error("[SpotTradeHistory] All providers failed:", err);
             setError((prev) => prev !== "Disconnected" ? "Disconnected" : prev);
         } finally {
             setLoading(false);
         }
-    }, [kucoinSymbol]);
+    }, [kucoinSymbol, binanceSymbol]);
 
     // Initial fetch
     useEffect(() => {

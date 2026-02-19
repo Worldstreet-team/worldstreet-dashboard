@@ -30,6 +30,20 @@ const PAIR_TO_KUCOIN: Record<string, string> = {
     LINK: "LINK-USDC",
 };
 
+// Map our pair symbols to Binance symbols
+const PAIR_TO_BINANCE: Record<string, string> = {
+    "SOL/USDC": "SOLUSDC",
+    "ETH/USDC": "ETHUSDC",
+    "BTC/USDC": "BTCUSDC",
+    "XRP/USDC": "XRPUSDC",
+    "LINK/USDC": "LINKUSDC",
+    SOL: "SOLUSDC",
+    ETH: "ETHUSDC",
+    BTC: "BTCUSDC",
+    XRP: "XRPUSDC",
+    LINK: "LINKUSDC",
+};
+
 function processLevels(
     rawLevels: [string, string][],
     side: "bid" | "ask",
@@ -81,23 +95,41 @@ const OrderBook = ({
     const [error, setError] = useState<string | null>(null);
     const prevPriceRef = useRef(midPriceFallback);
 
-    const LEVELS = view === "both" ? 14 : 20; // KuCoin level2_20 returns 20
+    const LEVELS = view === "both" ? 14 : 20;
 
     const kucoinSymbol = PAIR_TO_KUCOIN[pair] || PAIR_TO_KUCOIN[(pair || "BTC/USDC").split("/")[0]] || "BTC-USDC";
+    const binanceSymbol = PAIR_TO_BINANCE[pair] || PAIR_TO_BINANCE[(pair || "BTC/USDC").split("/")[0]] || "BTCUSDC";
 
-    // Fetch order book from KuCoin
+    // Fetch order book with fallback logic
     const fetchOrderBook = useCallback(async () => {
         try {
-            const res = await fetch(
-                `https://api.kucoin.com/api/v1/market/orderbook/level2_20?symbol=${kucoinSymbol}`
-            );
+            let data: { bids: [string, string][]; asks: [string, string][] } | null = null;
+            let source = "";
 
-            if (!res.ok) {
-                throw new Error(`KuCoin API returned ${res.status}`);
+            // 1. Try Binance first
+            try {
+                const res = await fetch(`https://api.binance.com/api/v3/depth?symbol=${binanceSymbol}&limit=20`);
+                if (res.ok) {
+                    data = await res.json();
+                    source = "Binance";
+                }
+            } catch (e) {
+                console.warn("[OrderBook] Binance fetch failed, falling back...");
             }
 
-            const json = await res.json();
-            const data = json.data;
+            // 2. Fallback to KuCoin
+            if (!data) {
+                try {
+                    const res = await fetch(`https://api.kucoin.com/api/v1/market/orderbook/level2_20?symbol=${kucoinSymbol}`);
+                    if (res.ok) {
+                        const json = await res.json();
+                        data = json.data;
+                        source = "KuCoin";
+                    }
+                } catch (e) {
+                    console.warn("[OrderBook] KuCoin fetch failed.");
+                }
+            }
 
             if (data && data.bids && data.asks) {
                 const processedBids = processLevels(data.bids, "bid", LEVELS);
@@ -123,14 +155,16 @@ const OrderBook = ({
                 setLastPrice(newMid);
                 prevPriceRef.current = newMid;
                 setError(null);
+            } else {
+                throw new Error("No data received from any provider");
             }
         } catch (err) {
-            console.error("[OrderBook] Fetch error:", err);
+            console.error("[OrderBook] All providers failed:", err);
             setError((prev) => prev !== "Disconnected" ? "Disconnected" : prev);
         } finally {
             setLoading(false);
         }
-    }, [kucoinSymbol, LEVELS, midPriceFallback]);
+    }, [kucoinSymbol, binanceSymbol, LEVELS, midPriceFallback]);
 
     // Initial fetch + polling every 2s
     useEffect(() => {
