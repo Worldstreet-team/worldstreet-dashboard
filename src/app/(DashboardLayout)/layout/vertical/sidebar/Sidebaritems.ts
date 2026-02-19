@@ -133,7 +133,7 @@ const SidebarContent: MenuItem[] = [
         name: "Futures",
         icon: 'ph:trend-up-duotone',
         id: uniqueId(),
-        url: "/",
+        url: "/spot",
         badge: true,
         badgeType: "filled",
       },
@@ -145,54 +145,6 @@ const SidebarContent: MenuItem[] = [
         url: "/swap",
         badge: true,
         badgeType: "outlined",
-      },
-    ],
-  },
-
-  {
-    heading: "Wallets",
-    children: [
-      {
-        name: "Assets",
-        icon: 'ph:stack-duotone',
-        id: uniqueId(),
-        url: "/assets",
-      },
-      {
-        name: "Spot Wallet",
-        icon: 'ph:wallet-duotone',
-        id: uniqueId(),
-        url: "/",
-      },
-      {
-        name: "Funding Wallet",
-        icon: 'ph:bank-duotone',
-        id: uniqueId(),
-        url: "/",
-      },
-      {
-        name: "Deposit",
-        icon: 'ph:arrow-down-left-duotone',
-        id: uniqueId(),
-        url: "/deposit",
-      },
-      {
-        name: "Withdraw",
-        icon: 'ph:arrow-up-right-duotone',
-        id: uniqueId(),
-        url: "/withdraw",
-      },
-      {
-        name: "Transactions",
-        icon: 'ph:clock-counter-clockwise-duotone',
-        id: uniqueId(),
-        url: "/transactions",
-      },
-      {
-        name: "Transfer",
-        icon: 'ph:arrows-left-right-duotone',
-        id: uniqueId(),
-        url: "/",
       },
     ],
   },

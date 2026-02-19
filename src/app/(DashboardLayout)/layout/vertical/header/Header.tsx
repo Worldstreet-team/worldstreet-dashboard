@@ -1,6 +1,5 @@
 "use client";
 import React, { useState, useEffect, useContext } from "react";
-import Search from "./Search";
 import { Icon } from "@iconify/react";
 import Profile from "./Profile";
 import { CustomizerContext } from "@/app/context/customizerContext";
@@ -75,10 +74,6 @@ const Header = ({ layoutType }: HeaderPropsType) => {
               </button>
             )}
 
-            {/* Search */}
-            <div className="hidden xl:block">
-              <Search />
-            </div>
           </div>
 
           {/* Right section */}
