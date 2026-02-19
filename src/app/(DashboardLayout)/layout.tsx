@@ -18,8 +18,10 @@ import { SpotProvider } from "@/app/context/spotContext";
 import { PinSetupModal, WalletAddressSync } from "@/components/wallet";
 import DashboardVividProvider from "@/components/dashboard/DashboardVividProvider";
 
+const LOGIN_URL = "https://www.worldstreetgold.com/login";
+
 function AuthGate({ children }: { children: React.ReactNode }) {
-  const { loading } = useAuth();
+  const { user, loading } = useAuth();
 
   if (loading) {
     return (
@@ -27,6 +29,21 @@ function AuthGate({ children }: { children: React.ReactNode }) {
         <div className="text-center animate-fade-in">
           <div className="animate-spin rounded-full h-10 w-10 border-2 border-primary/20 border-t-primary mx-auto mb-4"></div>
           <p className="text-muted text-sm">Verifying identity...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Clerk finished loading but no valid session → redirect to login
+  if (!user) {
+    if (typeof window !== "undefined") {
+      window.location.href = LOGIN_URL;
+    }
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-herobg dark:bg-dark">
+        <div className="text-center animate-fade-in">
+          <div className="animate-spin rounded-full h-10 w-10 border-2 border-primary/20 border-t-primary mx-auto mb-4"></div>
+          <p className="text-muted text-sm">Redirecting to login...</p>
         </div>
       </div>
     );
