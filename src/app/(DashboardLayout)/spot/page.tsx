@@ -13,8 +13,8 @@ export default function SpotTradingPage() {
 
     return (
         <div className="min-h-screen bg-[#F0F2F5] dark:bg-[#0a0a0a] flex flex-col font-sans">
-            {/* Top Bar - Bybit Style */}
-            <div className="bg-white dark:bg-[#1a1a1a] border-b border-border/50 dark:border-white/5 shadow-sm sticky top-[64px] z-[1000]">
+            {/* Top Bar - Bybit Style - More compact on mobile */}
+            <div className="bg-white dark:bg-[#1a1a1a] border-b border-border/50 dark:border-white/5 sticky top-[64px] sm:top-[64px] z-[50]">
                 <MarketTicker
                     selectedPair={selectedPair}
                     onPairChange={(pair) => setSelectedPair(pair.symbol)}

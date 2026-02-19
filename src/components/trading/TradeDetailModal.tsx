@@ -78,58 +78,84 @@ const TradeDetailModal = ({ isOpen, onClose, trade, onTradeClosed }: TradeDetail
             setError(null);
 
             try {
-                // Format symbol for Gate.io (e.g., BTC_USDT)
+                // Ensure symbol is formatted correctly for Gate.io (e.g., BTC_USDT)
                 const parts = trade.symbol.split('/');
                 const base = parts[0];
-                const quote = parts[1] || 'USDT';
-                const gateSymbol = `${base}_${quote}`;
+                let quote = parts[1] || 'USDT';
 
-                console.log("[Chart] Fetching data from Gate.io for", gateSymbol);
+                // If it's USDC, maybe Gate.io doesn't have it, so we'll try USDT as fallback
+                const symbolsToTry = [`${base}_${quote}`];
+                if (quote === 'USDC') symbolsToTry.push(`${base}_USDT`);
 
-                const url = `https://api.gateio.ws/api/v4/spot/candlesticks?currency_pair=${gateSymbol}&interval=1m&limit=100`;
-                const res = await fetch(`/api/proxy?url=${encodeURIComponent(url)}`, {
-                    signal: abortController.signal
-                });
+                let data = null;
+                let successSymbol = '';
 
-                if (!res.ok) throw new Error(`API Connection Failed: ${res.status}`);
+                for (const gateSymbol of symbolsToTry) {
+                    console.log("[Chart] Trying Gate.io symbol:", gateSymbol);
+                    const url = `https://api.gateio.ws/api/v4/spot/candlesticks?currency_pair=${gateSymbol}&interval=1m&limit=100`;
+                    try {
+                        const res = await fetch(`/api/proxy?url=${encodeURIComponent(url)}`, {
+                            signal: abortController.signal
+                        });
+                        if (res.ok) {
+                            const json = await res.json();
+                            if (Array.isArray(json) && json.length > 0) {
+                                data = json;
+                                successSymbol = gateSymbol;
+                                break;
+                            }
+                        }
+                    } catch (e) {
+                        console.warn(`[Chart] Failed to fetch ${gateSymbol}`, e);
+                    }
+                }
 
-                const data = await res.json();
                 if (!isMounted) return;
 
                 if (Array.isArray(data) && data.length > 0) {
-                    console.log("[Chart] Received", data.length, "Gate.io candles");
+                    console.log("[Chart] Success with", successSymbol, "Received", data.length, "candles");
+
                     // Mapping Gate.io format: [timestamp, volume, close, high, low, open, quote_volume]
-                    const formattedData: CandlestickData[] = data.map((d: any) => ({
-                        time: parseInt(d[0]) as Time, // Gate.io returns seconds
-                        open: parseFloat(d[5]),
-                        high: parseFloat(d[3]),
-                        low: parseFloat(d[4]),
-                        close: parseFloat(d[2]),
-                    }));
+                    // Ensure data is sorted by time (Gate.io usually is, but let's be safe)
+                    const formattedData: CandlestickData[] = data
+                        .map((d: any) => ({
+                            time: parseInt(d[0]) as Time,
+                            open: parseFloat(d[5]),
+                            high: parseFloat(d[3]),
+                            low: parseFloat(d[4]),
+                            close: parseFloat(d[2]),
+                        }))
+                        .sort((a, b) => (a.time as number) - (b.time as number));
 
-                    candlestickSeries.setData(formattedData);
-                    setCurrentPrice(formattedData[formattedData.length - 1].close);
+                    // Filter out any invalid data points
+                    const finalData = formattedData.filter(d => !isNaN(d.open) && !isNaN(d.close));
 
-                    if (trade.price) {
-                        candlestickSeries.createPriceLine({
-                            price: trade.price, color: "#3b82f6", lineWidth: 2, lineStyle: 2, axisLabelVisible: true, title: "Entry",
-                        });
-                    }
-                    if (trade.stopLoss) {
-                        candlestickSeries.createPriceLine({
-                            price: trade.stopLoss, color: "#ef4444", lineWidth: 2, lineStyle: 1, axisLabelVisible: true, title: "SL",
-                        });
-                    }
-                    if (trade.takeProfit) {
-                        candlestickSeries.createPriceLine({
-                            price: trade.takeProfit, color: "#10b981", lineWidth: 2, lineStyle: 1, axisLabelVisible: true, title: "TP",
-                        });
-                    }
+                    if (finalData.length > 0) {
+                        candlestickSeries.setData(finalData);
+                        setCurrentPrice(finalData[finalData.length - 1].close);
 
-                    chart.timeScale().fitContent();
+                        // Add Trade Lines
+                        if (trade.price) {
+                            candlestickSeries.createPriceLine({
+                                price: trade.price, color: "#3b82f6", lineWidth: 2, lineStyle: 2, axisLabelVisible: true, title: "Entry",
+                            });
+                        }
+                        if (trade.stopLoss) {
+                            candlestickSeries.createPriceLine({
+                                price: trade.stopLoss, color: "#ef4444", lineWidth: 2, lineStyle: 1, axisLabelVisible: true, title: "SL",
+                            });
+                        }
+                        if (trade.takeProfit) {
+                            candlestickSeries.createPriceLine({
+                                price: trade.takeProfit, color: "#10b981", lineWidth: 2, lineStyle: 1, axisLabelVisible: true, title: "TP",
+                            });
+                        }
+
+                        chart.timeScale().fitContent();
+                    }
                     setLoading(false);
                 } else {
-                    throw new Error("No recent market data found on Gate.io");
+                    throw new Error(`Market data for ${trade.symbol} not available on Gate.io`);
                 }
             } catch (err: any) {
                 if (err.name === 'AbortError') return;
