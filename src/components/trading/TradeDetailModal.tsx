@@ -91,20 +91,24 @@ const TradeDetailModal = ({ isOpen, onClose, trade, onTradeClosed }: TradeDetail
                 let successSymbol = '';
 
                 for (const gateSymbol of symbolsToTry) {
-                    console.log("[Chart] Trying Gate.io:", gateSymbol);
+                    console.log("[Chart] Calling Gate.io directly:", gateSymbol);
                     const url = `https://api.gateio.ws/api/v4/spot/candlesticks?currency_pair=${gateSymbol}&interval=1m&limit=100`;
 
-                    const res = await fetch(`/api/proxy?url=${encodeURIComponent(url)}`, {
-                        signal: abortController.signal
-                    });
+                    try {
+                        const res = await fetch(url, {
+                            signal: abortController.signal
+                        });
 
-                    if (res.ok) {
-                        const json = await res.json();
-                        if (Array.isArray(json) && json.length > 0) {
-                            finalDataPoints = json;
-                            successSymbol = gateSymbol;
-                            break;
+                        if (res.ok) {
+                            const json = await res.json();
+                            if (Array.isArray(json) && json.length > 0) {
+                                finalDataPoints = json;
+                                successSymbol = gateSymbol;
+                                break;
+                            }
                         }
+                    } catch (e) {
+                        console.warn(`[Chart] Direct fetch failed for ${gateSymbol}`, e);
                     }
                 }
 
@@ -156,8 +160,35 @@ const TradeDetailModal = ({ isOpen, onClose, trade, onTradeClosed }: TradeDetail
             }
         };
 
-        // Fetch after a small delay to ensure DOM is ready
+        // Initial fetch after a small delay to ensure DOM is ready
         const timer = setTimeout(fetchChartData, 100);
+
+        // Polling for live price updates (every 10s)
+        const pollInterval = setInterval(async () => {
+            if (!isMounted || !trade) return;
+
+            try {
+                // We only need the latest price for PnL calculation
+                const parts = trade.symbol.split('/');
+                const base = parts[0];
+                const quote = parts[1] || 'USDT';
+                const gateSymbol = `${base}_${quote}`;
+
+                const url = `https://api.gateio.ws/api/v4/spot/tickers?currency_pair=${gateSymbol}`;
+                const res = await fetch(url);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (Array.isArray(data) && data.length > 0) {
+                        const lastPrice = parseFloat(data[0].last);
+                        if (!isNaN(lastPrice)) {
+                            setCurrentPrice(lastPrice);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn("[Chart] Price poll failed", e);
+            }
+        }, 10000);
 
         const resizeObserver = new ResizeObserver(() => {
             if (isMounted && container && chart) {
@@ -171,6 +202,7 @@ const TradeDetailModal = ({ isOpen, onClose, trade, onTradeClosed }: TradeDetail
             isMounted = false;
             abortController.abort();
             clearTimeout(timer);
+            clearInterval(pollInterval);
             resizeObserver.disconnect();
             if (chart) chart.remove();
         };
