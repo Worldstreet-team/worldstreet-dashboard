@@ -132,7 +132,29 @@ const SpotInterface = ({ pair }: SpotInterfaceProps) => {
     const onPinSubmit = async (pin: string) => {
         if (!quote) return;
         try {
-            await executeSwap(quote, pin);
+            const result = await executeSwap(quote, pin);
+
+            // Record the transaction in MongoDB
+            try {
+                await fetch("/api/trades/transaction", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        symbol: pair,
+                        side: side,
+                        type: orderType,
+                        price: currentPrice,
+                        amount: parseFloat(amount),
+                        total: parseFloat(total),
+                        fee: 0.1, // Default fee or fetch from quote if available
+                        status: "COMPLETED", // marking as completed if executeSwap succeeded
+                        txHash: result || "",
+                    }),
+                });
+            } catch (dbErr) {
+                console.error("Failed to record transaction in DB:", dbErr);
+            }
+
             setShowPinModal(false);
             setAmount("");
             setTotal("");
