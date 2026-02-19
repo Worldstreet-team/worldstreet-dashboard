@@ -99,6 +99,8 @@ const TradeDetailModal = ({ isOpen, onClose, trade, onTradeClosed }: TradeDetail
                             signal: abortController.signal
                         });
 
+                        console.log("RESULT: ", res)
+
                         if (res.ok) {
                             const json = await res.json();
                             if (Array.isArray(json) && json.length > 0) {
