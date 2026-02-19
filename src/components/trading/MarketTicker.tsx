@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { Icon } from "@iconify/react";
 import { TrendingUp, TrendingDown, Activity, Loader2 } from "lucide-react";
 import { usePrices, CoinData } from "@/lib/wallet/usePrices";
+import { useTradingStore } from "@/store/useTradingStore";
 
 // Map our pair symbols to CoinGecko symbol + display info
 const PAIR_CONFIG = [
@@ -198,6 +199,7 @@ const MarketTicker = ({
                                             key={pair.symbol}
                                             onClick={() => {
                                                 onPairChange(pair);
+                                                useTradingStore.getState().setSymbol(pair.symbol);
                                                 setDropdownOpen(false);
                                             }}
                                             className={cn(

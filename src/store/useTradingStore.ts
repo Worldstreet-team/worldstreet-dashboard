@@ -48,7 +48,10 @@ export const useTradingStore = create<TradingState>((set, get) => ({
     lastPrice: '0',
     priceDirection: 'neutral',
 
-    setSymbol: (symbol) => set({ symbol, bids: [], asks: [], recentTrades: [] }),
+    setSymbol: (symbol) => {
+        const normalized = symbol.replace("/", "").toUpperCase();
+        set({ symbol: normalized, bids: [], asks: [], recentTrades: [] });
+    },
 
     setOrderBook: (rawBids, rawAsks) => {
         const processedBids = processLevels(rawBids, 'buy');
