@@ -8,12 +8,15 @@ import SimpleBar from "simplebar-react";
 import { Icon } from "@iconify/react";
 import Image from "next/image";
 import Link from "next/link";
+import { useAuth } from "@/app/context/authContext";
 
 const MobileSidebar = ({ handleClose }: { handleClose: () => void }) => {
+  const { logout } = useAuth();
+
   return (
-    <aside className="bg-white dark:bg-black w-full h-full" aria-label="Mobile sidebar navigation">
+    <aside className="bg-white dark:bg-black w-full h-full flex flex-col" aria-label="Mobile sidebar navigation">
       {/* Logo */}
-      <div className="h-16 flex items-center px-6 border-b border-border dark:border-darkborder">
+      <div className="h-16 flex items-center px-6 border-b border-border dark:border-darkborder shrink-0">
         <Link href="/" className="flex items-center gap-2.5" onClick={handleClose}>
           <Image
             src="/worldstreet-logo/WorldStreet4x.png"
@@ -27,7 +30,7 @@ const MobileSidebar = ({ handleClose }: { handleClose: () => void }) => {
           </span>
         </Link>
       </div>
-      <SimpleBar className="h-[calc(100vh_-_64px)]">
+      <SimpleBar className="flex-1 min-h-0">
         <nav className="sidebar-nav px-4 py-3">
           <ul className="sidebar-nav-group space-y-0.5">
             {SidebarContent.map((item, index) => (
@@ -53,6 +56,16 @@ const MobileSidebar = ({ handleClose }: { handleClose: () => void }) => {
           </ul>
         </nav>
       </SimpleBar>
+      {/* Logout Button */}
+      <div className="shrink-0 border-t border-border dark:border-darkborder p-4">
+        <button
+          onClick={() => { handleClose(); logout(); }}
+          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-error hover:bg-error/10 transition-colors duration-200"
+        >
+          <Icon icon="ph:sign-out-duotone" className="h-5 w-5" />
+          <span className="text-sm font-medium">Sign Out</span>
+        </button>
+      </div>
     </aside>
   );
 };
