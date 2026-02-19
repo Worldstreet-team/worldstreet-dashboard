@@ -96,11 +96,11 @@ ${portfolioContext}
       {children as any}
       <VividWidget
         showTranscript={true}
-        size="lg"
+        size="md"
         position={{ bottom: '24px', right: '24px' }}
         classNames={{
           container:
-            'fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3 max-sm:scale-[0.67] max-sm:origin-bottom-right',
+            'fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3 max-sm:scale-[0.625] max-sm:origin-bottom-right max-sm:!bottom-4 max-sm:!right-4',
         }}
       />
     </VividProvider>
