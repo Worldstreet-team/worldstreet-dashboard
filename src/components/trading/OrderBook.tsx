@@ -15,19 +15,19 @@ interface OrderLevel {
 
 type BookView = "both" | "bids" | "asks";
 
-// Map our pair symbols to Binance symbols
-const PAIR_TO_BINANCE: Record<string, string> = {
-    "SOL/USDC": "SOLUSDC",
-    "ETH/USDC": "ETHUSDC",
-    "BTC/USDC": "BTCUSDC",
-    "XRP/USDC": "XRPUSDC",
-    "LINK/USDC": "LINKUSDC",
+// Map our pair symbols to KuCoin symbols
+const PAIR_TO_KUCOIN: Record<string, string> = {
+    "SOL/USDC": "SOL-USDC",
+    "ETH/USDC": "ETH-USDC",
+    "BTC/USDC": "BTC-USDC",
+    "XRP/USDC": "XRP-USDC",
+    "LINK/USDC": "LINK-USDC",
     // Fallback — also support just the base symbol for convenience
-    SOL: "SOLUSDC",
-    ETH: "ETHUSDC",
-    BTC: "BTCUSDC",
-    XRP: "XRPUSDC",
-    LINK: "LINKUSDC",
+    SOL: "SOL-USDC",
+    ETH: "ETH-USDC",
+    BTC: "BTC-USDC",
+    XRP: "XRP-USDC",
+    LINK: "LINK-USDC",
 };
 
 function processLevels(
@@ -81,23 +81,25 @@ const OrderBook = ({
     const [error, setError] = useState<string | null>(null);
     const prevPriceRef = useRef(midPriceFallback);
 
-    const LEVELS = view === "both" ? 14 : 24;
+    const LEVELS = view === "both" ? 14 : 20; // KuCoin level2_20 returns 20
 
-    const binanceSymbol = PAIR_TO_BINANCE[pair] || PAIR_TO_BINANCE[(pair || "BTC/USDC").split("/")[0]] || "BTCUSDC";
-    // Fetch order book from Binance
+    const kucoinSymbol = PAIR_TO_KUCOIN[pair] || PAIR_TO_KUCOIN[(pair || "BTC/USDC").split("/")[0]] || "BTC-USDC";
+
+    // Fetch order book from KuCoin
     const fetchOrderBook = useCallback(async () => {
         try {
             const res = await fetch(
-                `https://api.binance.com/api/v3/depth?symbol=${binanceSymbol}&limit=${LEVELS}`
+                `https://api.kucoin.com/api/v1/market/orderbook/level2_20?symbol=${kucoinSymbol}`
             );
 
             if (!res.ok) {
-                throw new Error(`Binance API returned ${res.status}`);
+                throw new Error(`KuCoin API returned ${res.status}`);
             }
 
-            const data = await res.json();
+            const json = await res.json();
+            const data = json.data;
 
-            if (data.bids && data.asks) {
+            if (data && data.bids && data.asks) {
                 const processedBids = processLevels(data.bids, "bid", LEVELS);
                 const processedAsks = processLevels(data.asks, "ask", LEVELS);
 
@@ -123,14 +125,12 @@ const OrderBook = ({
                 setError(null);
             }
         } catch (err) {
-            // If it's a network error, don't spam state updates too fast
             console.error("[OrderBook] Fetch error:", err);
             setError((prev) => prev !== "Disconnected" ? "Disconnected" : prev);
-            // Slow down polling on failure
         } finally {
             setLoading(false);
         }
-    }, [binanceSymbol, LEVELS, midPriceFallback]);
+    }, [kucoinSymbol, LEVELS, midPriceFallback]);
 
     // Initial fetch + polling every 2s
     useEffect(() => {

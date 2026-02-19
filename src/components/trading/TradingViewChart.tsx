@@ -28,13 +28,13 @@ const TradingViewChart = ({ symbol, theme = 'dark' }: TradingViewChartProps) => 
         // Map our symbols to TradingView symbols
         let tvSymbol = symbol.replace("/", "");
         if (!tvSymbol.includes(":")) {
-            // Default to BINANCE for crypto
-            if (tvSymbol.includes("SOL")) tvSymbol = "BINANCE:SOLUSDT";
-            else if (tvSymbol.includes("BTC")) tvSymbol = "BINANCE:BTCUSDT";
-            else if (tvSymbol.includes("ETH")) tvSymbol = "BINANCE:ETHUSDT";
-            else if (tvSymbol.includes("XRP")) tvSymbol = "BINANCE:XRPUSDT";
-            else if (tvSymbol.includes("LINK")) tvSymbol = "BINANCE:LINKUSDT";
-            else tvSymbol = `BINANCE:${tvSymbol}T`;
+            // Default to KUCOIN for crypto
+            if (tvSymbol.includes("SOL")) tvSymbol = "KUCOIN:SOLUSDC";
+            else if (tvSymbol.includes("BTC")) tvSymbol = "KUCOIN:BTCUSDC";
+            else if (tvSymbol.includes("ETH")) tvSymbol = "KUCOIN:ETHUSDC";
+            else if (tvSymbol.includes("XRP")) tvSymbol = "KUCOIN:XRPUSDC";
+            else if (tvSymbol.includes("LINK")) tvSymbol = "KUCOIN:LINKUSDC";
+            else tvSymbol = `KUCOIN:${tvSymbol}C`;
         }
 
         const config = {

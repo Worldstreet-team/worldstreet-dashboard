@@ -15,18 +15,18 @@ interface Trade {
     isNew?: boolean;
 }
 
-// Map our pair symbols to Binance symbols
-const PAIR_TO_BINANCE: Record<string, string> = {
-    "SOL/USDC": "SOLUSDC",
-    "ETH/USDC": "ETHUSDC",
-    "BTC/USDC": "BTCUSDC",
-    "XRP/USDC": "XRPUSDC",
-    "LINK/USDC": "LINKUSDC",
-    SOL: "SOLUSDC",
-    ETH: "ETHUSDC",
-    BTC: "BTCUSDC",
-    XRP: "XRPUSDC",
-    LINK: "LINKUSDC",
+// Map our pair symbols to KuCoin symbols
+const PAIR_TO_KUCOIN: Record<string, string> = {
+    "SOL/USDC": "SOL-USDC",
+    "ETH/USDC": "ETH-USDC",
+    "BTC/USDC": "BTC-USDC",
+    "XRP/USDC": "XRP-USDC",
+    "LINK/USDC": "LINK-USDC",
+    SOL: "SOL-USDC",
+    ETH: "ETH-USDC",
+    BTC: "BTC-USDC",
+    XRP: "XRP-USDC",
+    LINK: "LINK-USDC",
 };
 
 const SpotTradeHistory = ({ pair = "SOL/USDC" }: { pair?: string; midPrice?: number }) => {
@@ -36,38 +36,37 @@ const SpotTradeHistory = ({ pair = "SOL/USDC" }: { pair?: string; midPrice?: num
     const lastTradeIdRef = useRef<string | null>(null);
     const maxTrades = 50;
 
-    const binanceSymbol = PAIR_TO_BINANCE[pair] || PAIR_TO_BINANCE[(pair || "BTC/USDC").split("/")[0]] || "BTCUSDC";
+    const kucoinSymbol = PAIR_TO_KUCOIN[pair] || PAIR_TO_KUCOIN[(pair || "BTC/USDC").split("/")[0]] || "BTC-USDC";
 
-    // Fetch recent trades from Binance
+    // Fetch recent trades from KuCoin
     const fetchTrades = useCallback(async (isInitial = false) => {
         try {
-            const limit = isInitial ? 40 : 20;
             const res = await fetch(
-                `https://api.binance.com/api/v3/trades?symbol=${binanceSymbol}&limit=${limit}`
+                `https://api.kucoin.com/api/v1/market/histories?symbol=${kucoinSymbol}`
             );
 
             if (!res.ok) {
-                throw new Error(`Binance API returned ${res.status}`);
+                throw new Error(`KuCoin API returned ${res.status}`);
             }
 
-            const data = await res.json();
+            const json = await res.json();
+            const data = json.data;
 
             if (!Array.isArray(data) || data.length === 0) return;
 
             const newTrades: Trade[] = data.map((t: {
-                id: number;
+                sequence: string;
                 price: string;
-                qty: string;
-                isBuyerMaker: boolean;
+                size: string;
+                side: "buy" | "sell";
                 time: number;
             }) => ({
-                id: String(t.id),
+                id: String(t.sequence),
                 price: parseFloat(t.price),
-                size: parseFloat(t.qty),
-                // isBuyerMaker=true means the buyer placed the order as a maker,
-                // so the trade was a sell (taker sold into the bid)
-                side: t.isBuyerMaker ? "sell" : "buy" as "buy" | "sell",
-                time: new Date(t.time),
+                size: parseFloat(t.size),
+                side: t.side,
+                // KuCoin time is in nanoseconds, convert to milliseconds for JS Date
+                time: new Date(Math.floor(t.time / 1000000)),
                 isNew: false,
             }));
 
@@ -104,7 +103,7 @@ const SpotTradeHistory = ({ pair = "SOL/USDC" }: { pair?: string; midPrice?: num
         } finally {
             setLoading(false);
         }
-    }, [binanceSymbol]);
+    }, [kucoinSymbol]);
 
     // Initial fetch
     useEffect(() => {

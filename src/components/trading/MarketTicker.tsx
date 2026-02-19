@@ -60,48 +60,49 @@ const MarketTicker = ({
 }) => {
     const { coins, loading: pricesLoading } = usePrices();
     const [dropdownOpen, setDropdownOpen] = useState(false);
-    const [binanceStats, setBinanceStats] = useState<Record<string, { high: number; low: number }>>({});
+    const [kucoinStats, setKucoinStats] = useState<Record<string, { high: number; low: number }>>({});
 
-    // Fetch 24h high/low from Binance (CoinGecko free tier doesn't include this)
+    // Fetch 24h high/low from KuCoin (CoinGecko free tier doesn't include this)
     useEffect(() => {
-        const fetchBinanceStats = async () => {
-            const binanceSymbols = ["SOLUSDC", "ETHUSDC", "BTCUSDC", "XRPUSDC", "LINKUSDC"];
+        const fetchKuCoinStats = async () => {
+            const kucoinSymbols = ["SOL-USDC", "ETH-USDC", "BTC-USDC", "XRP-USDC", "LINK-USDC"];
             try {
-                const responses = await Promise.allSettled(
-                    binanceSymbols.map((sym) =>
-                        fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${sym}`)
-                            .then((r) => {
-                                if (!r.ok) return {};
-                                return r.json();
-                            })
-                            .catch(() => ({}))
-                    )
-                );
+                const res = await fetch("https://api.kucoin.com/api/v1/market/allTickers");
+                if (!res.ok) return;
+
+                const json = await res.json();
+                const allTickers = json.data?.ticker;
+
+                if (!Array.isArray(allTickers)) return;
 
                 const stats: Record<string, { high: number; low: number }> = {};
-                const pairSymbols = ["SOL", "ETH", "BTC", "XRP", "LINK"];
+                const symbolToKey: Record<string, string> = {
+                    "SOL-USDC": "SOL",
+                    "ETH-USDC": "ETH",
+                    "BTC-USDC": "BTC",
+                    "XRP-USDC": "XRP",
+                    "LINK-USDC": "LINK"
+                };
 
-                responses.forEach((result, i) => {
-                    if (result.status === "fulfilled" && result.value) {
-                        const val = result.value as any;
-                        if (val.highPrice) {
-                            stats[pairSymbols[i]] = {
-                                high: parseFloat(val.highPrice),
-                                low: parseFloat(val.lowPrice),
-                            };
-                        }
+                allTickers.forEach((t: any) => {
+                    const key = symbolToKey[t.symbol];
+                    if (key) {
+                        stats[key] = {
+                            high: parseFloat(t.high),
+                            low: parseFloat(t.low),
+                        };
                     }
                 });
 
-                setBinanceStats(stats);
+                setKucoinStats(stats);
             } catch (err) {
-                console.error("[MarketTicker] Failed to fetch Binance stats:", err);
+                console.error("[MarketTicker] Failed to fetch KuCoin stats:", err);
             }
         };
 
-        fetchBinanceStats();
+        fetchKuCoinStats();
         // Use a longer interval for tickers (5 mins) since we have CoinGecko as primary
-        const interval = setInterval(fetchBinanceStats, 300_000);
+        const interval = setInterval(fetchKuCoinStats, 300_000);
         return () => clearInterval(interval);
     }, []);
 
@@ -109,7 +110,7 @@ const MarketTicker = ({
     const livePairs: TickerPair[] = useMemo(() => {
         return PAIR_CONFIG.map((cfg) => {
             const coin = coins.find((c: CoinData) => c.symbol === cfg.coinSymbol);
-            const bStats = binanceStats[cfg.coinSymbol];
+            const kStats = kucoinStats[cfg.coinSymbol];
 
             return {
                 symbol: cfg.symbol,
@@ -117,12 +118,12 @@ const MarketTicker = ({
                 icon: cfg.icon,
                 price: coin?.price ?? 0,
                 change24h: coin?.change24h ?? 0,
-                high24h: bStats?.high ?? (coin ? coin.price * 1.02 : 0),
-                low24h: bStats?.low ?? (coin ? coin.price * 0.98 : 0),
+                high24h: kStats?.high ?? (coin ? coin.price * 1.02 : 0),
+                low24h: kStats?.low ?? (coin ? coin.price * 0.98 : 0),
                 volume24h: coin?.volume24h ?? 0,
             };
         });
-    }, [coins, binanceStats]);
+    }, [coins, kucoinStats]);
 
     const currentPair = livePairs.find((p) => p.symbol === selectedPair) || livePairs[0];
 
