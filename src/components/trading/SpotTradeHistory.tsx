@@ -43,6 +43,20 @@ const PAIR_TO_BINANCE: Record<string, string> = {
     LINK: "LINKUSDC",
 };
 
+// Map our pair symbols to Gate.io symbols
+const PAIR_TO_GATE: Record<string, string> = {
+    "SOL/USDC": "SOL_USDC",
+    "ETH/USDC": "ETH_USDC",
+    "BTC/USDC": "BTC_USDC",
+    "XRP/USDC": "XRP_USDC",
+    "LINK/USDC": "LINK_USDC",
+    SOL: "SOL_USDC",
+    ETH: "ETH_USDC",
+    BTC: "BTC_USDC",
+    XRP: "XRP_USDC",
+    LINK: "LINK_USDC",
+};
+
 const SpotTradeHistory = ({ pair = "SOL/USDC" }: { pair?: string; midPrice?: number }) => {
     const [trades, setTrades] = useState<Trade[]>([]);
     const [loading, setLoading] = useState(true);
@@ -52,35 +66,66 @@ const SpotTradeHistory = ({ pair = "SOL/USDC" }: { pair?: string; midPrice?: num
 
     const kucoinSymbol = PAIR_TO_KUCOIN[pair] || PAIR_TO_KUCOIN[(pair || "BTC/USDC").split("/")[0]] || "BTC-USDC";
     const binanceSymbol = PAIR_TO_BINANCE[pair] || PAIR_TO_BINANCE[(pair || "BTC/USDC").split("/")[0]] || "BTCUSDC";
+    const gateSymbol = PAIR_TO_GATE[pair] || PAIR_TO_GATE[(pair || "BTC/USDC").split("/")[0]] || "BTC_USDC";
 
     // Fetch recent trades with fallback logic
     const fetchTrades = useCallback(async (isInitial = false) => {
         try {
             let rawTrades: any[] = [];
-            let source: "binance" | "kucoin" | null = null;
+            let source: "binance" | "kucoin" | "gate" | null = null;
 
-            // 1. Try Binance first
-            try {
-                const res = await fetch(`https://api.binance.com/api/v3/trades?symbol=${binanceSymbol}&limit=${maxTrades}`);
-                if (res.ok) {
-                    rawTrades = await res.json();
-                    source = "binance";
-                }
-            } catch (e) {
-                console.warn("[SpotTradeHistory] Binance fetch failed, falling back...");
-            }
-
-            // 2. Fallback to KuCoin
-            if (rawTrades.length === 0) {
+            // Helper to try a fetch and extract data
+            const tryFetch = async (url: string, provider: "binance" | "kucoin" | "gate") => {
                 try {
-                    const res = await fetch(`https://api.kucoin.com/api/v1/market/histories?symbol=${kucoinSymbol}`);
+                    const res = await fetch(url);
                     if (res.ok) {
                         const json = await res.json();
-                        rawTrades = json.data;
-                        source = "kucoin";
+                        if (provider === "kucoin") return { data: json.data, source: provider };
+                        return { data: json, source: provider };
                     }
                 } catch (e) {
-                    console.warn("[SpotTradeHistory] KuCoin fetch failed.");
+                    console.warn(`[SpotTradeHistory] ${provider} fetch failed.`);
+                }
+                return null;
+            };
+
+            // 1. Try Binance
+            const bRes = await tryFetch(`https://api.binance.com/api/v3/trades?symbol=${binanceSymbol}&limit=${maxTrades}`, "binance");
+            if (bRes) {
+                rawTrades = bRes.data;
+                source = bRes.source;
+            }
+
+            // 2. Try KuCoin fallback
+            if (rawTrades.length === 0) {
+                const kRes = await tryFetch(`https://api.kucoin.com/api/v1/market/histories?symbol=${kucoinSymbol}`, "kucoin");
+                if (kRes) {
+                    rawTrades = kRes.data;
+                    source = kRes.source;
+                }
+            }
+
+            // 3. Try Gate.io fallback
+            if (rawTrades.length === 0) {
+                const gRes = await tryFetch(`https://api.gateio.ws/api/v4/spot/trades?currency_pair=${gateSymbol}&limit=${maxTrades}`, "gate");
+                if (gRes) {
+                    rawTrades = gRes.data;
+                    source = gRes.source;
+                }
+            }
+
+            // 4. Last Resort: Proxy-based fetch (Binance via AllOrigins)
+            if (rawTrades.length === 0) {
+                try {
+                    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(`https://api.binance.com/api/v3/trades?symbol=${binanceSymbol}&limit=${maxTrades}`)}`;
+                    const res = await fetch(proxyUrl);
+                    if (res.ok) {
+                        const wrapper = await res.json();
+                        rawTrades = JSON.parse(wrapper.contents);
+                        source = "binance";
+                    }
+                } catch (e) {
+                    console.warn("[SpotTradeHistory] Proxy fallback failed.");
                 }
             }
 
@@ -89,23 +134,36 @@ const SpotTradeHistory = ({ pair = "SOL/USDC" }: { pair?: string; midPrice?: num
                 return;
             }
 
-            const newTrades: Trade[] = source === "binance"
-                ? rawTrades.map((t: any) => ({
-                    id: String(t.id),
-                    price: parseFloat(t.price),
-                    size: parseFloat(t.qty),
-                    side: t.isBuyerMaker ? "sell" : "buy",
-                    time: new Date(t.time),
-                    isNew: false,
-                }))
-                : rawTrades.map((t: any) => ({
-                    id: String(t.sequence),
-                    price: parseFloat(t.price),
-                    size: parseFloat(t.size),
-                    side: t.side,
-                    time: new Date(Math.floor(t.time / 1000000)),
-                    isNew: false,
-                }));
+            const newTrades: Trade[] = rawTrades.map((t: any) => {
+                if (source === "binance") {
+                    return {
+                        id: String(t.id),
+                        price: parseFloat(t.price),
+                        size: parseFloat(t.qty),
+                        side: t.isBuyerMaker ? "sell" : "buy",
+                        time: new Date(t.time),
+                        isNew: false,
+                    };
+                } else if (source === "kucoin") {
+                    return {
+                        id: String(t.sequence),
+                        price: parseFloat(t.price),
+                        size: parseFloat(t.size),
+                        side: t.side,
+                        time: new Date(Math.floor(t.time / 1000000)),
+                        isNew: false,
+                    };
+                } else { // gate.io
+                    return {
+                        id: String(t.id),
+                        price: parseFloat(t.price),
+                        size: parseFloat(t.amount),
+                        side: t.side,
+                        time: new Date(t.create_time * 1000), // gate.io uses seconds
+                        isNew: false,
+                    };
+                }
+            });
 
             // Sort newest first
             newTrades.sort((a, b) => b.time.getTime() - a.time.getTime());
@@ -140,7 +198,7 @@ const SpotTradeHistory = ({ pair = "SOL/USDC" }: { pair?: string; midPrice?: num
         } finally {
             setLoading(false);
         }
-    }, [kucoinSymbol, binanceSymbol]);
+    }, [kucoinSymbol, binanceSymbol, gateSymbol]);
 
     // Initial fetch
     useEffect(() => {

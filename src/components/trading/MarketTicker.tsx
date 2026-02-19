@@ -67,14 +67,33 @@ const MarketTicker = ({
         const fetchKuCoinStats = async () => {
             const kucoinSymbols = ["SOL-USDC", "ETH-USDC", "BTC-USDC", "XRP-USDC", "LINK-USDC"];
             try {
-                const res = await fetch("https://api.kucoin.com/api/v1/market/allTickers");
-                if (!res.ok) return;
+                let json: any = null;
 
-                const json = await res.json();
-                const allTickers = json.data?.ticker;
+                // 1. Try direct fetch
+                try {
+                    const res = await fetch("https://api.kucoin.com/api/v1/market/allTickers");
+                    if (res.ok) json = await res.json();
+                } catch (e) {
+                    console.warn("[MarketTicker] Direct KuCoin fetch failed, trying proxy...");
+                }
 
-                if (!Array.isArray(allTickers)) return;
+                // 2. Try proxy fallback
+                if (!json) {
+                    try {
+                        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent("https://api.kucoin.com/api/v1/market/allTickers")}`;
+                        const res = await fetch(proxyUrl);
+                        if (res.ok) {
+                            const wrapper = await res.json();
+                            json = JSON.parse(wrapper.contents);
+                        }
+                    } catch (e) {
+                        console.warn("[MarketTicker] Proxy fallback failed.");
+                    }
+                }
 
+                if (!json || !json.data || !Array.isArray(json.data.ticker)) return;
+
+                const allTickers = json.data.ticker;
                 const stats: Record<string, { high: number; low: number }> = {};
                 const symbolToKey: Record<string, string> = {
                     "SOL-USDC": "SOL",

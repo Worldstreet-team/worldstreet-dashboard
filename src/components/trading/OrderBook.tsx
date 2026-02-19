@@ -44,6 +44,20 @@ const PAIR_TO_BINANCE: Record<string, string> = {
     LINK: "LINKUSDC",
 };
 
+// Map our pair symbols to Gate.io symbols
+const PAIR_TO_GATE: Record<string, string> = {
+    "SOL/USDC": "SOL_USDC",
+    "ETH/USDC": "ETH_USDC",
+    "BTC/USDC": "BTC_USDC",
+    "XRP/USDC": "XRP_USDC",
+    "LINK/USDC": "LINK_USDC",
+    SOL: "SOL_USDC",
+    ETH: "ETH_USDC",
+    BTC: "BTC_USDC",
+    XRP: "XRP_USDC",
+    LINK: "LINK_USDC",
+};
+
 function processLevels(
     rawLevels: [string, string][],
     side: "bid" | "ask",
@@ -99,35 +113,55 @@ const OrderBook = ({
 
     const kucoinSymbol = PAIR_TO_KUCOIN[pair] || PAIR_TO_KUCOIN[(pair || "BTC/USDC").split("/")[0]] || "BTC-USDC";
     const binanceSymbol = PAIR_TO_BINANCE[pair] || PAIR_TO_BINANCE[(pair || "BTC/USDC").split("/")[0]] || "BTCUSDC";
+    const gateSymbol = PAIR_TO_GATE[pair] || PAIR_TO_GATE[(pair || "BTC/USDC").split("/")[0]] || "BTC_USDC";
 
     // Fetch order book with fallback logic
     const fetchOrderBook = useCallback(async () => {
         try {
             let data: { bids: [string, string][]; asks: [string, string][] } | null = null;
-            let source = "";
+            let success = false;
 
-            // 1. Try Binance first
-            try {
-                const res = await fetch(`https://api.binance.com/api/v3/depth?symbol=${binanceSymbol}&limit=20`);
-                if (res.ok) {
-                    data = await res.json();
-                    source = "Binance";
-                }
-            } catch (e) {
-                console.warn("[OrderBook] Binance fetch failed, falling back...");
-            }
-
-            // 2. Fallback to KuCoin
-            if (!data) {
+            // Helper to try a fetch and extract data
+            const tryFetch = async (url: string, provider: string) => {
                 try {
-                    const res = await fetch(`https://api.kucoin.com/api/v1/market/orderbook/level2_20?symbol=${kucoinSymbol}`);
+                    const res = await fetch(url);
                     if (res.ok) {
                         const json = await res.json();
-                        data = json.data;
-                        source = "KuCoin";
+                        if (provider === "Binance") return { bids: json.bids, asks: json.asks };
+                        if (provider === "KuCoin") return { bids: json.data.bids, asks: json.data.asks };
+                        if (provider === "Gate") return { bids: json.bids, asks: json.asks };
                     }
                 } catch (e) {
-                    console.warn("[OrderBook] KuCoin fetch failed.");
+                    console.warn(`[OrderBook] ${provider} fetch failed.`);
+                }
+                return null;
+            };
+
+            // 1. Try Binance
+            data = await tryFetch(`https://api.binance.com/api/v3/depth?symbol=${binanceSymbol}&limit=20`, "Binance");
+
+            // 2. Try KuCoin fallback
+            if (!data) {
+                data = await tryFetch(`https://api.kucoin.com/api/v1/market/orderbook/level2_20?symbol=${kucoinSymbol}`, "KuCoin");
+            }
+
+            // 3. Try Gate.io fallback
+            if (!data) {
+                data = await tryFetch(`https://api.gateio.ws/api/v4/spot/order_book?currency_pair=${gateSymbol}`, "Gate");
+            }
+
+            // 4. Last Resort: Proxy-based fetch (Binance via AllOrigins)
+            if (!data) {
+                try {
+                    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(`https://api.binance.com/api/v3/depth?symbol=${binanceSymbol}&limit=20`)}`;
+                    const res = await fetch(proxyUrl);
+                    if (res.ok) {
+                        const wrapper = await res.json();
+                        const json = JSON.parse(wrapper.contents);
+                        data = { bids: json.bids, asks: json.asks };
+                    }
+                } catch (e) {
+                    console.warn("[OrderBook] Proxy fallback failed.");
                 }
             }
 
@@ -164,7 +198,7 @@ const OrderBook = ({
         } finally {
             setLoading(false);
         }
-    }, [kucoinSymbol, binanceSymbol, LEVELS, midPriceFallback]);
+    }, [kucoinSymbol, binanceSymbol, gateSymbol, LEVELS, midPriceFallback]);
 
     // Initial fetch + polling every 2s
     useEffect(() => {
