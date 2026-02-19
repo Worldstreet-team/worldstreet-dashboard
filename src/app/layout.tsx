@@ -7,6 +7,7 @@ import { CustomizerContextProvider } from "@/app/context/customizerContext";
 import "../utils/i18n";
 import NextTopLoader from "nextjs-toploader";
 import { ClerkProvider } from "@clerk/nextjs";
+import { Providers } from "./providers";
 const font = Outfit({ subsets: ["latin"], weight: ["300", "400", "500", "600", "700"] });
 
 export const metadata: Metadata = {
@@ -37,7 +38,9 @@ export default function RootLayout({
         >
           <NextTopLoader color="var(--color-primary)" />
           <CustomizerContextProvider>
-            {children}
+            <Providers>
+              {children}
+            </Providers>
           </CustomizerContextProvider>
         </ClerkProvider>
       </body>
