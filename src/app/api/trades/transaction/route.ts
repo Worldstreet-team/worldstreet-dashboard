@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
         }
 
         const body = await req.json();
-        const { symbol, side, type, price, amount, total, fee, status, txHash } = body;
+        const { symbol, side, type, price, amount, total, fee, status, txHash, stopLoss, takeProfit } = body;
 
         if (!symbol || !side || !type || !price || !amount || !total) {
             return NextResponse.json(
@@ -33,6 +33,8 @@ export async function POST(req: NextRequest) {
             price: Number(price),
             amount: Number(amount),
             total: Number(total),
+            stopLoss: stopLoss ? Number(stopLoss) : undefined,
+            takeProfit: takeProfit ? Number(takeProfit) : undefined,
             fee: Number(fee || 0),
             status: status || "PENDING",
             txHash,

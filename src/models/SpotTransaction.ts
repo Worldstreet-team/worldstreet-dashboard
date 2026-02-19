@@ -8,9 +8,12 @@ export interface ISpotTransaction extends Document {
     price: number;
     amount: number;
     total: number;
+    stopLoss?: number;
+    takeProfit?: number;
+    exitPrice?: number;
     fee: number;
     pnl?: number;
-    status: "PENDING" | "COMPLETED" | "FAILED";
+    status: "PENDING" | "OPEN" | "CLOSED" | "FAILED" | "CANCELED";
     txHash?: string;
     createdAt: Date;
     updatedAt: Date;
@@ -50,6 +53,15 @@ const SpotTransactionSchema = new Schema<ISpotTransaction>(
             type: Number,
             required: true,
         },
+        stopLoss: {
+            type: Number,
+        },
+        takeProfit: {
+            type: Number,
+        },
+        exitPrice: {
+            type: Number,
+        },
         fee: {
             type: Number,
             default: 0,
@@ -60,7 +72,7 @@ const SpotTransactionSchema = new Schema<ISpotTransaction>(
         status: {
             type: String,
             required: true,
-            enum: ["PENDING", "COMPLETED", "FAILED"],
+            enum: ["PENDING", "OPEN", "CLOSED", "FAILED", "CANCELED"],
             default: "PENDING",
         },
         txHash: {

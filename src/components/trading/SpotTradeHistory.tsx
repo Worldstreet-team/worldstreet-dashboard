@@ -12,9 +12,12 @@ interface UserTrade {
     price: number;
     amount: number;
     total: number;
+    stopLoss?: number;
+    takeProfit?: number;
+    exitPrice?: number;
     fee: number;
     pnl: number;
-    status: "PENDING" | "COMPLETED" | "FAILED";
+    status: "PENDING" | "OPEN" | "CLOSED" | "FAILED" | "CANCELED";
     timestamp: string;
 }
 
@@ -62,6 +65,8 @@ const SpotTradeHistory = ({ pair = "BTC/USDC" }: { pair?: string }) => {
                                 <th className="px-4 py-3">Symbol</th>
                                 <th className="px-4 py-3">Side</th>
                                 <th className="px-4 py-3">Price</th>
+                                <th className="px-4 py-3">Stop Loss</th>
+                                <th className="px-4 py-3">Take Profit</th>
                                 <th className="px-4 py-3">Amount</th>
                                 <th className="px-4 py-3">Total</th>
                                 <th className="px-4 py-3 text-right">Status</th>
@@ -70,13 +75,13 @@ const SpotTradeHistory = ({ pair = "BTC/USDC" }: { pair?: string }) => {
                         <tbody className="divide-y divide-border/5">
                             {loading ? (
                                 <tr>
-                                    <td colSpan={7} className="py-20 text-center">
+                                    <td colSpan={9} className="py-20 text-center">
                                         <Loader2 className="w-5 h-5 animate-spin mx-auto text-primary" />
                                     </td>
                                 </tr>
                             ) : trades.length === 0 ? (
                                 <tr>
-                                    <td colSpan={7} className="py-20 text-center text-muted-foreground">No transactions found</td>
+                                    <td colSpan={9} className="py-20 text-center text-muted-foreground">No transactions found</td>
                                 </tr>
                             ) : (
                                 trades.map((trade) => (
@@ -94,13 +99,16 @@ const SpotTradeHistory = ({ pair = "BTC/USDC" }: { pair?: string }) => {
                                             </span>
                                         </td>
                                         <td className="px-4 py-3 font-medium tabular-nums text-foreground">{trade.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                        <td className="px-4 py-3 font-medium tabular-nums text-rose-500/70">{trade.stopLoss ? trade.stopLoss.toLocaleString() : "-"}</td>
+                                        <td className="px-4 py-3 font-medium tabular-nums text-emerald-500/70">{trade.takeProfit ? trade.takeProfit.toLocaleString() : "-"}</td>
                                         <td className="px-4 py-3 font-medium tabular-nums text-foreground">{trade.amount.toFixed(4)}</td>
                                         <td className="px-4 py-3 font-medium tabular-nums text-foreground">{trade.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                                         <td className="px-4 py-3 text-right">
                                             <span className={cn(
                                                 "text-[10px] font-bold",
-                                                trade.status === "COMPLETED" ? "text-success" :
-                                                    trade.status === "PENDING" ? "text-warning" : "text-error"
+                                                trade.status === "OPEN" ? "text-primary shadow-glow shadow-primary/20" :
+                                                    trade.status === "CLOSED" ? "text-success" :
+                                                        trade.status === "PENDING" ? "text-warning" : "text-error"
                                             )}>
                                                 {trade.status}
                                             </span>

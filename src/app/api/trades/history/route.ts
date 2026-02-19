@@ -53,6 +53,8 @@ export async function GET(req: NextRequest) {
                 price: t.price,
                 amount: t.amount,
                 total: t.total,
+                stopLoss: t.stopLoss,
+                takeProfit: t.takeProfit,
                 fee: t.fee,
                 status: t.status,
                 pnl: t.pnl || 0,

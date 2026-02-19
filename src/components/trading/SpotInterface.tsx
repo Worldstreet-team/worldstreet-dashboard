@@ -30,6 +30,8 @@ const SpotInterface = ({ pair }: SpotInterfaceProps) => {
     const [amount, setAmount] = useState("");
     const [total, setTotal] = useState("");
     const [price, setPrice] = useState("");
+    const [sl, setSl] = useState("");
+    const [tp, setTp] = useState("");
     const [showPinModal, setShowPinModal] = useState(false);
 
     // Derived tokens
@@ -124,6 +126,32 @@ const SpotInterface = ({ pair }: SpotInterfaceProps) => {
         return () => clearTimeout(timer);
     }, [amount, total, side, fromToken, toToken, solAddress, getQuote, baseToken, quoteToken]);
 
+    // Monitor price for SL/TP triggers
+    useEffect(() => {
+        if (currentPrice > 0) {
+            const monitorTrades = async () => {
+                try {
+                    const res = await fetch("/api/trades/monitor", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            symbol: pair,
+                            currentPrice: currentPrice,
+                        }),
+                    });
+                    const result = await res.json();
+                    if (result.success && result.closedCount > 0) {
+                        console.log(`[Monitor] Automatically closed ${result.closedCount} trades.`);
+                        // Optional: trigger a refresh of the trade history if you have a refresh function
+                    }
+                } catch (err) {
+                    console.error("Monitor failed:", err);
+                }
+            };
+            monitorTrades();
+        }
+    }, [currentPrice, pair]);
+
     const handleExecute = () => {
         if (!quote) return;
         setShowPinModal(true);
@@ -146,8 +174,10 @@ const SpotInterface = ({ pair }: SpotInterfaceProps) => {
                         price: currentPrice,
                         amount: parseFloat(amount),
                         total: parseFloat(total),
+                        stopLoss: sl ? parseFloat(sl) : undefined,
+                        takeProfit: tp ? parseFloat(tp) : undefined,
                         fee: 0.1, // Default fee or fetch from quote if available
-                        status: "COMPLETED", // marking as completed if executeSwap succeeded
+                        status: "OPEN", // Mark as OPEN for spot positions with SL/TP
                         txHash: result || "",
                     }),
                 });
@@ -158,6 +188,8 @@ const SpotInterface = ({ pair }: SpotInterfaceProps) => {
             setShowPinModal(false);
             setAmount("");
             setTotal("");
+            setSl("");
+            setTp("");
         } catch (err) {
             console.error("Swap failed:", err);
         }
@@ -166,6 +198,7 @@ const SpotInterface = ({ pair }: SpotInterfaceProps) => {
     return (
         <Card className="border-0 shadow-none dark:bg-[#1a1a1a] bg-white h-full flex flex-col font-sans">
             <div className="flex p-1 bg-muted/20 dark:bg-white/5 rounded-t-xl">
+                {/* ... side buttons ... */}
                 <button
                     onClick={() => setSide("buy")}
                     className={cn(
@@ -252,6 +285,36 @@ const SpotInterface = ({ pair }: SpotInterfaceProps) => {
                             {p}%
                         </button>
                     ))}
+                </div>
+
+                {/* SL & TP Inputs - New Section */}
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                    <div className="space-y-1.5">
+                        <p className="text-[10px] font-bold text-rose-500/80 uppercase">Stop Loss</p>
+                        <div className="relative">
+                            <Input
+                                type="number"
+                                value={sl}
+                                onChange={(e) => setSl(e.target.value)}
+                                placeholder="None"
+                                className="bg-rose-500/5 dark:bg-rose-500/10 border-rose-500/20 text-right pr-8 font-bold h-8 text-[10px]"
+                            />
+                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-bold text-rose-500/50">{quoteSymbol}</span>
+                        </div>
+                    </div>
+                    <div className="space-y-1.5">
+                        <p className="text-[10px] font-bold text-emerald-500/80 uppercase">Take Profit</p>
+                        <div className="relative">
+                            <Input
+                                type="number"
+                                value={tp}
+                                onChange={(e) => setTp(e.target.value)}
+                                placeholder="None"
+                                className="bg-emerald-500/5 dark:bg-emerald-500/10 border-emerald-500/20 text-right pr-8 font-bold h-8 text-[10px]"
+                            />
+                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-bold text-emerald-500/50">{quoteSymbol}</span>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Total/Value Input */}
