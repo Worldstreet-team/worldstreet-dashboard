@@ -23,10 +23,12 @@ const SpotTradeHistory = ({ pair = "BTC/USDC" }: { pair?: string }) => {
     const [totalPages, setTotalPages] = useState(1);
 
     useEffect(() => {
+        setTrades([]); // Clear old trades immediately
         const fetchHistory = async () => {
             setLoading(true);
             try {
-                const res = await fetch(`/api/trades/history?pair=${encodeURIComponent(pair)}&page=${page}&limit=10`);
+                // Change 'pair' to 'symbol' to match backend API
+                const res = await fetch(`/api/trades/history?symbol=${encodeURIComponent(pair)}&page=${page}&limit=10`);
                 const result = await res.json();
                 if (result.success) {
                     setTrades(result.data);

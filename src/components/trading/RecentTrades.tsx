@@ -10,30 +10,26 @@ const RecentTrades = ({ pair = "BTC/USDC" }: { pair?: string }) => {
   const { recentTrades, setRecentTrades } = useTradingStore();
 
   React.useEffect(() => {
-    // Reset store for new pair
-    useTradingStore.getState().setSymbol(pair);
+    // Reset store for new pair and trigger fresh fetch
+    const state = useTradingStore.getState();
+    state.setSymbol(pair);
 
-    // If store is empty, try to fetch initial trades from KuCoin via proxy
     const fetchFallback = async () => {
-      if (recentTrades.length === 0) {
-        try {
-          const res = await fetch(`/api/trading/trades?symbol=${encodeURIComponent(pair)}&limit=50`);
-          if (res.ok) {
-            const json = await res.json();
-            if (json.success && Array.isArray(json.data)) {
-              setRecentTrades(json.data);
-            }
+      try {
+        const res = await fetch(`/api/trading/trades?symbol=${encodeURIComponent(pair)}&limit=50`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && Array.isArray(json.data)) {
+            setRecentTrades(json.data);
           }
-        } catch (e) {
-          console.warn("[RecentTrades] Fallback fetch failed.");
         }
+      } catch (e) {
+        console.warn("[RecentTrades] Fallback fetch failed.");
       }
     };
 
-    if (recentTrades.length === 0) {
-      fetchFallback();
-    }
-  }, [pair, recentTrades.length, setRecentTrades]);
+    fetchFallback();
+  }, [pair, setRecentTrades]);
 
 
   return (
