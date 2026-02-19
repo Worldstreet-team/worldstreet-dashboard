@@ -160,7 +160,7 @@ const MarketTicker = ({
     }
 
     return (
-        <div className="bg-white dark:bg-black border border-border/50 dark:border-darkborder rounded-2xl overflow-hidden animate-fade-in-up z-9999">
+        <div className="bg-white dark:bg-black border border-border/50 dark:border-darkborder rounded-2xl animate-fade-in-up z-[100] relative">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-0 p-4 sm:px-6 sm:py-4">
                 {/* Pair Selector */}
                 <div className="relative">
@@ -189,10 +189,10 @@ const MarketTicker = ({
                     {dropdownOpen && (
                         <>
                             <div
-                                className="fixed inset-0 z-40"
+                                className="fixed inset-0 z-[150]"
                                 onClick={() => setDropdownOpen(false)}
                             />
-                            <div className="absolute left-0 top-full mt-1 w-64 bg-white dark:bg-[#0a0a0a] border border-border dark:border-darkborder rounded-xl shadow-2xl z-50 overflow-hidden">
+                            <div className="absolute left-0 top-full mt-2 w-72 bg-white dark:bg-[#1a1a1a] border border-border dark:border-darkborder rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.3)] z-[200] overflow-hidden">
                                 <div className="p-2">
                                     {livePairs.map((pair) => (
                                         <button
