@@ -19,7 +19,7 @@ class BinanceWSService {
             this.ws.close();
         }
 
-        this.symbol = symbol.toLowerCase();
+        this.symbol = symbol.replace("/", "").toLowerCase();
         this.ws = new WebSocket(`${BINANCE_WS_URL}/${this.symbol}@depth@100ms/${this.symbol}@trade/${this.symbol}@kline_1m`);
 
         this.ws.onopen = () => {

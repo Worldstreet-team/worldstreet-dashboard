@@ -69,26 +69,13 @@ const MarketTicker = ({
             try {
                 let json: any = null;
 
-                // 1. Try direct fetch
+                // Use internal proxy to bypass CORS
                 try {
-                    const res = await fetch("https://api.kucoin.com/api/v1/market/allTickers");
+                    const targetUrl = "https://api.kucoin.com/api/v1/market/allTickers";
+                    const res = await fetch(`/api/proxy?url=${encodeURIComponent(targetUrl)}`);
                     if (res.ok) json = await res.json();
                 } catch (e) {
-                    console.warn("[MarketTicker] Direct KuCoin fetch failed, trying proxy...");
-                }
-
-                // 2. Try proxy fallback
-                if (!json) {
-                    try {
-                        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent("https://api.kucoin.com/api/v1/market/allTickers")}`;
-                        const res = await fetch(proxyUrl);
-                        if (res.ok) {
-                            const wrapper = await res.json();
-                            json = JSON.parse(wrapper.contents);
-                        }
-                    } catch (e) {
-                        console.warn("[MarketTicker] Proxy fallback failed.");
-                    }
+                    console.warn("[MarketTicker] Proxy fetch failed.");
                 }
 
                 if (!json || !json.data || !Array.isArray(json.data.ticker)) return;

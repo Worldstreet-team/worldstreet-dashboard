@@ -42,7 +42,7 @@ const TradingChart = ({ pair = "BTCUSDC" }: TradingChartProps) => {
         timeVisible: true,
         secondsVisible: false,
       },
-    });
+    }) as any;
 
     const candleSeries = chart.addCandlestickSeries({
       upColor: "#10b981",
@@ -80,30 +80,42 @@ const TradingChart = ({ pair = "BTCUSDC" }: TradingChartProps) => {
     // Initial data fetch
     const fetchHistory = async () => {
       setLoading(true);
+      const symbol = pair.replace("/", "").toUpperCase();
+      const binanceUrl = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${timeframe}&limit=500`;
+
       try {
-        const symbol = pair.replace("/", "").toUpperCase();
-        const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${timeframe}&limit=500`);
+        // Try direct fetch first
+        let res = await fetch(binanceUrl);
+
+        // If direct fetch fails (CORS or blocked), use our proxy
+        if (!res.ok) {
+          res = await fetch(`/api/proxy?url=${encodeURIComponent(binanceUrl)}`);
+        }
+
         const data = await res.json();
 
-        const formattedData: CandlestickData<Time>[] = data.map((d: any) => ({
-          time: (d[0] / 1000) as Time,
-          open: parseFloat(d[1]),
-          high: parseFloat(d[2]),
-          low: parseFloat(d[3]),
-          close: parseFloat(d[4]),
-        }));
+        if (Array.isArray(data)) {
+          const formattedData: CandlestickData<Time>[] = data.map((d: any) => ({
+            time: (d[0] / 1000) as Time,
+            open: parseFloat(d[1]),
+            high: parseFloat(d[2]),
+            low: parseFloat(d[3]),
+            close: parseFloat(d[4]),
+          }));
 
-        const formattedVolume = data.map((d: any) => ({
-          time: (d[0] / 1000) as Time,
-          value: parseFloat(d[5]),
-          color: parseFloat(d[4]) >= parseFloat(d[1]) ? "rgba(16, 185, 129, 0.3)" : "rgba(239, 68, 68, 0.3)",
-        }));
+          const formattedVolume = data.map((d: any) => ({
+            time: (d[0] / 1000) as Time,
+            value: parseFloat(d[5]),
+            color: parseFloat(d[4]) >= parseFloat(d[1]) ? "rgba(16, 185, 129, 0.3)" : "rgba(239, 68, 68, 0.3)",
+          }));
 
-        candleSeries.setData(formattedData);
-        volumeSeries.setData(formattedVolume);
+          candleSeries.setData(formattedData);
+          volumeSeries.setData(formattedVolume);
+        }
         setLoading(false);
       } catch (e) {
         console.error("History fetch failed", e);
+        setLoading(false);
       }
     };
 

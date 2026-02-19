@@ -6,8 +6,42 @@ import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 import { useTradingStore } from "@/store/useTradingStore";
 
-const RecentTrades = () => {
-  const { recentTrades } = useTradingStore();
+const RecentTrades = ({ pair = "BTC/USDC" }: { pair?: string }) => {
+  const { recentTrades, setRecentTrades } = useTradingStore();
+
+  React.useEffect(() => {
+    // If store is empty, try to fetch initial trades from KuCoin via proxy
+    const fetchFallback = async () => {
+      if (recentTrades.length === 0) {
+        const [base, quote] = pair.split("/");
+        const kucoinSymbol = `${base}-${quote}`;
+        try {
+          const targetUrl = `https://api.kucoin.com/api/v1/market/histories?symbol=${kucoinSymbol}`;
+          const res = await fetch(`/api/proxy?url=${encodeURIComponent(targetUrl)}`);
+          if (res.ok) {
+            const json = await res.json();
+            if (Array.isArray(json.data)) {
+              const mapped = json.data.map((t: any) => ({
+                id: t.sequence || String(t.time),
+                price: t.price,
+                amount: t.size,
+                side: t.side,
+                time: t.time / 1000000 // kucoin uses ns
+              }));
+              setRecentTrades(mapped);
+            }
+          }
+        } catch (e) {
+          console.warn("[RecentTrades] Fallback fetch failed.");
+        }
+      }
+    };
+
+    if (recentTrades.length === 0) {
+      fetchFallback();
+    }
+  }, [pair, recentTrades.length, setRecentTrades]);
+
 
   return (
     <Card className="border border-border/50 shadow-sm bg-[#0b0e11] text-gray-200 h-full flex flex-col">
