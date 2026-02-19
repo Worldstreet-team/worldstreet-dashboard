@@ -34,11 +34,13 @@
     "ethers": "^6.16.0",
     "flowbite-react": "^0.11.9",
     "i18next": "^25.0.2",
+    "lightweight-charts": "^5.1.0",
     "lodash": "^4.17.23",
     "lucide-react": "^0.563.0",
     "mongoose": "^9.1.6",
     "next": "15.3.8",
     "nextjs-toploader": "^3.8.16",
+    "p-throttle": "^8.1.0",
     "qrcode.react": "^4.2.0",
     "react": "^19.0.0",
     "react-apexcharts": "^1.7.0",
@@ -49,7 +51,8 @@
     "react-syntax-highlighter": "^15.6.1",
     "simplebar-react": "^3.3.0",
     "tailwind-merge": "^3.4.0",
-    "tiny-secp256k1": "^2.2.4"
+    "tiny-secp256k1": "^2.2.4",
+    "zustand": "^5.0.11"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

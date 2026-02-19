@@ -1,307 +1,123 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { Clock, TrendingUp, Loader2, WifiOff } from "lucide-react";
+import { Loader2, ChevronLeft, ChevronRight, Filter } from "lucide-react";
 
-interface Trade {
+interface UserTrade {
     id: string;
-    price: number;
-    size: number;
+    symbol: string;
     side: "buy" | "sell";
-    time: Date;
-    isNew?: boolean;
+    price: number;
+    amount: number;
+    fee: number;
+    pnl: number;
+    timestamp: string;
 }
 
-// Map our pair symbols to KuCoin symbols
-const PAIR_TO_KUCOIN: Record<string, string> = {
-    "SOL/USDC": "SOL-USDC",
-    "ETH/USDC": "ETH-USDC",
-    "BTC/USDC": "BTC-USDC",
-    "XRP/USDC": "XRP-USDC",
-    "LINK/USDC": "LINK-USDC",
-    SOL: "SOL-USDC",
-    ETH: "ETH-USDC",
-    BTC: "BTC-USDC",
-    XRP: "XRP-USDC",
-    LINK: "LINK-USDC",
-};
-
-// Map our pair symbols to Binance symbols
-const PAIR_TO_BINANCE: Record<string, string> = {
-    "SOL/USDC": "SOLUSDC",
-    "ETH/USDC": "ETHUSDC",
-    "BTC/USDC": "BTCUSDC",
-    "XRP/USDC": "XRPUSDC",
-    "LINK/USDC": "LINKUSDC",
-    SOL: "SOLUSDC",
-    ETH: "ETHUSDC",
-    BTC: "BTCUSDC",
-    XRP: "XRPUSDC",
-    LINK: "LINKUSDC",
-};
-
-// Map our pair symbols to Gate.io symbols
-const PAIR_TO_GATE: Record<string, string> = {
-    "SOL/USDC": "SOL_USDC",
-    "ETH/USDC": "ETH_USDC",
-    "BTC/USDC": "BTC_USDC",
-    "XRP/USDC": "XRP_USDC",
-    "LINK/USDC": "LINK_USDC",
-    SOL: "SOL_USDC",
-    ETH: "ETH_USDC",
-    BTC: "BTC_USDC",
-    XRP: "XRP_USDC",
-    LINK: "LINK_USDC",
-};
-
-const SpotTradeHistory = ({ pair = "SOL/USDC" }: { pair?: string; midPrice?: number }) => {
-    const [trades, setTrades] = useState<Trade[]>([]);
+const SpotTradeHistory = () => {
+    const [trades, setTrades] = useState<UserTrade[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const lastTradeIdRef = useRef<string | null>(null);
-    const maxTrades = 50;
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
 
-    const kucoinSymbol = PAIR_TO_KUCOIN[pair] || PAIR_TO_KUCOIN[(pair || "BTC/USDC").split("/")[0]] || "BTC-USDC";
-    const binanceSymbol = PAIR_TO_BINANCE[pair] || PAIR_TO_BINANCE[(pair || "BTC/USDC").split("/")[0]] || "BTCUSDC";
-    const gateSymbol = PAIR_TO_GATE[pair] || PAIR_TO_GATE[(pair || "BTC/USDC").split("/")[0]] || "BTC_USDC";
-
-    // Fetch recent trades with fallback logic
-    const fetchTrades = useCallback(async (isInitial = false) => {
-        try {
-            let rawTrades: any[] = [];
-            let source: "binance" | "kucoin" | "gate" | null = null;
-
-            // Helper to try a fetch and extract data
-            const tryFetch = async (url: string, provider: "binance" | "kucoin" | "gate") => {
-                try {
-                    const res = await fetch(url);
-                    if (res.ok) {
-                        const json = await res.json();
-                        if (provider === "kucoin") return { data: json.data, source: provider };
-                        return { data: json, source: provider };
-                    }
-                } catch (e) {
-                    console.warn(`[SpotTradeHistory] ${provider} fetch failed.`);
-                }
-                return null;
-            };
-
-            // 1. Try Binance
-            const bRes = await tryFetch(`https://api.binance.com/api/v3/trades?symbol=${binanceSymbol}&limit=${maxTrades}`, "binance");
-            if (bRes) {
-                rawTrades = bRes.data;
-                source = bRes.source;
-            }
-
-            // 2. Try KuCoin fallback
-            if (rawTrades.length === 0) {
-                const kRes = await tryFetch(`https://api.kucoin.com/api/v1/market/histories?symbol=${kucoinSymbol}`, "kucoin");
-                if (kRes) {
-                    rawTrades = kRes.data;
-                    source = kRes.source;
-                }
-            }
-
-            // 3. Try Gate.io fallback
-            if (rawTrades.length === 0) {
-                const gRes = await tryFetch(`https://api.gateio.ws/api/v4/spot/trades?currency_pair=${gateSymbol}&limit=${maxTrades}`, "gate");
-                if (gRes) {
-                    rawTrades = gRes.data;
-                    source = gRes.source;
-                }
-            }
-
-            // 4. Last Resort: Proxy-based fetch (Binance via AllOrigins)
-            if (rawTrades.length === 0) {
-                try {
-                    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(`https://api.binance.com/api/v3/trades?symbol=${binanceSymbol}&limit=${maxTrades}`)}`;
-                    const res = await fetch(proxyUrl);
-                    if (res.ok) {
-                        const wrapper = await res.json();
-                        rawTrades = JSON.parse(wrapper.contents);
-                        source = "binance";
-                    }
-                } catch (e) {
-                    console.warn("[SpotTradeHistory] Proxy fallback failed.");
-                }
-            }
-
-            if (!Array.isArray(rawTrades) || rawTrades.length === 0) {
-                if (isInitial) throw new Error("No trade data available from any provider");
-                return;
-            }
-
-            const newTrades: Trade[] = rawTrades.map((t: any) => {
-                if (source === "binance") {
-                    return {
-                        id: String(t.id),
-                        price: parseFloat(t.price),
-                        size: parseFloat(t.qty),
-                        side: t.isBuyerMaker ? "sell" : "buy",
-                        time: new Date(t.time),
-                        isNew: false,
-                    };
-                } else if (source === "kucoin") {
-                    return {
-                        id: String(t.sequence),
-                        price: parseFloat(t.price),
-                        size: parseFloat(t.size),
-                        side: t.side,
-                        time: new Date(Math.floor(t.time / 1000000)),
-                        isNew: false,
-                    };
-                } else { // gate.io
-                    return {
-                        id: String(t.id),
-                        price: parseFloat(t.price),
-                        size: parseFloat(t.amount),
-                        side: t.side,
-                        time: new Date(t.create_time * 1000), // gate.io uses seconds
-                        isNew: false,
-                    };
-                }
-            });
-
-            // Sort newest first
-            newTrades.sort((a, b) => b.time.getTime() - a.time.getTime());
-
-            if (isInitial) {
-                setTrades(newTrades.slice(0, maxTrades));
-                lastTradeIdRef.current = newTrades[0]?.id || null;
-            } else {
-                // Only add trades newer than what we already have
-                setTrades((prev) => {
-                    const existingIds = new Set(prev.map((t) => t.id));
-                    const fresh = newTrades
-                        .filter((t) => !existingIds.has(t.id))
-                        .map((t) => ({ ...t, isNew: true }));
-
-                    if (fresh.length === 0) return prev;
-
-                    // Mark all existing as not new
-                    const updated = prev.map((t) => ({ ...t, isNew: false }));
-                    return [...fresh, ...updated].slice(0, maxTrades);
-                });
-
-                if (newTrades[0]) {
-                    lastTradeIdRef.current = newTrades[0].id;
-                }
-            }
-
-            setError(null);
-        } catch (err) {
-            console.error("[SpotTradeHistory] All providers failed:", err);
-            setError((prev) => prev !== "Disconnected" ? "Disconnected" : prev);
-        } finally {
-            setLoading(false);
-        }
-    }, [kucoinSymbol, binanceSymbol, gateSymbol]);
-
-    // Initial fetch
     useEffect(() => {
-        setLoading(true);
-        setTrades([]);
-        setError(null);
-        fetchTrades(true);
-    }, [fetchTrades]);
-
-    // Poll for new trades every 5s (slower is better for stability)
-    useEffect(() => {
-        const interval = setInterval(() => {
-            fetchTrades(false);
-        }, 5000);
-        return () => clearInterval(interval);
-    }, [fetchTrades]);
-
-    const formatTime = (date: Date) => {
-        return date.toLocaleTimeString("en-US", {
-            hour12: false,
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-        });
-    };
-
-    const formatSize = (size: number) => {
-        if (size >= 1000) return size.toFixed(1);
-        if (size >= 100) return size.toFixed(2);
-        if (size >= 1) return size.toFixed(4);
-        return size.toFixed(6);
-    };
-
-    const formatPrice = (price: number) => {
-        if (price >= 10000) return price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        if (price >= 100) return price.toFixed(2);
-        if (price >= 1) return price.toFixed(4);
-        return price.toFixed(6);
-    };
+        const fetchHistory = async () => {
+            setLoading(true);
+            try {
+                const res = await fetch(`/api/trades/history?page=${page}&limit=10`);
+                const result = await res.json();
+                if (result.success) {
+                    setTrades(result.data);
+                    setTotalPages(result.pagination.pages);
+                }
+            } catch (e) {
+                console.error("Trade history fetch failed", e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchHistory();
+    }, [page]);
 
     return (
-        <Card className="border border-border/50 shadow-xl dark:bg-black dark:border-darkborder h-full overflow-hidden flex flex-col animate-fade-in-up" style={{ animationDelay: "100ms" }}>
-            <div className="flex items-center justify-between px-3 py-2 bg-[#F9FAFB] dark:bg-[#1f1f1f] border-b border-border/10">
-                <span className="text-[11px] font-bold text-dark dark:text-white uppercase tracking-wider">Market Trades</span>
-                <div className="flex items-center gap-1.5 text-[10px] text-muted">
-                    <Clock className="w-3 h-3" />
-                    <span className="font-medium">Live</span>
+        <Card className="border border-border/50 shadow-sm bg-[#0b0e11] text-gray-200">
+            <CardHeader className="pb-3 border-b border-white/5 bg-[#161a1e]">
+                <div className="flex items-center justify-between">
+                    <h5 className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Trade History</h5>
+                    <button className="p-1 hover:bg-white/5 rounded"><Filter className="w-3 h-3" /></button>
                 </div>
-            </div>
+            </CardHeader>
 
-            <CardContent className="p-0 flex-1 flex flex-col overflow-hidden">
-                {/* Column Headers */}
-                <div className="flex items-center text-[9px] font-black text-muted uppercase tracking-widest px-3 py-2 border-b border-border/10 dark:border-white/5">
-                    <span className="w-[34%]">Price (USD)</span>
-                    <span className="w-[33%] text-right">Size</span>
-                    <span className="w-[33%] text-right">Time</span>
+            <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-[11px] text-left">
+                        <thead>
+                            <tr className="border-b border-white/5 text-gray-500 uppercase font-bold bg-[#1e2329]/30">
+                                <th className="px-4 py-2">Time</th>
+                                <th className="px-4 py-2">Symbol</th>
+                                <th className="px-4 py-2">Side</th>
+                                <th className="px-4 py-2">Price</th>
+                                <th className="px-4 py-2">Amount</th>
+                                <th className="px-4 py-2">Fee</th>
+                                <th className="px-4 py-2 text-right">P/L</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5 font-mono">
+                            {loading ? (
+                                <tr>
+                                    <td colSpan={7} className="py-10 text-center">
+                                        <Loader2 className="w-5 h-5 animate-spin mx-auto text-emerald-500" />
+                                    </td>
+                                </tr>
+                            ) : trades.length === 0 ? (
+                                <tr>
+                                    <td colSpan={7} className="py-10 text-center text-gray-500">No trades found</td>
+                                </tr>
+                            ) : (
+                                trades.map((trade) => (
+                                    <tr key={trade.id} className="hover:bg-white/5 transition-colors">
+                                        <td className="px-4 py-2 text-gray-400">
+                                            {new Date(trade.timestamp).toLocaleDateString()} {new Date(trade.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </td>
+                                        <td className="px-4 py-2 font-bold text-gray-300">{trade.symbol}</td>
+                                        <td className={cn("px-4 py-2 font-bold", trade.side === "buy" ? "text-emerald-500" : "text-rose-500")}>
+                                            {trade.side.toUpperCase()}
+                                        </td>
+                                        <td className="px-4 py-2 text-gray-300">{trade.price.toLocaleString()}</td>
+                                        <td className="px-4 py-2 text-gray-300">{trade.amount.toFixed(4)}</td>
+                                        <td className="px-4 py-2 text-gray-500">{trade.fee.toFixed(6)}</td>
+                                        <td className={cn("px-4 py-2 text-right font-bold", trade.pnl >= 0 ? "text-emerald-500" : "text-rose-500")}>
+                                            {trade.pnl > 0 ? "+" : ""}{trade.pnl.toFixed(2)}
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
                 </div>
 
-                {loading && !trades.length ? (
-                    <div className="flex-1 flex items-center justify-center">
-                        <div className="flex flex-col items-center gap-3">
-                            <Loader2 className="w-6 h-6 text-primary animate-spin" />
-                            <p className="text-[10px] font-bold text-muted">Loading trades...</p>
-                        </div>
+                {/* Pagination */}
+                <div className="flex items-center justify-between px-4 py-3 border-t border-white/5 bg-[#161a1e]">
+                    <span className="text-[10px] text-gray-500">Page {page} of {totalPages}</span>
+                    <div className="flex gap-2">
+                        <button
+                            disabled={page === 1}
+                            onClick={() => setPage(p => p - 1)}
+                            className="p-1 disabled:opacity-30 hover:bg-white/10 rounded border border-white/10"
+                        >
+                            <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <button
+                            disabled={page === totalPages}
+                            onClick={() => setPage(p => p + 1)}
+                            className="p-1 disabled:opacity-30 hover:bg-white/10 rounded border border-white/10"
+                        >
+                            <ChevronRight className="w-4 h-4" />
+                        </button>
                     </div>
-                ) : error && !trades.length ? (
-                    <div className="flex-1 flex items-center justify-center">
-                        <div className="flex flex-col items-center gap-3 p-6 text-center">
-                            <WifiOff className="w-6 h-6 text-muted/40" />
-                            <p className="text-[10px] font-bold text-muted">Trades unavailable</p>
-                            <p className="text-[9px] text-muted/60">Retrying automatically...</p>
-                        </div>
-                    </div>
-                ) : (
-                    <ScrollArea className="flex-1">
-                        <div className="pb-1">
-                            {trades.map((trade) => (
-                                <div
-                                    key={trade.id}
-                                    className={cn(
-                                        "flex items-center text-[11px] font-mono h-[26px] px-3 transition-all duration-500 hover:bg-white/5 cursor-pointer",
-                                        trade.isNew && "bg-primary/5 animate-fade-in"
-                                    )}
-                                >
-                                    <span
-                                        className={cn(
-                                            "w-[34%] tabular-nums font-semibold",
-                                            trade.side === "buy" ? "text-success" : "text-error"
-                                        )}
-                                    >
-                                        {formatPrice(trade.price)}
-                                    </span>
-                                    <span className="w-[33%] text-right tabular-nums text-dark/80 dark:text-white/70">
-                                        {formatSize(trade.size)}
-                                    </span>
-                                    <span className="w-[33%] text-right tabular-nums text-muted">
-                                        {formatTime(trade.time)}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                    </ScrollArea>
-                )}
+                </div>
             </CardContent>
         </Card>
     );
