@@ -69,13 +69,12 @@ const MarketTicker = ({
             try {
                 let json: any = null;
 
-                // Use internal proxy to bypass CORS
+                // Use dedicated backend route
                 try {
-                    const targetUrl = "https://api.kucoin.com/api/v1/market/allTickers";
-                    const res = await fetch(`/api/proxy?url=${encodeURIComponent(targetUrl)}`);
+                    const res = await fetch("/api/trading/ticker");
                     if (res.ok) json = await res.json();
                 } catch (e) {
-                    console.warn("[MarketTicker] Proxy fetch failed.");
+                    console.warn("[MarketTicker] Ticker API fetch failed.");
                 }
 
                 if (!json || !json.data || !Array.isArray(json.data.ticker)) return;

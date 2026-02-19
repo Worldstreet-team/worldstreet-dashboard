@@ -13,22 +13,12 @@ const RecentTrades = ({ pair = "BTC/USDC" }: { pair?: string }) => {
     // If store is empty, try to fetch initial trades from KuCoin via proxy
     const fetchFallback = async () => {
       if (recentTrades.length === 0) {
-        const [base, quote] = pair.split("/");
-        const kucoinSymbol = `${base}-${quote}`;
         try {
-          const targetUrl = `https://api.kucoin.com/api/v1/market/histories?symbol=${kucoinSymbol}`;
-          const res = await fetch(`/api/proxy?url=${encodeURIComponent(targetUrl)}`);
+          const res = await fetch(`/api/trading/trades?symbol=${encodeURIComponent(pair)}&limit=50`);
           if (res.ok) {
             const json = await res.json();
-            if (Array.isArray(json.data)) {
-              const mapped = json.data.map((t: any) => ({
-                id: t.sequence || String(t.time),
-                price: t.price,
-                amount: t.size,
-                side: t.side,
-                time: t.time / 1000000 // kucoin uses ns
-              }));
-              setRecentTrades(mapped);
+            if (json.success && Array.isArray(json.data)) {
+              setRecentTrades(json.data);
             }
           }
         } catch (e) {

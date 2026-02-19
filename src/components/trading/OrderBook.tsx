@@ -61,37 +61,16 @@ const OrderBook = ({ pair = "BTCUSDC" }: { pair?: string }) => {
         const fallbackInterval = setInterval(async () => {
             const state = useTradingStore.getState();
             if (state.bids.length === 0 && state.asks.length === 0) {
-                console.log("[OrderBook] Attempting fallback fetch...");
-                const [base, quote] = pair.split("/");
-                const kucoinSymbol = `${base}-${quote}`;
-
                 try {
-                    const targetUrl = `https://api.kucoin.com/api/v1/market/orderbook/level2_20?symbol=${kucoinSymbol}`;
-                    const res = await fetch(`/api/proxy?url=${encodeURIComponent(targetUrl)}`);
+                    const res = await fetch(`/api/trading/orderbook?symbol=${encodeURIComponent(pair)}`);
                     if (res.ok) {
                         const json = await res.json();
-                        if (json.data) {
-                            state.setOrderBook(json.data.bids, json.data.asks);
-                            return; // Stop if KuCoin worked
-                        }
-                    }
-                } catch (e) {
-                    console.warn("[OrderBook] KuCoin fallback failed.");
-                }
-
-                // If KuCoin failed, try Gate.io
-                try {
-                    const gateSymbol = `${base}_${quote}`;
-                    const targetUrl = `https://api.gateio.ws/api/v4/spot/order_book?currency_pair=${gateSymbol}`;
-                    const res = await fetch(`/api/proxy?url=${encodeURIComponent(targetUrl)}`);
-                    if (res.ok) {
-                        const json = await res.json();
-                        if (json.bids && json.asks) {
+                        if (json.success) {
                             state.setOrderBook(json.bids, json.asks);
                         }
                     }
                 } catch (e) {
-                    console.warn("[OrderBook] Gate.io fallback failed.");
+                    console.warn("[OrderBook] Fallback fetch failed.");
                 }
             }
         }, 5000);
