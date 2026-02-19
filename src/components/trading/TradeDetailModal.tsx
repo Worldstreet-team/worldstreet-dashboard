@@ -78,13 +78,15 @@ const TradeDetailModal = ({ isOpen, onClose, trade, onTradeClosed }: TradeDetail
             setError(null);
 
             try {
-                // Ensure symbol is formatted correctly for Binance (e.g., BTCUSDT)
-                const base = trade.symbol.split('/')[0].split('USDT')[0].split('USDC')[0];
-                const binanceSymbol = `${base}USDT`;
+                // Format symbol for Gate.io (e.g., BTC_USDT)
+                const parts = trade.symbol.split('/');
+                const base = parts[0];
+                const quote = parts[1] || 'USDT';
+                const gateSymbol = `${base}_${quote}`;
 
-                console.log("[Chart] Fetching data for", binanceSymbol);
+                console.log("[Chart] Fetching data from Gate.io for", gateSymbol);
 
-                const url = `https://api.binance.com/api/v3/klines?symbol=${binanceSymbol}&interval=1m&limit=100`;
+                const url = `https://api.gateio.ws/api/v4/spot/candlesticks?currency_pair=${gateSymbol}&interval=1m&limit=100`;
                 const res = await fetch(`/api/proxy?url=${encodeURIComponent(url)}`, {
                     signal: abortController.signal
                 });
@@ -95,12 +97,14 @@ const TradeDetailModal = ({ isOpen, onClose, trade, onTradeClosed }: TradeDetail
                 if (!isMounted) return;
 
                 if (Array.isArray(data) && data.length > 0) {
+                    console.log("[Chart] Received", data.length, "Gate.io candles");
+                    // Mapping Gate.io format: [timestamp, volume, close, high, low, open, quote_volume]
                     const formattedData: CandlestickData[] = data.map((d: any) => ({
-                        time: (d[0] / 1000) as Time,
-                        open: parseFloat(d[1]),
-                        high: parseFloat(d[2]),
-                        low: parseFloat(d[3]),
-                        close: parseFloat(d[4]),
+                        time: parseInt(d[0]) as Time, // Gate.io returns seconds
+                        open: parseFloat(d[5]),
+                        high: parseFloat(d[3]),
+                        low: parseFloat(d[4]),
+                        close: parseFloat(d[2]),
                     }));
 
                     candlestickSeries.setData(formattedData);
@@ -125,7 +129,7 @@ const TradeDetailModal = ({ isOpen, onClose, trade, onTradeClosed }: TradeDetail
                     chart.timeScale().fitContent();
                     setLoading(false);
                 } else {
-                    throw new Error("No recent market data found");
+                    throw new Error("No recent market data found on Gate.io");
                 }
             } catch (err: any) {
                 if (err.name === 'AbortError') return;
