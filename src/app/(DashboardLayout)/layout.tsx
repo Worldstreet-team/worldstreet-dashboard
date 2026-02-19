@@ -16,6 +16,7 @@ import { BitcoinProvider } from "@/app/context/bitcoinContext";
 import { SwapProvider } from "@/app/context/swapContext";
 import { SpotProvider } from "@/app/context/spotContext";
 import { PinSetupModal, WalletAddressSync } from "@/components/wallet";
+import DashboardVividProvider from "@/components/dashboard/DashboardVividProvider";
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { loading } = useAuth();
@@ -55,6 +56,7 @@ export default function Layout({
                         <SpotProvider>
                           {/* Syncs wallet addresses to chain contexts */}
                           <WalletAddressSync />
+                          <DashboardVividProvider>
                           <div className="flex w-full min-h-screen">
                             <div className="page-wrapper flex w-full">
                               {/* Header/sidebar */}
@@ -91,6 +93,7 @@ export default function Layout({
                           </div>
                           {/* Wallet PIN Setup Modal */}
                           <PinSetupModal />
+                          </DashboardVividProvider>
                         </SpotProvider>
                       </SwapProvider>
                     </BitcoinProvider>

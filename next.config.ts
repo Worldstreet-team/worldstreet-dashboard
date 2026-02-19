@@ -7,7 +7,13 @@ const nextConfig: NextConfig = {
     ignoreDuringBuilds: true,
   },
   typescript: {
-    ignoreBuildErrors: true
+    ignoreBuildErrors: true,
+  },
+  transpilePackages: ["@worldstreet/vivid-voice"],
+  modularizeImports: {
+    "@tabler/icons-react": {
+      transform: "@tabler/icons-react/dist/esm/icons/{{member}}",
+    },
   },
   webpack: (config, { isServer }) => {
     // Enable WebAssembly support for tiny-secp256k1
@@ -32,6 +38,9 @@ const nextConfig: NextConfig = {
     });
 
     return config;
+  },
+  experimental: {
+    optimizePackageImports: ["@iconify/react", "flowbite-react"],
   },
 };
 
