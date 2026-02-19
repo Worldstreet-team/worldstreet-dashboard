@@ -34,11 +34,17 @@ const TradeDetailModal = ({ isOpen, onClose, trade, onTradeClosed }: TradeDetail
     const [loading, setLoading] = useState(true);
     const [closing, setClosing] = useState(false);
     const [currentPrice, setCurrentPrice] = useState<number | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         if (!isOpen || !trade || !chartContainerRef.current) return;
 
-        const chart = createChart(chartContainerRef.current, {
+        let isMounted = true;
+        const abortController = new AbortController();
+        const container = chartContainerRef.current;
+
+        // Initialize Chart
+        const chart = createChart(container, {
             layout: {
                 background: { type: ColorType.Solid, color: "transparent" },
                 textColor: "#9ca3af",
@@ -47,7 +53,7 @@ const TradeDetailModal = ({ isOpen, onClose, trade, onTradeClosed }: TradeDetail
                 vertLines: { color: "rgba(255, 255, 255, 0.05)" },
                 horzLines: { color: "rgba(255, 255, 255, 0.05)" },
             },
-            width: chartContainerRef.current.clientWidth,
+            width: container.clientWidth || 600,
             height: 300,
             timeScale: {
                 timeVisible: true,
@@ -67,16 +73,28 @@ const TradeDetailModal = ({ isOpen, onClose, trade, onTradeClosed }: TradeDetail
         candlestickSeriesRef.current = candlestickSeries;
 
         const fetchChartData = async () => {
+            if (!isMounted) return;
+            setLoading(true);
+            setError(null);
+
             try {
-                const symbol = trade.symbol.replace("/", "");
-                const binanceSymbol = symbol.includes("USDC") ? symbol.replace("USDC", "USDT") : (symbol.includes("USDT") ? symbol : `${symbol}USDT`);
+                // Ensure symbol is formatted correctly for Binance (e.g., BTCUSDT)
+                const base = trade.symbol.split('/')[0].split('USDT')[0].split('USDC')[0];
+                const binanceSymbol = `${base}USDT`;
 
-                // Fetch 1m candles from Binance via proxy
+                console.log("[Chart] Fetching data for", binanceSymbol);
+
                 const url = `https://api.binance.com/api/v3/klines?symbol=${binanceSymbol}&interval=1m&limit=100`;
-                const res = await fetch(`/api/proxy?url=${encodeURIComponent(url)}`);
-                const data = await res.json();
+                const res = await fetch(`/api/proxy?url=${encodeURIComponent(url)}`, {
+                    signal: abortController.signal
+                });
 
-                if (Array.isArray(data)) {
+                if (!res.ok) throw new Error(`API Connection Failed: ${res.status}`);
+
+                const data = await res.json();
+                if (!isMounted) return;
+
+                if (Array.isArray(data) && data.length > 0) {
                     const formattedData: CandlestickData[] = data.map((d: any) => ({
                         time: (d[0] / 1000) as Time,
                         open: parseFloat(d[1]),
@@ -84,70 +102,59 @@ const TradeDetailModal = ({ isOpen, onClose, trade, onTradeClosed }: TradeDetail
                         low: parseFloat(d[3]),
                         close: parseFloat(d[4]),
                     }));
+
                     candlestickSeries.setData(formattedData);
+                    setCurrentPrice(formattedData[formattedData.length - 1].close);
 
-                    if (formattedData.length > 0) {
-                        setCurrentPrice(formattedData[formattedData.length - 1].close);
+                    if (trade.price) {
+                        candlestickSeries.createPriceLine({
+                            price: trade.price, color: "#3b82f6", lineWidth: 2, lineStyle: 2, axisLabelVisible: true, title: "Entry",
+                        });
                     }
-                }
+                    if (trade.stopLoss) {
+                        candlestickSeries.createPriceLine({
+                            price: trade.stopLoss, color: "#ef4444", lineWidth: 2, lineStyle: 1, axisLabelVisible: true, title: "SL",
+                        });
+                    }
+                    if (trade.takeProfit) {
+                        candlestickSeries.createPriceLine({
+                            price: trade.takeProfit, color: "#10b981", lineWidth: 2, lineStyle: 1, axisLabelVisible: true, title: "TP",
+                        });
+                    }
 
-                // Add SL/TP/Entry lines
-                if (trade.price) {
-                    candlestickSeries.createPriceLine({
-                        price: trade.price,
-                        color: "#3b82f6",
-                        lineWidth: 2,
-                        lineStyle: 2, // Dashed
-                        axisLabelVisible: true,
-                        title: "Entry",
-                    });
+                    chart.timeScale().fitContent();
+                    setLoading(false);
+                } else {
+                    throw new Error("No recent market data found");
                 }
-
-                if (trade.stopLoss) {
-                    candlestickSeries.createPriceLine({
-                        price: trade.stopLoss,
-                        color: "#ef4444",
-                        lineWidth: 2,
-                        lineStyle: 1, // Dotted
-                        axisLabelVisible: true,
-                        title: "SL",
-                    });
+            } catch (err: any) {
+                if (err.name === 'AbortError') return;
+                console.error("[Chart] Load error:", err);
+                if (isMounted) {
+                    setError(err.message || "Failed to load chart");
+                    setLoading(false);
                 }
-
-                if (trade.takeProfit) {
-                    candlestickSeries.createPriceLine({
-                        price: trade.takeProfit,
-                        color: "#10b981",
-                        lineWidth: 2,
-                        lineStyle: 1, // Dotted
-                        axisLabelVisible: true,
-                        title: "TP",
-                    });
-                }
-
-                chart.timeScale().fitContent();
-                setLoading(false);
-            } catch (error) {
-                console.error("Failed to fetch chart data", error);
-                setLoading(false);
             }
         };
 
+        // Fetch immediately
         fetchChartData();
 
-        const handleResize = () => {
-            if (chartContainerRef.current) {
-                chart.applyOptions({ width: chartContainerRef.current.clientWidth });
+        const resizeObserver = new ResizeObserver(() => {
+            if (isMounted && container && chart) {
+                chart.applyOptions({ width: container.clientWidth });
+                chart.timeScale().fitContent();
             }
-        };
-
-        window.addEventListener("resize", handleResize);
+        });
+        resizeObserver.observe(container);
 
         return () => {
-            window.removeEventListener("resize", handleResize);
-            chart.remove();
+            isMounted = false;
+            abortController.abort();
+            resizeObserver.disconnect();
+            if (chart) chart.remove();
         };
-    }, [isOpen, trade]);
+    }, [isOpen, trade?.id]);
 
     const handleCloseTrade = async () => {
         if (!trade || closing) return;
@@ -276,7 +283,27 @@ const TradeDetailModal = ({ isOpen, onClose, trade, onTradeClosed }: TradeDetail
                         >
                             {loading && (
                                 <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-10">
-                                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                                    <div className="flex flex-col items-center gap-2">
+                                        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Loading Market Data...</p>
+                                    </div>
+                                </div>
+                            )}
+                            {error && (
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-10 p-4 text-center">
+                                    <div className="flex flex-col items-center gap-3">
+                                        <div className="p-3 bg-error/10 rounded-full">
+                                            <ShieldAlert className="w-6 h-6 text-error" />
+                                        </div>
+                                        <p className="text-xs text-error font-bold">{error}</p>
+                                        <Button
+                                            onClick={() => window.location.reload()}
+                                            variant="outline"
+                                            className="h-8 text-[10px] bg-white/5 border-white/10 hover:bg-white/10"
+                                        >
+                                            Try Again
+                                        </Button>
+                                    </div>
                                 </div>
                             )}
                         </div>
