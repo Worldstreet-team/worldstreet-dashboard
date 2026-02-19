@@ -92,6 +92,6 @@ const ChildComponent = ({
 
 export default ChildComponent;
 function usePathanme() {
-  throw new Error("Function not implemented.");
+  throw new Error("Function is not implemented.");
 }
 
