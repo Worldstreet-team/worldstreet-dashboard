@@ -100,7 +100,7 @@ ${portfolioContext}
         position={{ bottom: '24px', right: '24px' }}
         classNames={{
           container:
-            'fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3 max-sm:scale-[0.625] max-sm:origin-bottom-right max-sm:!bottom-4 max-sm:!right-4',
+            'fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3 max-sm:bottom-5 max-sm:right-4 max-sm:scale-75 max-sm:origin-bottom-right',
         }}
       />
     </VividProvider>
