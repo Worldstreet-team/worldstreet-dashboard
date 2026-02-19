@@ -10,6 +10,9 @@ const RecentTrades = ({ pair = "BTC/USDC" }: { pair?: string }) => {
   const { recentTrades, setRecentTrades } = useTradingStore();
 
   React.useEffect(() => {
+    // Reset store for new pair
+    useTradingStore.getState().setSymbol(pair);
+
     // If store is empty, try to fetch initial trades from KuCoin via proxy
     const fetchFallback = async () => {
       if (recentTrades.length === 0) {

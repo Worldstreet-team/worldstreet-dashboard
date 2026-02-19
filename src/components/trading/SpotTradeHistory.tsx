@@ -16,7 +16,7 @@ interface UserTrade {
     timestamp: string;
 }
 
-const SpotTradeHistory = () => {
+const SpotTradeHistory = ({ pair = "BTC/USDC" }: { pair?: string }) => {
     const [trades, setTrades] = useState<UserTrade[]>([]);
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
@@ -26,7 +26,7 @@ const SpotTradeHistory = () => {
         const fetchHistory = async () => {
             setLoading(true);
             try {
-                const res = await fetch(`/api/trades/history?page=${page}&limit=10`);
+                const res = await fetch(`/api/trades/history?pair=${encodeURIComponent(pair)}&page=${page}&limit=10`);
                 const result = await res.json();
                 if (result.success) {
                     setTrades(result.data);
@@ -39,7 +39,7 @@ const SpotTradeHistory = () => {
             }
         };
         fetchHistory();
-    }, [page]);
+    }, [page, pair]);
 
     return (
         <Card className="border border-border/50 shadow-sm bg-[#0b0e11] text-gray-200">

@@ -55,6 +55,9 @@ const OrderBook = ({ pair = "BTCUSDC" }: { pair?: string }) => {
     const { bids, asks, lastPrice, priceDirection } = useTradingStore();
 
     useEffect(() => {
+        // Clear store and set new symbol
+        useTradingStore.getState().setSymbol(pair);
+
         binanceWS.connect(pair);
 
         // Fallback polling if WS is not providing data
