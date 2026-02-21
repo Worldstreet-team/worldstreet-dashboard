@@ -36,14 +36,14 @@ const SidebarLayout = () => {
                 </span>
               </Link>
             </div>
-            <div
+            <SimpleBar
               className={`${isCollapse === "full-sidebar"
                 ? "h-[calc(100vh_-_64px)] px-4"
                 : "h-[calc(100vh_-_64px)]"
                 }`}
             >
-              <nav className={`sidebar-nav py-3 overflow-y-auto ${isCollapse === "full-sidebar" ? "" : "px-3"}`}>
-                <ul className="overflow-y-auto sidebar-nav-group space-y-0.5">
+              <nav className={`sidebar-nav py-3 ${isCollapse === "full-sidebar" ? "" : "px-3"}`}>
+                <ul className="sidebar-nav-group space-y-0.5">
                   {SidebarContent.map((item, index) => (
                     <React.Fragment key={index}>
                       <li>
@@ -71,7 +71,7 @@ const SidebarLayout = () => {
                   ))}
                 </ul>
               </nav>
-            </div>
+            </SimpleBar>
           </aside>
         </div>
       </div>
