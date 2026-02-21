@@ -1,36 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import crypto from 'crypto';
-import { ethers } from 'ethers';
-import { Keypair } from '@solana/web3.js';
-
-// Encryption utilities
-const ENCRYPTION_KEY = Buffer.from(process.env.WALLET_ENCRYPTION_KEY || '', 'hex');
-const IV_LENGTH = 16;
-
-function encrypt(text: string): string {
-  const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
-  let encrypted = cipher.update(text);
-  encrypted = Buffer.concat([encrypted, cipher.final()]);
-  return iv.toString('hex') + ':' + encrypted.toString('hex');
-}
-
-// Wallet generation functions
-async function generateEthereumWallet() {
-  const wallet = ethers.Wallet.createRandom();
-  return {
-    address: wallet.address,
-    privateKey: wallet.privateKey,
-  };
-}
-
-async function generateSolanaWallet() {
-  const keypair = Keypair.generate();
-  return {
-    address: keypair.publicKey.toBase58(),
-    privateKey: Buffer.from(keypair.secretKey).toString('hex'),
-  };
-}
 
 // GET - Fetch spot wallets and balances
 export async function GET(
@@ -40,24 +8,44 @@ export async function GET(
   const { userId } = params;
 
   try {
-    const response = await fetch(
-      `https://trading.watchup.site/api/users/${userId}/spot-wallets`,
+    // Fetch wallets
+    const walletsResponse = await fetch(
+      `https://trading.watchup.site/api/users/${userId}/wallets`,
       {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       }
     );
 
-    const data = await response.json();
-
-    if (!response.ok) {
+    if (!walletsResponse.ok) {
+      const errorText = await walletsResponse.text();
+      console.error('Wallets fetch failed:', errorText);
       return NextResponse.json(
-        { error: data.error || 'Failed to fetch spot wallets' },
-        { status: response.status }
+        { error: 'Failed to fetch spot wallets' },
+        { status: walletsResponse.status }
       );
     }
 
-    return NextResponse.json(data);
+    const wallets = await walletsResponse.json();
+
+    // Fetch balances
+    const balancesResponse = await fetch(
+      `https://trading.watchup.site/api/users/${userId}/balances`,
+      {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+
+    let balances = [];
+    if (balancesResponse.ok) {
+      balances = await balancesResponse.json();
+    }
+
+    return NextResponse.json({
+      wallets: wallets,
+      balances: balances,
+    });
   } catch (error) {
     console.error('Error fetching spot wallets:', error);
     return NextResponse.json(
@@ -75,49 +63,61 @@ export async function POST(
   const { userId } = params;
 
   try {
-    // Generate wallets
-    const ethWallet = await generateEthereumWallet();
-    const solWallet = await generateSolanaWallet();
-
-    const assets = [
-      { symbol: 'ETH', chain: 'evm', wallet: ethWallet },
-      { symbol: 'USDT', chain: 'evm', wallet: ethWallet },
-      { symbol: 'USDC', chain: 'evm', wallet: ethWallet },
-      { symbol: 'SOL', chain: 'sol', wallet: solWallet },
-    ];
-
-    const walletData = assets.map((asset) => ({
-      asset: asset.symbol,
-      publicAddress: asset.wallet.address,
-      encryptedPrivateKey: encrypt(asset.wallet.privateKey),
-    }));
-
-    // Send to backend
-    const response = await fetch(
-      `https://trading.watchup.site/api/users/${userId}/spot-wallets`,
+    // Check if wallets already exist
+    const checkResponse = await fetch(
+      `https://trading.watchup.site/api/users/${userId}/wallets`,
       {
-        method: 'POST',
+        method: 'GET',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ wallets: walletData }),
       }
     );
 
-    const data = await response.json();
+    // If wallets exist, return them
+    if (checkResponse.ok) {
+      const existingWallets = await checkResponse.json();
+      if (existingWallets && existingWallets.length > 0) {
+        return NextResponse.json({
+          message: 'Spot wallets already exist',
+          userId,
+          wallets: existingWallets,
+        });
+      }
+    }
+
+    // Wallets don't exist, create them via backend
+    const response = await fetch(
+      `https://trading.watchup.site/api/users/${userId}/wallets`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}), // Backend generates wallets internally
+      }
+    );
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Wallet creation failed:', errorText);
+      
+      // Try to parse as JSON, fallback to text
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {
+        errorData = { error: 'Failed to create spot wallets', details: errorText };
+      }
+
       return NextResponse.json(
-        { error: data.error || 'Failed to create spot wallets' },
+        { error: errorData.error || 'Failed to create spot wallets' },
         { status: response.status }
       );
     }
 
+    const data = await response.json();
+
     return NextResponse.json({
       message: 'Spot wallets created successfully',
       userId,
-      wallets: walletData.map((w) => ({
-        asset: w.asset,
-        public_address: w.publicAddress,
-      })),
+      ...data,
     });
   } catch (error) {
     console.error('Error creating spot wallets:', error);
