@@ -41,6 +41,7 @@ const SidebarLayout = () => {
                   ? "h-[calc(100vh_-_64px)] px-4"
                   : "h-[calc(100vh_-_64px)]"
               }`}
+              style={{ maxHeight: 'calc(100vh - 64px)' }}
             >
               <nav className={`sidebar-nav py-3 ${isCollapse === "full-sidebar" ? "" : "px-3"}`}>
                 <ul className="sidebar-nav-group space-y-0.5">
