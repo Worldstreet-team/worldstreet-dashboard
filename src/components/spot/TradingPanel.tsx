@@ -47,7 +47,7 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
     setError(null);
 
     try {
-      const response = await fetch('https://trading.watchup.site/api/quote', {
+      const response = await fetch('/api/quote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -85,7 +85,7 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
     setSuccess(null);
 
     try {
-      const response = await fetch('https://trading.watchup.site/api/execute-trade', {
+      const response = await fetch('/api/execute-trade', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

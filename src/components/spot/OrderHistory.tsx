@@ -36,7 +36,7 @@ export default function OrderHistory() {
     setError(null);
 
     try {
-      const response = await fetch(`https://trading.watchup.site/api/trades/${user.userId}`);
+      const response = await fetch(`/api/trades/${user.userId}`);
       
       if (!response.ok) {
         throw new Error('Failed to fetch trade history');
