@@ -14,6 +14,29 @@
   flex-direction: column;
 }
 
+/* Fix SimpleBar scrolling */
+.menu-sidebar .simplebar-wrapper {
+  height: 100%;
+}
+
+.menu-sidebar .simplebar-mask {
+  z-index: auto;
+}
+
+.menu-sidebar .simplebar-content-wrapper {
+  height: 100%;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
+.menu-sidebar .simplebar-scrollbar::before {
+  background-color: rgba(0, 0, 0, 0.2);
+}
+
+.dark .menu-sidebar .simplebar-scrollbar::before {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
 .logo img { margin: 0 auto; }
 .miniicons { height: calc(100vh - 150px); }
 
