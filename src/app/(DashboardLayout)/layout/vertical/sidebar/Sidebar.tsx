@@ -14,7 +14,7 @@ const SidebarLayout = () => {
   const { isCollapse } = useContext(CustomizerContext);
   return (
     <>
-      <div className="xl:block hidden">
+      <div className="lg:block hidden">
         <div className="flex">
           <aside
             className="fixed menu-sidebar bg-white dark:bg-black border-r border-border dark:border-darkborder"
@@ -38,8 +38,8 @@ const SidebarLayout = () => {
             </div>
             <SimpleBar
               className={`${isCollapse === "full-sidebar"
-                  ? "h-[calc(100vh_-_64px)] px-4"
-                  : "h-[calc(100vh_-_64px)]"
+                ? "h-[calc(100vh_-_64px)] px-4"
+                : "h-[calc(100vh_-_64px)]"
                 }`}
             >
               <nav className={`sidebar-nav py-3 ${isCollapse === "full-sidebar" ? "" : "px-3"}`}>
