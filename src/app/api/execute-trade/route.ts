@@ -13,6 +13,9 @@ export async function POST(request: NextRequest) {
       amountIn,
       slippage
     } = body;
+
+    // Log the incoming request
+    console.log('[Execute Trade API] Request:', { userId, fromChain, toChain, tokenIn, tokenOut, amountIn, slippage });
     
     if (!userId || !tokenIn || !tokenOut || !amountIn || !fromChain) {
       return NextResponse.json(
@@ -21,32 +24,44 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const backendPayload = {
+      userId,
+      fromChain,
+      toChain: toChain || fromChain,
+      tokenIn,
+      tokenOut,
+      amountIn,
+      slippage: slippage ?? 0.005
+    };
+
+    console.log('[Execute Trade API] Sending to backend:', backendPayload);
+
     const response = await fetch('https://trading.watchup.site/api/execute-trade', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId,
-        fromChain,
-        toChain: toChain || fromChain,
-        tokenIn,
-        tokenOut,
-        amountIn,
-        slippage: slippage ?? 0.005
-      })
+      body: JSON.stringify(backendPayload)
     });
 
     const data = await response.json();
+    console.log('[Execute Trade API] Backend response:', { status: response.status, data });
 
     if (!response.ok) {
+      // Backend returns errors in 'error' field, not 'message'
+      const errorMessage = data.error || data.message || 'Trade execution failed';
+      console.error('[Execute Trade API] Backend error:', errorMessage);
+      
       return NextResponse.json(
-        { message: data.message || 'Trade execution failed' },
+        { message: errorMessage },
         { status: response.status }
       );
     }
 
+    // Return the backend response (should include txHash, success, etc.)
+    console.log('[Execute Trade API] Success:', data);
     return NextResponse.json(data);
 
   } catch (error) {
+    console.error('[Execute Trade API] Internal error:', error);
     return NextResponse.json(
       { message: 'Internal error', error: (error as Error).message },
       { status: 500 }
