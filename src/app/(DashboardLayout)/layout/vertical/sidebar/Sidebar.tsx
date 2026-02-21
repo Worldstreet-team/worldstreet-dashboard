@@ -36,8 +36,7 @@ const SidebarLayout = () => {
                 </span>
               </Link>
             </div>
-            <p className="text-3xl font-bold">THIS IS A TEST</p>
-            {/* <SimpleBar
+            <div
               className={`${isCollapse === "full-sidebar"
                 ? "h-[calc(100vh_-_64px)] px-4"
                 : "h-[calc(100vh_-_64px)]"
@@ -72,7 +71,7 @@ const SidebarLayout = () => {
                   ))}
                 </ul>
               </nav>
-            </SimpleBar> */}
+            </div>
           </aside>
         </div>
       </div>
