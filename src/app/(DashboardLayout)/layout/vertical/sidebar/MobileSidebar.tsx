@@ -8,9 +8,15 @@ import { Icon } from "@iconify/react";
 import Image from "next/image";
 import Link from "next/link";
 import { useAuth } from "@/app/context/authContext";
+import { useContext } from "react";
+import { CustomizerContext } from "@/app/context/customizerContext";
 
 const MobileSidebar = ({ handleClose }: { handleClose: () => void }) => {
   const { logout } = useAuth();
+  const { setActiveMode, activeMode } = useContext(CustomizerContext);
+  const toggleMode = () => {
+    setActiveMode((prevMode: string) => prevMode === "light" ? "dark" : "light");
+  };
 
   return (
     <aside className="bg-white dark:bg-black w-full h-full flex flex-col" aria-label="Mobile sidebar navigation">
@@ -59,8 +65,22 @@ const MobileSidebar = ({ handleClose }: { handleClose: () => void }) => {
         </SimpleBar>
       </div>
 
-      {/* Logout Button */}
-      <div className="flex-shrink-0 border-t border-border dark:border-darkborder p-4">
+      {/* Footer Actions */}
+      <div className="flex-shrink-0 border-t border-border dark:border-darkborder p-4 space-y-1">
+        {/* Theme Toggle */}
+        <button
+          onClick={toggleMode}
+          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-link dark:text-darklink hover:text-primary hover:bg-primary/10 transition-colors duration-200"
+        >
+          <Icon
+            icon={activeMode === "light" ? "tabler:moon" : "solar:sun-bold-duotone"}
+            className="h-5 w-5"
+          />
+          <span className="text-sm font-medium">
+            {activeMode === "light" ? "Dark Mode" : "Light Mode"}
+          </span>
+        </button>
+        {/* Logout */}
         <button
           onClick={() => { handleClose(); logout(); }}
           className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-error hover:bg-error/10 transition-colors duration-200"

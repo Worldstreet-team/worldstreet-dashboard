@@ -1,4 +1,13 @@
 /* -- Sidebar Base Styles -- */
+.menu-sidebar {
+  width: 260px;
+  height: 100vh;
+  top: 0;
+  left: 0;
+  z-index: 30;
+  overflow: hidden;
+}
+
 aside[data-sidebar-type] {
   transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }

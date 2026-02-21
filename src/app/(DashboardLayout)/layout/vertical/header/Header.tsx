@@ -77,7 +77,7 @@ const Header = ({ layoutType }: HeaderPropsType) => {
           </div>
 
           {/* Right section */}
-          <div className="hidden lg:flex items-center gap-1">
+          <div className="flex items-center gap-1">
             {/* Theme toggle */}
             <button
               onClick={toggleMode}
@@ -120,10 +120,18 @@ const Header = ({ layoutType }: HeaderPropsType) => {
       {/* Mobile Sidebar Panel */}
       <div
         className={cn(
-          "fixed left-0 top-0 h-full w-[270px] bg-white dark:bg-black z-50 shadow-xl transition-transform duration-300 ease-in-out xl:hidden",
+          "fixed left-0 top-0 h-full w-[280px] bg-white dark:bg-black z-50 shadow-xl transition-transform duration-300 ease-in-out xl:hidden",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
+        {/* Close button */}
+        <button
+          onClick={handleClose}
+          className="absolute top-4 right-3 w-8 h-8 rounded-lg flex items-center justify-center text-muted hover:text-error hover:bg-error/10 transition-colors duration-200 z-10 cursor-pointer"
+          aria-label="Close sidebar"
+        >
+          <Icon icon="tabler:x" height={18} />
+        </button>
         <MobileSidebar handleClose={handleClose} />
       </div>
     </>
