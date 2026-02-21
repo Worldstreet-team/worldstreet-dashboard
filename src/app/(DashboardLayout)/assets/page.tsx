@@ -9,7 +9,6 @@ import { formatAmount, formatUSD } from "@/lib/wallet/amounts";
 import { usePrices, getPrice } from "@/lib/wallet/usePrices";
 import Footer from "@/components/dashboard/Footer";
 import { ReceiveModal, SendModal, AddTokenModal } from "@/components/wallet";
-import SpotInterface from "@/components/trading/SpotInterface";
 
 // Asset type definition
 interface Asset {
@@ -419,10 +418,10 @@ const AssetsPage = () => {
           </div>
         </div>
 
-        {/* Spot Trading Interface */}
+        {/* Spot Trading Interface
         <div className="col-span-12 lg:col-span-4">
           <SpotInterface />
-        </div>
+        </div> */}
 
         <div className="col-span-12">
           <Footer />
