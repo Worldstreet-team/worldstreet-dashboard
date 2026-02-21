@@ -52,11 +52,12 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: user?.userId,
-          chain: 'EVM',
+          fromChain: 'EVM',
+          toChain: 'EVM',
           tokenIn: side === 'buy' ? tokenOut : tokenIn,
           tokenOut: side === 'buy' ? tokenIn : tokenOut,
           amountIn: amount,
-          slippage: parseFloat(slippage)
+          slippage: parseFloat(slippage) / 100 // Convert percentage to decimal (0.5% -> 0.005)
         })
       });
 
@@ -90,11 +91,12 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: user?.userId,
-          chain: 'EVM',
+          fromChain: 'EVM',
+          toChain: 'EVM',
           tokenIn: side === 'buy' ? tokenOut : tokenIn,
           tokenOut: side === 'buy' ? tokenIn : tokenOut,
           amountIn: amount,
-          slippage: parseFloat(slippage)
+          slippage: parseFloat(slippage) / 100 // Convert percentage to decimal (0.5% -> 0.005)
         })
       });
 
