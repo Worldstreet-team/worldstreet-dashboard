@@ -36,9 +36,9 @@ const Header = ({ layoutType }: HeaderPropsType) => {
     <>
       <header
         className={cn(
-          "sticky top-0 z-[1] transition-all duration-300",
+          "sticky top-0 z-10 transition-all duration-300 shrink-0",
           isSticky
-            ? "shadow-sm bg-white/95 dark:bg-black/95 backdrop-blur-md fixed w-full"
+            ? "shadow-sm bg-white/95 dark:bg-black/95 backdrop-blur-md"
             : "bg-white dark:bg-black"
         )}
       >

@@ -74,11 +74,11 @@ export default function Layout({
                         {/* Syncs wallet addresses to chain contexts */}
                         <WalletAddressSync />
                         <DashboardVividProvider>
-                          <div className="flex w-full min-h-screen">
-                            <div className="page-wrapper flex w-full">
+                          <div className="flex w-full h-screen overflow-hidden">
+                            <div className="page-wrapper flex w-full h-full">
                               {/* Header/sidebar */}
                               {activeLayout == "vertical" ? <Sidebar /> : null}
-                              <div className="body-wrapper w-full ">
+                              <div className="body-wrapper w-full h-full flex flex-col overflow-hidden">
                                 {/* Top Header  */}
                                 {activeLayout == "horizontal" ? (
                                   <Header layoutType="horizontal" />
@@ -86,8 +86,8 @@ export default function Layout({
                                   <Header layoutType="vertical" />
                                 )}
 
-                                {/* Body Content  */}
-                                <div className="relative z-0 min-h-screen bg-herobg dark:bg-dark transition-colors duration-300 overflow-x-hidden">
+                                {/* Body Content - Scrollable */}
+                                <div className="relative z-0 flex-1 bg-herobg dark:bg-dark transition-colors duration-300 overflow-y-auto overflow-x-hidden">
                                   {/* Subtle ambient glow */}
                                   <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/5 blur-[120px] rounded-full -translate-y-1/2 translate-x-1/3 pointer-events-none" />
                                   <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-warning/3 blur-[100px] rounded-full translate-y-1/3 -translate-x-1/4 pointer-events-none" />
