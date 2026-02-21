@@ -36,42 +36,42 @@ const SidebarLayout = () => {
                 </span>
               </Link>
             </div>
-            <SimpleBar
+            {/* <SimpleBar
               className={`${isCollapse === "full-sidebar"
                 ? "h-[calc(100vh_-_64px)] px-4"
                 : "h-[calc(100vh_-_64px)]"
                 }`}
-            >
-              <nav className={`sidebar-nav py-3 ${isCollapse === "full-sidebar" ? "" : "px-3"}`}>
-                <ul className="sidebar-nav-group space-y-0.5">
-                  {SidebarContent.map((item, index) => (
-                    <React.Fragment key={index}>
-                      <li>
-                        <h5 className="text-muted dark:text-darklink font-semibold text-[10px] uppercase tracking-widest border-t border-border dark:border-darkborder caption px-3">
-                          <span className="hide-menu leading-21">{item.heading}</span>
-                          <Icon
-                            icon="tabler:dots"
-                            className="text-ld block mx-auto leading-6 dark:text-opacity-60 hide-icon"
-                            height={18}
-                          />
-                        </h5>
+            > */}
+            <nav className={`sidebar-nav py-3 ${isCollapse === "full-sidebar" ? "" : "px-3"}`}>
+              <ul className="sidebar-nav-group space-y-0.5">
+                {SidebarContent.map((item, index) => (
+                  <React.Fragment key={index}>
+                    <li>
+                      <h5 className="text-muted dark:text-darklink font-semibold text-[10px] uppercase tracking-widest border-t border-border dark:border-darkborder caption px-3">
+                        <span className="hide-menu leading-21">{item.heading}</span>
+                        <Icon
+                          icon="tabler:dots"
+                          className="text-ld block mx-auto leading-6 dark:text-opacity-60 hide-icon"
+                          height={18}
+                        />
+                      </h5>
+                    </li>
+                    {item.children?.map((child, idx) => (
+                      <li key={child.id || idx}>
+                        {child.children ? (
+                          <div className="collapse-items">
+                            <NavCollapse item={child} />
+                          </div>
+                        ) : (
+                          <NavItems item={child} />
+                        )}
                       </li>
-                      {item.children?.map((child, idx) => (
-                        <li key={child.id || idx}>
-                          {child.children ? (
-                            <div className="collapse-items">
-                              <NavCollapse item={child} />
-                            </div>
-                          ) : (
-                            <NavItems item={child} />
-                          )}
-                        </li>
-                      ))}
-                    </React.Fragment>
-                  ))}
-                </ul>
-              </nav>
-            </SimpleBar>
+                    ))}
+                  </React.Fragment>
+                ))}
+              </ul>
+            </nav>
+            {/* </SimpleBar> */}
           </aside>
         </div>
       </div>
