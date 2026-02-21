@@ -28,7 +28,7 @@ export default function BalanceDisplay() {
     setError(null);
 
     try {
-      const response = await fetch(`https://trading.watchup.site/api/users/${user.userId}/balances`);
+      const response = await fetch(`/api/users/${user.userId}/balances`);
       
       if (!response.ok) {
         throw new Error('Failed to fetch balances');
