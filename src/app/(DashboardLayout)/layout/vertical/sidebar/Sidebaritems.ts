@@ -124,6 +124,21 @@ const SidebarContent: MenuItem[] = [
     heading: "Trading",
     children: [
       {
+        name: "Spot Trading",
+        icon: 'ph:chart-line-up-duotone',
+        id: uniqueId(),
+        url: "/spot",
+      },
+      {
+        name: "Futures",
+        icon: 'ph:trend-up-duotone',
+        id: uniqueId(),
+        url: "/spot",
+        badge: true,
+        badgeType: "filled",
+      },
+
+      {
         name: "Swap",
         icon: 'ph:swap-duotone',
         id: uniqueId(),
