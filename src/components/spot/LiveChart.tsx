@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Icon } from '@iconify/react';
+import { useWallet } from '@/app/context/walletContext';
+import { useSolana } from '@/app/context/solanaContext';
+import { useEvm } from '@/app/context/evmContext';
 
 interface CandleData {
   time: number;
@@ -20,6 +23,10 @@ interface LiveChartProps {
 }
 
 export default function LiveChart({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartProps) {
+  const { addresses } = useWallet();
+  const { tokenBalances: solTokens } = useSolana();
+  const { tokenBalances: ethTokens } = useEvm();
+  
   const [interval, setInterval] = useState('1min');
   const [chartData, setChartData] = useState<CandleData[]>([]);
   const [loading, setLoading] = useState(false);
@@ -30,6 +37,10 @@ export default function LiveChart({ symbol, stopLoss, takeProfit, onUpdateLevels
   
   const wsRef = useRef<WebSocket | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Get USDT balances
+  const usdtSol = solTokens.find(t => t.symbol === 'USDT')?.amount || 0;
+  const usdtEth = ethTokens.find(t => t.symbol === 'USDT')?.amount || 0;
 
   useEffect(() => {
     if (symbol) {
@@ -165,8 +176,9 @@ export default function LiveChart({ symbol, stopLoss, takeProfit, onUpdateLevels
     const width = canvas.width;
     const height = canvas.height;
 
-    // Clear canvas
-    ctx.fillStyle = getComputedStyle(canvas).getPropertyValue('--chart-bg') || '#1e293b';
+    // Clear canvas with theme-aware background
+    const isDark = document.documentElement.classList.contains('dark');
+    ctx.fillStyle = isDark ? '#0f0f0f' : '#ffffff';
     ctx.fillRect(0, 0, width, height);
 
     if (chartData.length === 0) return;
@@ -177,8 +189,8 @@ export default function LiveChart({ symbol, stopLoss, takeProfit, onUpdateLevels
     const priceRange = maxPrice - minPrice;
     const padding = 40;
 
-    // Draw grid
-    ctx.strokeStyle = '#334155';
+    // Draw grid with theme-aware colors
+    ctx.strokeStyle = isDark ? '#1e293b' : '#e2e8f0';
     ctx.lineWidth = 1;
     for (let i = 0; i <= 5; i++) {
       const y = padding + (height - 2 * padding) * (i / 5);
@@ -188,7 +200,7 @@ export default function LiveChart({ symbol, stopLoss, takeProfit, onUpdateLevels
       ctx.stroke();
 
       const price = maxPrice - (priceRange * i / 5);
-      ctx.fillStyle = '#94a3b8';
+      ctx.fillStyle = isDark ? '#94a3b8' : '#64748b';
       ctx.font = '10px monospace';
       ctx.fillText(price.toFixed(2), 5, y + 3);
     }
@@ -294,54 +306,97 @@ export default function LiveChart({ symbol, stopLoss, takeProfit, onUpdateLevels
   };
 
   return (
-    <div className="bg-white dark:bg-black rounded-2xl border border-border dark:border-darkborder overflow-hidden">
+    <div className="bg-white dark:bg-black rounded-2xl border border-border/50 dark:border-darkborder overflow-hidden shadow-sm">
       {/* Header */}
-      <div className="p-4 border-b border-border dark:border-darkborder">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Icon icon="ph:chart-line" className="text-primary" width={20} />
-            <h3 className="font-semibold text-dark dark:text-white">Live Chart - {symbol}</h3>
-            
-            {(stopLoss || takeProfit) && (
-              <div className="flex items-center gap-2 text-xs">
-                {stopLoss && (
-                  <div className="px-2 py-1 bg-error/10 border border-error/30 rounded-lg">
-                    <span className="text-error font-semibold">SL: {parseFloat(stopLoss).toFixed(2)}</span>
-                  </div>
-                )}
-                {takeProfit && (
-                  <div className="px-2 py-1 bg-success/10 border border-success/30 rounded-lg">
-                    <span className="text-success font-semibold">TP: {parseFloat(takeProfit).toFixed(2)}</span>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+      <div className="p-4 border-b border-border/50 dark:border-darkborder">
+        <div className="flex flex-col gap-4">
+          {/* Top Row - Title and Controls */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3 flex-wrap">
+              <Icon icon="ph:chart-line" className="text-primary" width={20} />
+              <h3 className="font-semibold text-dark dark:text-white">Live Chart - {symbol}</h3>
+              
+              {(stopLoss || takeProfit) && (
+                <div className="flex items-center gap-2 text-xs">
+                  {stopLoss && (
+                    <div className="px-2 py-1 bg-error/10 border border-error/30 rounded-lg">
+                      <span className="text-error font-semibold">SL: {parseFloat(stopLoss).toFixed(2)}</span>
+                    </div>
+                  )}
+                  {takeProfit && (
+                    <div className="px-2 py-1 bg-success/10 border border-success/30 rounded-lg">
+                      <span className="text-success font-semibold">TP: {parseFloat(takeProfit).toFixed(2)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
-          <div className="flex items-center gap-2">
-            <select
-              value={interval}
-              onChange={(e) => setInterval(e.target.value)}
-              className="px-3 py-1.5 bg-muted/10 border border-border dark:border-darkborder rounded-lg text-sm text-dark dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              <option value="1min">1m</option>
-              <option value="5min">5m</option>
-            </select>
-
-            {onUpdateLevels && (
-              <button
-                onClick={() => setShowLevelsForm(!showLevelsForm)}
-                className="px-3 py-1.5 bg-primary hover:bg-primary/90 text-white rounded-lg text-sm font-medium transition-colors"
+            <div className="flex items-center gap-2">
+              <select
+                value={interval}
+                onChange={(e) => setInterval(e.target.value)}
+                className="px-3 py-1.5 bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-darkborder rounded-lg text-sm text-dark dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
               >
-                {showLevelsForm ? 'Cancel' : 'Set Levels'}
-              </button>
-            )}
+                <option value="1min">1m</option>
+                <option value="5min">5m</option>
+              </select>
+
+              {onUpdateLevels && (
+                <button
+                  onClick={() => setShowLevelsForm(!showLevelsForm)}
+                  className="px-3 py-1.5 bg-primary hover:bg-primary/90 text-white rounded-lg text-sm font-medium transition-colors"
+                >
+                  {showLevelsForm ? 'Cancel' : 'Set Levels'}
+                </button>
+              )}
+            </div>
           </div>
+
+          {/* USDT Wallet Balances */}
+          {addresses && (
+            <div className="flex items-center gap-4 p-3 bg-muted/30 dark:bg-white/5 rounded-xl">
+              <div className="flex items-center gap-2">
+                <Icon icon="ph:wallet" className="text-primary" width={18} />
+                <span className="text-sm font-medium text-dark dark:text-white">USDT Balances:</span>
+              </div>
+              <div className="flex items-center gap-4 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <img 
+                    src="https://cryptologos.cc/logos/solana-sol-logo.png" 
+                    alt="Solana" 
+                    className="w-5 h-5 rounded-full"
+                  />
+                  <span className="text-sm text-muted">SOL:</span>
+                  <span className="text-sm font-semibold text-dark dark:text-white font-mono">
+                    {usdtSol.toFixed(2)} USDT
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <img 
+                    src="https://cryptologos.cc/logos/ethereum-eth-logo.png" 
+                    alt="Ethereum" 
+                    className="w-5 h-5 rounded-full"
+                  />
+                  <span className="text-sm text-muted">ETH:</span>
+                  <span className="text-sm font-semibold text-dark dark:text-white font-mono">
+                    {usdtEth.toFixed(2)} USDT
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 px-3 py-1 bg-primary/10 rounded-lg">
+                  <span className="text-xs font-medium text-primary">Total:</span>
+                  <span className="text-sm font-bold text-primary font-mono">
+                    {(usdtSol + usdtEth).toFixed(2)} USDT
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Levels Form */}
         {showLevelsForm && onUpdateLevels && (
-          <div className="mt-4 p-4 bg-muted/5 rounded-xl border border-border dark:border-darkborder">
+          <div className="mt-4 p-4 bg-muted/30 dark:bg-white/5 rounded-xl border border-border/50 dark:border-darkborder">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-muted mb-1">Stop Loss</label>
@@ -351,7 +406,7 @@ export default function LiveChart({ symbol, stopLoss, takeProfit, onUpdateLevels
                   value={tempStopLoss}
                   onChange={(e) => setTempStopLoss(e.target.value)}
                   placeholder="Enter price"
-                  className="w-full px-3 py-2 bg-white dark:bg-darkgray border border-border dark:border-darkborder rounded-lg text-sm text-dark dark:text-white focus:outline-none focus:ring-2 focus:ring-error"
+                  className="w-full px-3 py-2 bg-white dark:bg-darkgray border border-border/50 dark:border-darkborder rounded-lg text-sm text-dark dark:text-white focus:outline-none focus:ring-2 focus:ring-error"
                 />
               </div>
               <div>
@@ -362,7 +417,7 @@ export default function LiveChart({ symbol, stopLoss, takeProfit, onUpdateLevels
                   value={tempTakeProfit}
                   onChange={(e) => setTempTakeProfit(e.target.value)}
                   placeholder="Enter price"
-                  className="w-full px-3 py-2 bg-white dark:bg-darkgray border border-border dark:border-darkborder rounded-lg text-sm text-dark dark:text-white focus:outline-none focus:ring-2 focus:ring-success"
+                  className="w-full px-3 py-2 bg-white dark:bg-darkgray border border-border/50 dark:border-darkborder rounded-lg text-sm text-dark dark:text-white focus:outline-none focus:ring-2 focus:ring-success"
                 />
               </div>
             </div>
@@ -391,7 +446,7 @@ export default function LiveChart({ symbol, stopLoss, takeProfit, onUpdateLevels
 
       {/* Chart Stats */}
       {chartData.length > 0 && (
-        <div className="px-4 py-3 border-b border-border dark:border-darkborder bg-muted/5">
+        <div className="px-4 py-3 border-b border-border/50 dark:border-darkborder bg-muted/30 dark:bg-white/5">
           <div className="flex flex-wrap gap-4 text-xs">
             <div>
               <span className="text-muted">O: </span>
@@ -440,8 +495,7 @@ export default function LiveChart({ symbol, stopLoss, takeProfit, onUpdateLevels
             ref={canvasRef}
             width={1200}
             height={500}
-            className="w-full h-auto rounded-lg"
-            style={{ '--chart-bg': '#1e293b' } as React.CSSProperties}
+            className="w-full h-auto rounded-lg border border-border/50 dark:border-darkborder"
           />
         )}
       </div>

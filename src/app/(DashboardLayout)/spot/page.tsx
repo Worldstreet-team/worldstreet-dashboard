@@ -46,7 +46,7 @@ export default function SpotTradingPage() {
         {/* Trading Panel */}
         <div className="space-y-6">
           {/* Order Form */}
-          <div className="bg-white dark:bg-black rounded-2xl border border-border dark:border-darkborder p-6">
+          <div className="bg-white dark:bg-black rounded-2xl border border-border/50 dark:border-darkborder p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-4">
               <Icon icon="ph:currency-circle-dollar" className="text-primary" width={20} />
               <h3 className="font-semibold text-dark dark:text-white">Place Order</h3>
@@ -65,7 +65,7 @@ export default function SpotTradingPage() {
             {/* Order Type */}
             <div className="mb-4">
               <label className="block text-xs font-medium text-muted mb-2">Order Type</label>
-              <select className="w-full px-3 py-2 bg-muted/10 border border-border dark:border-darkborder rounded-lg text-sm text-dark dark:text-white focus:outline-none focus:ring-2 focus:ring-primary">
+              <select className="w-full px-3 py-2 bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-darkborder rounded-lg text-sm text-dark dark:text-white focus:outline-none focus:ring-2 focus:ring-primary">
                 <option>Limit</option>
                 <option>Market</option>
                 <option>Stop-Limit</option>
@@ -78,7 +78,7 @@ export default function SpotTradingPage() {
               <input
                 type="number"
                 placeholder="0.00"
-                className="w-full px-3 py-2 bg-white dark:bg-darkgray border border-border dark:border-darkborder rounded-lg text-sm text-dark dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full px-3 py-2 bg-white dark:bg-darkgray border border-border/50 dark:border-darkborder rounded-lg text-sm text-dark dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
 
@@ -88,7 +88,7 @@ export default function SpotTradingPage() {
               <input
                 type="number"
                 placeholder="0.00"
-                className="w-full px-3 py-2 bg-white dark:bg-darkgray border border-border dark:border-darkborder rounded-lg text-sm text-dark dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full px-3 py-2 bg-white dark:bg-darkgray border border-border/50 dark:border-darkborder rounded-lg text-sm text-dark dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
 
@@ -97,7 +97,7 @@ export default function SpotTradingPage() {
               {['25%', '50%', '75%', '100%'].map(pct => (
                 <button
                   key={pct}
-                  className="py-1.5 bg-muted/10 hover:bg-muted/20 text-dark dark:text-white text-xs font-medium rounded-lg transition-colors"
+                  className="py-1.5 bg-muted/30 dark:bg-white/5 hover:bg-muted/40 dark:hover:bg-white/10 text-dark dark:text-white text-xs font-medium rounded-lg transition-colors"
                 >
                   {pct}
                 </button>
@@ -110,7 +110,7 @@ export default function SpotTradingPage() {
               <input
                 type="number"
                 placeholder="0.00"
-                className="w-full px-3 py-2 bg-white dark:bg-darkgray border border-border dark:border-darkborder rounded-lg text-sm text-dark dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full px-3 py-2 bg-white dark:bg-darkgray border border-border/50 dark:border-darkborder rounded-lg text-sm text-dark dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
 
@@ -120,7 +120,7 @@ export default function SpotTradingPage() {
             </button>
 
             {/* Balance Info */}
-            <div className="mt-4 pt-4 border-t border-border dark:border-darkborder">
+            <div className="mt-4 pt-4 border-t border-border/50 dark:border-darkborder">
               <div className="flex justify-between text-xs mb-2">
                 <span className="text-muted">Available:</span>
                 <span className="text-dark dark:text-white font-semibold">0.00 USDT</span>
@@ -133,7 +133,7 @@ export default function SpotTradingPage() {
           </div>
 
           {/* Market Info */}
-          <div className="bg-gradient-to-br from-primary/5 to-secondary/5 rounded-2xl border border-border dark:border-darkborder p-6">
+          <div className="bg-gradient-to-br from-primary/5 to-secondary/5 rounded-2xl border border-border/50 dark:border-darkborder p-6 shadow-sm">
             <h3 className="font-semibold text-dark dark:text-white mb-3">Market Info</h3>
             
             <div className="space-y-3">
@@ -157,7 +157,7 @@ export default function SpotTradingPage() {
           </div>
 
           {/* Trading Tips */}
-          <div className="bg-white dark:bg-black rounded-2xl border border-border dark:border-darkborder p-6">
+          <div className="bg-white dark:bg-black rounded-2xl border border-border/50 dark:border-darkborder p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-3">
               <Icon icon="ph:lightbulb" className="text-warning" width={18} />
               <h3 className="font-semibold text-dark dark:text-white text-sm">Trading Tips</h3>
@@ -182,8 +182,8 @@ export default function SpotTradingPage() {
       </div>
 
       {/* Recent Orders */}
-      <div className="bg-white dark:bg-black rounded-2xl border border-border dark:border-darkborder overflow-hidden">
-        <div className="p-4 border-b border-border dark:border-darkborder">
+      <div className="bg-white dark:bg-black rounded-2xl border border-border/50 dark:border-darkborder overflow-hidden shadow-sm">
+        <div className="p-4 border-b border-border/50 dark:border-darkborder">
           <div className="flex items-center gap-2">
             <Icon icon="ph:clock-clockwise" className="text-primary" width={20} />
             <h3 className="font-semibold text-dark dark:text-white">Recent Orders</h3>
@@ -192,7 +192,7 @@ export default function SpotTradingPage() {
         
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-muted/5">
+            <thead className="bg-muted/30 dark:bg-white/5">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-muted">Time</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-muted">Pair</th>
