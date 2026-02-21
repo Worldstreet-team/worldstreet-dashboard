@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
 
     if (!response.ok) {
       return NextResponse.json(
-        { message: data.message || 'Quote failed' },
+        { message: data.message || `Quote failed: ${data}` },
         { status: response.status }
       );
     }
