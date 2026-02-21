@@ -4,24 +4,18 @@
   z-index: 2;
   transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1),
               transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  position: fixed;
-  left: 0;
-  top: 0;
-  height: 100vh;
-  width: 260px !important;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
 }
 
-/* Fix SimpleBar scrolling - CRITICAL */
+/* SimpleBar scrolling configuration */
 .menu-sidebar .simplebar-wrapper {
   height: 100%;
-  overflow: hidden;
+}
+
+.menu-sidebar .simplebar-height-auto-observer-wrapper {
+  height: 100%;
 }
 
 .menu-sidebar .simplebar-mask {
-  z-index: auto;
   height: 100%;
 }
 
@@ -30,31 +24,40 @@
 }
 
 .menu-sidebar .simplebar-content-wrapper {
-  height: 100% !important;
-  max-height: 100% !important;
-  overflow-y: scroll !important;
-  overflow-x: hidden !important;
-  scrollbar-width: thin;
+  height: 100%;
+  overflow-y: scroll;
+  overflow-x: hidden;
 }
 
 .menu-sidebar .simplebar-content {
+  padding: 0;
   min-height: 100%;
 }
 
+/* Scrollbar styling */
 .menu-sidebar .simplebar-track.simplebar-vertical {
   width: 6px;
   right: 2px;
 }
 
+.menu-sidebar .simplebar-scrollbar {
+  width: 6px;
+}
+
 .menu-sidebar .simplebar-scrollbar::before {
-  background-color: rgba(0, 0, 0, 0.2);
+  background-color: rgba(0, 0, 0, 0.15);
   border-radius: 3px;
   left: 0;
   right: 0;
+  opacity: 1;
+}
+
+.menu-sidebar .simplebar-scrollbar.simplebar-visible::before {
+  opacity: 1;
 }
 
 .dark .menu-sidebar .simplebar-scrollbar::before {
-  background-color: rgba(255, 255, 255, 0.2);
+  background-color: rgba(255, 255, 255, 0.15);
 }
 
 .logo img { margin: 0 auto; }

@@ -15,35 +15,45 @@ const SidebarLayout = () => {
   return (
     <>
       <div className="xl:block hidden">
-        <div className="flex">
-          <aside
-            className="fixed menu-sidebar bg-white dark:bg-black border-r border-border dark:border-darkborder"
-            aria-label="Sidebar navigation"
-          >
-            {/* Logo */}
-            <div className="h-16 flex items-center px-6 border-b border-border dark:border-darkborder">
-              <Link href="/" className="brand-logo flex items-center gap-2.5">
-                <Image
-                  src="/worldstreet-logo/WorldStreet4x.png"
-                  alt="WorldStreet"
-                  width={28}
-                  height={28}
-                  className="shrink-0"
-                />
-                <span className="hide-menu text-base font-semibold text-dark dark:text-white tracking-tight">
-                  WorldStreet
-                </span>
-              </Link>
-            </div>
+        <aside
+          className="fixed menu-sidebar bg-white dark:bg-black border-r border-border dark:border-darkborder"
+          aria-label="Sidebar navigation"
+          style={{
+            width: '260px',
+            height: '100vh',
+            left: 0,
+            top: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden'
+          }}
+        >
+          {/* Logo - Fixed at top */}
+          <div className="h-16 flex items-center px-6 border-b border-border dark:border-darkborder shrink-0">
+            <Link href="/" className="brand-logo flex items-center gap-2.5">
+              <Image
+                src="/worldstreet-logo/WorldStreet4x.png"
+                alt="WorldStreet"
+                width={28}
+                height={28}
+                className="shrink-0"
+              />
+              <span className="hide-menu text-base font-semibold text-dark dark:text-white tracking-tight">
+                WorldStreet
+              </span>
+            </Link>
+          </div>
+
+          {/* Scrollable content area */}
+          <div className="flex-1 overflow-hidden">
             <SimpleBar
-              className={`${
-                isCollapse === "full-sidebar"
-                  ? "h-[calc(100vh_-_64px)] px-4"
-                  : "h-[calc(100vh_-_64px)]"
-              }`}
-              style={{ maxHeight: 'calc(100vh - 64px)' }}
+              style={{ 
+                height: '100%',
+                width: '100%'
+              }}
+              autoHide={false}
             >
-              <nav className={`sidebar-nav py-3 ${isCollapse === "full-sidebar" ? "" : "px-3"}`}>
+              <nav className={`sidebar-nav py-3 ${isCollapse === "full-sidebar" ? "px-4" : "px-3"}`}>
                 <ul className="sidebar-nav-group space-y-0.5">
                   {SidebarContent.map((item, index) => (
                     <React.Fragment key={index}>
@@ -73,8 +83,8 @@ const SidebarLayout = () => {
                 </ul>
               </nav>
             </SimpleBar>
-          </aside>
-        </div>
+          </div>
+        </aside>
       </div>
     </>
   );
