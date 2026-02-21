@@ -14,7 +14,7 @@ import { SolanaProvider } from "@/app/context/solanaContext";
 import { EvmProvider } from "@/app/context/evmContext";
 import { BitcoinProvider } from "@/app/context/bitcoinContext";
 import { SwapProvider } from "@/app/context/swapContext";
-import { SpotProvider } from "@/app/context/spotContext";
+
 import { PinSetupModal, WalletAddressSync } from "@/components/wallet";
 import DashboardVividProvider from "@/components/dashboard/DashboardVividProvider";
 
@@ -70,10 +70,10 @@ export default function Layout({
                   <EvmProvider>
                     <BitcoinProvider>
                       <SwapProvider>
-                        <SpotProvider>
-                          {/* Syncs wallet addresses to chain contexts */}
-                          <WalletAddressSync />
-                          <DashboardVividProvider>
+
+                        {/* Syncs wallet addresses to chain contexts */}
+                        <WalletAddressSync />
+                        <DashboardVividProvider>
                           <div className="flex w-full min-h-screen">
                             <div className="page-wrapper flex w-full">
                               {/* Header/sidebar */}
@@ -110,8 +110,8 @@ export default function Layout({
                           </div>
                           {/* Wallet PIN Setup Modal */}
                           <PinSetupModal />
-                          </DashboardVividProvider>
-                        </SpotProvider>
+                        </DashboardVividProvider>
+
                       </SwapProvider>
                     </BitcoinProvider>
                   </EvmProvider>
