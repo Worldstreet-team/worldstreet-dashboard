@@ -14,7 +14,7 @@ const SidebarLayout = () => {
   const { isCollapse } = useContext(CustomizerContext);
   return (
     <>
-      <div className="lg:block hidden">
+      <div className="xl:block hidden">
         <div className="flex">
           <aside
             className="fixed menu-sidebar bg-white dark:bg-black border-r border-border dark:border-darkborder"
