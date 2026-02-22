@@ -6,10 +6,12 @@ import { useAuth } from '@/app/context/authContext';
 
 interface QuoteResponse {
   expectedOutput: string;
-  priceImpact: number;
+  priceImpact: number | string; // Can be number or string from backend
   platformFee: string;
   gasEstimate: string;
-  route?: string;
+  route?: any;
+  executionData?: any;
+  toAmountMin?: string;
 }
 
 interface TradingPanelProps {
@@ -322,9 +324,9 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
             <div className="flex justify-between">
               <span className="text-muted">Price Impact:</span>
               <span className={`font-semibold ${
-                quote.priceImpact > 5 ? 'text-error' : quote.priceImpact > 1 ? 'text-warning' : 'text-success'
+                parseFloat(quote.priceImpact.toString()) > 5 ? 'text-error' : parseFloat(quote.priceImpact.toString()) > 1 ? 'text-warning' : 'text-success'
               }`}>
-                {quote.priceImpact.toFixed(2)}%
+                {parseFloat(quote.priceImpact.toString()).toFixed(2)}%
               </span>
             </div>
             <div className="flex justify-between">
@@ -341,7 +343,7 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
             </div>
           </div>
 
-          {quote.priceImpact > 5 && (
+          {parseFloat(quote.priceImpact.toString()) > 5 && (
             <div className="mt-3 p-2 bg-error/10 border border-error/30 rounded-lg flex items-start gap-2">
               <Icon icon="ph:warning" className="text-error shrink-0 mt-0.5" width={16} />
               <p className="text-xs text-error">
