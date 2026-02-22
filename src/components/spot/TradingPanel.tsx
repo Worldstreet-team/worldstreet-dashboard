@@ -47,6 +47,11 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
     setError(null);
 
     try {
+      // Convert amount to wei/smallest unit (assuming 18 decimals for most tokens)
+      // For USDT/USDC, it's 6 decimals, but we'll use 18 as default
+      const decimals = 18; // TODO: Get actual decimals from token config
+      const amountInWei = (parseFloat(amount) * Math.pow(10, decimals)).toFixed(0);
+
       const response = await fetch('/api/quote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -56,7 +61,7 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
           toChain: 'EVM',
           tokenIn: side === 'buy' ? tokenOut : tokenIn,
           tokenOut: side === 'buy' ? tokenIn : tokenOut,
-          amountIn: amount,
+          amountIn: amountInWei, // Send as wei string
           slippage: parseFloat(slippage) / 100 // Convert percentage to decimal (0.5% -> 0.005)
         })
       });
@@ -86,6 +91,10 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
     setSuccess(null);
 
     try {
+      // Convert amount to wei/smallest unit (assuming 18 decimals for most tokens)
+      const decimals = 18; // TODO: Get actual decimals from token config
+      const amountInWei = (parseFloat(amount) * Math.pow(10, decimals)).toFixed(0);
+
       const response = await fetch('/api/execute-trade', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -95,7 +104,7 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
           toChain: 'EVM',
           tokenIn: side === 'buy' ? tokenOut : tokenIn,
           tokenOut: side === 'buy' ? tokenIn : tokenOut,
-          amountIn: amount,
+          amountIn: amountInWei, // Send as wei string
           slippage: parseFloat(slippage) / 100 // Convert percentage to decimal (0.5% -> 0.005)
         })
       });
@@ -218,7 +227,7 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
             <div className="flex justify-between">
               <span className="text-muted">You will receive:</span>
               <span className="text-dark dark:text-white font-semibold font-mono">
-                {parseFloat(quote.expectedOutput).toFixed(6)} {side === 'buy' ? tokenIn : tokenOut}
+                {(parseFloat(quote.expectedOutput) / Math.pow(10, 18)).toFixed(6)} {side === 'buy' ? tokenIn : tokenOut}
               </span>
             </div>
             <div className="flex justify-between">
@@ -232,7 +241,7 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
             <div className="flex justify-between">
               <span className="text-muted">Platform Fee (0.3%):</span>
               <span className="text-dark dark:text-white font-mono text-xs">
-                {parseFloat(quote.platformFee).toFixed(6)}
+                {(parseFloat(quote.platformFee) / Math.pow(10, 18)).toFixed(6)}
               </span>
             </div>
             <div className="flex justify-between">
