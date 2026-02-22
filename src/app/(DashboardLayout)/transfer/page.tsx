@@ -102,17 +102,33 @@ export default function TransferPage() {
       const response = await fetch(`/api/users/${userId}/spot-wallets`);
       if (response.ok) {
         const data = await response.json();
-        console.log('Spot wallets response:', data);
+        console.log('Spot wallets API response:', JSON.stringify(data, null, 2));
         
         // Backend returns wallets as an array directly
-        const walletsArray = Array.isArray(data.wallets) ? data.wallets : [];
+        let walletsArray: SpotWallet[] = [];
+        
+        // Handle different possible response structures
+        if (Array.isArray(data.wallets)) {
+          // If wallets is already an array of objects with asset and public_address
+          walletsArray = data.wallets.map((w: any) => ({
+            asset: w.asset || w.symbol || '',
+            public_address: w.public_address || w.publicAddress || w.address || '',
+          }));
+        } else if (typeof data.wallets === 'object' && data.wallets !== null) {
+          // If wallets is an object like { USDT: { public_address: "..." }, ... }
+          walletsArray = Object.entries(data.wallets).map(([asset, wallet]: [string, any]) => ({
+            asset: asset.toUpperCase(),
+            public_address: wallet.public_address || wallet.publicAddress || wallet.address || wallet,
+          }));
+        }
+        
         const balancesArray = Array.isArray(data.balances) ? data.balances : [];
         
         setSpotWallets(walletsArray);
         setSpotBalances(balancesArray);
         
-        console.log('Spot wallets set:', walletsArray);
-        console.log('Spot balances set:', balancesArray);
+        console.log('Processed spot wallets:', JSON.stringify(walletsArray, null, 2));
+        console.log('Spot balances:', JSON.stringify(balancesArray, null, 2));
       } else {
         console.error('Failed to fetch spot wallets:', response.status);
         // If 404, wallets don't exist yet
@@ -188,11 +204,23 @@ export default function TransferPage() {
     try {
       // Get the spot wallet address for the selected asset
       const spotWallet = getSpotWallet(selectedAsset);
-      if (!spotWallet) {
-        setPinError(`No spot wallet found for ${selectedAsset}`);
+      console.log('Spot wallet for', selectedAsset, ':', spotWallet);
+      
+      if (!spotWallet || !spotWallet.public_address) {
+        setPinError(`No spot wallet address found for ${selectedAsset}`);
         setLoading(false);
         return;
       }
+
+      // Validate the address format
+      const recipientAddress = spotWallet.public_address.trim();
+      if (!recipientAddress) {
+        setPinError(`Invalid spot wallet address for ${selectedAsset}`);
+        setLoading(false);
+        return;
+      }
+
+      console.log('Recipient address:', recipientAddress);
 
       // Get encrypted keys with PIN hash
       const pinHash = CryptoJS.SHA256(pinString).toString();
@@ -217,7 +245,7 @@ export default function TransferPage() {
         txHash = await sendSolTransaction(
           encryptedKeys.solana.encryptedPrivateKey,
           pinString,
-          spotWallet.public_address,
+          recipientAddress,
           amountNum
         );
       } else if (selectedAsset === 'ETH') {
@@ -230,7 +258,7 @@ export default function TransferPage() {
         txHash = await sendEthTransaction(
           encryptedKeys.ethereum.encryptedPrivateKey,
           pinString,
-          spotWallet.public_address,
+          recipientAddress,
           amountNum
         );
       } else if (selectedAsset === 'USDT' || selectedAsset === 'USDC') {
@@ -252,7 +280,7 @@ export default function TransferPage() {
           txHash = await sendSolTokenTransaction(
             encryptedKeys.solana.encryptedPrivateKey,
             pinString,
-            spotWallet.public_address,
+            recipientAddress,
             amountNum,
             TOKEN_ADDRESSES[selectedAsset].solana,
             solToken.decimals
@@ -267,7 +295,7 @@ export default function TransferPage() {
           txHash = await sendEthTokenTransaction(
             encryptedKeys.ethereum.encryptedPrivateKey,
             pinString,
-            spotWallet.public_address,
+            recipientAddress,
             amountNum,
             TOKEN_ADDRESSES[selectedAsset].ethereum,
             ethToken.decimals
