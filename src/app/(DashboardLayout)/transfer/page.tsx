@@ -40,9 +40,21 @@ const TOKEN_ADDRESSES = {
 
 export default function TransferPage() {
   const { user } = useAuth();
-  const { addresses } = useWallet();
-  const { balance: solBalance, tokenBalances: solTokens, fetchBalance: fetchSolBalance } = useSolana();
-  const { balance: ethBalance, tokenBalances: ethTokens, fetchBalance: fetchEthBalance } = useEvm();
+  const { addresses, getEncryptedKeys } = useWallet();
+  const { 
+    balance: solBalance, 
+    tokenBalances: solTokens, 
+    fetchBalance: fetchSolBalance,
+    sendTransaction: sendSolTransaction,
+    sendTokenTransaction: sendSolTokenTransaction,
+  } = useSolana();
+  const { 
+    balance: ethBalance, 
+    tokenBalances: ethTokens, 
+    fetchBalance: fetchEthBalance,
+    sendTransaction: sendEthTransaction,
+    sendTokenTransaction: sendEthTokenTransaction,
+  } = useEvm();
 
   const [direction, setDirection] = useState<'main-to-spot' | 'spot-to-main'>('main-to-spot');
   const [selectedAsset, setSelectedAsset] = useState('USDT');
@@ -153,22 +165,103 @@ export default function TransferPage() {
     setSuccess('');
 
     try {
-      const response = await fetch('/api/transfer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId,
-          asset: selectedAsset,
-          amount: parseFloat(amount),
-          direction,
-        }),
-      });
+      if (direction === 'main-to-spot') {
+        // Main to Spot: Use blockchain send functions
+        // Get the spot wallet address for the selected asset
+        const spotWallet = getSpotWallet(selectedAsset);
+        if (!spotWallet) {
+          setError(`No spot wallet found for ${selectedAsset}`);
+          setLoading(false);
+          return;
+        }
 
-      const data = await response.json();
+        // Get encrypted keys
+        const encryptedKeys = await getEncryptedKeys('1234'); // TODO: Prompt user for PIN
+        if (!encryptedKeys) {
+          setError('Failed to retrieve wallet keys');
+          setLoading(false);
+          return;
+        }
 
-      if (response.ok) {
-        setSuccess(`Successfully transferred ${amount} ${selectedAsset}`);
+        let txHash = '';
+        const amountNum = parseFloat(amount);
+
+        // Determine which blockchain to use based on asset
+        if (selectedAsset === 'SOL') {
+          // Send SOL using Solana context
+          if (!encryptedKeys.solana?.encryptedPrivateKey) {
+            setError('Solana wallet not available');
+            setLoading(false);
+            return;
+          }
+          txHash = await sendSolTransaction(
+            encryptedKeys.solana.encryptedPrivateKey,
+            '1234', // TODO: Use actual PIN
+            spotWallet.public_address,
+            amountNum
+          );
+        } else if (selectedAsset === 'ETH') {
+          // Send ETH using EVM context
+          if (!encryptedKeys.ethereum?.encryptedPrivateKey) {
+            setError('Ethereum wallet not available');
+            setLoading(false);
+            return;
+          }
+          txHash = await sendEthTransaction(
+            encryptedKeys.ethereum.encryptedPrivateKey,
+            '1234', // TODO: Use actual PIN
+            spotWallet.public_address,
+            amountNum
+          );
+        } else if (selectedAsset === 'USDT' || selectedAsset === 'USDC') {
+          // For stablecoins, check which chain has balance
+          const solToken = solTokens.find(t => 
+            t.address.toLowerCase() === TOKEN_ADDRESSES[selectedAsset].solana.toLowerCase()
+          );
+          const ethToken = ethTokens.find(t => 
+            t.address.toLowerCase() === TOKEN_ADDRESSES[selectedAsset].ethereum.toLowerCase()
+          );
+
+          if (solToken && solToken.amount >= amountNum) {
+            // Use Solana
+            if (!encryptedKeys.solana?.encryptedPrivateKey) {
+              setError('Solana wallet not available');
+              setLoading(false);
+              return;
+            }
+            txHash = await sendSolTokenTransaction(
+              encryptedKeys.solana.encryptedPrivateKey,
+              '1234', // TODO: Use actual PIN
+              spotWallet.public_address,
+              amountNum,
+              TOKEN_ADDRESSES[selectedAsset].solana,
+              solToken.decimals
+            );
+          } else if (ethToken && ethToken.amount >= amountNum) {
+            // Use Ethereum
+            if (!encryptedKeys.ethereum?.encryptedPrivateKey) {
+              setError('Ethereum wallet not available');
+              setLoading(false);
+              return;
+            }
+            txHash = await sendEthTokenTransaction(
+              encryptedKeys.ethereum.encryptedPrivateKey,
+              '1234', // TODO: Use actual PIN
+              spotWallet.public_address,
+              amountNum,
+              TOKEN_ADDRESSES[selectedAsset].ethereum,
+              ethToken.decimals
+            );
+          } else {
+            setError(`Insufficient ${selectedAsset} balance`);
+            setLoading(false);
+            return;
+          }
+        }
+
+        setSuccess(`Successfully transferred ${amount} ${selectedAsset}. TX: ${txHash.slice(0, 8)}...`);
         setAmount('');
+        
         // Refresh balances
         if (addresses?.solana && addresses?.ethereum) {
           await Promise.all([
@@ -178,10 +271,54 @@ export default function TransferPage() {
         }
         await fetchSpotWallets();
       } else {
-        setError(data.error || 'Transfer failed');
+        // Spot to Main: Use backend API
+        // Get the main wallet address for the selected asset
+        let destinationAddress = '';
+        if (selectedAsset === 'SOL') {
+          destinationAddress = addresses?.solana || '';
+        } else if (selectedAsset === 'ETH' || selectedAsset === 'USDT' || selectedAsset === 'USDC') {
+          destinationAddress = addresses?.ethereum || '';
+        }
+
+        if (!destinationAddress) {
+          setError('Main wallet address not found');
+          setLoading(false);
+          return;
+        }
+
+        const response = await fetch('/api/transfer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId,
+            asset: selectedAsset,
+            amount: parseFloat(amount),
+            direction,
+            destinationAddress,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          setSuccess(`Successfully transferred ${amount} ${selectedAsset}. TX: ${data.txHash?.slice(0, 8)}...`);
+          setAmount('');
+          
+          // Refresh balances
+          if (addresses?.solana && addresses?.ethereum) {
+            await Promise.all([
+              fetchSolBalance(addresses.solana),
+              fetchEthBalance(addresses.ethereum),
+            ]);
+          }
+          await fetchSpotWallets();
+        } else {
+          setError(data.error || 'Transfer failed');
+        }
       }
     } catch (err) {
-      setError('Network error. Please try again.');
+      console.error('Transfer error:', err);
+      setError(err instanceof Error ? err.message : 'Transfer failed');
     } finally {
       setLoading(false);
     }
@@ -245,16 +382,6 @@ export default function TransferPage() {
           Move funds between your main wallet and spot trading wallet
         </p>
       </div>
-
-      {/* Loading State */}
-      {balancesLoading && (
-        <div className="bg-white dark:bg-black rounded-2xl border border-border/50 dark:border-darkborder p-6 shadow-sm">
-          <div className="flex items-center justify-center gap-3">
-            <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            <p className="text-muted">Loading wallet balances...</p>
-          </div>
-        </div>
-      )}
 
       {/* Wallet Setup Alert - Only show after loading completes */}
       {!spotWalletsLoading && !hasSpotWallets && (
