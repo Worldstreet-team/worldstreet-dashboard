@@ -27,6 +27,8 @@ export async function GET(
     }
 
     const wallets = await walletsResponse.json();
+    console.log('=== BACKEND WALLETS RESPONSE ===');
+    console.log(JSON.stringify(wallets, null, 2));
 
     // Fetch balances
     const balancesResponse = await fetch(
@@ -40,6 +42,8 @@ export async function GET(
     let balances = [];
     if (balancesResponse.ok) {
       balances = await balancesResponse.json();
+      console.log('=== BACKEND BALANCES RESPONSE ===');
+      console.log(JSON.stringify(balances, null, 2));
     }
 
     return NextResponse.json({

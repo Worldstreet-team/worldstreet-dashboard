@@ -102,33 +102,63 @@ export default function TransferPage() {
       const response = await fetch(`/api/users/${userId}/spot-wallets`);
       if (response.ok) {
         const data = await response.json();
-        console.log('Spot wallets API response:', JSON.stringify(data, null, 2));
+        console.log('=== SPOT WALLETS API RESPONSE ===');
+        console.log('Raw response:', JSON.stringify(data, null, 2));
         
         // Backend returns wallets as an array directly
         let walletsArray: SpotWallet[] = [];
         
         // Handle different possible response structures
         if (Array.isArray(data.wallets)) {
+          console.log('Wallets is an array with', data.wallets.length, 'items');
           // If wallets is already an array of objects with asset and public_address
-          walletsArray = data.wallets.map((w: any) => ({
-            asset: w.asset || w.symbol || '',
-            public_address: w.public_address || w.publicAddress || w.address || '',
-          }));
+          walletsArray = data.wallets
+            .map((w: any) => {
+              console.log('Processing wallet:', JSON.stringify(w, null, 2));
+              const asset = (w.asset || w.symbol || w.currency || '').toUpperCase();
+              const address = w.public_address || w.publicAddress || w.address || w.wallet_address || '';
+              
+              console.log(`Mapped: ${asset} -> ${address}`);
+              
+              return {
+                asset,
+                public_address: address,
+              };
+            })
+            .filter((w: SpotWallet) => w.asset && w.public_address); // Filter out invalid entries
         } else if (typeof data.wallets === 'object' && data.wallets !== null) {
+          console.log('Wallets is an object');
           // If wallets is an object like { USDT: { public_address: "..." }, ... }
-          walletsArray = Object.entries(data.wallets).map(([asset, wallet]: [string, any]) => ({
-            asset: asset.toUpperCase(),
-            public_address: wallet.public_address || wallet.publicAddress || wallet.address || wallet,
-          }));
+          walletsArray = Object.entries(data.wallets)
+            .map(([asset, wallet]: [string, any]) => {
+              console.log(`Processing ${asset}:`, JSON.stringify(wallet, null, 2));
+              
+              let address = '';
+              if (typeof wallet === 'string') {
+                address = wallet;
+              } else if (typeof wallet === 'object' && wallet !== null) {
+                address = wallet.public_address || wallet.publicAddress || wallet.address || wallet.wallet_address || '';
+              }
+              
+              console.log(`Mapped: ${asset} -> ${address}`);
+              
+              return {
+                asset: asset.toUpperCase(),
+                public_address: address,
+              };
+            })
+            .filter((w: SpotWallet) => w.asset && w.public_address); // Filter out invalid entries
         }
         
         const balancesArray = Array.isArray(data.balances) ? data.balances : [];
         
+        console.log('=== PROCESSED WALLETS ===');
+        console.log(JSON.stringify(walletsArray, null, 2));
+        console.log('=== BALANCES ===');
+        console.log(JSON.stringify(balancesArray, null, 2));
+        
         setSpotWallets(walletsArray);
         setSpotBalances(balancesArray);
-        
-        console.log('Processed spot wallets:', JSON.stringify(walletsArray, null, 2));
-        console.log('Spot balances:', JSON.stringify(balancesArray, null, 2));
       } else {
         console.error('Failed to fetch spot wallets:', response.status);
         // If 404, wallets don't exist yet
@@ -204,10 +234,19 @@ export default function TransferPage() {
     try {
       // Get the spot wallet address for the selected asset
       const spotWallet = getSpotWallet(selectedAsset);
-      console.log('Spot wallet for', selectedAsset, ':', spotWallet);
+      console.log('=== TRANSFER VALIDATION ===');
+      console.log('Selected asset:', selectedAsset);
+      console.log('All spot wallets:', JSON.stringify(spotWallets, null, 2));
+      console.log('Found spot wallet:', JSON.stringify(spotWallet, null, 2));
       
-      if (!spotWallet || !spotWallet.public_address) {
-        setPinError(`No spot wallet address found for ${selectedAsset}`);
+      if (!spotWallet) {
+        setPinError(`No spot wallet found for ${selectedAsset}. Please generate spot wallets first.`);
+        setLoading(false);
+        return;
+      }
+
+      if (!spotWallet.public_address) {
+        setPinError(`Spot wallet for ${selectedAsset} has no address. Please regenerate spot wallets.`);
         setLoading(false);
         return;
       }
@@ -215,12 +254,30 @@ export default function TransferPage() {
       // Validate the address format
       const recipientAddress = spotWallet.public_address.trim();
       if (!recipientAddress) {
-        setPinError(`Invalid spot wallet address for ${selectedAsset}`);
+        setPinError(`Invalid spot wallet address for ${selectedAsset} (empty after trim)`);
         setLoading(false);
         return;
       }
 
-      console.log('Recipient address:', recipientAddress);
+      // Additional validation for Solana addresses (base58 check)
+      if (selectedAsset === 'SOL' || selectedAsset === 'USDT' || selectedAsset === 'USDC') {
+        // Basic Solana address validation: should be 32-44 characters, base58
+        if (recipientAddress.length < 32 || recipientAddress.length > 44) {
+          setPinError(`Invalid Solana address length for ${selectedAsset}: ${recipientAddress.length} chars`);
+          setLoading(false);
+          return;
+        }
+        
+        // Check for invalid base58 characters
+        const base58Regex = /^[1-9A-HJ-NP-Za-km-z]+$/;
+        if (!base58Regex.test(recipientAddress)) {
+          setPinError(`Invalid Solana address format for ${selectedAsset}. Contains non-base58 characters.`);
+          setLoading(false);
+          return;
+        }
+      }
+
+      console.log('Validated recipient address:', recipientAddress);
 
       // Get encrypted keys with PIN hash
       const pinHash = CryptoJS.SHA256(pinString).toString();

@@ -17,6 +17,37 @@ interface TradingPanelProps {
   onTradeExecuted?: () => void;
 }
 
+// Token addresses per chain
+const SOLANA_TOKENS: Record<string, { address: string, decimals: number }> = {
+  'SOL': { address: 'So11111111111111111111111111111111111111112', decimals: 9 },
+  'USDT': { address: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', decimals: 6 },
+  'USDC': { address: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', decimals: 6 },
+};
+
+const EVM_TOKENS: Record<string, { address: string, decimals: number }> = {
+  'ETH': { address: '0x0000000000000000000000000000000000000000', decimals: 18 },
+  'USDT': { address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', decimals: 6 },
+  'USDC': { address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', decimals: 6 },
+  'BTC': { address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', decimals: 8 }, // WBTC
+};
+
+// Determine which chain a token belongs to
+const getTokenChain = (token: string): 'Solana' | 'EVM' => {
+  if (token === 'SOL') return 'Solana';
+  if (token === 'ETH' || token === 'BTC') return 'EVM';
+  // For stablecoins, default to Solana if available, otherwise EVM
+  return SOLANA_TOKENS[token] ? 'Solana' : 'EVM';
+};
+
+// Get token config for a specific chain
+const getTokenConfig = (token: string, chain: 'Solana' | 'EVM') => {
+  if (chain === 'Solana') {
+    return SOLANA_TOKENS[token];
+  } else {
+    return EVM_TOKENS[token];
+  }
+};
+
 export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingPanelProps) {
   const { user } = useAuth();
   const [side, setSide] = useState<'buy' | 'sell'>('buy');
@@ -47,21 +78,50 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
     setError(null);
 
     try {
-      // Convert amount to wei/smallest unit (assuming 18 decimals for most tokens)
-      // For USDT/USDC, it's 6 decimals, but we'll use 18 as default
-      const decimals = 18; // TODO: Get actual decimals from token config
-      const amountInWei = (parseFloat(amount) * Math.pow(10, decimals)).toFixed(0);
+      // Determine which chain to use based on the trading pair
+      // For SOL-USDT, both tokens should be on Solana
+      // For ETH-USDT, both tokens should be on EVM
+      const fromToken = side === 'buy' ? tokenOut : tokenIn;
+      const toToken = side === 'buy' ? tokenIn : tokenOut;
+      
+      // Determine the chain based on the base token (first token in pair)
+      const chain = getTokenChain(tokenIn);
+      
+      console.log('=== QUOTE REQUEST ===');
+      console.log('Trading pair:', selectedPair);
+      console.log('Side:', side);
+      console.log('From token:', fromToken);
+      console.log('To token:', toToken);
+      console.log('Detected chain:', chain);
+      
+      // Get token configs for the detected chain
+      const fromTokenConfig = getTokenConfig(fromToken, chain);
+      const toTokenConfig = getTokenConfig(toToken, chain);
+      
+      if (!fromTokenConfig || !toTokenConfig) {
+        setError(`Token configuration not found for ${chain} chain`);
+        setLoadingQuote(false);
+        return;
+      }
+      
+      console.log('From token config:', fromTokenConfig);
+      console.log('To token config:', toTokenConfig);
+      
+      // Convert amount to smallest unit using the correct decimals
+      const amountInSmallestUnit = (parseFloat(amount) * Math.pow(10, fromTokenConfig.decimals)).toFixed(0);
+      
+      console.log('Amount in smallest unit:', amountInSmallestUnit);
 
       const response = await fetch('/api/quote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: user?.userId,
-          fromChain: 'EVM',
-          toChain: 'EVM',
-          tokenIn: side === 'buy' ? tokenOut : tokenIn,
-          tokenOut: side === 'buy' ? tokenIn : tokenOut,
-          amountIn: amountInWei, // Send as wei string
+          fromChain: chain,
+          toChain: chain,
+          tokenIn: fromTokenConfig.address,
+          tokenOut: toTokenConfig.address,
+          amountIn: amountInSmallestUnit,
           slippage: parseFloat(slippage) / 100 // Convert percentage to decimal (0.5% -> 0.005)
         })
       });
@@ -72,7 +132,8 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
       }
 
       const data = await response.json();
-      setQuote(data);
+      // Store the decimals with the quote for display
+      setQuote({ ...data, _fromDecimals: fromTokenConfig.decimals, _toDecimals: toTokenConfig.decimals });
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -91,20 +152,48 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
     setSuccess(null);
 
     try {
-      // Convert amount to wei/smallest unit (assuming 18 decimals for most tokens)
-      const decimals = 18; // TODO: Get actual decimals from token config
-      const amountInWei = (parseFloat(amount) * Math.pow(10, decimals)).toFixed(0);
+      // Determine which chain to use based on the trading pair
+      const fromToken = side === 'buy' ? tokenOut : tokenIn;
+      const toToken = side === 'buy' ? tokenIn : tokenOut;
+      
+      // Determine the chain based on the base token (first token in pair)
+      const chain = getTokenChain(tokenIn);
+      
+      console.log('=== TRADE EXECUTION ===');
+      console.log('Trading pair:', selectedPair);
+      console.log('Side:', side);
+      console.log('From token:', fromToken);
+      console.log('To token:', toToken);
+      console.log('Detected chain:', chain);
+      
+      // Get token configs for the detected chain
+      const fromTokenConfig = getTokenConfig(fromToken, chain);
+      const toTokenConfig = getTokenConfig(toToken, chain);
+      
+      if (!fromTokenConfig || !toTokenConfig) {
+        setError(`Token configuration not found for ${chain} chain`);
+        setExecuting(false);
+        return;
+      }
+      
+      console.log('From token config:', fromTokenConfig);
+      console.log('To token config:', toTokenConfig);
+      
+      // Convert amount to smallest unit using the correct decimals
+      const amountInSmallestUnit = (parseFloat(amount) * Math.pow(10, fromTokenConfig.decimals)).toFixed(0);
+      
+      console.log('Amount in smallest unit:', amountInSmallestUnit);
 
       const response = await fetch('/api/execute-trade', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: user?.userId,
-          fromChain: 'EVM',
-          toChain: 'EVM',
-          tokenIn: side === 'buy' ? tokenOut : tokenIn,
-          tokenOut: side === 'buy' ? tokenIn : tokenOut,
-          amountIn: amountInWei, // Send as wei string
+          fromChain: chain,
+          toChain: chain,
+          tokenIn: fromTokenConfig.address,
+          tokenOut: toTokenConfig.address,
+          amountIn: amountInSmallestUnit,
           slippage: parseFloat(slippage) / 100 // Convert percentage to decimal (0.5% -> 0.005)
         })
       });
@@ -227,7 +316,7 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
             <div className="flex justify-between">
               <span className="text-muted">You will receive:</span>
               <span className="text-dark dark:text-white font-semibold font-mono">
-                {(parseFloat(quote.expectedOutput) / Math.pow(10, 18)).toFixed(6)} {side === 'buy' ? tokenIn : tokenOut}
+                {(parseFloat(quote.expectedOutput) / Math.pow(10, (quote as any)._toDecimals || 18)).toFixed(6)} {side === 'buy' ? tokenIn : tokenOut}
               </span>
             </div>
             <div className="flex justify-between">
@@ -241,7 +330,7 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
             <div className="flex justify-between">
               <span className="text-muted">Platform Fee (0.3%):</span>
               <span className="text-dark dark:text-white font-mono text-xs">
-                {(parseFloat(quote.platformFee) / Math.pow(10, 18)).toFixed(6)}
+                {(parseFloat(quote.platformFee) / Math.pow(10, (quote as any)._fromDecimals || 18)).toFixed(6)}
               </span>
             </div>
             <div className="flex justify-between">
