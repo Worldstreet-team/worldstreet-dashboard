@@ -7,6 +7,7 @@ import { useWallet } from "@/app/context/walletContext";
 import { useSolana } from "@/app/context/solanaContext";
 import { useEvm } from "@/app/context/evmContext";
 import { useAuth } from "@/app/context/authContext";
+import CryptoJS from "crypto-js";
 
 interface Balance {
   asset: string;
@@ -67,6 +68,11 @@ export default function TransferPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [generatingWallet, setGeneratingWallet] = useState(false);
+
+  // PIN modal state
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pin, setPin] = useState(['', '', '', '', '', '']);
+  const [pinError, setPinError] = useState('');
 
   const userId = user?.userId || '';
   const assets = ['USDT', 'USDC', 'ETH', 'SOL'];
@@ -160,106 +166,174 @@ export default function TransferPage() {
       return;
     }
 
-    setLoading(true);
     setError('');
     setSuccess('');
 
+    if (direction === 'main-to-spot') {
+      // Main to Spot: Show PIN modal
+      setShowPinModal(true);
+    } else {
+      // Spot to Main: Execute directly via backend
+      await executeSpotToMain();
+    }
+  };
+
+  const executeMainToSpot = async () => {
+    const pinString = pin.join('');
+    if (pinString.length !== 6) return;
+
+    setLoading(true);
+    setPinError('');
+
     try {
-      if (direction === 'main-to-spot') {
-        // Main to Spot: Use blockchain send functions
-        // Get the spot wallet address for the selected asset
-        const spotWallet = getSpotWallet(selectedAsset);
-        if (!spotWallet) {
-          setError(`No spot wallet found for ${selectedAsset}`);
+      // Get the spot wallet address for the selected asset
+      const spotWallet = getSpotWallet(selectedAsset);
+      if (!spotWallet) {
+        setPinError(`No spot wallet found for ${selectedAsset}`);
+        setLoading(false);
+        return;
+      }
+
+      // Get encrypted keys with PIN hash
+      const pinHash = CryptoJS.SHA256(pinString).toString();
+      const encryptedKeys = await getEncryptedKeys(pinHash);
+      if (!encryptedKeys) {
+        setPinError('Invalid PIN');
+        setLoading(false);
+        return;
+      }
+
+      let txHash = '';
+      const amountNum = parseFloat(amount);
+
+      // Determine which blockchain to use based on asset
+      if (selectedAsset === 'SOL') {
+        // Send SOL using Solana context
+        if (!encryptedKeys.solana?.encryptedPrivateKey) {
+          setPinError('Solana wallet not available');
           setLoading(false);
           return;
         }
-
-        // Get encrypted keys
-        const encryptedKeys = await getEncryptedKeys('1234'); // TODO: Prompt user for PIN
-        if (!encryptedKeys) {
-          setError('Failed to retrieve wallet keys');
+        txHash = await sendSolTransaction(
+          encryptedKeys.solana.encryptedPrivateKey,
+          pinString,
+          spotWallet.public_address,
+          amountNum
+        );
+      } else if (selectedAsset === 'ETH') {
+        // Send ETH using EVM context
+        if (!encryptedKeys.ethereum?.encryptedPrivateKey) {
+          setPinError('Ethereum wallet not available');
           setLoading(false);
           return;
         }
+        txHash = await sendEthTransaction(
+          encryptedKeys.ethereum.encryptedPrivateKey,
+          pinString,
+          spotWallet.public_address,
+          amountNum
+        );
+      } else if (selectedAsset === 'USDT' || selectedAsset === 'USDC') {
+        // For stablecoins, check which chain has balance
+        const solToken = solTokens.find(t => 
+          t.address.toLowerCase() === TOKEN_ADDRESSES[selectedAsset].solana.toLowerCase()
+        );
+        const ethToken = ethTokens.find(t => 
+          t.address.toLowerCase() === TOKEN_ADDRESSES[selectedAsset].ethereum.toLowerCase()
+        );
 
-        let txHash = '';
-        const amountNum = parseFloat(amount);
-
-        // Determine which blockchain to use based on asset
-        if (selectedAsset === 'SOL') {
-          // Send SOL using Solana context
+        if (solToken && solToken.amount >= amountNum) {
+          // Use Solana
           if (!encryptedKeys.solana?.encryptedPrivateKey) {
-            setError('Solana wallet not available');
+            setPinError('Solana wallet not available');
             setLoading(false);
             return;
           }
-          txHash = await sendSolTransaction(
+          txHash = await sendSolTokenTransaction(
             encryptedKeys.solana.encryptedPrivateKey,
-            '1234', // TODO: Use actual PIN
+            pinString,
             spotWallet.public_address,
-            amountNum
+            amountNum,
+            TOKEN_ADDRESSES[selectedAsset].solana,
+            solToken.decimals
           );
-        } else if (selectedAsset === 'ETH') {
-          // Send ETH using EVM context
+        } else if (ethToken && ethToken.amount >= amountNum) {
+          // Use Ethereum
           if (!encryptedKeys.ethereum?.encryptedPrivateKey) {
-            setError('Ethereum wallet not available');
+            setPinError('Ethereum wallet not available');
             setLoading(false);
             return;
           }
-          txHash = await sendEthTransaction(
+          txHash = await sendEthTokenTransaction(
             encryptedKeys.ethereum.encryptedPrivateKey,
-            '1234', // TODO: Use actual PIN
+            pinString,
             spotWallet.public_address,
-            amountNum
+            amountNum,
+            TOKEN_ADDRESSES[selectedAsset].ethereum,
+            ethToken.decimals
           );
-        } else if (selectedAsset === 'USDT' || selectedAsset === 'USDC') {
-          // For stablecoins, check which chain has balance
-          const solToken = solTokens.find(t => 
-            t.address.toLowerCase() === TOKEN_ADDRESSES[selectedAsset].solana.toLowerCase()
-          );
-          const ethToken = ethTokens.find(t => 
-            t.address.toLowerCase() === TOKEN_ADDRESSES[selectedAsset].ethereum.toLowerCase()
-          );
-
-          if (solToken && solToken.amount >= amountNum) {
-            // Use Solana
-            if (!encryptedKeys.solana?.encryptedPrivateKey) {
-              setError('Solana wallet not available');
-              setLoading(false);
-              return;
-            }
-            txHash = await sendSolTokenTransaction(
-              encryptedKeys.solana.encryptedPrivateKey,
-              '1234', // TODO: Use actual PIN
-              spotWallet.public_address,
-              amountNum,
-              TOKEN_ADDRESSES[selectedAsset].solana,
-              solToken.decimals
-            );
-          } else if (ethToken && ethToken.amount >= amountNum) {
-            // Use Ethereum
-            if (!encryptedKeys.ethereum?.encryptedPrivateKey) {
-              setError('Ethereum wallet not available');
-              setLoading(false);
-              return;
-            }
-            txHash = await sendEthTokenTransaction(
-              encryptedKeys.ethereum.encryptedPrivateKey,
-              '1234', // TODO: Use actual PIN
-              spotWallet.public_address,
-              amountNum,
-              TOKEN_ADDRESSES[selectedAsset].ethereum,
-              ethToken.decimals
-            );
-          } else {
-            setError(`Insufficient ${selectedAsset} balance`);
-            setLoading(false);
-            return;
-          }
+        } else {
+          setPinError(`Insufficient ${selectedAsset} balance`);
+          setLoading(false);
+          return;
         }
+      }
 
-        setSuccess(`Successfully transferred ${amount} ${selectedAsset}. TX: ${txHash.slice(0, 8)}...`);
+      setSuccess(`Successfully transferred ${amount} ${selectedAsset}. TX: ${txHash.slice(0, 8)}...`);
+      setAmount('');
+      setShowPinModal(false);
+      setPin(['', '', '', '', '', '']);
+      
+      // Refresh balances
+      if (addresses?.solana && addresses?.ethereum) {
+        await Promise.all([
+          fetchSolBalance(addresses.solana),
+          fetchEthBalance(addresses.ethereum),
+        ]);
+      }
+      await fetchSpotWallets();
+    } catch (err) {
+      console.error('Transfer error:', err);
+      setPinError(err instanceof Error ? err.message : 'Transfer failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const executeSpotToMain = async () => {
+    setLoading(true);
+
+    try {
+      // Get the main wallet address for the selected asset
+      let destinationAddress = '';
+      if (selectedAsset === 'SOL') {
+        destinationAddress = addresses?.solana || '';
+      } else if (selectedAsset === 'ETH' || selectedAsset === 'USDT' || selectedAsset === 'USDC') {
+        destinationAddress = addresses?.ethereum || '';
+      }
+
+      if (!destinationAddress) {
+        setError('Main wallet address not found');
+        setLoading(false);
+        return;
+      }
+
+      const response = await fetch('/api/transfer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          asset: selectedAsset,
+          amount: parseFloat(amount),
+          direction,
+          destinationAddress,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setSuccess(`Successfully transferred ${amount} ${selectedAsset}. TX: ${data.txHash?.slice(0, 8)}...`);
         setAmount('');
         
         // Refresh balances
@@ -271,50 +345,7 @@ export default function TransferPage() {
         }
         await fetchSpotWallets();
       } else {
-        // Spot to Main: Use backend API
-        // Get the main wallet address for the selected asset
-        let destinationAddress = '';
-        if (selectedAsset === 'SOL') {
-          destinationAddress = addresses?.solana || '';
-        } else if (selectedAsset === 'ETH' || selectedAsset === 'USDT' || selectedAsset === 'USDC') {
-          destinationAddress = addresses?.ethereum || '';
-        }
-
-        if (!destinationAddress) {
-          setError('Main wallet address not found');
-          setLoading(false);
-          return;
-        }
-
-        const response = await fetch('/api/transfer', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId,
-            asset: selectedAsset,
-            amount: parseFloat(amount),
-            direction,
-            destinationAddress,
-          }),
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-          setSuccess(`Successfully transferred ${amount} ${selectedAsset}. TX: ${data.txHash?.slice(0, 8)}...`);
-          setAmount('');
-          
-          // Refresh balances
-          if (addresses?.solana && addresses?.ethereum) {
-            await Promise.all([
-              fetchSolBalance(addresses.solana),
-              fetchEthBalance(addresses.ethereum),
-            ]);
-          }
-          await fetchSpotWallets();
-        } else {
-          setError(data.error || 'Transfer failed');
-        }
+        setError(data.error || 'Transfer failed');
       }
     } catch (err) {
       console.error('Transfer error:', err);
@@ -372,6 +403,23 @@ export default function TransferPage() {
     : getSpotBalance(selectedAsset);
 
   const hasSpotWallets = spotWallets.length > 0;
+
+  // PIN handlers
+  const pinRefs = React.useRef<(HTMLInputElement | null)[]>([]);
+
+  const handlePinChange = (index: number, value: string) => {
+    if (!/^\d*$/.test(value)) return;
+    const newPin = [...pin];
+    newPin[index] = value.slice(-1);
+    setPin(newPin);
+    if (value && index < 5) pinRefs.current[index + 1]?.focus();
+  };
+
+  const handlePinKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === 'Backspace' && !pin[index] && index > 0) {
+      pinRefs.current[index - 1]?.focus();
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -652,6 +700,72 @@ export default function TransferPage() {
       </div>
 
       <Footer />
+
+      {/* PIN Modal */}
+      {showPinModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div 
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm" 
+            onClick={() => !loading && setShowPinModal(false)} 
+          />
+          <div className="relative bg-white dark:bg-black border border-border/50 dark:border-darkborder rounded-2xl w-full max-w-md mx-4 p-6 shadow-lg">
+            <h3 className="text-lg font-semibold text-dark dark:text-white mb-2 text-center">
+              Confirm Transfer
+            </h3>
+            <p className="text-sm text-muted text-center mb-1">
+              Transferring <span className="font-semibold text-dark dark:text-white">{amount} {selectedAsset}</span>
+            </p>
+            <p className="text-sm text-muted text-center mb-1">
+              From <span className="font-semibold text-dark dark:text-white">Main Wallet</span> to{' '}
+              <span className="font-semibold text-dark dark:text-white">Spot Wallet</span>
+            </p>
+            <p className="text-xs text-muted text-center mb-6">
+              Enter your 6-digit PIN to authorize this transfer.
+            </p>
+
+            <div className="flex justify-center gap-3 mb-4">
+              {pin.map((digit, i) => (
+                <input
+                  key={i}
+                  ref={(el) => { pinRefs.current[i] = el; }}
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={1}
+                  value={digit}
+                  onChange={(e) => handlePinChange(i, e.target.value)}
+                  onKeyDown={(e) => handlePinKeyDown(i, e)}
+                  className="w-12 h-14 text-center text-xl font-bold bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-darkborder rounded-xl text-dark dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+              ))}
+            </div>
+
+            {pinError && (
+              <p className="text-sm text-red-500 text-center mb-4">{pinError}</p>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => { 
+                  setShowPinModal(false); 
+                  setPin(['', '', '', '', '', '']); 
+                  setPinError(''); 
+                }}
+                disabled={loading}
+                className="flex-1 py-3 px-4 bg-muted/30 dark:bg-white/5 text-dark dark:text-white font-medium rounded-xl transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={executeMainToSpot}
+                disabled={pin.some((d) => !d) || loading}
+                className="flex-1 py-3 px-4 bg-primary hover:bg-primary/90 text-white font-medium rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Transferring...' : 'Confirm Transfer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
