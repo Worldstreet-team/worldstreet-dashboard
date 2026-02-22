@@ -3,6 +3,10 @@
 import React, { useState, useEffect } from 'react';
 import { Icon } from "@iconify/react";
 import Footer from "@/components/dashboard/Footer";
+import { useWallet } from "@/app/context/walletContext";
+import { useSolana } from "@/app/context/solanaContext";
+import { useEvm } from "@/app/context/evmContext";
+import { useAuth } from "@/app/context/authContext";
 
 interface Balance {
   asset: string;
@@ -22,39 +26,58 @@ const ASSET_ICONS: Record<string, string> = {
   SOL: "https://cryptologos.cc/logos/solana-sol-logo.png",
 };
 
+// Token addresses for finding balances
+const TOKEN_ADDRESSES = {
+  USDT: {
+    solana: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB", // USDT on Solana
+    ethereum: "0xdac17f958d2ee523a2206206994597c13d831ec7", // USDT on Ethereum
+  },
+  USDC: {
+    solana: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", // USDC on Solana
+    ethereum: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", // USDC on Ethereum
+  },
+};
+
 export default function TransferPage() {
+  const { user } = useAuth();
+  const { addresses } = useWallet();
+  const { balance: solBalance, tokenBalances: solTokens, fetchBalance: fetchSolBalance } = useSolana();
+  const { balance: ethBalance, tokenBalances: ethTokens, fetchBalance: fetchEthBalance } = useEvm();
+
   const [direction, setDirection] = useState<'main-to-spot' | 'spot-to-main'>('main-to-spot');
   const [selectedAsset, setSelectedAsset] = useState('USDT');
   const [amount, setAmount] = useState('');
-  const [mainBalances, setMainBalances] = useState<Balance[]>([]);
   const [spotBalances, setSpotBalances] = useState<Balance[]>([]);
   const [spotWallets, setSpotWallets] = useState<SpotWallet[]>([]);
   const [loading, setLoading] = useState(false);
+  const [balancesLoading, setBalancesLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [generatingWallet, setGeneratingWallet] = useState(false);
 
-  const userId = 'user123'; // Replace with actual user ID from auth
+  const userId = user?.userId || '';
   const assets = ['USDT', 'USDC', 'ETH', 'SOL'];
 
+  // Fetch on-chain balances when addresses are available
   useEffect(() => {
-    fetchBalances();
-    fetchSpotWallets();
-  }, []);
-
-  const fetchBalances = async () => {
-    try {
-      const response = await fetch(`/api/users/${userId}/balances`);
-      if (response.ok) {
-        const data = await response.json();
-        setMainBalances(data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch balances:', err);
+    if (addresses?.solana && addresses?.ethereum) {
+      setBalancesLoading(true);
+      Promise.all([
+        fetchSolBalance(addresses.solana),
+        fetchEthBalance(addresses.ethereum),
+      ]).finally(() => setBalancesLoading(false));
     }
-  };
+  }, [addresses, fetchSolBalance, fetchEthBalance]);
+
+  useEffect(() => {
+    if (userId) {
+      fetchSpotWallets();
+    }
+  }, [userId]);
 
   const fetchSpotWallets = async () => {
+    if (!userId) return;
+    
     try {
       const response = await fetch(`/api/users/${userId}/spot-wallets`);
       if (response.ok) {
@@ -68,6 +91,8 @@ export default function TransferPage() {
   };
 
   const handleGenerateWallets = async () => {
+    if (!userId) return;
+    
     setGeneratingWallet(true);
     setError('');
     setSuccess('');
@@ -93,6 +118,11 @@ export default function TransferPage() {
   };
 
   const handleTransfer = async () => {
+    if (!userId) {
+      setError('User not authenticated');
+      return;
+    }
+
     if (!amount || parseFloat(amount) <= 0) {
       setError('Please enter a valid amount');
       return;
@@ -119,7 +149,13 @@ export default function TransferPage() {
       if (response.ok) {
         setSuccess(`Successfully transferred ${amount} ${selectedAsset}`);
         setAmount('');
-        await fetchBalances();
+        // Refresh balances
+        if (addresses?.solana && addresses?.ethereum) {
+          await Promise.all([
+            fetchSolBalance(addresses.solana),
+            fetchEthBalance(addresses.ethereum),
+          ]);
+        }
         await fetchSpotWallets();
       } else {
         setError(data.error || 'Transfer failed');
@@ -138,9 +174,35 @@ export default function TransferPage() {
     setSuccess('');
   };
 
-  const getBalance = (asset: string, isSpot: boolean) => {
-    const balances = isSpot ? spotBalances : mainBalances;
-    const balance = balances.find(b => b.asset === asset);
+  // Get main wallet balance from on-chain data (Solana/EVM contexts)
+  const getMainBalance = (asset: string): number => {
+    if (asset === 'SOL') {
+      return solBalance;
+    } else if (asset === 'ETH') {
+      return ethBalance;
+    } else if (asset === 'USDT' || asset === 'USDC') {
+      // Check Solana tokens first
+      const solToken = solTokens.find(t => 
+        t.address.toLowerCase() === TOKEN_ADDRESSES[asset].solana.toLowerCase()
+      );
+      if (solToken && solToken.amount > 0) {
+        return solToken.amount;
+      }
+      
+      // Check Ethereum tokens
+      const ethToken = ethTokens.find(t => 
+        t.address.toLowerCase() === TOKEN_ADDRESSES[asset].ethereum.toLowerCase()
+      );
+      if (ethToken) {
+        return ethToken.amount;
+      }
+    }
+    return 0;
+  };
+
+  // Get spot wallet balance from backend
+  const getSpotBalance = (asset: string): number => {
+    const balance = spotBalances.find(b => b.asset === asset);
     return balance ? parseFloat(balance.available_balance) : 0;
   };
 
@@ -149,8 +211,8 @@ export default function TransferPage() {
   };
 
   const currentBalance = direction === 'main-to-spot' 
-    ? getBalance(selectedAsset, false)
-    : getBalance(selectedAsset, true);
+    ? getMainBalance(selectedAsset)
+    : getSpotBalance(selectedAsset);
 
   const hasSpotWallets = spotWallets.length > 0;
 
@@ -163,6 +225,16 @@ export default function TransferPage() {
           Move funds between your main wallet and spot trading wallet
         </p>
       </div>
+
+      {/* Loading State */}
+      {balancesLoading && (
+        <div className="bg-white dark:bg-black rounded-2xl border border-border/50 dark:border-darkborder p-6 shadow-sm">
+          <div className="flex items-center justify-center gap-3">
+            <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            <p className="text-muted">Loading wallet balances...</p>
+          </div>
+        </div>
+      )}
 
       {/* Wallet Setup Alert */}
       {!hasSpotWallets && (
@@ -364,7 +436,11 @@ export default function TransferPage() {
                     <span className="text-sm font-medium text-dark dark:text-white">{asset}</span>
                   </div>
                   <span className="text-sm font-semibold text-dark dark:text-white">
-                    {getBalance(asset, false).toFixed(6)}
+                    {balancesLoading ? (
+                      <span className="text-muted">...</span>
+                    ) : (
+                      getMainBalance(asset).toFixed(6)
+                    )}
                   </span>
                 </div>
               ))}
@@ -392,7 +468,7 @@ export default function TransferPage() {
                         <span className="text-sm font-medium text-dark dark:text-white">{asset}</span>
                       </div>
                       <span className="text-sm font-semibold text-dark dark:text-white">
-                        {getBalance(asset, true).toFixed(6)}
+                        {getSpotBalance(asset).toFixed(6)}
                       </span>
                     </div>
                     {getSpotWallet(asset) && (
