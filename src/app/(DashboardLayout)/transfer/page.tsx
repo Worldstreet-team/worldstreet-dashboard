@@ -51,6 +51,7 @@ export default function TransferPage() {
   const [spotWallets, setSpotWallets] = useState<SpotWallet[]>([]);
   const [loading, setLoading] = useState(false);
   const [balancesLoading, setBalancesLoading] = useState(true);
+  const [spotWalletsLoading, setSpotWalletsLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [generatingWallet, setGeneratingWallet] = useState(false);
@@ -78,15 +79,34 @@ export default function TransferPage() {
   const fetchSpotWallets = async () => {
     if (!userId) return;
     
+    setSpotWalletsLoading(true);
     try {
       const response = await fetch(`/api/users/${userId}/spot-wallets`);
       if (response.ok) {
         const data = await response.json();
-        setSpotWallets(data.wallets || []);
-        setSpotBalances(data.balances || []);
+        console.log('Spot wallets response:', data);
+        
+        // Backend returns wallets as an array directly
+        const walletsArray = Array.isArray(data.wallets) ? data.wallets : [];
+        const balancesArray = Array.isArray(data.balances) ? data.balances : [];
+        
+        setSpotWallets(walletsArray);
+        setSpotBalances(balancesArray);
+        
+        console.log('Spot wallets set:', walletsArray);
+        console.log('Spot balances set:', balancesArray);
+      } else {
+        console.error('Failed to fetch spot wallets:', response.status);
+        // If 404, wallets don't exist yet
+        if (response.status === 404) {
+          setSpotWallets([]);
+          setSpotBalances([]);
+        }
       }
     } catch (err) {
       console.error('Failed to fetch spot wallets:', err);
+    } finally {
+      setSpotWalletsLoading(false);
     }
   };
 
@@ -236,8 +256,8 @@ export default function TransferPage() {
         </div>
       )}
 
-      {/* Wallet Setup Alert */}
-      {!hasSpotWallets && (
+      {/* Wallet Setup Alert - Only show after loading completes */}
+      {!spotWalletsLoading && !hasSpotWallets && (
         <div className="bg-gradient-to-br from-primary/5 to-secondary/5 rounded-2xl border border-border/50 dark:border-darkborder p-6 shadow-sm">
           <div className="flex items-start gap-4">
             <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
@@ -458,7 +478,11 @@ export default function TransferPage() {
                 <p className="text-xs text-muted">Trading Balance</p>
               </div>
             </div>
-            {hasSpotWallets ? (
+            {spotWalletsLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : hasSpotWallets ? (
               <div className="space-y-3">
                 {assets.map((asset) => (
                   <div key={asset}>
