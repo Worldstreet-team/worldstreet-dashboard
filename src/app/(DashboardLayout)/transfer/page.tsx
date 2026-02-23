@@ -11,13 +11,17 @@ import CryptoJS from "crypto-js";
 
 interface Balance {
   asset: string;
+  chain: string;
   available_balance: string;
   locked_balance: string;
+  assetChain: string; // e.g., "USDT_EVM", "USDT_SOL"
 }
 
 interface SpotWallet {
   asset: string;
+  chain: string;
   public_address: string;
+  assetChain: string; // e.g., "USDT_EVM", "USDT_SOL"
 }
 
 const ASSET_ICONS: Record<string, string> = {
@@ -59,6 +63,7 @@ export default function TransferPage() {
 
   const [direction, setDirection] = useState<'main-to-spot' | 'spot-to-main'>('main-to-spot');
   const [selectedAsset, setSelectedAsset] = useState('USDT');
+  const [selectedChain, setSelectedChain] = useState<'sol' | 'evm'>('sol'); // Chain selection for stablecoins
   const [amount, setAmount] = useState('');
   const [spotBalances, setSpotBalances] = useState<Balance[]>([]);
   const [spotWallets, setSpotWallets] = useState<SpotWallet[]>([]);
@@ -76,6 +81,19 @@ export default function TransferPage() {
 
   const userId = user?.userId || '';
   const assets = ['USDT', 'USDC', 'ETH', 'SOL'];
+
+  // Determine if chain selection is needed (stablecoins)
+  const needsChainSelection = selectedAsset === 'USDT' || selectedAsset === 'USDC';
+  
+  // Auto-set chain based on asset
+  useEffect(() => {
+    if (selectedAsset === 'SOL') {
+      setSelectedChain('sol');
+    } else if (selectedAsset === 'ETH') {
+      setSelectedChain('evm');
+    }
+    // For USDT/USDC, keep user selection or default to 'sol'
+  }, [selectedAsset]);
 
   // Fetch on-chain balances when addresses are available
   useEffect(() => {
@@ -105,52 +123,9 @@ export default function TransferPage() {
         console.log('=== SPOT WALLETS API RESPONSE ===');
         console.log('Raw response:', JSON.stringify(data, null, 2));
         
-        // Backend returns wallets as an array directly
-        let walletsArray: SpotWallet[] = [];
-        
-        // Handle different possible response structures
-        if (Array.isArray(data.wallets)) {
-          console.log('Wallets is an array with', data.wallets.length, 'items');
-          // If wallets is already an array of objects with asset and public_address
-          walletsArray = data.wallets
-            .map((w: any) => {
-              console.log('Processing wallet:', JSON.stringify(w, null, 2));
-              const asset = (w.asset || w.symbol || w.currency || '').toUpperCase();
-              const address = w.public_address || w.publicAddress || w.address || w.wallet_address || '';
-              
-              console.log(`Mapped: ${asset} -> ${address}`);
-              
-              return {
-                asset,
-                public_address: address,
-              };
-            })
-            .filter((w: SpotWallet) => w.asset && w.public_address); // Filter out invalid entries
-        } else if (typeof data.wallets === 'object' && data.wallets !== null) {
-          console.log('Wallets is an object');
-          // If wallets is an object like { USDT: { public_address: "..." }, ... }
-          walletsArray = Object.entries(data.wallets)
-            .map(([asset, wallet]: [string, any]) => {
-              console.log(`Processing ${asset}:`, JSON.stringify(wallet, null, 2));
-              
-              let address = '';
-              if (typeof wallet === 'string') {
-                address = wallet;
-              } else if (typeof wallet === 'object' && wallet !== null) {
-                address = wallet.public_address || wallet.publicAddress || wallet.address || wallet.wallet_address || '';
-              }
-              
-              console.log(`Mapped: ${asset} -> ${address}`);
-              
-              return {
-                asset: asset.toUpperCase(),
-                public_address: address,
-              };
-            })
-            .filter((w: SpotWallet) => w.asset && w.public_address); // Filter out invalid entries
-        }
-        
-        const balancesArray = Array.isArray(data.balances) ? data.balances : [];
+        // Backend now returns wallets with chain info
+        const walletsArray: SpotWallet[] = Array.isArray(data.wallets) ? data.wallets : [];
+        const balancesArray: Balance[] = Array.isArray(data.balances) ? data.balances : [];
         
         console.log('=== PROCESSED WALLETS ===');
         console.log(JSON.stringify(walletsArray, null, 2));
@@ -232,10 +207,11 @@ export default function TransferPage() {
     setPinError('');
 
     try {
-      // Get the spot wallet address for the selected asset
-      const spotWallet = getSpotWallet(selectedAsset);
+      // Get the spot wallet address for the selected asset and chain
+      const spotWallet = getSpotWallet(selectedAsset, selectedChain);
       console.log('=== TRANSFER VALIDATION ===');
       console.log('Selected asset:', selectedAsset);
+      console.log('Selected chain:', selectedChain);
       console.log('All spot wallets:', JSON.stringify(spotWallets, null, 2));
       console.log('Found spot wallet:', JSON.stringify(spotWallet, null, 2));
       
@@ -473,14 +449,18 @@ export default function TransferPage() {
     return 0;
   };
 
-  // Get spot wallet balance from backend
-  const getSpotBalance = (asset: string): number => {
-    const balance = spotBalances.find(b => b.asset === asset);
+  // Get spot wallet balance from backend (chain-specific)
+  const getSpotBalance = (asset: string, chain?: string): number => {
+    const targetChain = chain || selectedChain;
+    const assetChain = `${asset}_${targetChain.toUpperCase()}`;
+    const balance = spotBalances.find(b => b.assetChain === assetChain);
     return balance ? parseFloat(balance.available_balance) : 0;
   };
 
-  const getSpotWallet = (asset: string) => {
-    return spotWallets.find(w => w.asset === asset);
+  const getSpotWallet = (asset: string, chain?: string) => {
+    const targetChain = chain || selectedChain;
+    const assetChain = `${asset}_${targetChain.toUpperCase()}`;
+    return spotWallets.find(w => w.assetChain === assetChain);
   };
 
   const currentBalance = direction === 'main-to-spot' 
@@ -603,6 +583,40 @@ export default function TransferPage() {
                 </button>
               ))}
             </div>
+            
+            {/* Chain Selection for Stablecoins */}
+            {needsChainSelection && (
+              <div className="mt-6 pt-4 border-t border-border/50 dark:border-darkborder">
+                <h4 className="font-medium text-dark dark:text-white mb-3">Select Chain</h4>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setSelectedChain('sol')}
+                    className={`flex-1 py-3 px-4 rounded-xl border-2 transition-all flex items-center justify-center gap-2 ${
+                      selectedChain === 'sol'
+                        ? 'border-primary bg-primary/5 text-primary'
+                        : 'border-border/50 dark:border-darkborder text-muted hover:border-primary/50'
+                    }`}
+                  >
+                    <Icon icon="cryptocurrency:sol" width={20} />
+                    <span className="font-medium">Solana</span>
+                  </button>
+                  <button
+                    onClick={() => setSelectedChain('evm')}
+                    className={`flex-1 py-3 px-4 rounded-xl border-2 transition-all flex items-center justify-center gap-2 ${
+                      selectedChain === 'evm'
+                        ? 'border-primary bg-primary/5 text-primary'
+                        : 'border-border/50 dark:border-darkborder text-muted hover:border-primary/50'
+                    }`}
+                  >
+                    <Icon icon="cryptocurrency:eth" width={20} />
+                    <span className="font-medium">Ethereum</span>
+                  </button>
+                </div>
+                <p className="text-xs text-muted mt-2">
+                  Choose which blockchain to transfer {selectedAsset} on
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Amount Input */}
@@ -744,24 +758,72 @@ export default function TransferPage() {
               </div>
             ) : hasSpotWallets ? (
               <div className="space-y-3">
-                {assets.map((asset) => (
-                  <div key={asset}>
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-2">
-                        <img src={ASSET_ICONS[asset]} alt={asset} className="w-6 h-6 rounded-full" />
-                        <span className="text-sm font-medium text-dark dark:text-white">{asset}</span>
+                {assets.map((asset) => {
+                  // For stablecoins, show both chains
+                  if (asset === 'USDT' || asset === 'USDC') {
+                    return (
+                      <div key={asset} className="space-y-2">
+                        {/* Solana version */}
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-2">
+                              <img src={ASSET_ICONS[asset]} alt={asset} className="w-6 h-6 rounded-full" />
+                              <span className="text-sm font-medium text-dark dark:text-white">{asset}</span>
+                              <span className="text-xs text-muted bg-muted/20 px-2 py-0.5 rounded">SOL</span>
+                            </div>
+                            <span className="text-sm font-semibold text-dark dark:text-white">
+                              {getSpotBalance(asset, 'sol').toFixed(6)}
+                            </span>
+                          </div>
+                          {getSpotWallet(asset, 'sol') && (
+                            <p className="text-[10px] text-muted truncate ml-8">
+                              {getSpotWallet(asset, 'sol')?.public_address}
+                            </p>
+                          )}
+                        </div>
+                        {/* EVM version */}
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-2">
+                              <img src={ASSET_ICONS[asset]} alt={asset} className="w-6 h-6 rounded-full" />
+                              <span className="text-sm font-medium text-dark dark:text-white">{asset}</span>
+                              <span className="text-xs text-muted bg-muted/20 px-2 py-0.5 rounded">ETH</span>
+                            </div>
+                            <span className="text-sm font-semibold text-dark dark:text-white">
+                              {getSpotBalance(asset, 'evm').toFixed(6)}
+                            </span>
+                          </div>
+                          {getSpotWallet(asset, 'evm') && (
+                            <p className="text-[10px] text-muted truncate ml-8">
+                              {getSpotWallet(asset, 'evm')?.public_address}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      <span className="text-sm font-semibold text-dark dark:text-white">
-                        {getSpotBalance(asset).toFixed(6)}
-                      </span>
-                    </div>
-                    {getSpotWallet(asset) && (
-                      <p className="text-[10px] text-muted truncate ml-8">
-                        {getSpotWallet(asset)?.public_address}
-                      </p>
-                    )}
-                  </div>
-                ))}
+                    );
+                  } else {
+                    // For native tokens, show single version
+                    const chain = asset === 'SOL' ? 'sol' : 'evm';
+                    return (
+                      <div key={asset}>
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-2">
+                            <img src={ASSET_ICONS[asset]} alt={asset} className="w-6 h-6 rounded-full" />
+                            <span className="text-sm font-medium text-dark dark:text-white">{asset}</span>
+                          </div>
+                          <span className="text-sm font-semibold text-dark dark:text-white">
+                            {getSpotBalance(asset, chain).toFixed(6)}
+                          </span>
+                        </div>
+                        {getSpotWallet(asset, chain) && (
+                          <p className="text-[10px] text-muted truncate ml-8">
+                            {getSpotWallet(asset, chain)?.public_address}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  }
+                })}
               </div>
             ) : (
               <p className="text-sm text-muted text-center py-4">No spot wallets generated</p>

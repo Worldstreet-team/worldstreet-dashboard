@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+
 // GET - Fetch spot wallets and balances
 export async function GET(
   request: NextRequest,
@@ -46,9 +47,50 @@ export async function GET(
       console.log(JSON.stringify(balances, null, 2));
     }
 
+    // Transform the data to group by asset and chain
+    // Backend returns: [{ asset: 'USDT', public_address: '0x...', chain: 'evm' }, { asset: 'USDT', public_address: 'Es9v...', chain: 'sol' }]
+    // We need to group them by asset-chain combination
+    const transformedWallets = wallets.map((wallet: any) => {
+      // Determine chain from address format
+      const isEvm = wallet.public_address.startsWith('0x');
+      const chain = isEvm ? 'evm' : 'sol';
+      
+      return {
+        asset: wallet.asset.toUpperCase(),
+        chain,
+        public_address: wallet.public_address,
+        // Create a unique identifier for asset-chain combination
+        assetChain: `${wallet.asset.toUpperCase()}_${chain.toUpperCase()}`
+      };
+    });
+
+    // Transform balances to include chain info
+    const transformedBalances = balances.map((balance: any) => {
+      // Determine chain from tokenAddress or asset type
+      let chain = 'evm';
+      if (balance.asset === 'SOL') {
+        chain = 'sol';
+      } else if (balance.tokenAddress && !balance.tokenAddress.startsWith('0x')) {
+        chain = 'sol';
+      }
+      
+      return {
+        asset: balance.asset.toUpperCase(),
+        chain,
+        available_balance: balance.available_balance,
+        locked_balance: balance.locked_balance || '0',
+        assetChain: `${balance.asset.toUpperCase()}_${chain.toUpperCase()}`
+      };
+    });
+
+    console.log('=== TRANSFORMED WALLETS ===');
+    console.log(JSON.stringify(transformedWallets, null, 2));
+    console.log('=== TRANSFORMED BALANCES ===');
+    console.log(JSON.stringify(transformedBalances, null, 2));
+
     return NextResponse.json({
-      wallets: wallets,
-      balances: balances,
+      wallets: transformedWallets,
+      balances: transformedBalances,
     });
   } catch (error) {
     console.error('Error fetching spot wallets:', error);
