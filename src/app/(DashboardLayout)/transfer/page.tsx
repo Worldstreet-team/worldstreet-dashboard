@@ -723,21 +723,103 @@ export default function TransferPage() {
               </div>
             </div>
             <div className="space-y-3">
-              {assets.map((asset) => (
-                <div key={asset} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <img src={ASSET_ICONS[asset]} alt={asset} className="w-6 h-6 rounded-full" />
-                    <span className="text-sm font-medium text-dark dark:text-white">{asset}</span>
-                  </div>
-                  <span className="text-sm font-semibold text-dark dark:text-white">
-                    {balancesLoading ? (
-                      <span className="text-muted">...</span>
-                    ) : (
-                      getMainBalance(asset).toFixed(6)
-                    )}
-                  </span>
-                </div>
-              ))}
+              {assets.map((asset) => {
+                // For stablecoins, show which chain has balance
+                if (asset === 'USDT' || asset === 'USDC') {
+                  const solBalance = solTokens.find(t => 
+                    t.address.toLowerCase() === TOKEN_ADDRESSES[asset].solana.toLowerCase()
+                  );
+                  const ethBalance = ethTokens.find(t => 
+                    t.address.toLowerCase() === TOKEN_ADDRESSES[asset].ethereum.toLowerCase()
+                  );
+                  
+                  return (
+                    <div key={asset} className="space-y-2">
+                      {/* Solana version */}
+                      {solBalance && solBalance.amount > 0 && (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="relative">
+                              <img src={ASSET_ICONS[asset]} alt={asset} className="w-6 h-6 rounded-full" />
+                              <img 
+                                src="https://cryptologos.cc/logos/solana-sol-logo.png" 
+                                alt="Solana" 
+                                className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border border-white dark:border-black" 
+                              />
+                            </div>
+                            <span className="text-sm font-medium text-dark dark:text-white">{asset}</span>
+                            <span className="text-xs text-muted bg-muted/20 px-1.5 py-0.5 rounded">SOL</span>
+                          </div>
+                          <span className="text-sm font-semibold text-dark dark:text-white">
+                            {balancesLoading ? (
+                              <span className="text-muted">...</span>
+                            ) : (
+                              solBalance.amount.toFixed(6)
+                            )}
+                          </span>
+                        </div>
+                      )}
+                      {/* EVM version */}
+                      {ethBalance && ethBalance.amount > 0 && (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="relative">
+                              <img src={ASSET_ICONS[asset]} alt={asset} className="w-6 h-6 rounded-full" />
+                              <img 
+                                src="https://cryptologos.cc/logos/ethereum-eth-logo.png" 
+                                alt="Ethereum" 
+                                className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border border-white dark:border-black" 
+                              />
+                            </div>
+                            <span className="text-sm font-medium text-dark dark:text-white">{asset}</span>
+                            <span className="text-xs text-muted bg-muted/20 px-1.5 py-0.5 rounded">ETH</span>
+                          </div>
+                          <span className="text-sm font-semibold text-dark dark:text-white">
+                            {balancesLoading ? (
+                              <span className="text-muted">...</span>
+                            ) : (
+                              ethBalance.amount.toFixed(6)
+                            )}
+                          </span>
+                        </div>
+                      )}
+                      {/* Show zero balance if neither chain has balance */}
+                      {(!solBalance || solBalance.amount === 0) && (!ethBalance || ethBalance.amount === 0) && (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <img src={ASSET_ICONS[asset]} alt={asset} className="w-6 h-6 rounded-full" />
+                            <span className="text-sm font-medium text-dark dark:text-white">{asset}</span>
+                          </div>
+                          <span className="text-sm font-semibold text-dark dark:text-white">
+                            {balancesLoading ? (
+                              <span className="text-muted">...</span>
+                            ) : (
+                              '0.000000'
+                            )}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                } else {
+                  // For native tokens, show single version
+                  return (
+                    <div key={asset} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <img src={ASSET_ICONS[asset]} alt={asset} className="w-6 h-6 rounded-full" />
+                        <span className="text-sm font-medium text-dark dark:text-white">{asset}</span>
+                      </div>
+                      <span className="text-sm font-semibold text-dark dark:text-white">
+                        {balancesLoading ? (
+                          <span className="text-muted">...</span>
+                        ) : (
+                          getMainBalance(asset).toFixed(6)
+                        )}
+                      </span>
+                    </div>
+                  );
+                }
+              })}
             </div>
           </div>
 
