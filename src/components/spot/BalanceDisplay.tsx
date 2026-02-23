@@ -5,10 +5,11 @@ import { Icon } from '@iconify/react';
 import { useAuth } from '@/app/context/authContext';
 
 interface Balance {
-  token: string;
-  available: string;
-  locked: string;
-  total: string;
+  asset: string;
+  chain: string;
+  available_balance: string;
+  locked_balance: string;
+  tokenAddress: string;
 }
 
 export default function BalanceDisplay() {
@@ -35,7 +36,11 @@ export default function BalanceDisplay() {
       }
 
       const data = await response.json();
-      setBalances(data.balances || []);
+      console.log('Balance API response:', data);
+      
+      // The API returns an array directly, not wrapped in a balances property
+      const balancesArray = Array.isArray(data) ? data : data.balances || [];
+      setBalances(balancesArray);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -89,53 +94,70 @@ export default function BalanceDisplay() {
             <p className="text-muted text-sm">No balances found</p>
           </div>
         ) : (
-          balances.map((balance) => (
-            <div
-              key={balance.token}
-              className="p-4 bg-muted/30 dark:bg-white/5 rounded-xl border border-border/50 dark:border-darkborder"
-            >
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                    <span className="text-xs font-bold text-primary">
-                      {balance.token.slice(0, 2)}
-                    </span>
+          balances.map((balance, index) => {
+            const total = (parseFloat(balance.available_balance) + parseFloat(balance.locked_balance)).toString();
+            const hasBalance = parseFloat(total) > 0;
+            
+            return (
+              <div
+                key={`${balance.asset}-${balance.chain}-${index}`}
+                className="p-4 bg-muted/30 dark:bg-white/5 rounded-xl border border-border/50 dark:border-darkborder"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                      <span className="text-xs font-bold text-primary">
+                        {balance.asset.slice(0, 2)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="font-semibold text-dark dark:text-white">
+                        {balance.asset}
+                      </span>
+                      <span className="text-xs text-muted bg-muted/20 px-1.5 py-0.5 rounded ml-2">
+                        {balance.chain.toUpperCase()}
+                      </span>
+                    </div>
                   </div>
-                  <span className="font-semibold text-dark dark:text-white">
-                    {balance.token}
-                  </span>
+                  <div className="text-right">
+                    <div className={`text-lg font-bold font-mono ${
+                      hasBalance ? 'text-dark dark:text-white' : 'text-muted'
+                    }`}>
+                      {parseFloat(total).toFixed(6)}
+                    </div>
+                    <div className="text-xs text-muted">Total</div>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-lg font-bold text-dark dark:text-white font-mono">
-                    {parseFloat(balance.total).toFixed(4)}
+
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="p-2 bg-success/10 rounded-lg">
+                    <div className="text-muted mb-1">Available</div>
+                    <div className="font-semibold text-success font-mono">
+                      {parseFloat(balance.available_balance).toFixed(6)}
+                    </div>
                   </div>
-                  <div className="text-xs text-muted">Total</div>
+                  <div className="p-2 bg-warning/10 rounded-lg">
+                    <div className="text-muted mb-1">Locked</div>
+                    <div className="font-semibold text-warning font-mono">
+                      {parseFloat(balance.locked_balance).toFixed(6)}
+                    </div>
+                  </div>
+                </div>
+
+                {parseFloat(balance.locked_balance) > 0 && (
+                  <div className="mt-2 flex items-center gap-1 text-xs text-warning">
+                    <Icon icon="ph:lock" width={12} />
+                    <span>Funds locked in pending trades</span>
+                  </div>
+                )}
+
+                {/* Show token address for debugging */}
+                <div className="mt-2 text-[10px] text-muted truncate">
+                  {balance.tokenAddress}
                 </div>
               </div>
-
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="p-2 bg-success/10 rounded-lg">
-                  <div className="text-muted mb-1">Available</div>
-                  <div className="font-semibold text-success font-mono">
-                    {parseFloat(balance.available).toFixed(4)}
-                  </div>
-                </div>
-                <div className="p-2 bg-warning/10 rounded-lg">
-                  <div className="text-muted mb-1">Locked</div>
-                  <div className="font-semibold text-warning font-mono">
-                    {parseFloat(balance.locked).toFixed(4)}
-                  </div>
-                </div>
-              </div>
-
-              {parseFloat(balance.locked) > 0 && (
-                <div className="mt-2 flex items-center gap-1 text-xs text-warning">
-                  <Icon icon="ph:lock" width={12} />
-                  <span>Funds locked in pending trades</span>
-                </div>
-              )}
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 

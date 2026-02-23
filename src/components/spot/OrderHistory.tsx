@@ -6,17 +6,19 @@ import { useAuth } from '@/app/context/authContext';
 
 interface Trade {
   id: string;
-  timestamp: string;
-  pair: string;
-  side: 'buy' | 'sell';
-  amountIn: string;
-  amountOut: string;
-  tokenIn: string;
-  tokenOut: string;
-  status: 'completed' | 'failed' | 'pending';
-  txHash?: string;
-  platformFee: string;
-  gasUsed?: string;
+  user_id: string;
+  chain_from: string;
+  chain_to: string;
+  route_provider: string;
+  token_in: string;
+  token_out: string;
+  amount_in: string;
+  amount_out: string | null;
+  tx_hash: string | null;
+  price: string | null;
+  fee: string;
+  status: 'COMPLETED' | 'FAILED' | 'PENDING';
+  created_at: string;
 }
 
 export default function OrderHistory() {
@@ -36,14 +38,18 @@ export default function OrderHistory() {
     setError(null);
 
     try {
-      const response = await fetch(`/api/trades/${user.userId}`);
+      const response = await fetch(`/api/trades/history`);
       
       if (!response.ok) {
         throw new Error('Failed to fetch trade history');
       }
 
       const data = await response.json();
-      setTrades(data.trades || []);
+      console.log('Trade history API response:', data);
+      
+      // The API returns an array directly, not wrapped in a trades property
+      const tradesArray = Array.isArray(data) ? data : data.trades || [];
+      setTrades(tradesArray);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -52,7 +58,7 @@ export default function OrderHistory() {
   };
 
   const getStatusBadge = (status: string) => {
-    switch (status) {
+    switch (status.toLowerCase()) {
       case 'completed':
         return (
           <span className="px-2 py-1 bg-success/10 text-success text-xs font-semibold rounded-lg">
@@ -73,7 +79,11 @@ export default function OrderHistory() {
           </span>
         );
       default:
-        return null;
+        return (
+          <span className="px-2 py-1 bg-muted/10 text-muted text-xs font-semibold rounded-lg">
+            {status}
+          </span>
+        );
     }
   };
 
@@ -85,6 +95,30 @@ export default function OrderHistory() {
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  const getSideFromTokens = (tokenIn: string, tokenOut: string): 'buy' | 'sell' => {
+    // If buying SOL with USDT/USDC, it's a buy
+    // If selling SOL for USDT/USDC, it's a sell
+    if (tokenOut === 'SOL' || tokenOut === 'ETH' || tokenOut === 'BTC') {
+      return 'buy';
+    } else {
+      return 'sell';
+    }
+  };
+
+  const formatAmount = (amount: string | null, decimals: number = 6): string => {
+    if (!amount) return '0.000000';
+    const num = parseFloat(amount) / Math.pow(10, 18); // Assuming 18 decimals from backend
+    return num.toFixed(decimals);
+  };
+
+  const getExplorerUrl = (txHash: string, chain: string): string => {
+    if (chain.toLowerCase().includes('solana') || chain.toLowerCase() === 'sol') {
+      return `https://solscan.io/tx/${txHash}`;
+    } else {
+      return `https://etherscan.io/tx/${txHash}`;
+    }
   };
 
   if (loading) {
@@ -151,63 +185,71 @@ export default function OrderHistory() {
               </tr>
             </thead>
             <tbody>
-              {trades.map((trade) => (
-                <tr
-                  key={trade.id}
-                  className="border-b border-border/50 dark:border-darkborder hover:bg-muted/20 dark:hover:bg-white/5 transition-colors"
-                >
-                  <td className="px-4 py-3 text-xs text-muted">
-                    {formatDate(trade.timestamp)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="text-sm font-semibold text-dark dark:text-white">
-                      {trade.pair}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs font-semibold ${
-                      trade.side === 'buy' ? 'text-success' : 'text-error'
-                    }`}>
-                      {trade.side.toUpperCase()}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="text-sm text-dark dark:text-white font-mono">
-                      {parseFloat(trade.amountIn).toFixed(4)}
-                    </div>
-                    <div className="text-xs text-muted">{trade.tokenIn}</div>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="text-sm text-dark dark:text-white font-mono">
-                      {parseFloat(trade.amountOut).toFixed(4)}
-                    </div>
-                    <div className="text-xs text-muted">{trade.tokenOut}</div>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <span className="text-xs text-muted font-mono">
-                      {parseFloat(trade.platformFee).toFixed(4)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    {getStatusBadge(trade.status)}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    {trade.txHash ? (
-                      <a
-                        href={`https://etherscan.io/tx/${trade.txHash}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-primary hover:text-primary/80 text-xs"
-                      >
-                        <Icon icon="ph:arrow-square-out" width={14} />
-                        View
-                      </a>
-                    ) : (
-                      <span className="text-xs text-muted">-</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {trades.map((trade) => {
+                const side = getSideFromTokens(trade.token_in, trade.token_out);
+                const pair = `${trade.token_in}/${trade.token_out}`;
+                
+                return (
+                  <tr
+                    key={trade.id}
+                    className="border-b border-border/50 dark:border-darkborder hover:bg-muted/20 dark:hover:bg-white/5 transition-colors"
+                  >
+                    <td className="px-4 py-3 text-xs text-muted">
+                      {formatDate(trade.created_at)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div>
+                        <span className="text-sm font-semibold text-dark dark:text-white">
+                          {pair}
+                        </span>
+                        <div className="text-xs text-muted">{trade.chain_from}</div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`text-xs font-semibold ${
+                        side === 'buy' ? 'text-success' : 'text-error'
+                      }`}>
+                        {side.toUpperCase()}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="text-sm text-dark dark:text-white font-mono">
+                        {formatAmount(trade.amount_in)}
+                      </div>
+                      <div className="text-xs text-muted">{trade.token_in}</div>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="text-sm text-dark dark:text-white font-mono">
+                        {trade.amount_out ? formatAmount(trade.amount_out) : '-'}
+                      </div>
+                      <div className="text-xs text-muted">{trade.token_out}</div>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <span className="text-xs text-muted font-mono">
+                        {formatAmount(trade.fee, 8)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {getStatusBadge(trade.status)}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {trade.tx_hash ? (
+                        <a
+                          href={getExplorerUrl(trade.tx_hash, trade.chain_from)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-primary hover:text-primary/80 text-xs"
+                        >
+                          <Icon icon="ph:arrow-square-out" width={14} />
+                          View
+                        </a>
+                      ) : (
+                        <span className="text-xs text-muted">-</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
