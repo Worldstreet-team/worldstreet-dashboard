@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     // First try to get from the existing quote/execute history endpoint
     // This might be a different endpoint on your backend
     const response = await fetch(
-      `${BACKEND_URL}/api/users/${authUser.userId}/trades?limit=${limit}`,
+      `${BACKEND_URL}/api/trades/${authUser.userId}?limit=${limit}`,
       {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' }
