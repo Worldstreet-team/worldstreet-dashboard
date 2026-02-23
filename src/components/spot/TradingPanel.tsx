@@ -12,7 +12,7 @@ interface QuoteResponse {
   route?: any;
   executionData?: any;
   toAmountMin?: string;
-}
+};
 
 interface TradingPanelProps {
   selectedPair: string;
@@ -60,15 +60,33 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
   const [executing, setExecuting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  
+  // Chain selection for stablecoins
+  const [selectedChain, setSelectedChain] = useState<'Solana' | 'EVM'>('Solana');
 
   const [tokenIn, tokenOut] = selectedPair.split('-');
+
+  // Determine if we need chain selection (both tokens are stablecoins available on multiple chains)
+  const needsChainSelection = (tokenIn === 'USDT' || tokenIn === 'USDC') && (tokenOut === 'USDT' || tokenOut === 'USDC');
+  
+  // For pairs like SOL-USDT, default to Solana chain
+  // For pairs like ETH-USDT, default to EVM chain
+  useEffect(() => {
+    if (!needsChainSelection) {
+      if (tokenIn === 'SOL' || tokenOut === 'SOL') {
+        setSelectedChain('Solana');
+      } else if (tokenIn === 'ETH' || tokenOut === 'ETH' || tokenIn === 'BTC' || tokenOut === 'BTC') {
+        setSelectedChain('EVM');
+      }
+    }
+  }, [selectedPair, tokenIn, tokenOut, needsChainSelection]);
 
   // Reset quote when inputs change
   useEffect(() => {
     setQuote(null);
     setError(null);
     setSuccess(null);
-  }, [amount, slippage, selectedPair, side]);
+  }, [amount, slippage, selectedPair, side, selectedChain]);
 
   const fetchQuote = async () => {
     if (!amount || parseFloat(amount) <= 0) {
@@ -80,23 +98,27 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
     setError(null);
 
     try {
-      // Determine which chain to use based on the trading pair
-      // For SOL-USDT, both tokens should be on Solana
-      // For ETH-USDT, both tokens should be on EVM
+      // Determine which chain to use
       const fromToken = side === 'buy' ? tokenOut : tokenIn;
       const toToken = side === 'buy' ? tokenIn : tokenOut;
       
-      // Determine the chain based on the base token (first token in pair)
-      const chain = getTokenChain(tokenIn);
+      // Use selected chain for stablecoin pairs, otherwise auto-detect
+      let chain: 'Solana' | 'EVM';
+      if (needsChainSelection) {
+        chain = selectedChain;
+      } else {
+        chain = getTokenChain(tokenIn);
+      }
       
       console.log('=== QUOTE REQUEST ===');
       console.log('Trading pair:', selectedPair);
       console.log('Side:', side);
       console.log('From token:', fromToken);
       console.log('To token:', toToken);
-      console.log('Detected chain:', chain);
+      console.log('Selected chain:', chain);
+      console.log('Needs chain selection:', needsChainSelection);
       
-      // Get token configs for the detected chain
+      // Get token configs for the selected chain
       const fromTokenConfig = getTokenConfig(fromToken, chain);
       const toTokenConfig = getTokenConfig(toToken, chain);
       
@@ -154,21 +176,26 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
     setSuccess(null);
 
     try {
-      // Determine which chain to use based on the trading pair
+      // Determine which chain to use
       const fromToken = side === 'buy' ? tokenOut : tokenIn;
       const toToken = side === 'buy' ? tokenIn : tokenOut;
       
-      // Determine the chain based on the base token (first token in pair)
-      const chain = getTokenChain(tokenIn);
+      // Use selected chain for stablecoin pairs, otherwise auto-detect
+      let chain: 'Solana' | 'EVM';
+      if (needsChainSelection) {
+        chain = selectedChain;
+      } else {
+        chain = getTokenChain(tokenIn);
+      }
       
       console.log('=== TRADE EXECUTION ===');
       console.log('Trading pair:', selectedPair);
       console.log('Side:', side);
       console.log('From token:', fromToken);
       console.log('To token:', toToken);
-      console.log('Detected chain:', chain);
+      console.log('Selected chain:', chain);
       
-      // Get token configs for the detected chain
+      // Get token configs for the selected chain
       const fromTokenConfig = getTokenConfig(fromToken, chain);
       const toTokenConfig = getTokenConfig(toToken, chain);
       
@@ -251,10 +278,47 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
         </button>
       </div>
 
+      {/* Chain Selection for Stablecoins */}
+      {needsChainSelection && (
+        <div className="mb-4">
+          <label className="block text-xs font-medium text-muted mb-2">
+            Select Chain
+          </label>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setSelectedChain('Solana')}
+              className={`flex-1 py-2 px-3 text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2 ${
+                selectedChain === 'Solana'
+                  ? 'bg-primary text-white'
+                  : 'bg-muted/30 dark:bg-white/5 text-dark dark:text-white hover:bg-muted/40 dark:hover:bg-white/10'
+              }`}
+            >
+              <Icon icon="cryptocurrency:sol" width={16} />
+              Solana
+            </button>
+            <button
+              onClick={() => setSelectedChain('EVM')}
+              className={`flex-1 py-2 px-3 text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2 ${
+                selectedChain === 'EVM'
+                  ? 'bg-primary text-white'
+                  : 'bg-muted/30 dark:bg-white/5 text-dark dark:text-white hover:bg-muted/40 dark:hover:bg-white/10'
+              }`}
+            >
+              <Icon icon="cryptocurrency:eth" width={16} />
+              Ethereum
+            </button>
+          </div>
+          <p className="text-xs text-muted mt-1">
+            Choose which blockchain to execute the trade on
+          </p>
+        </div>
+      )}
+
       {/* Amount Input */}
       <div className="mb-4">
         <label className="block text-xs font-medium text-muted mb-2">
-          Amount ({side === 'buy' ? tokenOut : tokenIn})
+          Amount ({side === 'buy' ? tokenOut : tokenIn}
+          {needsChainSelection && ` on ${selectedChain}`})
         </label>
         <input
           type="number"
@@ -335,12 +399,12 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
                 {(parseFloat(quote.platformFee) / Math.pow(10, (quote as any)._fromDecimals || 18)).toFixed(6)}
               </span>
             </div>
-            <div className="flex justify-between">
+            {/* <div className="flex justify-between">
               <span className="text-muted">Gas Estimate:</span>
               <span className="text-dark dark:text-white font-mono text-xs">
                 ~${parseFloat(quote.gasEstimate).toFixed(2)}
               </span>
-            </div>
+            </div> */}
           </div>
 
           {parseFloat(quote.priceImpact.toString()) > 5 && (
