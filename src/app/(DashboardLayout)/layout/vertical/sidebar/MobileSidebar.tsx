@@ -36,8 +36,7 @@ const MobileSidebar = ({ handleClose }: { handleClose: () => void }) => {
       </div>
 
       {/* Navigation - Scrollable */}
-      <div className="flex-1 overflow-hidden">
-        <SimpleBar style={{ height: '100%' }} autoHide={false}>
+      <div className="flex-1 overflow-y-auto">
           <nav className="sidebar-nav px-4 py-3">
             <ul className="sidebar-nav-group space-y-0.5">
               {SidebarContent.map((item, index) => (
@@ -62,7 +61,6 @@ const MobileSidebar = ({ handleClose }: { handleClose: () => void }) => {
               ))}
             </ul>
           </nav>
-        </SimpleBar>
       </div>
 
       {/* Footer Actions */}

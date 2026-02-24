@@ -21,7 +21,7 @@ const SidebarLayout = () => {
           aria-label="Sidebar navigation"
         >
           {/* Logo */}
-          <div className="h-16 flex items-center px-6 border-b border-border dark:border-darkborder flex-shrink-0">
+          <div className="h-16 flex items-center px-6 border-b border-border dark:border-darkborder">
             <Link href="/" className="brand-logo flex items-center gap-2.5">
               <Image
                 src="/worldstreet-logo/WorldStreet4x.png"
@@ -37,6 +37,7 @@ const SidebarLayout = () => {
           </div>
           
           {/* Scrollable Navigation */}
+          <div className="overflow-y-auto" style={{ height: 'calc(100vh - 4rem)' }}>
             <nav className={`sidebar-nav py-3 ${isCollapse === "full-sidebar" ? "px-4" : "px-3"}`}>
               <ul className="sidebar-nav-group space-y-0.5">
                 {SidebarContent.map((item, index) => (
@@ -66,6 +67,7 @@ const SidebarLayout = () => {
                 ))}
               </ul>
             </nav>
+          </div>
         </aside>
       </div>
     </>
