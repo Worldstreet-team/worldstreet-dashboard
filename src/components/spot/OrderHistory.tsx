@@ -109,7 +109,9 @@ export default function OrderHistory() {
 
   const formatAmount = (amount: string | null, decimals: number = 6): string => {
     if (!amount) return '0.000000';
-    const num = parseFloat(amount) / Math.pow(10, 18); // Assuming 18 decimals from backend
+    // The backend already stores amounts in decimal format with 18 decimal places
+    // Just parse and format to the desired precision
+    const num = parseFloat(amount);
     return num.toFixed(decimals);
   };
 
@@ -226,7 +228,7 @@ export default function OrderHistory() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <span className="text-xs text-muted font-mono">
-                        {formatAmount(trade.fee, 8)}
+                        {trade.fee ? formatAmount(trade.fee, 8) : '-'}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-center">
