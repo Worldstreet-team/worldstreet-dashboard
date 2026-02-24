@@ -21,7 +21,7 @@ interface TradingPanelProps {
 
 // Token addresses per chain
 const SOLANA_TOKENS: Record<string, { address: string, decimals: number }> = {
-  'SOL': { address: '11111111111111111111111111111111', decimals: 9 },
+  'SOL': { address: '11111111111111111111111111111111', decimals: 9 }, // System Program (native SOL)
   'USDT': { address: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', decimals: 6 },
   'USDC': { address: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', decimals: 6 },
 };
@@ -234,23 +234,27 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
 
       const data = await response.json();
       console.log('[TradingPanel] Trade execution response:', data);
+      console.log('[TradingPanel] Full response data:', JSON.stringify(data, null, 2));
       
       // Check if position was created/updated
       if (data.position) {
-        console.log('[TradingPanel] Position created/updated:', data.position);
+        console.log('[TradingPanel] ✅ Position created/updated:', data.position);
         const positionInfo = side === 'buy' 
           ? `Position opened: ${data.position.quantity} ${data.position.baseAsset} @ $${data.position.entryPrice}`
           : `Position reduced: ${data.position.soldQuantity} ${data.position.baseAsset}`;
         setSuccess(`Trade executed! ${positionInfo}. Tx: ${data.txHash?.slice(0, 10)}...`);
       } else {
-        console.warn('[TradingPanel] No position data in response');
-        setSuccess(`Trade executed! Tx: ${data.txHash?.slice(0, 10)}...`);
+        console.warn('[TradingPanel] ⚠️ No position data in response');
+        console.warn('[TradingPanel] Backend needs to implement position creation - see BACKEND_POSITION_INTEGRATION_REQUIRED.md');
+        setSuccess(`Trade executed! Tx: ${data.txHash?.slice(0, 10)}... (Position tracking pending backend update)`);
       }
       
       setAmount('');
       setQuote(null);
       
+      // Always trigger refresh to check if positions were created
       if (onTradeExecuted) {
+        console.log('[TradingPanel] Triggering refresh of positions and balances');
         onTradeExecuted();
       }
     } catch (err) {
