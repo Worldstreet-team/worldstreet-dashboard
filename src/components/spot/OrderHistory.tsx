@@ -107,12 +107,36 @@ export default function OrderHistory() {
     }
   };
 
-  const formatAmount = (amount: string | null, decimals: number = 6): string => {
+  // Token decimals mapping
+  const getTokenDecimals = (token: string): number => {
+    const decimalsMap: Record<string, number> = {
+      'SOL': 9,
+      'ETH': 18,
+      'BTC': 8,
+      'WBTC': 8,
+      'USDT': 6,
+      'USDC': 6,
+      'DAI': 18,
+      'MATIC': 18,
+      'ARB': 18,
+      'AVAX': 18,
+      'BNB': 18,
+    };
+    return decimalsMap[token.toUpperCase()] || 18; // Default to 18 if unknown
+  };
+
+  const formatAmount = (amount: string | null, token: string, displayDecimals: number = 6): string => {
     if (!amount) return '0.000000';
-    // The backend already stores amounts in decimal format with 18 decimal places
-    // Just parse and format to the desired precision
-    const num = parseFloat(amount);
-    return num.toFixed(decimals);
+    
+    // Get the token's actual decimals
+    const tokenDecimals = getTokenDecimals(token);
+    
+    // The backend stores amounts in smallest units (wei, lamports, etc.)
+    // Convert to human-readable by dividing by 10^decimals
+    const num = parseFloat(amount) / Math.pow(10, tokenDecimals);
+    
+    // Format to display decimals
+    return num.toFixed(displayDecimals);
   };
 
   const getExplorerUrl = (txHash: string, chain: string): string => {
@@ -216,19 +240,19 @@ export default function OrderHistory() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="text-sm text-dark dark:text-white font-mono">
-                        {formatAmount(trade.amount_in)}
+                        {formatAmount(trade.amount_in, trade.token_in)}
                       </div>
                       <div className="text-xs text-muted">{trade.token_in}</div>
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="text-sm text-dark dark:text-white font-mono">
-                        {trade.amount_out ? formatAmount(trade.amount_out) : '-'}
+                        {trade.amount_out ? formatAmount(trade.amount_out, trade.token_out) : '-'}
                       </div>
                       <div className="text-xs text-muted">{trade.token_out}</div>
                     </td>
                     <td className="px-4 py-3 text-right">
                       <span className="text-xs text-muted font-mono">
-                        {trade.fee ? formatAmount(trade.fee, 8) : '-'}
+                        {trade.fee ? formatAmount(trade.fee, trade.token_in, 8) : '-'}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-center">
