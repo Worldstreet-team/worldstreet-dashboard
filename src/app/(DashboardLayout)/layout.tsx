@@ -115,7 +115,7 @@ export default function Layout({
                               </div>
                             </div>
                           </div>
-                          )}
+                      
                           {/* Wallet PIN Setup Modal */}
                           <PinSetupModal />
                         </DashboardVividProvider>
