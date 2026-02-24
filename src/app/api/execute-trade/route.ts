@@ -56,7 +56,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Return the backend response (should include txHash, success, etc.)
+    // Log position information if available
+    if (data.position) {
+      console.log('[Execute Trade API] Position created/updated:', data.position);
+    } else {
+      console.warn('[Execute Trade API] No position data in response - backend may not be creating positions');
+    }
+
+    // Return the backend response (should include txHash, success, position, etc.)
     console.log('[Execute Trade API] Success:', data);
     return NextResponse.json(data);
 
