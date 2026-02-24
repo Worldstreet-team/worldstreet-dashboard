@@ -14,14 +14,17 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
+    const status = searchParams.get('status') || 'OPEN';
     const limit = searchParams.get('limit') || '50';
 
-    console.log('[Trade History API] Fetching history for user:', authUser.userId);
+    console.log('[Positions API] Fetching positions:', {
+      userId: authUser.userId,
+      status,
+      limit
+    });
 
-    // First try to get from the existing quote/execute history endpoint
-    // This might be a different endpoint on your backend
     const response = await fetch(
-      `${BACKEND_URL}/api/trades/${authUser.userId}?limit=${limit}`,
+      `${BACKEND_URL}/api/positions?userId=${authUser.userId}&status=${status}&limit=${limit}`,
       {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' }
@@ -30,21 +33,20 @@ export async function GET(request: NextRequest) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[Trade History API] Backend error:', response.status, errorText);
+      console.error('[Positions API] Backend error:', response.status, errorText);
       
       return NextResponse.json(
-        { error: 'Failed to fetch trade history from backend' },
+        { error: 'Failed to fetch positions from backend' },
         { status: response.status }
       );
     }
 
     const data = await response.json();
-    console.log('[Trade History API] Backend response:', JSON.stringify(data, null, 2));
+    console.log('[Positions API] Backend response:', JSON.stringify(data, null, 2));
 
-    // Return the data directly as the backend already returns the correct format
     return NextResponse.json(data);
   } catch (error) {
-    console.error('[Trade History API] Error:', error);
+    console.error('[Positions API] Error:', error);
     return NextResponse.json(
       { error: 'Internal server error', message: (error as Error).message },
       { status: 500 }

@@ -66,6 +66,12 @@ const SidebarContent: MenuItem[] = [
         url: "/withdraw",
       },
       {
+        name: "Transfer",
+        icon: 'ph:arrow-square-out-duotone',
+        id: uniqueId(),
+        url: "/transfer",
+      },
+      {
         name: "Transactions",
         icon: 'ph:clock-counter-clockwise-duotone',
         id: uniqueId(),

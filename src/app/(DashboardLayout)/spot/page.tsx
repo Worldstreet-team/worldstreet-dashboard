@@ -1,91 +1,146 @@
 "use client";
 
-import React, { useState } from "react";
-import TradingChart from "@/components/trading/TradingChart";
-import SpotInterface from "@/components/trading/SpotInterface";
-import OrderBook from "@/components/trading/OrderBook";
-import SpotTradeHistory from "@/components/trading/SpotTradeHistory";
-import MarketTicker from "@/components/trading/MarketTicker";
+import React, { useState, useCallback } from "react";
+import { Icon } from "@iconify/react";
 import Footer from "@/components/dashboard/Footer";
+import { MarketTicker, LiveChart, TradingPanel, OrderHistory, BalanceDisplay } from "@/components/spot";
+import PositionsList from "@/components/spot/PositionsList";
 
 export default function SpotTradingPage() {
-    const [selectedPair, setSelectedPair] = useState("BTC/USDC");
+  const [selectedPair, setSelectedPair] = useState('BTC-USDT');
+  const [stopLoss, setStopLoss] = useState('');
+  const [takeProfit, setTakeProfit] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
 
-    return (
-        <div className="min-h-screen bg-[#F0F2F5] dark:bg-[#0a0a0a] flex flex-col font-sans">
-            {/* Top Bar - Bybit Style - More compact on mobile */}
-            <div className="bg-white dark:bg-[#1a1a1a] border-b border-border/50 dark:border-white/5 sticky top-[64px] sm:top-[64px] z-[50]">
-                <MarketTicker
-                    selectedPair={selectedPair}
-                    onPairChange={(pair) => setSelectedPair(pair.symbol)}
-                />
+  const handleUpdateLevels = (sl: string, tp: string) => {
+    setStopLoss(sl);
+    setTakeProfit(tp);
+  };
+
+  const handleTradeExecuted = useCallback(() => {
+    // Trigger refresh of balances and order history
+    setRefreshKey(prev => prev + 1);
+  }, []);
+
+  return (
+    <div className="space-y-6">
+      {/* Page Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-dark dark:text-white">Spot Trading</h1>
+        <p className="text-muted text-sm mt-1">
+          Trade cryptocurrencies with real-time charts and DEX execution via 1inch
+        </p>
+      </div>
+
+      {/* Market Ticker */}
+      <MarketTicker 
+        selectedPair={selectedPair} 
+        onSelectPair={setSelectedPair} 
+      />
+
+      {/* Main Trading Interface */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Live Chart - Takes 2 columns */}
+        <div className="lg:col-span-2 space-y-6">
+          <LiveChart 
+            symbol={selectedPair}
+            stopLoss={stopLoss}
+            takeProfit={takeProfit}
+            onUpdateLevels={handleUpdateLevels}
+          />
+
+          {/* Positions List */}
+          <PositionsList key={`positions-${refreshKey}`} />
+
+          {/* Order History */}
+          <OrderHistory key={`history-${refreshKey}`} />
+        </div>
+
+        {/* Trading Panel & Balances */}
+        <div className="space-y-6">
+          {/* Trading Panel */}
+          <TradingPanel 
+            selectedPair={selectedPair}
+            onTradeExecuted={handleTradeExecuted}
+          />
+
+          {/* Balance Display */}
+          <BalanceDisplay key={`balance-${refreshKey}`} />
+
+          {/* Market Info */}
+          <div className="bg-gradient-to-br from-primary/5 to-secondary/5 rounded-2xl border border-border/50 dark:border-darkborder p-6 shadow-sm">
+            <h3 className="font-semibold text-dark dark:text-white mb-3">Market Info</h3>
+            
+            <div className="space-y-3">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted">24h Change:</span>
+                <span className="text-success font-semibold">+5.23%</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted">24h High:</span>
+                <span className="text-dark dark:text-white font-semibold">$45,234.56</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted">24h Low:</span>
+                <span className="text-dark dark:text-white font-semibold">$42,123.45</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted">24h Volume:</span>
+                <span className="text-dark dark:text-white font-semibold">$1.2B</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Trading Info */}
+          <div className="bg-white dark:bg-black rounded-2xl border border-border/50 dark:border-darkborder p-6 shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <Icon icon="ph:info" className="text-primary" width={18} />
+              <h3 className="font-semibold text-dark dark:text-white text-sm">How It Works</h3>
+            </div>
+            
+            <div className="space-y-3">
+              <div className="flex gap-3">
+                <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                  <span className="text-xs font-bold text-primary">1</span>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-dark dark:text-white">Get Quote</p>
+                  <p className="text-xs text-muted">View expected output, fees, and price impact</p>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                  <span className="text-xs font-bold text-primary">2</span>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-dark dark:text-white">Execute Trade</p>
+                  <p className="text-xs text-muted">Funds are locked and trade is executed on-chain</p>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                  <span className="text-xs font-bold text-primary">3</span>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-dark dark:text-white">Confirmation</p>
+                  <p className="text-xs text-muted">Receive tokens and view transaction details</p>
+                </div>
+              </div>
             </div>
 
-            {/* Trading Grid */}
-            <main className="flex-1 flex flex-col xl:flex-row p-0.5 sm:p-1 gap-0.5 sm:gap-1 overflow-x-hidden">
-
-                {/* Left Panel - Order Book */}
-                <div className="hidden xl:flex w-[280px] 2xl:w-[320px] flex-col gap-1 shrink-0">
-                    <div className="flex-1 bg-white dark:bg-[#1a1a1a] border border-border/50 dark:border-white/5 rounded-sm overflow-hidden min-h-[500px]">
-                        <OrderBook pair={selectedPair} />
-                    </div>
-                </div>
-
-                {/* Center Panel - Chart & Trades */}
-                <div className="flex-1 flex flex-col gap-1 min-w-0">
-                    {/* Chart - Responsive height to prevent mobile overload */}
-                    <div className="bg-white dark:bg-[#1a1a1a] border border-border/50 dark:border-white/5 rounded-sm overflow-hidden h-[350px] sm:h-[500px] xl:h-[600px] 2xl:h-[700px]">
-                        <TradingChart pair={selectedPair} />
-                    </div>
-
-                    {/* Bottom Area: Trades/Orders */}
-                    <div className="flex-none sm:flex-1 bg-white dark:bg-[#1a1a1a] border border-border/50 dark:border-white/5 rounded-sm overflow-hidden min-h-[300px]">
-                        <div className="flex flex-col h-full">
-                            <div className="flex bg-[#F9FAFB] dark:bg-[#1f1f1f] border-b border-border/10 overflow-x-auto whitespace-nowrap scrollbar-hide">
-                                {["Open Orders", "Order History", "Trade History", "Assets"].map((tab, i) => (
-                                    <button
-                                        key={tab}
-                                        className={`px-4 sm:px-6 py-2.5 text-[10px] sm:text-[11px] font-bold transition-all border-b-2 ${i === 2 ? 'text-primary border-primary bg-white dark:bg-[#1a1a1a]' : 'text-muted border-transparent hover:text-dark dark:hover:text-white'}`}
-                                    >
-                                        {tab}
-                                    </button>
-                                ))}
-                            </div>
-                            <div className="flex-1 overflow-auto max-h-[400px] sm:max-h-none">
-                                <SpotTradeHistory pair={selectedPair} />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Order Book for Mobile (Hidden on Desktop) */}
-                    <div className="xl:hidden bg-white dark:bg-[#1a1a1a] border border-border/50 dark:border-white/5 rounded-sm overflow-hidden min-h-[400px]">
-                        <OrderBook pair={selectedPair} />
-                    </div>
-                </div>
-
-                {/* Right Panel - Order Placement */}
-                <div className="w-full xl:w-[300px] 2xl:w-[340px] flex flex-col gap-1 shrink-0 order-first xl:order-last">
-                    <div className="bg-white dark:bg-[#1a1a1a] border border-border/50 dark:border-white/5 rounded-sm overflow-hidden">
-                        <SpotInterface pair={selectedPair} />
-                    </div>
-
-                    <div className="hidden sm:block bg-white dark:bg-[#1a1a1a] border border-border/50 dark:border-white/5 rounded-sm p-4">
-                        <h4 className="text-[10px] font-bold text-muted uppercase mb-3 text-center xl:text-left">Asset Info</h4>
-                        <div className="space-y-2">
-                            <div className="flex justify-between text-[11px]">
-                                <span className="text-muted">Trading Fee</span>
-                                <span className="font-bold">0.1%</span>
-                            </div>
-                            <div className="flex justify-between text-[11px]">
-                                <span className="text-muted">Settlement</span>
-                                <span className="font-bold">On-chain</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </main>
-
-            <Footer />
+            <div className="mt-4 pt-4 border-t border-border/50 dark:border-darkborder">
+              <div className="flex items-center gap-2 text-xs">
+                <Icon icon="ph:shield-check" className="text-success" width={14} />
+                <span className="text-muted">Powered by 1inch DEX Aggregator</span>
+              </div>
+            </div>
+          </div>
         </div>
-    );
+      </div>
+
+      <Footer />
+    </div>
+  );
 }

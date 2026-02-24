@@ -49,11 +49,11 @@
   columns: 4;
 }
 
-[data-sidebar-type="mini-sidebar"] .menu-sidebar:hover .simplebar-offset {
+aside[data-sidebar-type="mini-sidebar"] .menu-sidebar:hover .simplebar-offset {
   width: 270px;
 }
 
-[data-sidebar-type="mini-sidebar"] .simplebar-offset {
+aside[data-sidebar-type="mini-sidebar"] .simplebar-offset {
   width: fit-content;
 }
 

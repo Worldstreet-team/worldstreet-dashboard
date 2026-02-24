@@ -240,7 +240,7 @@ export function SolanaProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (address) {
       fetchBalance(address);
-      const interval = setInterval(() => fetchBalance(address), 30000);
+      const interval = setInterval(() => fetchBalance(address), 40000);
       return () => clearInterval(interval);
     }
   }, [address, fetchBalance]);
