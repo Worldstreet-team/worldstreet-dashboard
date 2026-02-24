@@ -19,37 +19,66 @@ interface Trade {
   fee: string;
   status: 'COMPLETED' | 'FAILED' | 'PENDING';
   created_at: string;
+  position_id?: string | null; // Link to position
+  realized_pnl?: string | null; // PnL for this trade
+}
+
+interface Position {
+  id: string;
+  symbol: string;
+  baseAsset: string;
+  quoteAsset: string;
+  quantity: string;
+  entryPrice: string;
+  status: 'OPEN' | 'CLOSED';
 }
 
 export default function OrderHistory() {
   const { user } = useAuth();
   const [trades, setTrades] = useState<Trade[]>([]);
+  const [positions, setPositions] = useState<Record<string, Position>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchTrades();
+    fetchData();
   }, [user]);
 
-  const fetchTrades = async () => {
+  const fetchData = async () => {
     if (!user?.userId) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      const response = await fetch(`/api/trades/history`);
+      // Fetch trades and positions in parallel
+      const [tradesResponse, positionsResponse] = await Promise.all([
+        fetch(`/api/trades/history`),
+        fetch(`/api/positions?status=OPEN`)
+      ]);
       
-      if (!response.ok) {
+      if (!tradesResponse.ok) {
         throw new Error('Failed to fetch trade history');
       }
 
-      const data = await response.json();
-      console.log('Trade history API response:', data);
+      const tradesData = await tradesResponse.json();
+      console.log('Trade history API response:', tradesData);
       
-      // The API returns an array directly, not wrapped in a trades property
-      const tradesArray = Array.isArray(data) ? data : data.trades || [];
+      const tradesArray = Array.isArray(tradesData) ? tradesData : tradesData.trades || [];
       setTrades(tradesArray);
+
+      // Fetch positions if available
+      if (positionsResponse.ok) {
+        const positionsData = await positionsResponse.json();
+        const positionsArray = Array.isArray(positionsData) ? positionsData : positionsData.positions || [];
+        
+        // Create a map of position_id -> position for quick lookup
+        const positionsMap: Record<string, Position> = {};
+        positionsArray.forEach((pos: Position) => {
+          positionsMap[pos.id] = pos;
+        });
+        setPositions(positionsMap);
+      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -172,7 +201,7 @@ export default function OrderHistory() {
             <h3 className="font-semibold text-dark dark:text-white">Order History</h3>
           </div>
           <button
-            onClick={fetchTrades}
+            onClick={fetchData}
             className="p-1.5 hover:bg-muted/30 dark:hover:bg-white/5 rounded-lg transition-colors"
             title="Refresh"
           >
@@ -205,6 +234,7 @@ export default function OrderHistory() {
                 <th className="px-4 py-3 text-left text-xs font-semibold text-muted">Side</th>
                 <th className="px-4 py-3 text-right text-xs font-semibold text-muted">Amount In</th>
                 <th className="px-4 py-3 text-right text-xs font-semibold text-muted">Amount Out</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-muted">PnL</th>
                 <th className="px-4 py-3 text-right text-xs font-semibold text-muted">Fee</th>
                 <th className="px-4 py-3 text-center text-xs font-semibold text-muted">Status</th>
                 <th className="px-4 py-3 text-center text-xs font-semibold text-muted">Tx</th>
@@ -214,6 +244,10 @@ export default function OrderHistory() {
               {trades.map((trade) => {
                 const side = getSideFromTokens(trade.token_in, trade.token_out);
                 const pair = `${trade.token_in}/${trade.token_out}`;
+                const linkedPosition = trade.position_id ? positions[trade.position_id] : null;
+                const hasPnL = trade.realized_pnl && parseFloat(trade.realized_pnl) !== 0;
+                const pnl = hasPnL ? parseFloat(trade.realized_pnl!) : 0;
+                const isProfitable = pnl >= 0;
                 
                 return (
                   <tr
@@ -229,6 +263,12 @@ export default function OrderHistory() {
                           {pair}
                         </span>
                         <div className="text-xs text-muted">{trade.chain_from}</div>
+                        {linkedPosition && (
+                          <div className="text-[10px] text-primary mt-0.5 flex items-center gap-1">
+                            <Icon icon="ph:link" width={10} />
+                            Position
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="px-4 py-3">
@@ -249,6 +289,17 @@ export default function OrderHistory() {
                         {trade.amount_out ? formatAmount(trade.amount_out, trade.token_out) : '-'}
                       </div>
                       <div className="text-xs text-muted">{trade.token_out}</div>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {hasPnL ? (
+                        <div className={`text-sm font-semibold font-mono ${
+                          isProfitable ? 'text-success' : 'text-error'
+                        }`}>
+                          {isProfitable ? '+' : ''}{pnl.toFixed(2)}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted">-</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <span className="text-xs text-muted font-mono">

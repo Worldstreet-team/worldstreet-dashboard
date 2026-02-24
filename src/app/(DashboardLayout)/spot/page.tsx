@@ -4,6 +4,7 @@ import React, { useState, useCallback } from "react";
 import { Icon } from "@iconify/react";
 import Footer from "@/components/dashboard/Footer";
 import { MarketTicker, LiveChart, TradingPanel, OrderHistory, BalanceDisplay } from "@/components/spot";
+import PositionsList from "@/components/spot/PositionsList";
 
 export default function SpotTradingPage() {
   const [selectedPair, setSelectedPair] = useState('BTC-USDT');
@@ -47,6 +48,9 @@ export default function SpotTradingPage() {
             takeProfit={takeProfit}
             onUpdateLevels={handleUpdateLevels}
           />
+
+          {/* Positions List */}
+          <PositionsList key={`positions-${refreshKey}`} />
 
           {/* Order History */}
           <OrderHistory key={`history-${refreshKey}`} />

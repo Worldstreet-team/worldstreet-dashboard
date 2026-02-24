@@ -12,6 +12,12 @@ interface Balance {
   tokenAddress: string;
 }
 
+// Chain badge colors
+const CHAIN_COLORS: Record<string, { bg: string; text: string }> = {
+  sol: { bg: 'bg-purple-500/10', text: 'text-purple-600 dark:text-purple-400' },
+  evm: { bg: 'bg-blue-500/10', text: 'text-blue-600 dark:text-blue-400' },
+};
+
 export default function BalanceDisplay() {
   const { user } = useAuth();
   const [balances, setBalances] = useState<Balance[]>([]);
@@ -110,11 +116,15 @@ export default function BalanceDisplay() {
                         {balance.asset.slice(0, 2)}
                       </span>
                     </div>
-                    <div>
+                      <div className="flex items-center gap-2">
                       <span className="font-semibold text-dark dark:text-white">
                         {balance.asset}
                       </span>
-                      <span className="text-xs text-muted bg-muted/20 px-1.5 py-0.5 rounded ml-2">
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded ${
+                        CHAIN_COLORS[balance.chain.toLowerCase()]?.bg || 'bg-muted/20'
+                      } ${
+                        CHAIN_COLORS[balance.chain.toLowerCase()]?.text || 'text-muted'
+                      }`}>
                         {balance.chain.toUpperCase()}
                       </span>
                     </div>
