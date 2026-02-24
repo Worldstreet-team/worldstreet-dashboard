@@ -166,10 +166,7 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
   };
 
   const executeTrade = async () => {
-    if (!quote) {
-      setError('Please get a quote first');
-      return;
-    }
+
 
     setExecuting(true);
     setError(null);
@@ -438,7 +435,7 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
       {/* Execute Button */}
       <button
         onClick={executeTrade}
-        disabled={!quote || executing}
+        disabled={executing}
         className={`w-full py-3 font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
           side === 'buy'
             ? 'bg-success hover:bg-success/90 text-white'
