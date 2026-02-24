@@ -388,7 +388,7 @@ export function SwapProvider({ children }: { children: ReactNode }) {
           const connection = new Connection(SOL_RPC, "confirmed");
 
           // Native SOL address — skip ATA creation for native SOL only
-          const NATIVE_SOL = "So11111111111111111111111111111111111111112";
+          const NATIVE_SOL = "11111111111111111111111111111111";
 
           // Create destination ATA if the to-chain is also Solana and the token isn't native SOL.
           // For cross-chain swaps (SOL → ETH), the destination is on EVM so no ATA needed.

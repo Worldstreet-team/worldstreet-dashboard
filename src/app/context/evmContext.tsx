@@ -220,7 +220,7 @@ export function EvmProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (address) {
       fetchBalance(address);
-      const interval = setInterval(() => fetchBalance(address), 30000); // Increased to 30s
+      const interval = setInterval(() => fetchBalance(address), 40000); // Increased to 30s
       return () => clearInterval(interval);
     }
   }, [address, fetchBalance]);
