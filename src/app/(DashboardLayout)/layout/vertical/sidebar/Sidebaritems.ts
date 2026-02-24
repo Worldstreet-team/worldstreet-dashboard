@@ -115,7 +115,7 @@ const SidebarContent: MenuItem[] = [
         name: "Vivid AI",
         icon: 'ph:sparkle-duotone',
         id: uniqueId(),
-        url: "#",
+        url: "/vivid",
         subtitle: "AI-powered trading insights",
       },
     ],

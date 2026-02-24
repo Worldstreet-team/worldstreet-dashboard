@@ -1,5 +1,6 @@
 "use client";
 import React, { useContext } from "react";
+import { usePathname } from "next/navigation";
 import Sidebar from "./layout/vertical/sidebar/Sidebar";
 import Header from "./layout/vertical/header/Header";
 import { Customizer } from "./layout/shared/customizer/Customizer";
@@ -17,6 +18,9 @@ import { SwapProvider } from "@/app/context/swapContext";
 import { SpotProvider } from "@/app/context/spotContext";
 import { PinSetupModal, WalletAddressSync } from "@/components/wallet";
 import DashboardVividProvider from "@/components/dashboard/DashboardVividProvider";
+
+// Routes that render full-screen without sidebar/header chrome
+const FULLSCREEN_ROUTES = ["/vivid"];
 
 const LOGIN_URL = "https://www.worldstreetgold.com/login";
 
@@ -58,6 +62,9 @@ export default function Layout({
   children: React.ReactNode;
 }>) {
   const { activeLayout, isLayout } = useContext(CustomizerContext);
+  const pathname = usePathname();
+  const isFullscreen = FULLSCREEN_ROUTES.some((r) => pathname.startsWith(r));
+
   return (
     <>
       <ThemeModeScript />
@@ -74,6 +81,10 @@ export default function Layout({
                           {/* Syncs wallet addresses to chain contexts */}
                           <WalletAddressSync />
                           <DashboardVividProvider>
+                          {isFullscreen ? (
+                            /* Full-screen routes (e.g. Vivid AI chat) — no sidebar/header */
+                            <>{children}</>
+                          ) : (
                           <div className="flex w-full min-h-screen">
                             <div className="page-wrapper flex w-full">
                               {/* Header/sidebar */}
@@ -108,6 +119,7 @@ export default function Layout({
                               </div>
                             </div>
                           </div>
+                          )}
                           {/* Wallet PIN Setup Modal */}
                           <PinSetupModal />
                           </DashboardVividProvider>

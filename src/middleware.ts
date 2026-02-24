@@ -1,7 +1,10 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
-const LOGIN_URL = "https://www.worldstreetgold.com/login";
+const isProduction = process.env.NODE_ENV === "production";
+const LOGIN_URL = isProduction
+  ? "https://www.worldstreetgold.com/login"
+  : "/sign-in";
 
 // Routes that require authentication (all dashboard pages)
 const isProtectedRoute = createRouteMatcher([
@@ -17,6 +20,7 @@ const isProtectedRoute = createRouteMatcher([
   "/tables(.*)",
   "/transactions(.*)",
   "/ui-components(.*)",
+  "/vivid(.*)",
   "/withdraw(.*)",
 ]);
 
@@ -34,8 +38,11 @@ export default clerkMiddleware(async (auth, req) => {
     try {
       await auth.protect();
     } catch {
-      // Token invalid/expired/missing → redirect to WorldStreet login
-      return NextResponse.redirect(LOGIN_URL);
+      // Token invalid/expired/missing → redirect to login
+      if (isProduction) {
+        return NextResponse.redirect(LOGIN_URL);
+      }
+      return NextResponse.redirect(new URL(LOGIN_URL, req.url));
     }
   }
 
