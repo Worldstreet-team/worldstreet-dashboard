@@ -74,7 +74,7 @@ export default function LiveChart({ symbol, stopLoss, takeProfit, onUpdateLevels
       const startAt = endAt - (interval === '1min' ? 3600 : 7200);
 
       const response = await fetch(
-        `/api/market/${symbol}/klines?type=${interval}&startAt=${startAt}&endAt=${endAt}`
+        `https://trading.watchup.site/api/spot/market/${symbol}/klines?type=${interval}&startAt=${startAt}&endAt=${endAt}`
       );
 
       if (!response.ok) {
