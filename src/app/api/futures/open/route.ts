@@ -1,23 +1,72 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@clerk/nextjs/server';
+
+const BASE_API_URL = 'https://trading.watchup.site';
 
 export async function POST(request: NextRequest) {
   try {
+    const { userId } = await auth();
+    
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
-    const { chain, market, side, size, leverage, orderType, limitPrice } = body;
+    const { chain, market, marketIndex, side, size, leverage, orderType, limitPrice } = body;
 
-    // TODO: Implement actual position opening
-    // 1. Validate user has sufficient collateral
-    // 2. Call protocol-specific contract/API to open position
-    // 3. Store position in database
-    // 4. Return position details
+    if (!chain || !market || !side || !size || !leverage) {
+      return NextResponse.json(
+        { error: 'Missing required fields' },
+        { status: 400 }
+      );
+    }
 
-    // Placeholder response
+    // Determine marketIndex if not provided
+    let finalMarketIndex = marketIndex;
+    if (finalMarketIndex === undefined) {
+      // Try to extract from market symbol or default to 0
+      finalMarketIndex = 0;
+    }
+
+    const response = await fetch(`${BASE_API_URL}/api/futures/open`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        userId,
+        chain,
+        marketIndex: finalMarketIndex,
+        market,
+        side: side.toUpperCase(),
+        size: size.toString(),
+        leverage,
+        limitPrice: limitPrice ? limitPrice.toString() : undefined,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      return NextResponse.json(
+        { error: error.error || 'Failed to open position' },
+        { status: response.status }
+      );
+    }
+
+    const data = await response.json();
     return NextResponse.json(
       { 
-        message: 'Position opened successfully',
-        positionId: `pos_${Date.now()}`,
+        message: data.message,
+        positionId: data.positionId,
+        txHash: data.txHash,
+        entryPrice: data.entryPrice,
+        liquidationPrice: data.liquidationPrice,
+        margin: data.margin,
       },
-      { status: 200 }
+      { status: 201 }
     );
   } catch (error) {
     console.error('Open position API error:', error);

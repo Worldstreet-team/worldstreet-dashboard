@@ -1,52 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+const BASE_API_URL = 'https://trading.watchup.site';
+
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const chain = searchParams.get('chain') || 'solana';
 
-    // TODO: Implement actual market data fetching from protocol
-    // This is a placeholder response
-    const markets = [
-      {
-        id: 'btc-perp',
-        symbol: 'BTC-PERP',
-        baseAsset: 'BTC',
-        quoteAsset: 'USD',
-        markPrice: 45000.00,
-        indexPrice: 45010.00,
-        fundingRate: 0.0001,
-        nextFundingTime: Date.now() + 3600000,
-        volume24h: 1250000000,
-        priceChange24h: 2.5,
-      },
-      {
-        id: 'eth-perp',
-        symbol: 'ETH-PERP',
-        baseAsset: 'ETH',
-        quoteAsset: 'USD',
-        markPrice: 2500.00,
-        indexPrice: 2502.00,
-        fundingRate: 0.00008,
-        nextFundingTime: Date.now() + 3600000,
-        volume24h: 850000000,
-        priceChange24h: 1.8,
-      },
-      {
-        id: 'sol-perp',
-        symbol: 'SOL-PERP',
-        baseAsset: 'SOL',
-        quoteAsset: 'USD',
-        markPrice: 100.00,
-        indexPrice: 100.50,
-        fundingRate: 0.00012,
-        nextFundingTime: Date.now() + 3600000,
-        volume24h: 320000000,
-        priceChange24h: -0.5,
-      },
-    ];
+    const response = await fetch(
+      `${BASE_API_URL}/api/futures/markets?chain=${chain}`
+    );
 
-    return NextResponse.json({ markets, chain });
+    if (!response.ok) {
+      throw new Error('Failed to fetch markets');
+    }
+
+    const data = await response.json();
+    
+    // Transform backend response to frontend format
+    const markets = data.markets.map((market: any) => ({
+      id: market.symbol.toLowerCase().replace('-perp', '-perp'),
+      symbol: market.symbol,
+      baseAsset: market.baseAsset,
+      quoteAsset: market.quoteAsset || 'USD',
+      markPrice: market.markPrice || 0,
+      indexPrice: market.indexPrice || market.markPrice || 0,
+      fundingRate: market.fundingRate || 0,
+      nextFundingTime: market.nextFundingTime || Date.now() + 3600000,
+      volume24h: market.volume24h || 0,
+      priceChange24h: market.priceChange24h || 0,
+    }));
+
+    return NextResponse.json({ markets, chain: data.chain });
   } catch (error) {
     console.error('Markets API error:', error);
     return NextResponse.json(

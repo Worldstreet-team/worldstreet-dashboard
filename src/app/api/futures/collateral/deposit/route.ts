@@ -15,16 +15,16 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { chain } = body;
+    const { chain, amount } = body;
 
-    if (!chain) {
+    if (!chain || !amount) {
       return NextResponse.json(
-        { error: 'Chain is required' },
+        { error: 'Chain and amount are required' },
         { status: 400 }
       );
     }
 
-    const response = await fetch(`${BASE_API_URL}/api/futures/wallet/create`, {
+    const response = await fetch(`${BASE_API_URL}/api/futures/collateral/deposit`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -32,13 +32,14 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         userId,
         chain,
+        amount: amount.toString(),
       }),
     });
 
     if (!response.ok) {
       const error = await response.json();
       return NextResponse.json(
-        { error: error.error || 'Failed to create wallet' },
+        { error: error.error || 'Failed to deposit collateral' },
         { status: response.status }
       );
     }
@@ -47,15 +48,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { 
         message: data.message,
-        address: data.publicAddress,
-        chain: data.chain,
+        amount: data.amount,
+        txHash: data.txHash,
       },
-      { status: 201 }
+      { status: 200 }
     );
   } catch (error) {
-    console.error('Wallet creation API error:', error);
+    console.error('Deposit collateral API error:', error);
     return NextResponse.json(
-      { error: 'Failed to create wallet' },
+      { error: 'Failed to deposit collateral' },
       { status: 500 }
     );
   }

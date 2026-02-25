@@ -1,21 +1,57 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@clerk/nextjs/server';
+
+const BASE_API_URL = 'https://trading.watchup.site';
 
 export async function POST(request: NextRequest) {
   try {
+    const { userId } = await auth();
+    
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
-    const { chain, positionId } = body;
+    const { chain, positionId, size } = body;
 
-    // TODO: Implement actual position closing
-    // 1. Fetch position details
-    // 2. Call protocol-specific contract/API to close position
-    // 3. Update position status in database
-    // 4. Return closing details
+    if (!positionId) {
+      return NextResponse.json(
+        { error: 'Position ID is required' },
+        { status: 400 }
+      );
+    }
 
-    // Placeholder response
+    const response = await fetch(`${BASE_API_URL}/api/futures/close`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        userId,
+        positionId,
+        size: size ? size.toString() : undefined,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      return NextResponse.json(
+        { error: error.error || 'Failed to close position' },
+        { status: response.status }
+      );
+    }
+
+    const data = await response.json();
     return NextResponse.json(
       { 
-        message: 'Position closed successfully',
-        positionId,
+        message: data.message,
+        positionId: data.positionId,
+        closedSize: data.closedSize,
+        remainingSize: data.remainingSize,
+        txHash: data.txHash,
       },
       { status: 200 }
     );

@@ -5,7 +5,7 @@ import { useFuturesStore, OrderSide, OrderType } from '@/store/futuresStore';
 import { Icon } from '@iconify/react';
 
 export const OrderPanel: React.FC = () => {
-  const { selectedMarket, selectedChain, collateral, setPreviewData, previewData } = useFuturesStore();
+  const { selectedMarket, selectedChain, collateral, setPreviewData, previewData, markets } = useFuturesStore();
   
   const [side, setSide] = useState<OrderSide>('long');
   const [orderType, setOrderType] = useState<OrderType>('market');
@@ -28,7 +28,7 @@ export const OrderPanel: React.FC = () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             chain: selectedChain,
-            market: selectedMarket.id,
+            market: selectedMarket.symbol,
             side,
             size: parseFloat(size),
             leverage,
@@ -55,12 +55,16 @@ export const OrderPanel: React.FC = () => {
 
     setIsSubmitting(true);
     try {
+      // Determine marketIndex from market symbol
+      const marketIndex = markets.findIndex(m => m.id === selectedMarket.id);
+      
       const response = await fetch('/api/futures/open', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           chain: selectedChain,
-          market: selectedMarket.id,
+          market: selectedMarket.symbol,
+          marketIndex: marketIndex >= 0 ? marketIndex : 0,
           side,
           size: parseFloat(size),
           leverage,
@@ -76,7 +80,7 @@ export const OrderPanel: React.FC = () => {
         alert('Position opened successfully');
       } else {
         const error = await response.json();
-        alert(error.message || 'Failed to open position');
+        alert(error.error || 'Failed to open position');
       }
     } catch (error) {
       console.error('Submit error:', error);
