@@ -133,11 +133,13 @@ A complete system to transfer USDT between Spot and Futures wallets on Solana ne
 - Warning shown if SOL balance is low
 
 ### Supported Assets
-- **Futures transfers**: USDT and SOL only
+- **Futures wallet transfers**: USDT and SOL only
 - **Network**: Solana only
+- **Trading collateral**: USDC (managed separately via collateral endpoints)
 - **Why?**: 
-  - USDT is used as collateral for futures trading
+  - USDT is held in the futures wallet for deposits/withdrawals
   - SOL is needed for transaction fees (gas)
+  - USDC is used as collateral on Drift Protocol for trading
 
 ### If You Don't Have USDT or SOL
 1. Go to Swap page

@@ -15,8 +15,9 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { chain, positionId, size } = body;
+    const { positionId, size } = body;
 
+    // Validate required fields
     if (!positionId) {
       return NextResponse.json(
         { error: 'Position ID is required' },
@@ -24,41 +25,46 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Prepare request body
+    const requestBody: any = {
+      userId,
+      positionId,
+    };
+
+    // Add size if partial close
+    if (size) {
+      requestBody.size = size.toString();
+    }
+
+    console.log('Closing position:', requestBody);
+
     const response = await fetch(`${BASE_API_URL}/api/futures/close`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        userId,
-        positionId,
-        size: size ? size.toString() : undefined,
-      }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
     });
 
+    const data = await response.json();
+
     if (!response.ok) {
-      const error = await response.json();
       return NextResponse.json(
-        { error: error.error || 'Failed to close position' },
+        { error: data.message || data.error || 'Failed to close position' },
         { status: response.status }
       );
     }
 
-    const data = await response.json();
-    return NextResponse.json(
-      { 
-        message: data.message,
-        positionId: data.positionId,
-        closedSize: data.closedSize,
-        remainingSize: data.remainingSize,
-        txHash: data.txHash,
-      },
-      { status: 200 }
-    );
+    return NextResponse.json({
+      message: data.message || 'Position closed successfully',
+      positionId: data.positionId,
+      closedSize: data.closedSize,
+      remainingSize: data.remainingSize,
+      txHash: data.txHash,
+      realizedPnL: data.realizedPnL,
+    });
   } catch (error) {
     console.error('Close position API error:', error);
     return NextResponse.json(
-      { error: 'Failed to close position' },
+      { error: 'Internal error', message: (error as Error).message },
       { status: 500 }
     );
   }

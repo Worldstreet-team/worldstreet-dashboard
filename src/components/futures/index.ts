@@ -6,3 +6,4 @@ export { RiskPanel } from './RiskPanel';
 export { WalletModal } from './WalletModal';
 export { FuturesChart } from './FuturesChart';
 export { FuturesWalletBalance } from './FuturesWalletBalance';
+export { CollateralPanel } from './CollateralPanel';

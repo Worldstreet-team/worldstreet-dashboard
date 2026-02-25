@@ -9,6 +9,7 @@ import { RiskPanel } from '@/components/futures/RiskPanel';
 import { WalletModal } from '@/components/futures/WalletModal';
 import { FuturesChart } from '@/components/futures/FuturesChart';
 import { FuturesWalletBalance } from '@/components/futures/FuturesWalletBalance';
+import { CollateralPanel } from '@/components/futures/CollateralPanel';
 import { useFuturesData } from '@/hooks/useFuturesData';
 import { useFuturesStore } from '@/store/futuresStore';
 import { Icon } from '@iconify/react';
@@ -104,6 +105,7 @@ const FuturesPage: React.FC = () => {
         {/* Right Column - Order & Risk */}
         <div className="space-y-4">
           <FuturesWalletBalance />
+          <CollateralPanel />
           <OrderPanel />
           <RiskPanel />
         </div>
