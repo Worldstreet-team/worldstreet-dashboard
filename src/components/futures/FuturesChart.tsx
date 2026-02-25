@@ -62,15 +62,9 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
     setLoading(true);
     setError(null);
     try {
-      // Use backend API with PERP format (e.g., SOL-PERP, BTC-PERP)
+      // Use Next.js API route as proxy
       const response = await fetch(
-        `https://trading.watchup.site/api/futures/market/${symbol}/klines?interval=${interval}`,
-        {
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          }
-        }
+        `/api/futures/klines?symbol=${symbol}&interval=${interval}`
       );
 
       if (!response.ok) {
@@ -118,15 +112,9 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
 
   const fetchLiveUpdate = async () => {
     try {
-      // Use backend API with PERP format (e.g., SOL-PERP, BTC-PERP)
+      // Use Next.js API route as proxy
       const response = await fetch(
-        `https://trading.watchup.site/api/futures/market/${symbol}/klines?interval=${interval}`,
-        {
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          }
-        }
+        `/api/futures/klines?symbol=${symbol}&interval=${interval}`
       );
 
       if (!response.ok) {
