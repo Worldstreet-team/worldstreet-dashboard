@@ -27,7 +27,7 @@ export default function LiveChart({ symbol, stopLoss, takeProfit, onUpdateLevels
   const { tokenBalances: solTokens } = useSolana();
   const { tokenBalances: ethTokens } = useEvm();
   
-  const [interval, setInterval] = useState('1min');
+  const [intervalState, setIntervalState] = useState('1min');
   const [chartData, setChartData] = useState<CandleData[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +37,7 @@ export default function LiveChart({ symbol, stopLoss, takeProfit, onUpdateLevels
   
   const wsRef = useRef<WebSocket | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Get USDT balances
   const usdtSol = solTokens.find(t => t.symbol === 'USDT')?.amount || 0;
@@ -45,15 +46,13 @@ export default function LiveChart({ symbol, stopLoss, takeProfit, onUpdateLevels
   useEffect(() => {
     if (symbol) {
       fetchHistoricalData();
-      connectWebSocket();
+      startPolling();
     }
 
     return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
+      stopPolling();
     };
-  }, [symbol, interval]);
+  }, [symbol, intervalState]);
 
   useEffect(() => {
     if (chartData.length > 0 && canvasRef.current) {
@@ -71,10 +70,10 @@ export default function LiveChart({ symbol, stopLoss, takeProfit, onUpdateLevels
     setError(null);
     try {
       const endAt = Math.floor(Date.now() / 1000);
-      const startAt = endAt - (interval === '1min' ? 3600 : 7200);
+      const startAt = endAt - (intervalState === '1min' ? 3600 : 7200);
 
       const response = await fetch(
-        `/api/spot/klines?symbol=${symbol}&type=${interval}&startAt=${startAt}&endAt=${endAt}`
+        `/api/spot/klines?symbol=${symbol}&type=${intervalState}&startAt=${startAt}&endAt=${endAt}`
       );
 
       if (!response.ok) {
@@ -101,71 +100,69 @@ export default function LiveChart({ symbol, stopLoss, takeProfit, onUpdateLevels
     }
   };
 
-  const connectWebSocket = () => {
-    if (wsRef.current) {
-      wsRef.current.close();
-    }
+  const fetchLatestCandle = async () => {
+    try {
+      const endAt = Math.floor(Date.now() / 1000);
+      const startAt = endAt - 120; // Get last 2 minutes
 
-    const wsUrl = 'wss://trading.watchup.site';
-    const ws = new WebSocket(wsUrl);
+      const response = await fetch(
+        `/api/spot/klines?symbol=${symbol}&type=${intervalState}&startAt=${startAt}&endAt=${endAt}`
+      );
 
-    ws.onopen = () => {
-      console.log('WebSocket connected');
-      ws.send(JSON.stringify({
-        type: 'subscribe',
-        symbol: symbol,
-        interval: interval
-      }));
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data);
-        
-        if (message.message) {
-          return;
-        }
-
-        // Backend sends candle data directly as object
-        if (message.time && message.open && message.close) {
-          const newCandle: CandleData = {
-            time: parseInt(message.time) * 1000,
-            open: parseFloat(message.open),
-            close: parseFloat(message.close),
-            high: parseFloat(message.high),
-            low: parseFloat(message.low),
-            volume: parseFloat(message.volume)
-          };
-
-          setChartData(prev => {
-            const updated = [...prev];
-            const lastIndex = updated.length - 1;
-
-            if (lastIndex >= 0 && updated[lastIndex].time === newCandle.time) {
-              updated[lastIndex] = newCandle;
-            } else {
-              updated.push(newCandle);
-              if (updated.length > 100) updated.shift();
-            }
-
-            return updated;
-          });
-        }
-      } catch (err) {
-        console.error('WebSocket message error:', err);
+      if (!response.ok) {
+        return;
       }
-    };
 
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-      setError('WebSocket connection failed');
-    };
+      const data = await response.json();
+      
+      if (Array.isArray(data) && data.length > 0) {
+        const latestCandle = data[data.length - 1];
+        const newCandle: CandleData = {
+          time: latestCandle.time * 1000,
+          open: parseFloat(latestCandle.open),
+          high: parseFloat(latestCandle.high),
+          low: parseFloat(latestCandle.low),
+          close: parseFloat(latestCandle.close),
+          volume: parseFloat(latestCandle.volume)
+        };
 
-    ws.onclose = () => {
-      console.log('WebSocket disconnected');
-    };
+        setChartData(prev => {
+          const updated = [...prev];
+          const lastIndex = updated.length - 1;
 
-    wsRef.current = ws;
+          if (lastIndex >= 0 && updated[lastIndex].time === newCandle.time) {
+            // Update existing candle
+            updated[lastIndex] = newCandle;
+          } else {
+            // Add new candle
+            updated.push(newCandle);
+            // Keep only last 100 candles
+            if (updated.length > 100) updated.shift();
+          }
+
+          return updated;
+        });
+      }
+    } catch (err) {
+      console.error('Failed to fetch latest candle:', err);
+    }
+  };
+
+  const startPolling = () => {
+    // Clear any existing interval
+    stopPolling();
+    
+    // Poll every 3 seconds
+    pollingIntervalRef.current = setInterval(() => {
+      fetchLatestCandle();
+    }, 3000);
+  };
+
+  const stopPolling = () => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
   };
 
   const drawChart = () => {
@@ -336,8 +333,8 @@ export default function LiveChart({ symbol, stopLoss, takeProfit, onUpdateLevels
 
             <div className="flex items-center gap-2">
               <select
-                value={interval}
-                onChange={(e) => setInterval(e.target.value)}
+                value={intervalState}
+                onChange={(e) => setIntervalState(e.target.value)}
                 className="px-3 py-1.5 bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-darkborder rounded-lg text-sm text-dark dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="1min">1m</option>
