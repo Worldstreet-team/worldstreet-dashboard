@@ -29,9 +29,9 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
   const [chartData, setChartData] = useState<CandleData[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [wsStatus, setWsStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected');
+  const [pollingStatus, setPollingStatus] = useState<'active' | 'paused' | 'error'>('paused');
   
-  const wsRef = useRef<WebSocket | null>(null);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Auto-select first market when markets load
@@ -44,13 +44,11 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
   useEffect(() => {
     if (symbol) {
       fetchHistoricalData();
-      connectWebSocket();
+      startPolling();
     }
 
     return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
+      stopPolling();
     };
   }, [symbol, interval]);
 
@@ -93,82 +91,72 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
     }
   };
 
-  const connectWebSocket = () => {
-    if (wsRef.current) {
-      wsRef.current.close();
+  const startPolling = () => {
+    stopPolling(); // Clear any existing interval
+    
+    setPollingStatus('active');
+    
+    // Poll every 3 seconds for live updates
+    pollingIntervalRef.current = setInterval(() => {
+      fetchLiveUpdate();
+    }, 3000);
+  };
+
+  const stopPolling = () => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
     }
+    setPollingStatus('paused');
+  };
 
-    setWsStatus('connecting');
-    const wsUrl = 'wss://trading.watchup.site';
-    const ws = new WebSocket(wsUrl);
+  const fetchLiveUpdate = async () => {
+    try {
+      const endAt = Math.floor(Date.now() / 1000);
+      const startAt = endAt - 60; // Get last minute of data
 
-    ws.onopen = () => {
-      console.log('WebSocket connected');
-      setWsStatus('connected');
-      ws.send(JSON.stringify({
-        type: 'subscribe',
-        symbol: symbol,
-        interval: interval
-      }));
-    };
+      const response = await fetch(
+        `https://trading.watchup.site/api/futures/market/${symbol}/klines?interval=${interval}&startAt=${startAt}&endAt=${endAt}`
+      );
 
-    ws.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data);
-        
-        if (message.message) {
-          return;
-        }
-
-        if (message.data?.candles) {
-          const candleArray = message.data.candles;
-          const newCandle: CandleData = {
-            time: parseInt(candleArray[0]) * 1000,
-            open: parseFloat(candleArray[1]),
-            close: parseFloat(candleArray[2]),
-            high: parseFloat(candleArray[3]),
-            low: parseFloat(candleArray[4]),
-            volume: parseFloat(candleArray[5])
-          };
-
-          setChartData(prev => {
-            const updated = [...prev];
-            const lastIndex = updated.length - 1;
-
-            if (lastIndex >= 0 && updated[lastIndex].time === newCandle.time) {
-              updated[lastIndex] = newCandle;
-            } else {
-              updated.push(newCandle);
-              if (updated.length > 100) updated.shift();
-            }
-
-            return updated;
-          });
-        }
-      } catch (err) {
-        console.error('WebSocket message error:', err);
+      if (!response.ok) {
+        throw new Error('Failed to fetch live update');
       }
-    };
 
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-      setError('WebSocket connection failed');
-      setWsStatus('disconnected');
-    };
+      const data = await response.json();
+      if (data.data && data.data.length > 0) {
+        const latestCandle = data.data[data.data.length - 1];
+        const newCandle: CandleData = {
+          time: latestCandle[0] * 1000,
+          open: parseFloat(latestCandle[1]),
+          high: parseFloat(latestCandle[3]),
+          low: parseFloat(latestCandle[4]),
+          close: parseFloat(latestCandle[2]),
+          volume: parseFloat(latestCandle[5])
+        };
 
-    ws.onclose = () => {
-      console.log('WebSocket disconnected');
-      setWsStatus('disconnected');
-      
-      // Auto-reconnect after 5 seconds
-      setTimeout(() => {
-        if (symbol) {
-          connectWebSocket();
-        }
-      }, 5000);
-    };
+        setChartData(prev => {
+          const updated = [...prev];
+          const lastIndex = updated.length - 1;
 
-    wsRef.current = ws;
+          if (lastIndex >= 0 && updated[lastIndex].time === newCandle.time) {
+            // Update existing candle
+            updated[lastIndex] = newCandle;
+          } else {
+            // Add new candle
+            updated.push(newCandle);
+            if (updated.length > 100) updated.shift();
+          }
+
+          return updated;
+        });
+
+        setPollingStatus('active');
+      }
+    } catch (err) {
+      console.error('Polling error:', err);
+      setPollingStatus('error');
+    }
   };
 
   const drawChart = () => {
@@ -283,17 +271,17 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
             )}
           </div>
 
-          {/* WebSocket Status */}
+          {/* Polling Status */}
           <div className="flex items-center gap-1.5">
             <div className={`w-2 h-2 rounded-full ${
-              wsStatus === 'connected' ? 'bg-success' :
-              wsStatus === 'connecting' ? 'bg-warning animate-pulse' :
-              'bg-error'
+              pollingStatus === 'active' ? 'bg-success animate-pulse' :
+              pollingStatus === 'error' ? 'bg-error' :
+              'bg-warning'
             }`} />
             <span className="text-xs text-muted dark:text-darklink">
-              {wsStatus === 'connected' ? 'Live' :
-               wsStatus === 'connecting' ? 'Connecting...' :
-               'Disconnected'}
+              {pollingStatus === 'active' ? 'Live (Polling)' :
+               pollingStatus === 'error' ? 'Update Error' :
+               'Paused'}
             </span>
           </div>
         </div>
