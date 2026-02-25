@@ -59,8 +59,9 @@ export class DataFeedService {
 
   async fetchHistoricalData(): Promise<Candle[]> {
     try {
+      // Use frontend API route which proxies to backend
       const response = await fetch(
-        `${this.baseUrl}/api/market/${this.symbol}/klines?type=${this.interval}`
+        `/api/market/${this.symbol}/klines?type=${this.interval}`
       );
 
       if (!response.ok) {
@@ -69,7 +70,10 @@ export class DataFeedService {
 
       const data: KlineResponse = await response.json();
 
-      return data.data.map((kline) => ({
+      // Handle both array and object response formats
+      const klineData = Array.isArray(data) ? data : (data.data || []);
+
+      return klineData.map((kline) => ({
         time: Math.floor(kline.time / 1000), // Convert to seconds
         open: parseFloat(kline.open),
         high: parseFloat(kline.high),

@@ -46,7 +46,8 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
     setError,
   } = useChartStore();
 
-  const symbol = propSymbol || storeSymbol;
+  // Use prop symbol or store symbol, with fallback
+  const symbol = propSymbol || storeSymbol || 'BTC-USDT';
   const [wsStatus, setWsStatus] = useState<'connected' | 'disconnected' | 'connecting'>('disconnected');
 
   const handleCandleUpdate = useCallback((candle: Candle) => {

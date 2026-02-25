@@ -13,10 +13,17 @@ import { useFuturesStore } from '@/store/futuresStore';
 import { Icon } from '@iconify/react';
 
 const FuturesPage: React.FC = () => {
-  const { selectedChain, walletAddresses, isLoading } = useFuturesStore();
+  const { selectedChain, selectedMarket, markets, walletAddresses, isLoading, setSelectedMarket } = useFuturesStore();
   const { fetchWallet } = useFuturesData();
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [walletChecked, setWalletChecked] = useState(false);
+
+  // Auto-select first market when markets load
+  useEffect(() => {
+    if (markets.length > 0 && !selectedMarket) {
+      setSelectedMarket(markets[0]);
+    }
+  }, [markets, selectedMarket, setSelectedMarket]);
 
   useEffect(() => {
     const checkWallet = async () => {
@@ -82,9 +89,9 @@ const FuturesPage: React.FC = () => {
         {/* Left Column - Chart & Positions */}
         <div className="lg:col-span-2 space-y-4">
           {/* Trading Chart */}
-          <div className="bg-white dark:bg-darkgray rounded-lg border border-border dark:border-darkborder">
+          <div className="h-[600px]">
             <FuturesChart 
-              symbol={selectedMarket?.symbol}
+              symbol={selectedMarket?.symbol || 'BTC-USDT'}
               isDarkMode={true}
             />
           </div>
