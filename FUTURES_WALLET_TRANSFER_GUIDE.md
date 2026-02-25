@@ -33,16 +33,32 @@ A complete system to transfer USDT between Spot and Futures wallets on Solana ne
 
 ### 3. API Routes
 
+#### `/api/transfer` (`src/app/api/transfer/route.ts`)
+- Handles transfers from spot wallet (backend-signed)
+- **Supported Directions**:
+  - `spot-to-main`: Transfer from spot to main wallet
+  - `spot-to-futures`: Transfer from spot to futures wallet
+- **Parameters**:
+  - `userId`: User identifier (required)
+  - `asset`: Asset to transfer (USDT, SOL, etc.)
+  - `amount`: Transfer amount (number)
+  - `direction`: Transfer direction
+  - `destinationAddress`: Target wallet address
+- **Backend Integration**:
+  - Calls `https://trading.watchup.site/api/transfer`
+  - Backend uses spot wallet private key to sign transaction
+
 #### `/api/futures/transfer` (`src/app/api/futures/transfer/route.ts`)
-- Handles transfers between spot and futures wallets
+- Handles transfers from futures wallet (backend-signed)
+- **Use Case**: Transferring from futures back to spot or main wallet
 - **Parameters**:
   - `destinationAddress`: Target wallet address (required)
   - `amount`: Transfer amount as number (required)
 - **Backend Integration**:
   - Calls `https://trading.watchup.site/api/futures/wallet/transfer`
   - Passes userId from Clerk authentication
-  - Backend determines direction automatically
-  - Fixed to USDT on Solana
+  - Backend uses futures wallet private key to sign transaction
+  - Backend determines source automatically based on userId
 
 #### `/api/futures/wallet/balance` (`src/app/api/futures/wallet/balance/route.ts`)
 - Fetches futures wallet balance
@@ -84,23 +100,25 @@ A complete system to transfer USDT between Spot and Futures wallets on Solana ne
 
 ## User Flow
 
-### Transferring to Futures Wallet
+### Transferring to Futures Wallet (Spot → Futures)
 1. Go to Transfer page
 2. Click direction toggle until "Spot → Futures" is shown
 3. Select USDT or SOL (system automatically uses Solana)
 4. Enter amount (must have USDT/SOL in spot wallet)
 5. Click "Transfer to Futures"
-6. Backend executes transfer using spot wallet private key
-7. Success message shows transaction hash
+6. **Frontend calls `/api/transfer` with direction "spot-to-futures"**
+7. Backend executes transfer using spot wallet private key
+8. Success message shows transaction hash
 
-### Transferring from Futures Wallet
+### Transferring from Futures Wallet (Futures → Spot)
 1. Go to Transfer page
 2. Click direction toggle until "Futures → Spot" is shown
 3. Select USDT or SOL
 4. Enter amount (must have USDT/SOL in futures wallet)
 5. Click "Transfer to Spot"
-6. Backend executes transfer using futures wallet private key
-7. Success message shows transaction hash
+6. **Frontend calls `/api/futures/transfer` with destination address**
+7. Backend executes transfer using futures wallet private key
+8. Success message shows transaction hash
 
 ## Important Notes
 
@@ -129,7 +147,35 @@ A complete system to transfer USDT between Spot and Futures wallets on Solana ne
 
 The backend implements these endpoints:
 
+### POST `/api/transfer`
+**Used for**: Spot to Main and Spot to Futures transfers
+
+**Request:**
+```json
+{
+  "userId": "string",
+  "asset": "string",
+  "amount": number,
+  "direction": "spot-to-main" | "spot-to-futures",
+  "destinationAddress": "string"
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Transfer completed successfully",
+  "txHash": "string"
+}
+```
+
+**Notes:**
+- Backend uses spot wallet private key to sign transaction
+- Supports both main wallet and futures wallet as destinations
+
 ### POST `/api/futures/wallet/transfer`
+**Used for**: Futures to Spot (or any destination) transfers
+
 **Request:**
 ```json
 {
@@ -152,9 +198,9 @@ The backend implements these endpoints:
 ```
 
 **Notes:**
-- Backend determines transfer direction automatically based on userId and destinationAddress
-- No explicit direction parameter needed
+- Backend uses futures wallet private key to sign transaction
 - Amount is sent as string for precision
+- Backend determines source wallet automatically based on userId
 
 ### GET `/api/futures/wallet/balance?userId={userId}`
 **Response:**
@@ -202,12 +248,18 @@ The backend implements these endpoints:
 
 ## Implementation Status
 
-✅ **COMPLETED** - All components updated to match backend API documentation:
-- API routes use simplified transfer endpoint (no direction parameter)
+✅ **COMPLETED** - All components updated with proper routing logic:
+- **Spot → Futures**: Uses `/api/transfer` route with spot wallet signing
+- **Futures → Spot**: Uses `/api/futures/transfer` route with futures wallet signing
+- API routes properly configured for their respective directions
 - Balance endpoint uses userId instead of address
 - Frontend components properly integrated with backend
 - Error handling and validation in place
 
 ## Summary
 
-The system provides a complete workflow for managing USDT and SOL between spot and futures wallets, with proper validation, gas fee monitoring, and user-friendly error messages. The implementation matches the backend API documentation exactly, using simplified transfer logic where the backend determines direction automatically based on userId and destination address. Both USDT (for trading collateral) and SOL (for gas fees) can be transferred to ensure users have everything they need for futures trading.
+The system provides a complete workflow for managing USDT and SOL between spot and futures wallets, with proper validation, gas fee monitoring, and user-friendly error messages. The implementation uses the correct API routes based on transfer direction:
+- **Spot → Futures**: Uses `/api/transfer` (spot wallet signs the transaction)
+- **Futures → Spot**: Uses `/api/futures/transfer` (futures wallet signs the transaction)
+
+Both USDT (for trading collateral) and SOL (for gas fees) can be transferred to ensure users have everything they need for futures trading.

@@ -462,14 +462,29 @@ export default function TransferPage() {
 
     try {
       let destinationAddress = '';
+      let endpoint = '';
+      let requestBody: any = {};
       
       if (direction === 'spot-to-futures') {
-        // Transferring to futures wallet
+        // Transferring from spot to futures - use /api/transfer
         destinationAddress = futuresWalletAddress || '';
+        endpoint = '/api/transfer';
+        requestBody = {
+          userId,
+          asset: selectedAsset,
+          amount: parseFloat(amount),
+          direction: 'spot-to-futures',
+          destinationAddress,
+        };
       } else {
-        // Transferring from futures to spot
+        // Transferring from futures to spot - use /api/futures/transfer
         const spotWallet = getSpotWallet(selectedAsset, 'sol');
         destinationAddress = spotWallet?.public_address || '';
+        endpoint = '/api/futures/transfer';
+        requestBody = {
+          destinationAddress,
+          amount: parseFloat(amount),
+        };
       }
 
       if (!destinationAddress) {
@@ -478,14 +493,10 @@ export default function TransferPage() {
         return;
       }
 
-      // Backend API uses simplified transfer: just userId, destinationAddress, amount
-      const response = await fetch('/api/futures/transfer', {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          destinationAddress,
-          amount: parseFloat(amount),
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();

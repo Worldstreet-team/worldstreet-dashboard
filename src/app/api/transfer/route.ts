@@ -13,10 +13,10 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Validate direction - only spot-to-main is handled by backend signers
-        if (direction !== 'spot-to-main') {
+        // Validate direction - spot-to-main and spot-to-futures are handled by backend signers
+        if (direction !== 'spot-to-main' && direction !== 'spot-to-futures') {
             return NextResponse.json(
-                { error: 'Invalid direction. Only "spot-to-main" is supported for backend signing.' },
+                { error: 'Invalid direction. Only "spot-to-main" and "spot-to-futures" are supported for backend signing.' },
                 { status: 400 }
             );
         }
