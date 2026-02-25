@@ -25,13 +25,13 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
   const { selectedMarket, markets, setSelectedMarket } = useFuturesStore();
   const symbol = propSymbol || selectedMarket?.symbol || 'BTC-USDT';
   
-  const [interval, setInterval] = useState('1min');
+  const [timeInterval, setTimeInterval] = useState('1min');
   const [chartData, setChartData] = useState<CandleData[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pollingStatus, setPollingStatus] = useState<'active' | 'paused' | 'error'>('paused');
   
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Auto-select first market when markets load
@@ -50,7 +50,7 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
     return () => {
       stopPolling();
     };
-  }, [symbol, interval]);
+  }, [symbol, timeInterval]);
 
   useEffect(() => {
     if (chartData.length > 0 && canvasRef.current) {
@@ -58,13 +58,20 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
     }
   }, [chartData, isDarkMode]);
 
+  useEffect(() => {
+    // Redraw chart when canvas is ready
+    if (canvasRef.current && chartData.length > 0) {
+      drawChart();
+    }
+  }, [canvasRef.current]);
+
   const fetchHistoricalData = async () => {
     setLoading(true);
     setError(null);
     try {
       // Use Next.js API route as proxy
       const response = await fetch(
-        `/api/futures/klines?symbol=${symbol}&interval=${interval}`
+        `/api/futures/klines?symbol=${symbol}&interval=${timeInterval}`
       );
 
       if (!response.ok) {
@@ -84,6 +91,13 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
       }));
 
       setChartData(candles);
+      
+      // Force redraw after data is set
+      setTimeout(() => {
+        if (canvasRef.current && candles.length > 0) {
+          drawChart();
+        }
+      }, 100);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -114,7 +128,7 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
     try {
       // Use Next.js API route as proxy
       const response = await fetch(
-        `/api/futures/klines?symbol=${symbol}&interval=${interval}`
+        `/api/futures/klines?symbol=${symbol}&interval=${timeInterval}`
       );
 
       if (!response.ok) {
@@ -160,10 +174,23 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
 
   const drawChart = () => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) {
+      console.log('Canvas not ready');
+      return;
+    }
 
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) {
+      console.log('Context not available');
+      return;
+    }
+
+    if (chartData.length === 0) {
+      console.log('No chart data available');
+      return;
+    }
+
+    console.log(`Drawing chart with ${chartData.length} candles`);
 
     const width = canvas.width;
     const height = canvas.height;
@@ -172,13 +199,13 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
     ctx.fillStyle = isDarkMode ? '#1a1a1a' : '#ffffff';
     ctx.fillRect(0, 0, width, height);
 
-    if (chartData.length === 0) return;
-
     const prices = chartData.flatMap(c => [c.high, c.low]);
     const maxPrice = Math.max(...prices);
     const minPrice = Math.min(...prices);
     const priceRange = maxPrice - minPrice;
     const padding = 40;
+
+    console.log(`Price range: ${minPrice} - ${maxPrice}`);
 
     // Draw grid with theme-aware colors
     ctx.strokeStyle = isDarkMode ? '#2a2e39' : '#e2e8f0';
@@ -241,6 +268,8 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
       ctx.font = 'bold 11px monospace';
       ctx.fillText(lastPrice.toFixed(2), width - padding + 10, y + 3);
     }
+
+    console.log('Chart drawn successfully');
   };
 
   const currentPrice = chartData.length > 0 ? chartData[chartData.length - 1].close : null;
@@ -288,9 +317,9 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
         {/* Interval Selector */}
         <div className="flex items-center gap-1">
           <button
-            onClick={() => setInterval('1min')}
+            onClick={() => setTimeInterval('1min')}
             className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-              interval === '1min'
+              timeInterval === '1min'
                 ? 'bg-primary text-white'
                 : 'bg-gray-100 dark:bg-dark text-dark dark:text-white hover:bg-gray-200 dark:hover:bg-darkgray'
             }`}
@@ -298,9 +327,9 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
             1m
           </button>
           <button
-            onClick={() => setInterval('5min')}
+            onClick={() => setTimeInterval('5min')}
             className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-              interval === '5min'
+              timeInterval === '5min'
                 ? 'bg-primary text-white'
                 : 'bg-gray-100 dark:bg-dark text-dark dark:text-white hover:bg-gray-200 dark:hover:bg-darkgray'
             }`}
