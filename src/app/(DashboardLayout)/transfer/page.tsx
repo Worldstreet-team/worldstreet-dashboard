@@ -61,7 +61,7 @@ export default function TransferPage() {
     sendTokenTransaction: sendEthTokenTransaction,
   } = useEvm();
 
-  const [direction, setDirection] = useState<'main-to-spot' | 'spot-to-main'>('main-to-spot');
+  const [direction, setDirection] = useState<'main-to-spot' | 'spot-to-main' | 'spot-to-futures' | 'futures-to-spot'>('main-to-spot');
   const [selectedAsset, setSelectedAsset] = useState('USDT');
   const [selectedChain, setSelectedChain] = useState<'sol' | 'evm'>('sol'); // Chain selection for stablecoins
   const [amount, setAmount] = useState('');
@@ -70,6 +70,8 @@ export default function TransferPage() {
   const [loading, setLoading] = useState(false);
   const [balancesLoading, setBalancesLoading] = useState(true);
   const [spotWalletsLoading, setSpotWalletsLoading] = useState(true);
+  const [futuresWalletAddress, setFuturesWalletAddress] = useState<string | null>(null);
+  const [futuresWalletLoading, setFuturesWalletLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [generatingWallet, setGeneratingWallet] = useState(false);
@@ -109,8 +111,28 @@ export default function TransferPage() {
   useEffect(() => {
     if (userId) {
       fetchSpotWallets();
+      fetchFuturesWallet();
     }
   }, [userId]);
+
+  const fetchFuturesWallet = async () => {
+    if (!userId) return;
+    
+    setFuturesWalletLoading(true);
+    try {
+      const response = await fetch(`/api/futures/wallet?chain=solana`);
+      if (response.ok) {
+        const data = await response.json();
+        setFuturesWalletAddress(data.address);
+      } else if (response.status === 404) {
+        setFuturesWalletAddress(null);
+      }
+    } catch (err) {
+      console.error('Failed to fetch futures wallet:', err);
+    } finally {
+      setFuturesWalletLoading(false);
+    }
+  };
 
   const fetchSpotWallets = async () => {
     if (!userId) return;
@@ -187,12 +209,31 @@ export default function TransferPage() {
       return;
     }
 
+    // Validate futures transfers
+    if (direction === 'spot-to-futures' || direction === 'futures-to-spot') {
+      if (selectedAsset !== 'USDT') {
+        setError('Only USDT can be transferred to/from futures wallet');
+        return;
+      }
+      if (selectedChain !== 'sol') {
+        setError('Futures transfers only support Solana network');
+        return;
+      }
+      if (!futuresWalletAddress) {
+        setError('Futures wallet not found. Please create one from the Futures page.');
+        return;
+      }
+    }
+
     setError('');
     setSuccess('');
 
     if (direction === 'main-to-spot') {
       // Main to Spot: Show PIN modal
       setShowPinModal(true);
+    } else if (direction === 'spot-to-futures' || direction === 'futures-to-spot') {
+      // Futures transfers: Execute via backend
+      await executeFuturesTransfer();
     } else {
       // Spot to Main: Execute directly via backend
       await executeSpotToMain();
@@ -416,8 +457,74 @@ export default function TransferPage() {
     }
   };
 
+  const executeFuturesTransfer = async () => {
+    setLoading(true);
+
+    try {
+      let destinationAddress = '';
+      
+      if (direction === 'spot-to-futures') {
+        // Transferring to futures wallet
+        destinationAddress = futuresWalletAddress || '';
+      } else {
+        // Transferring from futures to spot
+        const spotWallet = getSpotWallet('USDT', 'sol');
+        destinationAddress = spotWallet?.public_address || '';
+      }
+
+      if (!destinationAddress) {
+        setError('Destination wallet address not found');
+        setLoading(false);
+        return;
+      }
+
+      // Backend API uses simplified transfer: just userId, destinationAddress, amount
+      const response = await fetch('/api/futures/transfer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          destinationAddress,
+          amount: parseFloat(amount),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        const directionText = direction === 'spot-to-futures' ? 'to Futures' : 'to Spot';
+        setSuccess(`Successfully transferred ${amount} USDT ${directionText}. TX: ${data.txHash?.slice(0, 8)}...`);
+        setAmount('');
+        
+        // Refresh balances
+        await fetchSpotWallets();
+      } else {
+        setError(data.error || 'Transfer failed');
+      }
+    } catch (err) {
+      console.error('Futures transfer error:', err);
+      setError(err instanceof Error ? err.message : 'Transfer failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const toggleDirection = () => {
-    setDirection(direction === 'main-to-spot' ? 'spot-to-main' : 'main-to-spot');
+    const directions: Array<'main-to-spot' | 'spot-to-main' | 'spot-to-futures' | 'futures-to-spot'> = [
+      'main-to-spot',
+      'spot-to-main',
+      'spot-to-futures',
+      'futures-to-spot'
+    ];
+    const currentIndex = directions.indexOf(direction);
+    const nextIndex = (currentIndex + 1) % directions.length;
+    setDirection(directions[nextIndex]);
+    
+    // Auto-set to USDT and Solana for futures transfers
+    if (directions[nextIndex] === 'spot-to-futures' || directions[nextIndex] === 'futures-to-spot') {
+      setSelectedAsset('USDT');
+      setSelectedChain('sol');
+    }
+    
     setAmount('');
     setError('');
     setSuccess('');
@@ -465,6 +572,10 @@ export default function TransferPage() {
 
   const currentBalance = direction === 'main-to-spot' 
     ? getMainBalance(selectedAsset)
+    : direction === 'spot-to-futures'
+    ? getSpotBalance(selectedAsset)
+    : direction === 'futures-to-spot'
+    ? 0 // Will be fetched from futures wallet
     : getSpotBalance(selectedAsset);
 
   const hasSpotWallets = spotWallets.length > 0;
@@ -537,8 +648,9 @@ export default function TransferPage() {
           <div className="bg-white dark:bg-black rounded-2xl border border-border/50 dark:border-darkborder p-6 shadow-sm">
             <h3 className="font-semibold text-dark dark:text-white mb-4">Transfer Direction</h3>
             <div className="flex items-center justify-center">
-              <div className="inline-flex items-center gap-4 bg-muted/30 dark:bg-white/5 p-3 rounded-xl">
-                <div className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+              <div className="inline-flex flex-col items-center gap-3 bg-muted/30 dark:bg-white/5 p-4 rounded-xl w-full max-w-md">
+                {/* Main Wallet */}
+                <div className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all w-full justify-center ${
                   direction === 'main-to-spot' 
                     ? 'bg-primary text-white shadow-sm' 
                     : 'text-muted'
@@ -546,20 +658,54 @@ export default function TransferPage() {
                   <Icon icon="ph:wallet" width={18} />
                   <span className="font-medium">Main Wallet</span>
                 </div>
+                
+                {/* Arrow */}
                 <button
                   onClick={toggleDirection}
                   className="p-2 rounded-lg bg-white dark:bg-black hover:bg-muted/40 dark:hover:bg-white/10 transition-colors"
                 >
-                  <Icon icon="ph:arrows-left-right" width={20} className="text-primary" />
+                  <Icon icon="ph:arrows-down-up" width={20} className="text-primary" />
                 </button>
-                <div className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
-                  direction === 'spot-to-main' 
+                
+                {/* Spot Wallet */}
+                <div className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all w-full justify-center ${
+                  direction === 'spot-to-main' || direction === 'spot-to-futures'
                     ? 'bg-primary text-white shadow-sm' 
                     : 'text-muted'
                 }`}>
                   <Icon icon="ph:chart-line" width={18} />
                   <span className="font-medium">Spot Wallet</span>
                 </div>
+                
+                {/* Arrow */}
+                {(direction === 'spot-to-futures' || direction === 'futures-to-spot') && (
+                  <>
+                    <button
+                      onClick={toggleDirection}
+                      className="p-2 rounded-lg bg-white dark:bg-black hover:bg-muted/40 dark:hover:bg-white/10 transition-colors"
+                    >
+                      <Icon icon="ph:arrows-down-up" width={20} className="text-primary" />
+                    </button>
+                    
+                    {/* Futures Wallet */}
+                    <div className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all w-full justify-center ${
+                      direction === 'futures-to-spot'
+                        ? 'bg-primary text-white shadow-sm' 
+                        : 'text-muted'
+                    }`}>
+                      <Icon icon="ph:trend-up" width={18} />
+                      <span className="font-medium">Futures Wallet</span>
+                      <span className="text-xs bg-white/20 px-2 py-0.5 rounded">USDT Only</span>
+                    </div>
+                  </>
+                )}
+                
+                <p className="text-xs text-center text-muted mt-2">
+                  {direction === 'main-to-spot' && 'Transfer from Main to Spot'}
+                  {direction === 'spot-to-main' && 'Transfer from Spot to Main'}
+                  {direction === 'spot-to-futures' && 'Transfer USDT from Spot to Futures (Solana only)'}
+                  {direction === 'futures-to-spot' && 'Transfer USDT from Futures to Spot (Solana only)'}
+                </p>
               </div>
             </div>
           </div>
@@ -674,6 +820,20 @@ export default function TransferPage() {
             </div>
 
             {/* Alerts */}
+            {(direction === 'spot-to-futures' || direction === 'futures-to-spot') && (
+              <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-start gap-3">
+                <Icon icon="ph:info" className="text-blue-500 shrink-0" width={20} />
+                <div className="text-sm text-blue-600 dark:text-blue-400">
+                  <p className="font-semibold mb-1">Futures Transfer Requirements:</p>
+                  <ul className="list-disc list-inside space-y-1 text-xs">
+                    <li>Only USDT on Solana network is supported</li>
+                    <li>Keep at least 0.01 SOL in your futures wallet for gas fees</li>
+                    <li>If you don't have USDT, swap other tokens first</li>
+                  </ul>
+                </div>
+              </div>
+            )}
+            
             {error && (
               <div className="mt-4 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3">
                 <Icon icon="ph:warning-circle" className="text-red-500 shrink-0" width={20} />
