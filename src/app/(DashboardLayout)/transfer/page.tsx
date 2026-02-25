@@ -211,8 +211,8 @@ export default function TransferPage() {
 
     // Validate futures transfers
     if (direction === 'spot-to-futures' || direction === 'futures-to-spot') {
-      if (selectedAsset !== 'USDT') {
-        setError('Only USDT can be transferred to/from futures wallet');
+      if (selectedAsset !== 'USDT' && selectedAsset !== 'SOL') {
+        setError('Only USDT and SOL can be transferred to/from futures wallet');
         return;
       }
       if (selectedChain !== 'sol') {
@@ -468,7 +468,7 @@ export default function TransferPage() {
         destinationAddress = futuresWalletAddress || '';
       } else {
         // Transferring from futures to spot
-        const spotWallet = getSpotWallet('USDT', 'sol');
+        const spotWallet = getSpotWallet(selectedAsset, 'sol');
         destinationAddress = spotWallet?.public_address || '';
       }
 
@@ -492,7 +492,7 @@ export default function TransferPage() {
 
       if (response.ok) {
         const directionText = direction === 'spot-to-futures' ? 'to Futures' : 'to Spot';
-        setSuccess(`Successfully transferred ${amount} USDT ${directionText}. TX: ${data.txHash?.slice(0, 8)}...`);
+        setSuccess(`Successfully transferred ${amount} ${selectedAsset} ${directionText}. TX: ${data.txHash?.slice(0, 8)}...`);
         setAmount('');
         
         // Refresh balances
@@ -519,9 +519,11 @@ export default function TransferPage() {
     const nextIndex = (currentIndex + 1) % directions.length;
     setDirection(directions[nextIndex]);
     
-    // Auto-set to USDT and Solana for futures transfers
+    // Auto-set to Solana for futures transfers (keep current asset if it's USDT or SOL)
     if (directions[nextIndex] === 'spot-to-futures' || directions[nextIndex] === 'futures-to-spot') {
-      setSelectedAsset('USDT');
+      if (selectedAsset !== 'USDT' && selectedAsset !== 'SOL') {
+        setSelectedAsset('USDT');
+      }
       setSelectedChain('sol');
     }
     
@@ -695,7 +697,7 @@ export default function TransferPage() {
                     }`}>
                       <Icon icon="ph:trend-up" width={18} />
                       <span className="font-medium">Futures Wallet</span>
-                      <span className="text-xs bg-white/20 px-2 py-0.5 rounded">USDT Only</span>
+                      <span className="text-xs bg-white/20 px-2 py-0.5 rounded">USDT & SOL</span>
                     </div>
                   </>
                 )}
@@ -703,8 +705,8 @@ export default function TransferPage() {
                 <p className="text-xs text-center text-muted mt-2">
                   {direction === 'main-to-spot' && 'Transfer from Main to Spot'}
                   {direction === 'spot-to-main' && 'Transfer from Spot to Main'}
-                  {direction === 'spot-to-futures' && 'Transfer USDT from Spot to Futures (Solana only)'}
-                  {direction === 'futures-to-spot' && 'Transfer USDT from Futures to Spot (Solana only)'}
+                  {direction === 'spot-to-futures' && 'Transfer USDT or SOL from Spot to Futures (Solana only)'}
+                  {direction === 'futures-to-spot' && 'Transfer USDT or SOL from Futures to Spot (Solana only)'}
                 </p>
               </div>
             </div>
@@ -826,9 +828,9 @@ export default function TransferPage() {
                 <div className="text-sm text-blue-600 dark:text-blue-400">
                   <p className="font-semibold mb-1">Futures Transfer Requirements:</p>
                   <ul className="list-disc list-inside space-y-1 text-xs">
-                    <li>Only USDT on Solana network is supported</li>
+                    <li>Only USDT and SOL on Solana network are supported</li>
                     <li>Keep at least 0.01 SOL in your futures wallet for gas fees</li>
-                    <li>If you don't have USDT, swap other tokens first</li>
+                    <li>SOL is needed for transaction fees when trading futures</li>
                   </ul>
                 </div>
               </div>

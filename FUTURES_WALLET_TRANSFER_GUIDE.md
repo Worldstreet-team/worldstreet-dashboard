@@ -7,15 +7,16 @@ A complete system to transfer USDT between Spot and Futures wallets on Solana ne
 
 ### 1. Transfer Page Updates (`src/app/(DashboardLayout)/transfer/page.tsx`)
 - Added two new transfer directions:
-  - `spot-to-futures`: Transfer USDT from Spot wallet to Futures wallet
-  - `futures-to-spot`: Transfer USDT from Futures wallet to Spot wallet
+  - `spot-to-futures`: Transfer USDT or SOL from Spot wallet to Futures wallet
+  - `futures-to-spot`: Transfer USDT or SOL from Futures wallet to Spot wallet
 - **Restrictions**:
-  - Only USDT is supported for futures transfers
+  - Only USDT and SOL are supported for futures transfers
   - Only Solana network is supported
-  - Automatically sets asset to USDT and chain to Solana when futures direction is selected
+  - Automatically sets chain to Solana when futures direction is selected
+  - Keeps current asset if it's USDT or SOL, otherwise defaults to USDT
 - **Validation**:
   - Checks if futures wallet exists before allowing transfer
-  - Validates that only USDT on Solana is being transferred
+  - Validates that only USDT or SOL on Solana is being transferred
   - Shows helpful error messages for invalid transfers
 
 ### 2. Futures Wallet Balance Component (`src/components/futures/FuturesWalletBalance.tsx`)
@@ -66,9 +67,9 @@ A complete system to transfer USDT between Spot and Futures wallets on Solana ne
 
 #### Information Alerts
 - **Futures Transfer Requirements** (blue info box):
-  - Only USDT on Solana supported
+  - Only USDT and SOL on Solana supported
   - Keep at least 0.01 SOL for gas
-  - Swap other tokens to USDT if needed
+  - SOL is needed for transaction fees when trading
 
 #### Balance Display
 - Shows available balance for source wallet
@@ -86,8 +87,8 @@ A complete system to transfer USDT between Spot and Futures wallets on Solana ne
 ### Transferring to Futures Wallet
 1. Go to Transfer page
 2. Click direction toggle until "Spot → Futures" is shown
-3. System automatically selects USDT on Solana
-4. Enter amount (must have USDT in spot wallet)
+3. Select USDT or SOL (system automatically uses Solana)
+4. Enter amount (must have USDT/SOL in spot wallet)
 5. Click "Transfer to Futures"
 6. Backend executes transfer using spot wallet private key
 7. Success message shows transaction hash
@@ -95,10 +96,11 @@ A complete system to transfer USDT between Spot and Futures wallets on Solana ne
 ### Transferring from Futures Wallet
 1. Go to Transfer page
 2. Click direction toggle until "Futures → Spot" is shown
-3. Enter amount (must have USDT in futures wallet)
-4. Click "Transfer to Spot"
-5. Backend executes transfer using futures wallet private key
-6. Success message shows transaction hash
+3. Select USDT or SOL
+4. Enter amount (must have USDT/SOL in futures wallet)
+5. Click "Transfer to Spot"
+6. Backend executes transfer using futures wallet private key
+7. Success message shows transaction hash
 
 ## Important Notes
 
@@ -111,14 +113,16 @@ A complete system to transfer USDT between Spot and Futures wallets on Solana ne
 - Warning shown if SOL balance is low
 
 ### Supported Assets
-- **Futures transfers**: USDT only
+- **Futures transfers**: USDT and SOL only
 - **Network**: Solana only
-- **Why?**: Futures trading on backend uses Solana USDT as collateral
+- **Why?**: 
+  - USDT is used as collateral for futures trading
+  - SOL is needed for transaction fees (gas)
 
-### If You Don't Have USDT
+### If You Don't Have USDT or SOL
 1. Go to Swap page
-2. Swap any token to USDT on Solana
-3. Transfer USDT from main to spot wallet
+2. Swap any token to USDT or SOL on Solana
+3. Transfer from main to spot wallet
 4. Then transfer from spot to futures wallet
 
 ## Backend Requirements
@@ -184,10 +188,12 @@ The backend implements these endpoints:
 ## Testing Checklist
 
 - [ ] Transfer USDT from spot to futures wallet
+- [ ] Transfer SOL from spot to futures wallet
 - [ ] Transfer USDT from futures to spot wallet
+- [ ] Transfer SOL from futures to spot wallet
 - [ ] Verify balances update after transfer
 - [ ] Check gas warning appears when SOL < 0.01
-- [ ] Verify only USDT can be selected for futures transfers
+- [ ] Verify only USDT and SOL can be selected for futures transfers
 - [ ] Verify only Solana network is used
 - [ ] Test error handling (insufficient balance, no wallet, etc.)
 - [ ] Verify transaction hashes are displayed
@@ -204,4 +210,4 @@ The backend implements these endpoints:
 
 ## Summary
 
-The system provides a complete workflow for managing USDT between spot and futures wallets, with proper validation, gas fee monitoring, and user-friendly error messages. The implementation matches the backend API documentation exactly, using simplified transfer logic where the backend determines direction automatically based on userId and destination address.
+The system provides a complete workflow for managing USDT and SOL between spot and futures wallets, with proper validation, gas fee monitoring, and user-friendly error messages. The implementation matches the backend API documentation exactly, using simplified transfer logic where the backend determines direction automatically based on userId and destination address. Both USDT (for trading collateral) and SOL (for gas fees) can be transferred to ensure users have everything they need for futures trading.
