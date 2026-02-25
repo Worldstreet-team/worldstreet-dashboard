@@ -7,6 +7,7 @@ import { OrderPanel } from '@/components/futures/OrderPanel';
 import { PositionPanel } from '@/components/futures/PositionPanel';
 import { RiskPanel } from '@/components/futures/RiskPanel';
 import { WalletModal } from '@/components/futures/WalletModal';
+import { FuturesChart } from '@/components/futures/FuturesChart';
 import { useFuturesData } from '@/hooks/useFuturesData';
 import { useFuturesStore } from '@/store/futuresStore';
 import { Icon } from '@iconify/react';
@@ -80,17 +81,12 @@ const FuturesPage: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Left Column - Chart & Positions */}
         <div className="lg:col-span-2 space-y-4">
-          {/* Trading Chart Placeholder */}
-          <div className="bg-white dark:bg-darkgray rounded-lg border border-border dark:border-darkborder p-4">
-            <div className="flex items-center justify-center h-96 bg-gray-50 dark:bg-dark rounded-lg">
-              <div className="text-center">
-                <Icon icon="ph:chart-line-duotone" className="mx-auto mb-2 text-muted dark:text-darklink" height={48} />
-                <p className="text-sm text-muted dark:text-darklink">Trading chart integration</p>
-                <p className="text-xs text-muted dark:text-darklink mt-1">
-                  Connect TradingView or custom charting library
-                </p>
-              </div>
-            </div>
+          {/* Trading Chart */}
+          <div className="bg-white dark:bg-darkgray rounded-lg border border-border dark:border-darkborder">
+            <FuturesChart 
+              symbol={selectedMarket?.symbol}
+              isDarkMode={true}
+            />
           </div>
 
           {/* Positions */}

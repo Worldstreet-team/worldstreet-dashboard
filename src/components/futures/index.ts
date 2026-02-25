@@ -4,3 +4,4 @@ export { OrderPanel } from './OrderPanel';
 export { PositionPanel } from './PositionPanel';
 export { RiskPanel } from './RiskPanel';
 export { WalletModal } from './WalletModal';
+export { FuturesChart } from './FuturesChart';
