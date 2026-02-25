@@ -62,14 +62,16 @@ A complete system to transfer USDT between Spot and Futures wallets on Solana ne
 
 #### `/api/futures/wallet/balance` (`src/app/api/futures/wallet/balance/route.ts`)
 - Fetches futures wallet balance
-- **Parameters**: None (uses authenticated userId)
-- **Returns**:
-  - `balance`: USDT balance
-  - `usdtBalance`: Alias for compatibility
-  - `solBalance`: Set to 0 (not provided by backend)
+- **Parameters**: None (uses authenticated userId, chain defaults to solana)
+- **Backend Response**: Nested balances object with USDT and SOL
+- **Returns** (flattened for frontend):
+  - `balance`: USDT balance (primary)
+  - `usdtBalance`: USDT balance (alias)
+  - `solBalance`: SOL balance for gas fees
   - `walletAddress`: Futures wallet address
-  - `tokenAccount`: Token account address
-  - `exists`: Whether wallet exists
+  - `tokenAccount`: USDT token account address
+  - `exists`: Whether USDT account exists
+  - `balances`: Full nested balances object
 
 ### 4. UI/UX Improvements
 
@@ -202,21 +204,34 @@ The backend implements these endpoints:
 - Amount is sent as string for precision
 - Backend determines source wallet automatically based on userId
 
-### GET `/api/futures/wallet/balance?userId={userId}`
+### GET `/api/futures/wallet/balance?userId={userId}&chain=solana`
 **Response:**
 ```json
 {
-  "balance": number,
+  "userId": "string",
+  "chain": "solana",
   "walletAddress": "string",
-  "tokenAccount": "string",
-  "exists": boolean
+  "balances": {
+    "USDT": {
+      "balance": number,
+      "decimals": 6,
+      "tokenAccount": "string",
+      "exists": boolean
+    },
+    "SOL": {
+      "balance": number,
+      "decimals": 9,
+      "exists": boolean
+    }
+  }
 }
 ```
 
 **Notes:**
-- Uses userId instead of address parameter
-- Returns USDT balance only (SOL balance not provided by this endpoint)
-- Returns 404 if wallet doesn't exist yet
+- Uses userId and chain parameters
+- Returns nested balances object with USDT and SOL
+- Includes token account addresses and decimals
+- Frontend API route flattens this for easier consumption
 
 ## Files Created/Modified
 

@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
 
     // Call backend API to get wallet balance
     const response = await fetch(
-      `${BASE_API_URL}/api/futures/wallet/balance?userId=${userId}`
+      `${BASE_API_URL}/api/futures/wallet/balance?userId=${userId}&chain=solana`
     );
 
     if (!response.ok) {
@@ -31,13 +31,20 @@ export async function GET(request: NextRequest) {
 
     const data = await response.json();
     
+    // Parse the nested balance structure
+    const usdtBalance = data.balances?.USDT?.balance || 0;
+    const solBalance = data.balances?.SOL?.balance || 0;
+    const usdtTokenAccount = data.balances?.USDT?.tokenAccount || null;
+    
     return NextResponse.json({
-      balance: data.balance || 0,
-      usdtBalance: data.balance || 0, // Alias for compatibility
-      solBalance: 0, // SOL balance not provided by this endpoint
+      balance: usdtBalance,
+      usdtBalance: usdtBalance,
+      solBalance: solBalance,
       walletAddress: data.walletAddress,
-      tokenAccount: data.tokenAccount,
-      exists: data.exists,
+      tokenAccount: usdtTokenAccount,
+      exists: data.balances?.USDT?.exists || false,
+      // Include full balances object for future use
+      balances: data.balances,
     });
   } catch (error) {
     console.error('Wallet balance API error:', error);
