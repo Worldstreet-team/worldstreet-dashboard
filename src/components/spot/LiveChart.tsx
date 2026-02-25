@@ -74,7 +74,7 @@ export default function LiveChart({ symbol, stopLoss, takeProfit, onUpdateLevels
       const startAt = endAt - (interval === '1min' ? 3600 : 7200);
 
       const response = await fetch(
-        `https://trading.watchup.site/api/spot/market/${symbol}/klines?type=${interval}&startAt=${startAt}&endAt=${endAt}`
+        `/api/spot/klines?symbol=${symbol}&type=${interval}&startAt=${startAt}&endAt=${endAt}`
       );
 
       if (!response.ok) {
@@ -82,13 +82,15 @@ export default function LiveChart({ symbol, stopLoss, takeProfit, onUpdateLevels
       }
 
       const data = await response.json();
-      const candles = (data.data || []).map((k: any) => ({
-        time: k[0] * 1000,
-        open: parseFloat(k[1]),
-        high: parseFloat(k[3]),
-        low: parseFloat(k[4]),
-        close: parseFloat(k[2]),
-        volume: parseFloat(k[5])
+      
+      // Backend returns array of objects with time, open, close, high, low, volume, turnover
+      const candles = (Array.isArray(data) ? data : []).map((k: any) => ({
+        time: k.time * 1000,
+        open: parseFloat(k.open),
+        high: parseFloat(k.high),
+        low: parseFloat(k.low),
+        close: parseFloat(k.close),
+        volume: parseFloat(k.volume)
       }));
 
       setChartData(candles);
@@ -124,15 +126,15 @@ export default function LiveChart({ symbol, stopLoss, takeProfit, onUpdateLevels
           return;
         }
 
-        if (message.data?.candles) {
-          const candleArray = message.data.candles;
+        // Backend sends candle data directly as object
+        if (message.time && message.open && message.close) {
           const newCandle: CandleData = {
-            time: parseInt(candleArray[0]) * 1000,
-            open: parseFloat(candleArray[1]),
-            close: parseFloat(candleArray[2]),
-            high: parseFloat(candleArray[3]),
-            low: parseFloat(candleArray[4]),
-            volume: parseFloat(candleArray[5])
+            time: parseInt(message.time) * 1000,
+            open: parseFloat(message.open),
+            close: parseFloat(message.close),
+            high: parseFloat(message.high),
+            low: parseFloat(message.low),
+            volume: parseFloat(message.volume)
           };
 
           setChartData(prev => {
