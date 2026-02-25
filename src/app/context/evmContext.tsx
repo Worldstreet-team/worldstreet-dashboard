@@ -137,15 +137,14 @@ export function EvmProvider({ children }: { children: ReactNode }) {
         const popularTokens = allTokens.filter(t => t.isPopular);
         const customTokenAddrs = customTokens.map(ct => ct.address.toLowerCase());
         const userCustomTokens = allTokens.filter(t => customTokenAddrs.includes(t.address.toLowerCase()));
-        const otherTokens = allTokens.filter(t => !t.isPopular && !customTokenAddrs.includes(t.address.toLowerCase()));
         
-        // Fetch popular and custom tokens first, then others
+        // Only fetch popular and custom tokens to reduce RPC calls
         const priorityTokens = [...popularTokens, ...userCustomTokens.filter(t => !t.isPopular)];
-        const BATCH_SIZE = 5; // Smaller batches for public RPC
+        const BATCH_SIZE = 3; // Reduced batch size for public RPC
         const results: TokenBalance[] = [];
         let rpcFailed = false;
 
-        // Helper to fetch a batch of tokens
+        // Helper to fetch a batch of tokens with delay between batches
         const fetchBatch = async (batch: TokenInfo[]) => {
           return Promise.all(
             batch.map(async (token) => {
@@ -188,7 +187,7 @@ export function EvmProvider({ children }: { children: ReactNode }) {
           );
         };
 
-        // First fetch priority tokens
+        // Fetch priority tokens only (popular + custom) with delays between batches
         for (let i = 0; i < priorityTokens.length && !rpcFailed; i += BATCH_SIZE) {
           const batch = priorityTokens.slice(i, i + BATCH_SIZE);
           const batchResults = await fetchBatch(batch);
@@ -202,6 +201,11 @@ export function EvmProvider({ children }: { children: ReactNode }) {
               }
             }
           });
+
+          // Add 500ms delay between batches to avoid rate limiting
+          if (i + BATCH_SIZE < priorityTokens.length && !rpcFailed) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
         }
 
         setTokenBalances(results);
@@ -220,7 +224,8 @@ export function EvmProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (address) {
       fetchBalance(address);
-      const interval = setInterval(() => fetchBalance(address), 40000); // Increased to 30s
+      // Increased polling interval to 5 minutes (300 seconds) to avoid rate limiting
+      const interval = setInterval(() => fetchBalance(address), 300000);
       return () => clearInterval(interval);
     }
   }, [address, fetchBalance]);
