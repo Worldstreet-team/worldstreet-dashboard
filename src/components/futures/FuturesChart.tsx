@@ -62,25 +62,9 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
     setLoading(true);
     setError(null);
     try {
-      // Convert symbol format for Gate.io
-      // SOL-PERP -> SOL_USDT, BTC-PERP -> BTC_USDT, etc.
-      let gateSymbol = symbol;
-      if (symbol.includes('-PERP')) {
-        // Replace -PERP with _USDT
-        gateSymbol = symbol.replace('-PERP', '_USDT');
-      } else if (symbol.includes('-')) {
-        // For other formats like BTC-USDT, just replace - with _
-        gateSymbol = symbol.replace('-', '_');
-      }
-      
-      // Map interval format: 1min -> 1m, 5min -> 5m
-      const gateInterval = interval === '1min' ? '1m' : '5m';
-      
-      const endAt = Math.floor(Date.now() / 1000);
-      const startAt = endAt - (interval === '1min' ? 3600 : 7200);
-
+      // Use backend API with PERP format (e.g., SOL-PERP, BTC-PERP)
       const response = await fetch(
-        `https://api.gateio.ws/api/v4/futures/usdt/candlesticks?contract=${gateSymbol}&from=${startAt}&to=${endAt}&interval=${gateInterval}`,
+        `https://trading.watchup.site/api/futures/market/${symbol}/klines?interval=${interval}`,
         {
           headers: {
             'Accept': 'application/json',
@@ -94,13 +78,15 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
       }
 
       const data = await response.json();
+      
+      // Backend returns array of objects with: time, open, close, high, low, volume, turnover
       const candles = (data || []).map((k: any) => ({
-        time: k.t * 1000,
-        open: parseFloat(k.o),
-        high: parseFloat(k.h),
-        low: parseFloat(k.l),
-        close: parseFloat(k.c),
-        volume: parseFloat(k.v || 0)
+        time: k.time * 1000, // Convert to milliseconds
+        open: parseFloat(k.open),
+        high: parseFloat(k.high),
+        low: parseFloat(k.low),
+        close: parseFloat(k.close),
+        volume: parseFloat(k.volume || 0)
       }));
 
       setChartData(candles);
@@ -132,25 +118,9 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
 
   const fetchLiveUpdate = async () => {
     try {
-      // Convert symbol format for Gate.io
-      // SOL-PERP -> SOL_USDT, BTC-PERP -> BTC_USDT, etc.
-      let gateSymbol = symbol;
-      if (symbol.includes('-PERP')) {
-        // Replace -PERP with _USDT
-        gateSymbol = symbol.replace('-PERP', '_USDT');
-      } else if (symbol.includes('-')) {
-        // For other formats like BTC-USDT, just replace - with _
-        gateSymbol = symbol.replace('-', '_');
-      }
-      
-      // Map interval format: 1min -> 1m, 5min -> 5m
-      const gateInterval = interval === '1min' ? '1m' : '5m';
-      
-      const endAt = Math.floor(Date.now() / 1000);
-      const startAt = endAt - (interval === '1min' ? 120 : 600); // Get last 2 minutes or 10 minutes
-
+      // Use backend API with PERP format (e.g., SOL-PERP, BTC-PERP)
       const response = await fetch(
-        `https://api.gateio.ws/api/v4/futures/usdt/candlesticks?contract=${gateSymbol}&from=${startAt}&to=${endAt}&interval=${gateInterval}`,
+        `https://trading.watchup.site/api/futures/market/${symbol}/klines?interval=${interval}`,
         {
           headers: {
             'Accept': 'application/json',
@@ -165,14 +135,15 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
 
       const data = await response.json();
       if (data && data.length > 0) {
+        // Get the latest candle from the response
         const latestCandle = data[data.length - 1];
         const newCandle: CandleData = {
-          time: latestCandle.t * 1000,
-          open: parseFloat(latestCandle.o),
-          high: parseFloat(latestCandle.h),
-          low: parseFloat(latestCandle.l),
-          close: parseFloat(latestCandle.c),
-          volume: parseFloat(latestCandle.v || 0)
+          time: latestCandle.time * 1000, // Convert to milliseconds
+          open: parseFloat(latestCandle.open),
+          high: parseFloat(latestCandle.high),
+          low: parseFloat(latestCandle.low),
+          close: parseFloat(latestCandle.close),
+          volume: parseFloat(latestCandle.volume || 0)
         };
 
         setChartData(prev => {
