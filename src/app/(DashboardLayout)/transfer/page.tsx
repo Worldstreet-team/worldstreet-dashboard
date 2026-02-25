@@ -593,6 +593,34 @@ export default function TransferPage() {
 
   const hasSpotWallets = spotWallets.length > 0;
 
+  // Check if user is sending a token and needs native token for gas
+  const isTokenTransfer = (asset: string, chain: string) => {
+    if (asset === 'USDT' || asset === 'USDC') return true;
+    return false;
+  };
+
+  const getNativeTokenBalance = (chain: string) => {
+    if (chain === 'sol') return solBalance;
+    if (chain === 'evm') return ethBalance;
+    return 0;
+  };
+
+  const getMinimumGasRequirement = (chain: string) => {
+    if (chain === 'sol') return { amount: 0.01, usdValue: 1 }; // At least $1 worth
+    if (chain === 'evm') return { amount: 0.001, usdValue: 2 }; // At least $2 worth
+    return { amount: 0, usdValue: 0 };
+  };
+
+  const showGasWarning = () => {
+    if (direction !== 'main-to-spot') return false;
+    if (!isTokenTransfer(selectedAsset, selectedChain)) return false;
+    
+    const nativeBalance = getNativeTokenBalance(selectedChain);
+    const minGas = getMinimumGasRequirement(selectedChain);
+    
+    return nativeBalance < minGas.amount;
+  };
+
   // PIN handlers
   const pinRefs = React.useRef<(HTMLInputElement | null)[]>([]);
 
@@ -824,13 +852,45 @@ export default function TransferPage() {
                   75%
                 </button>
                 <button
-                  onClick={() => setAmount(currentBalance.toString())}
+                  onClick={() => setAmount((currentBalance * 0.99).toString())}
                   className="flex-1 px-3 py-2 bg-primary/10 text-primary rounded-lg text-sm font-medium hover:bg-primary/20 transition-colors"
                 >
                   Max
                 </button>
               </div>
+              
+              {/* Gas Fee Info */}
+              <div className="mt-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-start gap-2">
+                <Icon icon="ph:info" className="text-amber-500 shrink-0 mt-0.5" width={16} />
+                <div className="text-xs text-amber-600 dark:text-amber-400">
+                  <p className="font-semibold mb-1">Max is 99% of available balance</p>
+                  <p>The remaining 1% is reserved for potential gas fees to ensure successful transaction processing.</p>
+                </div>
+              </div>
             </div>
+
+            {/* Gas Fee Warning for Token Transfers */}
+            {showGasWarning() && (
+              <div className="mt-4 p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl flex items-start gap-3">
+                <Icon icon="ph:warning" className="text-orange-500 shrink-0" width={20} />
+                <div className="text-sm text-orange-600 dark:text-orange-400">
+                  <p className="font-semibold mb-1">Insufficient Gas Funds</p>
+                  <p className="mb-2">
+                    You need {selectedChain === 'sol' ? 'SOL' : 'ETH'} to pay for transaction fees when sending {selectedAsset}.
+                  </p>
+                  <p className="text-xs">
+                    Required: At least <span className="font-semibold">
+                      {selectedChain === 'sol' ? '0.01 SOL (~$1)' : '0.001 ETH (~$2)'}
+                    </span> in your wallet
+                  </p>
+                  <p className="text-xs mt-1">
+                    Current balance: <span className="font-semibold">
+                      {getNativeTokenBalance(selectedChain).toFixed(6)} {selectedChain === 'sol' ? 'SOL' : 'ETH'}
+                    </span>
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Alerts */}
             {(direction === 'spot-to-futures' || direction === 'futures-to-spot') && (

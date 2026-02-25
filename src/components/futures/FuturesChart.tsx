@@ -43,6 +43,10 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
 
   useEffect(() => {
     if (symbol) {
+      // Clear existing data when symbol changes
+      setChartData([]);
+      setError(null);
+      
       fetchHistoricalData();
       startPolling();
     }
@@ -126,9 +130,12 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
 
   const fetchLiveUpdate = async () => {
     try {
+      // Use current symbol from state
+      const currentSymbol = propSymbol || selectedMarket?.symbol || 'BTC-PERP';
+      
       // Use Next.js API route as proxy
       const response = await fetch(
-        `/api/futures/klines?symbol=${symbol}&interval=${timeInterval}`
+        `/api/futures/klines?symbol=${currentSymbol}&interval=${timeInterval}`
       );
 
       if (!response.ok) {

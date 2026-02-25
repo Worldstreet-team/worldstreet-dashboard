@@ -93,7 +93,7 @@ const FuturesPage: React.FC = () => {
           {/* Trading Chart */}
           <div className="h-[600px]">
             <FuturesChart 
-              symbol={selectedMarket?.symbol || 'BTC-USDT'}
+              symbol={selectedMarket?.symbol}
               isDarkMode={true}
             />
           </div>
