@@ -23,7 +23,7 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
   isDarkMode = true,
 }) => {
   const { selectedMarket, markets, setSelectedMarket } = useFuturesStore();
-  const symbol = propSymbol || selectedMarket?.symbol || 'BTC-USDT';
+  const symbol = propSymbol || selectedMarket?.symbol || 'BTC-PERP';
   
   const [timeInterval, setTimeInterval] = useState('1min');
   const [chartData, setChartData] = useState<CandleData[]>([]);
