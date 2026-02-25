@@ -139,11 +139,10 @@ const SidebarContent: MenuItem[] = [
         name: "Futures",
         icon: 'ph:trend-up-duotone',
         id: uniqueId(),
-        url: "/spot",
+        url: "/futures",
         badge: true,
         badgeType: "filled",
       },
-
       {
         name: "Swap",
         icon: 'ph:swap-duotone',
