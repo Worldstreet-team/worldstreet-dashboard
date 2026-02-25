@@ -95,9 +95,20 @@ export function useFuturesTrading() {
     
     try {
       const response = await fetch('/api/futures/collateral?chain=solana');
+      
+      if (response.status === 404) {
+        // Wallet not found - this is expected for new users
+        setCollateral(null);
+        return;
+      }
+      
       if (response.ok) {
         const data = await response.json();
         setCollateral(data.collateral || null);
+      } else {
+        const errorData = await response.json();
+        console.error('Failed to fetch collateral:', errorData);
+        setError(errorData.message || 'Failed to fetch collateral');
       }
     } catch (err) {
       console.error('Failed to fetch collateral:', err);

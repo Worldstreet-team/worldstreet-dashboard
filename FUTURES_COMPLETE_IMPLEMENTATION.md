@@ -331,3 +331,23 @@ The futures trading system is now fully functional with:
 - User-friendly UI components
 
 Users can now trade perpetual futures on Drift Protocol with up to 10x leverage, manage their collateral, and monitor their positions in real-time.
+
+---
+
+## Known Backend Issue
+
+### Drift Client Initialization
+
+**Problem**: The backend may fail with "Cannot read properties of null (reading 'publicKey')" error.
+
+**Cause**: The backend needs to initialize a separate Drift client for each user with their specific futures wallet keypair.
+
+**Solution**: See `BACKEND_DRIFT_INITIALIZATION_FIX.md` for detailed backend implementation guide.
+
+**Frontend Handling**: The frontend now gracefully handles 404 responses when a futures wallet doesn't exist and prompts users to create one.
+
+**Key Points**:
+- Each user must have their own futures wallet created first
+- Backend must fetch user's wallet from database before initializing Drift
+- Backend must create a new DriftClient instance per request with user's keypair
+- Never reuse Drift clients across different users

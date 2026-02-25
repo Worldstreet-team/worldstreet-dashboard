@@ -34,12 +34,25 @@ export const CollateralPanel: React.FC = () => {
     setLoading(true);
     try {
       const response = await fetch('/api/futures/collateral?chain=solana');
+      
+      if (response.status === 404) {
+        // Wallet not found - show message to create wallet
+        setCollateral(null);
+        setError('Futures wallet not found. Please create a futures wallet first.');
+        return;
+      }
+      
       if (response.ok) {
         const data = await response.json();
         setCollateral(data);
+        setError('');
+      } else {
+        const errorData = await response.json();
+        setError(errorData.message || 'Failed to fetch collateral');
       }
     } catch (err) {
       console.error('Failed to fetch collateral:', err);
+      setError('Failed to fetch collateral');
     } finally {
       setLoading(false);
     }
@@ -129,6 +142,24 @@ export const CollateralPanel: React.FC = () => {
       <div className="bg-white dark:bg-darkgray rounded-lg border border-border dark:border-darkborder p-6">
         <div className="flex items-center justify-center py-8">
           <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        </div>
+      </div>
+    );
+  }
+
+  // Show wallet creation message if no collateral data
+  if (!collateral && error) {
+    return (
+      <div className="bg-white dark:bg-darkgray rounded-lg border border-border dark:border-darkborder p-4">
+        <h3 className="text-lg font-semibold text-dark dark:text-white mb-4">Collateral (USDC)</h3>
+        <div className="text-center py-6">
+          <Icon icon="ph:wallet-duotone" className="mx-auto text-muted dark:text-darklink mb-3" height={48} />
+          <p className="text-sm text-muted dark:text-darklink mb-2">
+            {error}
+          </p>
+          <p className="text-xs text-muted dark:text-darklink">
+            Create a futures wallet to start trading
+          </p>
         </div>
       </div>
     );
