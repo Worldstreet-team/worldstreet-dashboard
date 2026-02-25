@@ -2,7 +2,211 @@
 
 ## 🎯 Overview
 
-A production-grade, modular charting system built with `lightweight-charts` for real-time futures trading visualization.
+A production-grade canvas-based charting system for real-time futures trading visualization, matching the spot trading implementation.
+
+## 📦 No External Dependencies
+
+This chart system uses native HTML5 Canvas API - no external charting libraries required!
+
+## 🏗️ Architecture
+
+### Canvas-Based Rendering
+Pure HTML5 Canvas with custom drawing logic.
+
+**Features:**
+- Candlestick rendering
+- Real-time WebSocket updates
+- Theme-aware colors
+- Grid and price labels
+- Current price indicator
+- OHLC stats display
+
+### WebSocket Integration
+Connects to backend WebSocket relay at `wss://trading.watchup.site`
+
+**Protocol:**
+```json
+// Subscribe
+{
+  "type": "subscribe",
+  "symbol": "BTC-USDT",
+  "interval": "1min"
+}
+
+// Receive updates
+{
+  "data": {
+    "candles": [timestamp, open, close, high, low, volume]
+  }
+}
+```
+
+## 📊 Data Flow
+
+### Initial Load
+```
+Component Mount
+    ↓
+Fetch Historical Data (REST)
+    ↓
+Parse and Transform
+    ↓
+Draw on Canvas
+    ↓
+Connect WebSocket
+    ↓
+Subscribe to Symbol
+```
+
+### Live Updates
+```
+WebSocket Message
+    ↓
+Parse Candle Data
+    ↓
+Update or Append to chartData
+    ↓
+Redraw Canvas
+```
+
+### Symbol/Interval Change
+```
+User Changes Setting
+    ↓
+Close WebSocket
+    ↓
+Fetch New Historical Data
+    ↓
+Reconnect WebSocket
+    ↓
+Subscribe to New Topic
+```
+
+## 🎨 Canvas Drawing
+
+### Chart Elements
+1. **Background** - Theme-aware (dark/light)
+2. **Grid Lines** - 5 horizontal lines with price labels
+3. **Candlesticks** - Green (up) / Red (down)
+4. **Wicks** - High/Low lines
+5. **Current Price Line** - Blue dashed line with label
+
+### Color Scheme
+```typescript
+// Dark Mode
+background: '#1a1a1a'
+gridLines: '#2a2e39'
+textColor: '#94a3b8'
+upCandle: '#26a69a'
+downCandle: '#ef5350'
+
+// Light Mode
+background: '#ffffff'
+gridLines: '#e2e8f0'
+textColor: '#64748b'
+upCandle: '#26a69a'
+downCandle: '#ef5350'
+```
+
+## 🔄 WebSocket Resilience
+
+### Auto-Reconnect
+- Reconnects after 5 seconds on disconnect
+- Resubscribes to last symbol/interval
+- Shows connection status indicator
+
+### Status Indicators
+- 🟢 Connected (green dot)
+- 🟡 Connecting (yellow pulsing dot)
+- 🔴 Disconnected (red dot)
+
+## 📝 Usage Example
+
+```typescript
+import { FuturesChart } from '@/components/futures/FuturesChart';
+
+function TradingPage() {
+  return (
+    <div className="h-[600px]">
+      <FuturesChart 
+        symbol="BTC-USDT"
+        isDarkMode={true}
+      />
+    </div>
+  );
+}
+```
+
+## 🎯 Key Features
+
+- ✅ Canvas-based rendering (no external libs)
+- ✅ Real-time WebSocket updates
+- ✅ Auto-reconnection
+- ✅ Theme support (dark/light)
+- ✅ Interval switching (1m, 5m)
+- ✅ OHLC stats display
+- ✅ Current price indicator
+- ✅ Loading states
+- ✅ Error handling
+- ✅ Responsive design
+
+## 🔧 Configuration
+
+### Supported Intervals
+- `1min` - 1 minute candles
+- `5min` - 5 minute candles
+
+### API Endpoints
+```typescript
+// Historical data
+GET /api/market/:symbol/klines?type=:interval&startAt=:start&endAt=:end
+
+// WebSocket
+wss://trading.watchup.site
+```
+
+## 🐛 Troubleshooting
+
+### Chart Not Rendering
+- Check canvas ref is set
+- Verify container has height
+- Check console for errors
+
+### No Historical Data
+- Verify API endpoint responding
+- Check network tab
+- Verify symbol format
+
+### WebSocket Not Connecting
+- Check WebSocket URL
+- Verify backend running
+- Check browser console
+
+### Updates Not Showing
+- Verify WebSocket connected
+- Check message format
+- Verify data transformation
+
+## ⚡ Performance
+
+- Handles 100 candles efficiently
+- Redraws only on data change
+- Auto-limits candle history
+- Minimal memory footprint
+- No external library overhead
+
+## 🎉 Summary
+
+The futures chart system uses the same proven canvas-based approach as spot trading:
+- Simple and maintainable
+- No external dependencies
+- Fast and efficient
+- Theme-aware
+- Real-time updates
+- Production-ready
+
+**Matches spot trading implementation perfectly!**
+
 
 ## 📦 Installation
 
