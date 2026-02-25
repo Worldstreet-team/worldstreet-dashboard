@@ -62,8 +62,16 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
     setLoading(true);
     setError(null);
     try {
-      // Convert symbol format: BTC-USDT -> BTC_USDT for Gate.io
-      const gateSymbol = symbol.replace('-', '_');
+      // Convert symbol format for Gate.io
+      // SOL-PERP -> SOL_USDT, BTC-PERP -> BTC_USDT, etc.
+      let gateSymbol = symbol;
+      if (symbol.includes('-PERP')) {
+        // Replace -PERP with _USDT
+        gateSymbol = symbol.replace('-PERP', '_USDT');
+      } else if (symbol.includes('-')) {
+        // For other formats like BTC-USDT, just replace - with _
+        gateSymbol = symbol.replace('-', '_');
+      }
       
       // Map interval format: 1min -> 1m, 5min -> 5m
       const gateInterval = interval === '1min' ? '1m' : '5m';
@@ -124,8 +132,16 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
 
   const fetchLiveUpdate = async () => {
     try {
-      // Convert symbol format: BTC-USDT -> BTC_USDT for Gate.io
-      const gateSymbol = symbol.replace('-', '_');
+      // Convert symbol format for Gate.io
+      // SOL-PERP -> SOL_USDT, BTC-PERP -> BTC_USDT, etc.
+      let gateSymbol = symbol;
+      if (symbol.includes('-PERP')) {
+        // Replace -PERP with _USDT
+        gateSymbol = symbol.replace('-PERP', '_USDT');
+      } else if (symbol.includes('-')) {
+        // For other formats like BTC-USDT, just replace - with _
+        gateSymbol = symbol.replace('-', '_');
+      }
       
       // Map interval format: 1min -> 1m, 5min -> 5m
       const gateInterval = interval === '1min' ? '1m' : '5m';
