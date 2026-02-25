@@ -62,11 +62,23 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
     setLoading(true);
     setError(null);
     try {
+      // Convert symbol format: BTC-USDT -> BTC_USDT for Gate.io
+      const gateSymbol = symbol.replace('-', '_');
+      
+      // Map interval format: 1min -> 1m, 5min -> 5m
+      const gateInterval = interval === '1min' ? '1m' : '5m';
+      
       const endAt = Math.floor(Date.now() / 1000);
       const startAt = endAt - (interval === '1min' ? 3600 : 7200);
 
       const response = await fetch(
-        `https://trading.watchup.site/api/futures/market/${symbol}/klines?interval=${interval}&startAt=${startAt}&endAt=${endAt}`
+        `https://api.gateio.ws/api/v4/futures/usdt/candlesticks?contract=${gateSymbol}&from=${startAt}&to=${endAt}&interval=${gateInterval}`,
+        {
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          }
+        }
       );
 
       if (!response.ok) {
@@ -74,13 +86,13 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
       }
 
       const data = await response.json();
-      const candles = (data.data || []).map((k: any) => ({
-        time: k[0] * 1000,
-        open: parseFloat(k[1]),
-        high: parseFloat(k[3]),
-        low: parseFloat(k[4]),
-        close: parseFloat(k[2]),
-        volume: parseFloat(k[5])
+      const candles = (data || []).map((k: any) => ({
+        time: k.t * 1000,
+        open: parseFloat(k.o),
+        high: parseFloat(k.h),
+        low: parseFloat(k.l),
+        close: parseFloat(k.c),
+        volume: parseFloat(k.v || 0)
       }));
 
       setChartData(candles);
@@ -112,11 +124,23 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
 
   const fetchLiveUpdate = async () => {
     try {
+      // Convert symbol format: BTC-USDT -> BTC_USDT for Gate.io
+      const gateSymbol = symbol.replace('-', '_');
+      
+      // Map interval format: 1min -> 1m, 5min -> 5m
+      const gateInterval = interval === '1min' ? '1m' : '5m';
+      
       const endAt = Math.floor(Date.now() / 1000);
-      const startAt = endAt - 60; // Get last minute of data
+      const startAt = endAt - (interval === '1min' ? 120 : 600); // Get last 2 minutes or 10 minutes
 
       const response = await fetch(
-        `https://trading.watchup.site/api/futures/market/${symbol}/klines?interval=${interval}&startAt=${startAt}&endAt=${endAt}`
+        `https://api.gateio.ws/api/v4/futures/usdt/candlesticks?contract=${gateSymbol}&from=${startAt}&to=${endAt}&interval=${gateInterval}`,
+        {
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          }
+        }
       );
 
       if (!response.ok) {
@@ -124,15 +148,15 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
       }
 
       const data = await response.json();
-      if (data.data && data.data.length > 0) {
-        const latestCandle = data.data[data.data.length - 1];
+      if (data && data.length > 0) {
+        const latestCandle = data[data.length - 1];
         const newCandle: CandleData = {
-          time: latestCandle[0] * 1000,
-          open: parseFloat(latestCandle[1]),
-          high: parseFloat(latestCandle[3]),
-          low: parseFloat(latestCandle[4]),
-          close: parseFloat(latestCandle[2]),
-          volume: parseFloat(latestCandle[5])
+          time: latestCandle.t * 1000,
+          open: parseFloat(latestCandle.o),
+          high: parseFloat(latestCandle.h),
+          low: parseFloat(latestCandle.l),
+          close: parseFloat(latestCandle.c),
+          volume: parseFloat(latestCandle.v || 0)
         };
 
         setChartData(prev => {
