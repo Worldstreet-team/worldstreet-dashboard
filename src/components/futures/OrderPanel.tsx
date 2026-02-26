@@ -33,6 +33,7 @@ export const OrderPanel: React.FC = () => {
   useEffect(() => {
     if (!selectedMarket || !size || parseFloat(size) <= 0) {
       setPreviewData(null);
+      setError({ type: null, message: '' });
       return;
     }
 
@@ -52,12 +53,24 @@ export const OrderPanel: React.FC = () => {
           }),
         });
 
+        const data = await response.json();
+
         if (response.ok) {
-          const data = await response.json();
           setPreviewData(data);
+          setError({ type: null, message: '' });
+        } else {
+          // Handle preview errors
+          setPreviewData(null);
+          const parsedError = parseError(data.error || '', data.message || data.error || '');
+          setError(parsedError);
         }
       } catch (error) {
         console.error('Preview error:', error);
+        setPreviewData(null);
+        setError({
+          type: 'generic',
+          message: 'Failed to calculate preview. Please try again.',
+        });
       }
     };
 

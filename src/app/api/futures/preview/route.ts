@@ -50,8 +50,13 @@ export async function POST(request: NextRequest) {
     const data = await response.json();
 
     if (!response.ok) {
+      // Return detailed error with full message from backend
       return NextResponse.json(
-        { error: data.error || data.message || 'Failed to preview trade' },
+        { 
+          error: data.error || 'Failed to preview trade',
+          message: data.message || data.error || 'Failed to preview trade',
+          details: data.details || {}
+        },
         { status: response.status }
       );
     }
