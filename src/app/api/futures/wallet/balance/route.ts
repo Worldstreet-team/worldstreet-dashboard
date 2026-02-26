@@ -1,12 +1,11 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { Connection, PublicKey } from '@solana/web3.js';
 import { getAssociatedTokenAddress } from '@solana/spl-token';
 
-const BASE_API_URL = 'https://trading.watchup.site';
 const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'; // USDC on Solana mainnet
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const { userId } = await auth();
     
@@ -17,28 +16,14 @@ export async function GET() {
       );
     }
 
-    // First, get the wallet address from backend
-    const walletResponse = await fetch(
-      `${BASE_API_URL}/api/futures/wallet?userId=${userId}&chain=solana`
-    );
-
-    if (!walletResponse.ok) {
-      if (walletResponse.status === 404) {
-        return NextResponse.json(
-          { error: 'Futures wallet not found' },
-          { status: 404 }
-        );
-      }
-      throw new Error('Failed to fetch wallet address');
-    }
-
-    const walletData = await walletResponse.json();
-    const walletAddress = walletData.walletAddress;
+    // Get wallet address from query params
+    const searchParams = request.nextUrl.searchParams;
+    const walletAddress = searchParams.get('address');
 
     if (!walletAddress) {
       return NextResponse.json(
-        { error: 'Wallet address not found' },
-        { status: 404 }
+        { error: 'Wallet address is required' },
+        { status: 400 }
       );
     }
 
@@ -47,7 +32,15 @@ export async function GET() {
     const connection = new Connection(rpcUrl, 'confirmed');
 
     // Get wallet public key
-    const walletPubkey = new PublicKey(walletAddress);
+    let walletPubkey: PublicKey;
+    try {
+      walletPubkey = new PublicKey(walletAddress);
+    } catch (error) {
+      return NextResponse.json(
+        { error: 'Invalid wallet address' },
+        { status: 400 }
+      );
+    }
 
     // Get SOL balance
     const solBalance = await connection.getBalance(walletPubkey);

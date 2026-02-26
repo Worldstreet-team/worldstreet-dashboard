@@ -31,11 +31,20 @@ export const FuturesWalletBalance: React.FC = () => {
     
     try {
       const address = walletAddresses[selectedChain];
-      if (!address) return;
+      if (!address) {
+        console.log('No wallet address found in store');
+        setBalance({
+          address: '',
+          usdcBalance: 0,
+          solBalance: 0,
+          loading: false,
+        });
+        return;
+      }
 
       // For Solana, fetch USDC balance directly from RPC via API
       if (selectedChain === 'solana') {
-        const response = await fetch(`/api/futures/wallet/balance`);
+        const response = await fetch(`/api/futures/wallet/balance?address=${encodeURIComponent(address)}`);
         if (response.ok) {
           const data = await response.json();
           setBalance({
@@ -45,7 +54,9 @@ export const FuturesWalletBalance: React.FC = () => {
             loading: false,
           });
         } else {
-          // Wallet doesn't exist yet
+          const errorData = await response.json();
+          console.error('Failed to fetch balance:', errorData);
+          // Show address but zero balances on error
           setBalance({
             address,
             usdcBalance: 0,
