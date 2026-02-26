@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
 
-const REQUIRED_SOL_BALANCE = 0.5; // Minimum SOL required for initialization
+const REQUIRED_SOL_BALANCE = 0.05; // Minimum SOL required for initialization (~$5-6)
 
 export async function GET() {
   try {
