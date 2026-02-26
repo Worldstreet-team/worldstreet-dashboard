@@ -24,16 +24,12 @@ export const useFuturesData = () => {
     }
   }, [selectedChain, setMarkets, setError]);
 
+  // Positions are now fetched directly by PositionPanel using Drift API
+  // This function is kept for backward compatibility but does nothing
   const fetchPositions = useCallback(async () => {
-    try {
-      const response = await fetch(`/api/futures/positions?chain=${selectedChain}`);
-      if (!response.ok) throw new Error('Failed to fetch positions');
-      const data = await response.json();
-      setPositions(data.positions || []);
-    } catch (error) {
-      console.error('Error fetching positions:', error);
-    }
-  }, [selectedChain, setPositions]);
+    // No-op: Positions are managed by PositionPanel component
+    setPositions([]);
+  }, [setPositions]);
 
   const fetchCollateral = useCallback(async () => {
     try {
@@ -69,15 +65,16 @@ export const useFuturesData = () => {
   const refreshData = useCallback(async () => {
     setIsLoading(true);
     try {
+      // Only fetch markets and collateral
+      // Positions are managed by PositionPanel using Drift API
       await Promise.all([
         fetchMarkets(),
-        fetchPositions(),
         fetchCollateral(),
       ]);
     } finally {
       setIsLoading(false);
     }
-  }, [fetchMarkets, fetchPositions, fetchCollateral, setIsLoading]);
+  }, [fetchMarkets, fetchCollateral, setIsLoading]);
 
   useEffect(() => {
     refreshData();
