@@ -4,6 +4,19 @@ import React, { useState, useEffect } from 'react';
 import { useFuturesStore, OrderSide, OrderType } from '@/store/futuresStore';
 import { Icon } from '@iconify/react';
 
+interface ErrorState {
+  type: 'insufficient_margin' | 'order_too_small' | 'leverage_too_high' | 'insufficient_collateral' | 'oracle_unavailable' | 'market_paused' | 'volatility' | 'wallet_not_found' | 'generic' | null;
+  message: string;
+  details?: {
+    required?: number;
+    available?: number;
+    shortfall?: number;
+    minimum?: number;
+    current?: number;
+    maximum?: number;
+  };
+}
+
 export const OrderPanel: React.FC = () => {
   const { selectedMarket, selectedChain, setPreviewData, previewData, markets } = useFuturesStore();
   
@@ -13,6 +26,8 @@ export const OrderPanel: React.FC = () => {
   const [leverage, setLeverage] = useState(1);
   const [limitPrice, setLimitPrice] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<ErrorState>({ type: null, message: '' });
+  const [retryCountdown, setRetryCountdown] = useState(0);
 
   // Preview calculation
   useEffect(() => {
@@ -50,12 +65,131 @@ export const OrderPanel: React.FC = () => {
     return () => clearTimeout(debounce);
   }, [selectedMarket, size, leverage, side, orderType, limitPrice, selectedChain, setPreviewData]);
 
+  // Retry countdown effect
+  useEffect(() => {
+    if (retryCountdown > 0) {
+      const timer = setTimeout(() => {
+        setRetryCountdown(retryCountdown - 1);
+        if (retryCountdown === 1) {
+          handleSubmit();
+        }
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [retryCountdown]);
+
+  // Parse error message and extract details
+  const parseError = (errorType: string, message: string): ErrorState => {
+    // Insufficient margin
+    if (errorType === 'Insufficient margin' || message.includes('Insufficient margin')) {
+      const requiredMatch = message.match(/Required: \$([0-9.]+)/);
+      const availableMatch = message.match(/Available: \$([0-9.]+)/);
+      const shortfallMatch = message.match(/Shortfall: \$([0-9.]+)/);
+      
+      return {
+        type: 'insufficient_margin',
+        message: 'You need more collateral to open this position',
+        details: {
+          required: requiredMatch ? parseFloat(requiredMatch[1]) : undefined,
+          available: availableMatch ? parseFloat(availableMatch[1]) : undefined,
+          shortfall: shortfallMatch ? parseFloat(shortfallMatch[1]) : undefined,
+        },
+      };
+    }
+
+    // Order size too small
+    if (message.includes('Order size too small') || message.includes('Minimum:')) {
+      const minMatch = message.match(/Minimum: ([0-9.]+)/);
+      const orderMatch = message.match(/Your order: ([0-9.]+)/);
+      
+      return {
+        type: 'order_too_small',
+        message: 'Your order size is below the minimum for this market',
+        details: {
+          minimum: minMatch ? parseFloat(minMatch[1]) : undefined,
+          current: orderMatch ? parseFloat(orderMatch[1]) : undefined,
+        },
+      };
+    }
+
+    // Leverage too high
+    if (message.includes('Leverage too high') || message.includes('Max leverage')) {
+      const maxMatch = message.match(/Max leverage.*?(\d+)x/i);
+      
+      return {
+        type: 'leverage_too_high',
+        message: 'Maximum leverage exceeded for this market',
+        details: {
+          maximum: maxMatch ? parseInt(maxMatch[1]) : 10,
+          current: leverage,
+        },
+      };
+    }
+
+    // Insufficient collateral (Drift)
+    if (message.includes('Insufficient collateral')) {
+      return {
+        type: 'insufficient_collateral',
+        message: "You don't have enough USDC deposited in your Drift account",
+      };
+    }
+
+    // Oracle unavailable
+    if (message.includes('oracle')) {
+      return {
+        type: 'oracle_unavailable',
+        message: 'The price oracle for this market is updating',
+      };
+    }
+
+    // Market paused
+    if (message.includes('paused')) {
+      return {
+        type: 'market_paused',
+        message: 'Trading is temporarily paused for this market',
+      };
+    }
+
+    // High volatility
+    if (message.includes('volatile') || message.includes('volatility')) {
+      return {
+        type: 'volatility',
+        message: 'Market price is moving too quickly',
+      };
+    }
+
+    // Wallet not found
+    if (message.includes('wallet not found') || message.includes('Create one first')) {
+      return {
+        type: 'wallet_not_found',
+        message: 'You need to create a futures wallet before trading',
+      };
+    }
+
+    // Generic error
+    return {
+      type: 'generic',
+      message: message || 'An unexpected error occurred',
+    };
+  };
+
   const handleSubmit = async () => {
     if (!selectedMarket || !size || !previewData) return;
 
+    // Clear previous errors
+    setError({ type: null, message: '' });
+
     // Check margin before submitting
     if (!previewData.marginCheckPassed) {
-      alert(`Insufficient margin.\nRequired: $${previewData.totalRequired.toFixed(2)}\nAvailable: $${previewData.freeCollateral.toFixed(2)}\n\nPlease deposit more collateral.`);
+      setError({
+        type: 'insufficient_margin',
+        message: 'You need more collateral to open this position',
+        details: {
+          required: previewData.totalRequired,
+          available: previewData.freeCollateral,
+          shortfall: previewData.totalRequired - previewData.freeCollateral,
+        },
+      });
       return;
     }
 
@@ -84,17 +218,38 @@ export const OrderPanel: React.FC = () => {
         // Reset form
         setSize('');
         setLimitPrice('');
+        setError({ type: null, message: '' });
+        
+        // Show success message (you can replace alert with a toast notification)
         alert(`Position opened successfully! TX: ${result.txSignature?.slice(0, 8)}...`);
       } else {
-        // Show detailed error message from backend
-        const errorMessage = result.message || result.error || 'Failed to open position';
-        alert(errorMessage);
+        // Parse and display error
+        const parsedError = parseError(result.error || '', result.message || result.error || '');
+        setError(parsedError);
+
+        // Auto-retry for temporary errors
+        if (parsedError.type === 'oracle_unavailable' || parsedError.type === 'volatility') {
+          setRetryCountdown(5);
+        }
       }
     } catch (error) {
       console.error('Submit error:', error);
-      alert('Network error. Please try again.');
+      setError({
+        type: 'generic',
+        message: 'Network error. Please check your connection and try again.',
+      });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleFixError = () => {
+    if (error.type === 'order_too_small' && error.details?.minimum) {
+      setSize(error.details.minimum.toString());
+      setError({ type: null, message: '' });
+    } else if (error.type === 'leverage_too_high' && error.details?.maximum) {
+      setLeverage(error.details.maximum);
+      setError({ type: null, message: '' });
     }
   };
 
@@ -251,6 +406,178 @@ export const OrderPanel: React.FC = () => {
               <span>
                 ${(previewData?.estimatedFundingImpact ?? 0).toFixed(4)}
               </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Error Display */}
+      {error.type && (
+        <div className={`mb-4 p-3 rounded-lg border ${
+          error.type === 'oracle_unavailable' || error.type === 'volatility' 
+            ? 'bg-warning/10 border-warning/20' 
+            : 'bg-error/10 border-error/20'
+        }`}>
+          <div className="flex items-start gap-2">
+            <Icon 
+              icon={error.type === 'oracle_unavailable' || error.type === 'volatility' ? 'ph:warning' : 'ph:x-circle'} 
+              className={error.type === 'oracle_unavailable' || error.type === 'volatility' ? 'text-warning' : 'text-error'} 
+              height={20} 
+            />
+            <div className="flex-1">
+              <p className={`text-sm font-semibold ${
+                error.type === 'oracle_unavailable' || error.type === 'volatility' ? 'text-warning' : 'text-error'
+              }`}>
+                {error.type === 'insufficient_margin' && 'Insufficient Margin'}
+                {error.type === 'order_too_small' && 'Order Too Small'}
+                {error.type === 'leverage_too_high' && 'Leverage Too High'}
+                {error.type === 'insufficient_collateral' && 'Insufficient Collateral'}
+                {error.type === 'oracle_unavailable' && 'Market Temporarily Unavailable'}
+                {error.type === 'market_paused' && 'Market Paused'}
+                {error.type === 'volatility' && 'High Volatility'}
+                {error.type === 'wallet_not_found' && 'No Futures Wallet'}
+                {error.type === 'generic' && 'Error'}
+              </p>
+              <p className={`text-xs mt-1 ${
+                error.type === 'oracle_unavailable' || error.type === 'volatility' ? 'text-warning/80' : 'text-error/80'
+              }`}>
+                {error.message}
+              </p>
+
+              {/* Insufficient Margin Details */}
+              {error.type === 'insufficient_margin' && error.details && (
+                <div className="mt-2 space-y-1 text-xs">
+                  {error.details.required && (
+                    <div className="flex justify-between">
+                      <span className="text-muted">Required:</span>
+                      <span className="font-medium text-error">${error.details.required.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {error.details.available && (
+                    <div className="flex justify-between">
+                      <span className="text-muted">Available:</span>
+                      <span className="font-medium text-error">${error.details.available.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {error.details.shortfall && (
+                    <div className="flex justify-between">
+                      <span className="text-muted">Shortfall:</span>
+                      <span className="font-semibold text-error">${error.details.shortfall.toFixed(2)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Order Too Small Details */}
+              {error.type === 'order_too_small' && error.details && (
+                <div className="mt-2 space-y-1 text-xs">
+                  {error.details.minimum && (
+                    <div className="flex justify-between">
+                      <span className="text-muted">Minimum:</span>
+                      <span className="font-medium text-error">{error.details.minimum} {selectedMarket?.baseAsset}</span>
+                    </div>
+                  )}
+                  {error.details.current && (
+                    <div className="flex justify-between">
+                      <span className="text-muted">Your order:</span>
+                      <span className="font-medium text-error">{error.details.current} {selectedMarket?.baseAsset}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Leverage Too High Details */}
+              {error.type === 'leverage_too_high' && error.details && (
+                <div className="mt-2 space-y-1 text-xs">
+                  {error.details.maximum && (
+                    <div className="flex justify-between">
+                      <span className="text-muted">Maximum:</span>
+                      <span className="font-medium text-error">{error.details.maximum}x</span>
+                    </div>
+                  )}
+                  {error.details.current && (
+                    <div className="flex justify-between">
+                      <span className="text-muted">Your leverage:</span>
+                      <span className="font-medium text-error">{error.details.current}x</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="mt-3 flex gap-2">
+                {error.type === 'insufficient_margin' && (
+                  <a
+                    href="/futures"
+                    className="text-xs px-3 py-1.5 bg-error text-white rounded hover:bg-error/90 transition-colors"
+                  >
+                    Deposit Funds
+                  </a>
+                )}
+                {error.type === 'order_too_small' && error.details?.minimum && (
+                  <button
+                    onClick={handleFixError}
+                    className="text-xs px-3 py-1.5 bg-error text-white rounded hover:bg-error/90 transition-colors"
+                  >
+                    Set to {error.details.minimum} {selectedMarket?.baseAsset}
+                  </button>
+                )}
+                {error.type === 'leverage_too_high' && error.details?.maximum && (
+                  <button
+                    onClick={handleFixError}
+                    className="text-xs px-3 py-1.5 bg-error text-white rounded hover:bg-error/90 transition-colors"
+                  >
+                    Set to {error.details.maximum}x
+                  </button>
+                )}
+                {error.type === 'insufficient_collateral' && (
+                  <>
+                    <a
+                      href="/futures"
+                      className="text-xs px-3 py-1.5 bg-error text-white rounded hover:bg-error/90 transition-colors"
+                    >
+                      Deposit USDC
+                    </a>
+                    <button
+                      onClick={() => window.location.reload()}
+                      className="text-xs px-3 py-1.5 bg-muted/30 dark:bg-white/5 text-dark dark:text-white rounded hover:bg-muted/40 transition-colors"
+                    >
+                      Check Balance
+                    </button>
+                  </>
+                )}
+                {(error.type === 'oracle_unavailable' || error.type === 'volatility') && (
+                  <button
+                    onClick={() => retryCountdown === 0 && handleSubmit()}
+                    disabled={retryCountdown > 0}
+                    className="text-xs px-3 py-1.5 bg-warning text-white rounded hover:bg-warning/90 transition-colors disabled:opacity-50"
+                  >
+                    {retryCountdown > 0 ? `Retry in ${retryCountdown}s` : 'Retry Now'}
+                  </button>
+                )}
+                {error.type === 'market_paused' && (
+                  <a
+                    href="/futures"
+                    className="text-xs px-3 py-1.5 bg-error text-white rounded hover:bg-error/90 transition-colors"
+                  >
+                    View Other Markets
+                  </a>
+                )}
+                {error.type === 'wallet_not_found' && (
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="text-xs px-3 py-1.5 bg-error text-white rounded hover:bg-error/90 transition-colors"
+                  >
+                    Create Wallet
+                  </button>
+                )}
+                <button
+                  onClick={() => setError({ type: null, message: '' })}
+                  className="text-xs px-3 py-1.5 bg-muted/30 dark:bg-white/5 text-dark dark:text-white rounded hover:bg-muted/40 transition-colors"
+                >
+                  Dismiss
+                </button>
+              </div>
             </div>
           </div>
         </div>
