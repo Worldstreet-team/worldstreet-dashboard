@@ -5,7 +5,7 @@ import { useFuturesStore, OrderSide, OrderType } from '@/store/futuresStore';
 import { Icon } from '@iconify/react';
 
 export const OrderPanel: React.FC = () => {
-  const { selectedMarket, selectedChain, collateral, setPreviewData, previewData, markets } = useFuturesStore();
+  const { selectedMarket, selectedChain, setPreviewData, previewData, markets } = useFuturesStore();
   
   const [side, setSide] = useState<OrderSide>('long');
   const [orderType, setOrderType] = useState<OrderType>('market');
@@ -53,6 +53,12 @@ export const OrderPanel: React.FC = () => {
   const handleSubmit = async () => {
     if (!selectedMarket || !size || !previewData) return;
 
+    // Check margin before submitting
+    if (!previewData.marginCheckPassed) {
+      alert(`Insufficient margin.\nRequired: $${previewData.totalRequired.toFixed(2)}\nAvailable: $${previewData.freeCollateral.toFixed(2)}\n\nPlease deposit more collateral.`);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       // Determine marketIndex from market symbol
@@ -72,19 +78,21 @@ export const OrderPanel: React.FC = () => {
         }),
       });
 
+      const result = await response.json();
+
       if (response.ok) {
-        const result = await response.json();
         // Reset form
         setSize('');
         setLimitPrice('');
         alert(`Position opened successfully! TX: ${result.txSignature?.slice(0, 8)}...`);
       } else {
-        const error = await response.json();
-        alert(error.error || 'Failed to open position');
+        // Show detailed error message from backend
+        const errorMessage = result.message || result.error || 'Failed to open position';
+        alert(errorMessage);
       }
     } catch (error) {
       console.error('Submit error:', error);
-      alert('Failed to open position');
+      alert('Network error. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -94,8 +102,12 @@ export const OrderPanel: React.FC = () => {
     !size || 
     parseFloat(size) <= 0 || 
     !previewData ||
-    (collateral && previewData.requiredMargin > collateral.free) ||
+    !previewData.marginCheckPassed ||
     isSubmitting;
+
+  const shortfall = previewData && !previewData.marginCheckPassed
+    ? (previewData.totalRequired ?? 0) - (previewData.freeCollateral ?? 0)
+    : 0;
 
   return (
     <div className="bg-white dark:bg-darkgray rounded-lg border border-border dark:border-darkborder p-4">
@@ -202,28 +214,44 @@ export const OrderPanel: React.FC = () => {
       {previewData && (
         <div className="bg-gray-50 dark:bg-dark rounded-lg p-3 mb-4 space-y-2">
           <div className="flex justify-between text-sm">
-            <span className="text-muted dark:text-darklink">Required Margin:</span>
+            <span className="text-muted dark:text-darklink">Base Margin:</span>
             <span className="font-medium text-dark dark:text-white">
-              ${previewData?.requiredMargin?.toFixed(2) || '0.00'}
+              ${(previewData?.requiredMargin ?? 0).toFixed(2)}
             </span>
           </div>
           <div className="flex justify-between text-sm">
-            <span className="text-muted dark:text-darklink">Est. Liquidation:</span>
-            <span className="font-medium text-error">
-              ${previewData?.estimatedLiquidationPrice?.toFixed(2) || '0.00'}
+            <span className="text-muted dark:text-darklink">Trading Fee (0.1%):</span>
+            <span className="font-medium text-dark dark:text-white">
+              ${(previewData?.estimatedFee ?? 0).toFixed(2)}
             </span>
           </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-muted dark:text-darklink">Est. Fee:</span>
-            <span className="font-medium text-dark dark:text-white">
-              ${previewData?.estimatedFee?.toFixed(2) || '0.00'}
+          <div className="flex justify-between text-sm border-t border-border dark:border-darkborder pt-2">
+            <span className="font-semibold text-dark dark:text-white">Total Required:</span>
+            <span className="font-semibold text-dark dark:text-white">
+              ${(previewData?.totalRequired ?? 0).toFixed(2)}
             </span>
           </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-muted dark:text-darklink">Funding Impact:</span>
-            <span className="font-medium text-dark dark:text-white">
-              ${previewData?.estimatedFundingImpact?.toFixed(4) || '0.0000'}
+          <div className={`flex justify-between text-sm ${
+            previewData?.marginCheckPassed ? 'text-success' : 'text-error'
+          }`}>
+            <span>Your Available:</span>
+            <span className="font-medium">
+              ${(previewData?.freeCollateral ?? 0).toFixed(2)}
             </span>
+          </div>
+          <div className="border-t border-border dark:border-darkborder pt-2 mt-2 space-y-1">
+            <div className="flex justify-between text-xs text-muted dark:text-darklink">
+              <span>Est. Liquidation:</span>
+              <span className="text-error">
+                ${(previewData?.estimatedLiquidationPrice ?? 0).toFixed(2)}
+              </span>
+            </div>
+            <div className="flex justify-between text-xs text-muted dark:text-darklink">
+              <span>Funding Impact:</span>
+              <span>
+                ${(previewData?.estimatedFundingImpact ?? 0).toFixed(4)}
+              </span>
+            </div>
           </div>
         </div>
       )}
@@ -243,8 +271,45 @@ export const OrderPanel: React.FC = () => {
         {isSubmitting ? 'Opening...' : `Open ${side === 'long' ? 'Long' : 'Short'}`}
       </button>
 
-      {collateral && previewData && previewData.requiredMargin > collateral.free && (
-        <p className="text-xs text-error mt-2">Insufficient margin available</p>
+      {/* Insufficient Margin Warning */}
+      {previewData && !previewData.marginCheckPassed && shortfall > 0 && (
+        <div className="mt-3 p-3 bg-error/10 border border-error/20 rounded-lg">
+          <div className="flex items-start gap-2">
+            <Icon icon="ph:warning-duotone" className="text-error flex-shrink-0 mt-0.5" height={18} />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-error">Insufficient Margin</p>
+              <p className="text-xs text-error/80 mt-1">
+                Need ${shortfall.toFixed(2)} more to open this position.
+              </p>
+              <a 
+                href="/futures" 
+                className="text-xs text-error underline hover:no-underline mt-1 inline-block"
+              >
+                Deposit collateral →
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Low Margin Buffer Warning */}
+      {previewData && previewData.marginCheckPassed && previewData.freeCollateral > 0 && (
+        (() => {
+          const ratio = previewData.freeCollateral / previewData.totalRequired;
+          if (ratio < 1.1 && ratio >= 1.0) {
+            return (
+              <div className="mt-3 p-3 bg-warning/10 border border-warning/20 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <Icon icon="ph:info" className="text-warning flex-shrink-0 mt-0.5" height={18} />
+                  <p className="text-xs text-warning">
+                    Low margin buffer. Position may be at risk of liquidation.
+                  </p>
+                </div>
+              </div>
+            );
+          }
+          return null;
+        })()
       )}
     </div>
   );

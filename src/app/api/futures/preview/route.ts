@@ -66,16 +66,25 @@ export async function POST(request: NextRequest) {
       markPrice: parseFloat(preview.markPrice || 0),
       notionalValue: parseFloat(preview.notionalValue || 0),
       requiredMargin: parseFloat(preview.requiredMargin || 0),
-      estimatedFees: parseFloat(preview.estimatedFees || 0),
+      estimatedFees: parseFloat(preview.estimatedFees || preview.estimatedFee || 0),
+      estimatedFee: parseFloat(preview.estimatedFee || preview.estimatedFees || 0),
       totalCost: parseFloat(preview.totalCost || 0),
+      // New margin validation fields
+      totalRequired: parseFloat(preview.totalRequired || preview.totalCost || 0),
+      freeCollateral: parseFloat(preview.freeCollateral || 0),
+      marginCheckPassed: preview.marginCheckPassed ?? true,
+      // Liquidation
       liquidationPrice: parseFloat(preview.liquidationPrice || 0),
       estimatedLiquidationPrice: parseFloat(preview.liquidationPrice || 0),
+      maintenanceMargin: parseFloat(preview.maintenanceMargin || 0),
+      // Leverage and ratios
       maxLeverageAllowed: parseFloat(preview.maxLeverageAllowed || 10),
       marginRatio: parseFloat(preview.marginRatio || 0),
       maintenanceMarginRatio: parseFloat(preview.maintenanceMarginRatio || 0.05),
+      // Other
       priceImpact: parseFloat(preview.priceImpact || 0),
-      estimatedFee: parseFloat(preview.estimatedFees || 0),
       estimatedFundingImpact: parseFloat(preview.fundingImpact || 0),
+      fundingImpact: parseFloat(preview.fundingImpact || 0),
     });
   } catch (error) {
     console.error('Preview API error:', error);
