@@ -7,6 +7,7 @@ import { OrderPanel } from '@/components/futures/OrderPanel';
 import { PositionPanel } from '@/components/futures/PositionPanel';
 import { RiskPanel } from '@/components/futures/RiskPanel';
 import { WalletModal } from '@/components/futures/WalletModal';
+import { SolRequirementModal } from '@/components/futures/SolRequirementModal';
 import { FuturesChart } from '@/components/futures/FuturesChart';
 import { FuturesWalletBalance } from '@/components/futures/FuturesWalletBalance';
 import { CollateralPanel } from '@/components/futures/CollateralPanel';
@@ -14,11 +15,23 @@ import { useFuturesData } from '@/hooks/useFuturesData';
 import { useFuturesStore } from '@/store/futuresStore';
 import { Icon } from '@iconify/react';
 
+interface SolBalanceCheck {
+  hasWallet: boolean;
+  hasSufficientSol: boolean;
+  requiredSol: number;
+  currentSol: number;
+  shortfall: number;
+  walletAddress?: string;
+  message: string;
+}
+
 const FuturesPage: React.FC = () => {
   const { selectedChain, selectedMarket, markets, walletAddresses, isLoading, setSelectedMarket } = useFuturesStore();
   const { fetchWallet } = useFuturesData();
   const [showWalletModal, setShowWalletModal] = useState(false);
+  const [showSolRequirementModal, setShowSolRequirementModal] = useState(false);
   const [walletChecked, setWalletChecked] = useState(false);
+  const [solBalanceCheck, setSolBalanceCheck] = useState<SolBalanceCheck | null>(null);
 
   // Auto-select first market when markets load
   useEffect(() => {
@@ -33,6 +46,19 @@ const FuturesPage: React.FC = () => {
         const result = await fetchWallet();
         if (!result.exists) {
           setShowWalletModal(true);
+          setWalletChecked(true);
+          return;
+        }
+
+        // Wallet exists, now check SOL balance
+        const solCheckResponse = await fetch('/api/futures/check-sol-balance');
+        if (solCheckResponse.ok) {
+          const solCheck: SolBalanceCheck = await solCheckResponse.json();
+          setSolBalanceCheck(solCheck);
+
+          if (!solCheck.hasSufficientSol) {
+            setShowSolRequirementModal(true);
+          }
         }
       } catch (error) {
         console.error('Error checking wallet:', error);
@@ -61,6 +87,29 @@ const FuturesPage: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      {/* SOL Requirement Warning Banner */}
+      {solBalanceCheck && !solBalanceCheck.hasSufficientSol && (
+        <div className="bg-warning/10 border-2 border-warning/30 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <Icon icon="ph:warning-duotone" className="text-warning flex-shrink-0 mt-0.5" height={24} />
+            <div className="flex-1">
+              <h4 className="text-sm font-semibold text-warning mb-1">SOL Required for Initialization</h4>
+              <p className="text-xs text-warning/80 mb-3">
+                You need at least {solBalanceCheck.requiredSol} SOL in your futures wallet to initialize your Drift account. 
+                Current balance: {solBalanceCheck.currentSol.toFixed(4)} SOL
+              </p>
+              <button
+                onClick={() => setShowSolRequirementModal(true)}
+                className="px-4 py-2 bg-warning text-white rounded-lg text-sm font-medium hover:bg-warning/90 transition-colors"
+              >
+                <Icon icon="ph:wallet" className="inline mr-2" height={16} />
+                Add SOL to Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="bg-white dark:bg-darkgray rounded-lg border border-border dark:border-darkborder p-4">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -122,6 +171,18 @@ const FuturesPage: React.FC = () => {
         onClose={() => setShowWalletModal(false)}
         onWalletCreated={handleWalletCreated}
       />
+
+      {/* SOL Requirement Modal */}
+      {solBalanceCheck && !solBalanceCheck.hasSufficientSol && (
+        <SolRequirementModal
+          isOpen={showSolRequirementModal}
+          onClose={() => setShowSolRequirementModal(false)}
+          requiredSol={solBalanceCheck.requiredSol}
+          currentSol={solBalanceCheck.currentSol}
+          shortfall={solBalanceCheck.shortfall}
+          walletAddress={solBalanceCheck.walletAddress || ''}
+        />
+      )}
     </div>
   );
 };
