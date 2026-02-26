@@ -30,7 +30,7 @@ export const MarketSelector: React.FC = () => {
           <div className="text-sm">
             <span className="text-muted dark:text-darklink">Mark:</span>
             <span className="ml-1 font-semibold text-dark dark:text-white">
-              ${selectedMarket.markPrice.toFixed(2) || 0}
+              ${selectedMarket?.markPrice?.toFixed(2) || 0}
             </span>
           </div>
           <div className="text-sm">
