@@ -95,8 +95,8 @@ const FuturesPage: React.FC = () => {
             <div className="flex-1">
               <h4 className="text-sm font-semibold text-warning mb-1">SOL Required for Initialization</h4>
               <p className="text-xs text-warning/80 mb-3">
-                You need at least {solBalanceCheck.requiredSol} SOL in your futures wallet to initialize your Drift account. 
-                Current balance: {solBalanceCheck.currentSol.toFixed(4)} SOL
+                You need at least {solBalanceCheck.requiredSol ?? 0} SOL in your futures wallet to initialize your Drift account. 
+                Current balance: {(solBalanceCheck.currentSol ?? 0).toFixed(4)} SOL
               </p>
               <button
                 onClick={() => setShowSolRequirementModal(true)}
