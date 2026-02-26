@@ -353,25 +353,25 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
             <div>
               <span className="text-muted dark:text-darklink">O: </span>
               <span className="text-dark dark:text-white font-mono font-semibold">
-                {chartData[chartData.length - 1]?.open.toFixed(2)}
+                {chartData[chartData.length - 1]?.open?.toFixed(2) || '0.00'}
               </span>
             </div>
             <div>
               <span className="text-muted dark:text-darklink">H: </span>
               <span className="text-success font-mono font-semibold">
-                {chartData[chartData.length - 1]?.high.toFixed(2)}
+                {chartData[chartData.length - 1]?.high?.toFixed(2) || '0.00'}
               </span>
             </div>
             <div>
               <span className="text-muted dark:text-darklink">L: </span>
               <span className="text-error font-mono font-semibold">
-                {chartData[chartData.length - 1]?.low.toFixed(2)}
+                {chartData[chartData.length - 1]?.low?.toFixed(2) || '0.00'}
               </span>
             </div>
             <div>
               <span className="text-muted dark:text-darklink">C: </span>
               <span className="text-dark dark:text-white font-mono font-bold">
-                {chartData[chartData.length - 1]?.close.toFixed(2) || 0}
+                {chartData[chartData.length - 1]?.close?.toFixed(2) || '0.00'}
               </span>
             </div>
           </div>

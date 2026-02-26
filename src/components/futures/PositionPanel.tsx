@@ -126,21 +126,21 @@ export const PositionPanel: React.FC = () => {
                   </span>
                 </td>
                 <td className="py-3 px-2 text-sm text-right text-dark dark:text-white">
-                  {position.baseAmount.toFixed(4)}
+                  {position.baseAmount?.toFixed(4) || '0.0000'}
                 </td>
                 <td className="py-3 px-2 text-sm text-right text-dark dark:text-white">
-                  ${position.entryPrice.toFixed(2)}
+                  ${position.entryPrice?.toFixed(2) || '0.00'}
                 </td>
                 <td className="py-3 px-2 text-sm text-right text-dark dark:text-white">
-                  ${position.quoteAmount.toFixed(2)}
+                  ${position.quoteAmount?.toFixed(2) || '0.00'}
                 </td>
                 <td className={`py-3 px-2 text-sm text-right font-semibold ${
-                  position.unrealizedPnl >= 0 ? 'text-success' : 'text-error'
+                  (position.unrealizedPnl || 0) >= 0 ? 'text-success' : 'text-error'
                 }`}>
-                  {position.unrealizedPnl >= 0 ? '+' : ''}${position.unrealizedPnl.toFixed(2)}
+                  {(position.unrealizedPnl || 0) >= 0 ? '+' : ''}${(position.unrealizedPnl || 0).toFixed(2)}
                 </td>
                 <td className="py-3 px-2 text-sm text-right text-dark dark:text-white">
-                  {position.leverage.toFixed(1)}x
+                  {position.leverage?.toFixed(1) || '1.0'}x
                 </td>
                 <td className="py-3 px-2 text-center">
                   <button
