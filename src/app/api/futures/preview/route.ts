@@ -20,24 +20,27 @@ export async function POST(request: NextRequest) {
     // Validate required fields
     if (!chain || !market || !side || !size || !leverage) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Missing required fields: chain, market, side, size, leverage' },
         { status: 400 }
       );
     }
 
+    // Prepare request body for backend API
     const requestBody: any = {
       userId,
       chain,
       market,
       side: side.toUpperCase(),
       size: size.toString(),
-      leverage,
+      leverage: parseInt(leverage.toString()),
     };
 
+    // Add optional entryPrice if provided
     if (entryPrice) {
       requestBody.entryPrice = entryPrice.toString();
     }
 
+    // Call backend preview API
     const response = await fetch(`${BASE_API_URL}/api/futures/preview`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -48,48 +51,53 @@ export async function POST(request: NextRequest) {
 
     if (!response.ok) {
       return NextResponse.json(
-        { error: data.message || data.error || 'Failed to preview trade' },
+        { error: data.error || data.message || 'Failed to preview trade' },
         { status: response.status }
       );
     }
 
-    // Transform backend response to frontend format
+    // Backend returns: { userId, chain, preview: {...} }
     const preview = data.preview || {};
     
+    // Return the preview data with all margin validation fields
     return NextResponse.json({
+      // Market info
       market: preview.market,
-      marketIndex: preview.marketIndex,
       side: preview.side,
       size: parseFloat(preview.size || size),
-      leverage: parseFloat(preview.leverage || leverage),
+      leverage: parseInt(preview.leverage || leverage),
       entryPrice: parseFloat(preview.entryPrice || 0),
-      markPrice: parseFloat(preview.markPrice || 0),
+      
+      // Position value
       notionalValue: parseFloat(preview.notionalValue || 0),
+      
+      // Margin requirements
       requiredMargin: parseFloat(preview.requiredMargin || 0),
-      estimatedFees: parseFloat(preview.estimatedFees || preview.estimatedFee || 0),
-      estimatedFee: parseFloat(preview.estimatedFee || preview.estimatedFees || 0),
-      totalCost: parseFloat(preview.totalCost || 0),
-      // New margin validation fields
-      totalRequired: parseFloat(preview.totalRequired || preview.totalCost || 0),
+      estimatedFee: parseFloat(preview.estimatedFee || 0),
+      totalRequired: parseFloat(preview.totalRequired || 0),
+      
+      // User's collateral
+      userCollateral: parseFloat(preview.userCollateral || 0),
       freeCollateral: parseFloat(preview.freeCollateral || 0),
       marginCheckPassed: preview.marginCheckPassed ?? true,
-      // Liquidation
+      
+      // Risk metrics
       liquidationPrice: parseFloat(preview.liquidationPrice || 0),
       estimatedLiquidationPrice: parseFloat(preview.liquidationPrice || 0),
       maintenanceMargin: parseFloat(preview.maintenanceMargin || 0),
-      // Leverage and ratios
-      maxLeverageAllowed: parseFloat(preview.maxLeverageAllowed || 10),
-      marginRatio: parseFloat(preview.marginRatio || 0),
-      maintenanceMarginRatio: parseFloat(preview.maintenanceMarginRatio || 0.05),
-      // Other
-      priceImpact: parseFloat(preview.priceImpact || 0),
-      estimatedFundingImpact: parseFloat(preview.fundingImpact || 0),
+      
+      // Funding
       fundingImpact: parseFloat(preview.fundingImpact || 0),
+      estimatedFundingImpact: parseFloat(preview.fundingImpact || 0),
+      
+      // Additional fields for compatibility
+      maxLeverageAllowed: 10,
+      isPlaceholder: preview.isPlaceholder ?? false,
     });
   } catch (error) {
     console.error('Preview API error:', error);
     return NextResponse.json(
-      { error: 'Internal error', message: (error as Error).message },
+      { error: 'Internal server error', message: (error as Error).message },
       { status: 500 }
     );
   }
