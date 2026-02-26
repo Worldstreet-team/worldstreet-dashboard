@@ -295,11 +295,11 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
             {currentPrice && (
               <div className="flex items-center gap-2">
                 <span className="text-xl font-bold text-dark dark:text-white">
-                  ${currentPrice.toFixed(2)}
+                  ${currentPrice?.toFixed(2) || 0}
                 </span>
                 {priceChange !== null && (
                   <span className={`text-sm font-medium ${priceChange >= 0 ? 'text-success' : 'text-error'}`}>
-                    {priceChange >= 0 ? '+' : ''}{priceChange.toFixed(2)}%
+                    {priceChange >= 0 ? '+' : ''}{priceChange?.toFixed(2) || 0}%
                   </span>
                 )}
               </div>
@@ -371,7 +371,7 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
             <div>
               <span className="text-muted dark:text-darklink">C: </span>
               <span className="text-dark dark:text-white font-mono font-bold">
-                {chartData[chartData.length - 1]?.close.toFixed(2)}
+                {chartData[chartData.length - 1]?.close.toFixed(2) || 0}
               </span>
             </div>
           </div>

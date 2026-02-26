@@ -180,7 +180,7 @@ export const RiskPanel: React.FC = () => {
           <div className="flex justify-between items-center">
             <span className="text-sm text-muted dark:text-darklink">Account Leverage</span>
             <span className="text-sm font-semibold text-dark dark:text-white">
-              {accountSummary.leverage.toFixed(2)}x
+              {accountSummary?.leverage?.toFixed(2) || 0}x
             </span>
           </div>
 
@@ -190,7 +190,7 @@ export const RiskPanel: React.FC = () => {
             <span className={`text-sm font-semibold ${
               accountSummary.unrealizedPnl >= 0 ? 'text-success' : 'text-error'
             }`}>
-              {accountSummary.unrealizedPnl >= 0 ? '+' : ''}${accountSummary.unrealizedPnl.toFixed(2)}
+              {accountSummary.unrealizedPnl >= 0 ? '+' : ''}${accountSummary?.unrealizedPnl?.toFixed(2) || 0}
             </span>
           </div>
 

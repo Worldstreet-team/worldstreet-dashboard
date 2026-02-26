@@ -95,7 +95,7 @@ export const FuturesWalletBalance: React.FC = () => {
             <span className="text-sm font-medium text-dark dark:text-white">USDT</span>
           </div>
           <span className="text-sm font-semibold text-dark dark:text-white font-mono">
-            {balance.loading ? '...' : balance.usdtBalance.toFixed(2)}
+            {balance.loading ? '...' : balance?.usdtBalance?.toFixed(2) || 0}
           </span>
         </div>
 

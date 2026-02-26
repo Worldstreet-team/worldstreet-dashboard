@@ -204,25 +204,25 @@ export const OrderPanel: React.FC = () => {
           <div className="flex justify-between text-sm">
             <span className="text-muted dark:text-darklink">Required Margin:</span>
             <span className="font-medium text-dark dark:text-white">
-              ${previewData.requiredMargin.toFixed(2)}
+              ${previewData.requiredMargin.toFixed(2) || 0}
             </span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-muted dark:text-darklink">Est. Liquidation:</span>
             <span className="font-medium text-error">
-              ${previewData.estimatedLiquidationPrice.toFixed(2)}
+              ${previewData?.estimatedLiquidationPrice?.toFixed(2) || 0}
             </span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-muted dark:text-darklink">Est. Fee:</span>
             <span className="font-medium text-dark dark:text-white">
-              ${previewData.estimatedFee.toFixed(2)}
+              ${previewData?.estimatedFee?.toFixed(2) || 0}
             </span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-muted dark:text-darklink">Funding Impact:</span>
             <span className="font-medium text-dark dark:text-white">
-              ${previewData.estimatedFundingImpact.toFixed(4)}
+              ${previewData?.estimatedFundingImpact?.toFixed(4) || 0}
             </span>
           </div>
         </div>
