@@ -6,7 +6,7 @@ import { useFuturesStore } from '@/store/futuresStore';
 
 interface WalletBalance {
   address: string;
-  usdtBalance: number;
+  usdcBalance: number;
   solBalance: number;
   loading: boolean;
 }
@@ -15,7 +15,7 @@ export const FuturesWalletBalance: React.FC = () => {
   const { selectedChain, walletAddresses } = useFuturesStore();
   const [balance, setBalance] = useState<WalletBalance>({
     address: '',
-    usdtBalance: 0,
+    usdcBalance: 0,
     solBalance: 0,
     loading: true,
   });
@@ -33,14 +33,14 @@ export const FuturesWalletBalance: React.FC = () => {
       const address = walletAddresses[selectedChain];
       if (!address) return;
 
-      // For Solana, fetch USDT balance from backend (uses userId internally)
+      // For Solana, fetch USDC balance directly from RPC via API
       if (selectedChain === 'solana') {
         const response = await fetch(`/api/futures/wallet/balance`);
         if (response.ok) {
           const data = await response.json();
           setBalance({
             address: data.walletAddress || address,
-            usdtBalance: data.usdtBalance || 0,
+            usdcBalance: data.usdcBalance || data.usdtBalance || 0,
             solBalance: data.solBalance || 0,
             loading: false,
           });
@@ -48,7 +48,7 @@ export const FuturesWalletBalance: React.FC = () => {
           // Wallet doesn't exist yet
           setBalance({
             address,
-            usdtBalance: 0,
+            usdcBalance: 0,
             solBalance: 0,
             loading: false,
           });
@@ -84,18 +84,18 @@ export const FuturesWalletBalance: React.FC = () => {
       </div>
 
       <div className="space-y-2">
-        {/* USDT Balance */}
+        {/* USDC Balance */}
         <div className="flex items-center justify-between p-3 bg-muted/20 dark:bg-white/5 rounded-lg">
           <div className="flex items-center gap-2">
             <img 
-              src="https://cryptologos.cc/logos/tether-usdt-logo.png" 
-              alt="USDT" 
+              src="https://cryptologos.cc/logos/usd-coin-usdc-logo.png" 
+              alt="USDC" 
               className="w-6 h-6 rounded-full"
             />
-            <span className="text-sm font-medium text-dark dark:text-white">USDT</span>
+            <span className="text-sm font-medium text-dark dark:text-white">USDC</span>
           </div>
           <span className="text-sm font-semibold text-dark dark:text-white font-mono">
-            {balance.loading ? '...' : (balance?.usdtBalance ?? 0).toFixed(2)}
+            {balance.loading ? '...' : (balance?.usdcBalance ?? 0).toFixed(2)}
           </span>
         </div>
 
