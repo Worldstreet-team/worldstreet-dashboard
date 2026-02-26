@@ -95,7 +95,7 @@ export const FuturesWalletBalance: React.FC = () => {
             <span className="text-sm font-medium text-dark dark:text-white">USDT</span>
           </div>
           <span className="text-sm font-semibold text-dark dark:text-white font-mono">
-            {balance.loading ? '...' : balance?.usdtBalance?.toFixed(2) || 0}
+            {balance.loading ? '...' : (balance?.usdtBalance ?? 0).toFixed(2)}
           </span>
         </div>
 
@@ -113,7 +113,7 @@ export const FuturesWalletBalance: React.FC = () => {
           <span className={`text-sm font-semibold font-mono ${
             hasLowGas ? 'text-error' : 'text-dark dark:text-white'
           }`}>
-            {balance.loading ? '...' : balance.solBalance.toFixed(4)}
+            {balance.loading ? '...' : (balance.solBalance ?? 0).toFixed(4)}
           </span>
         </div>
 
