@@ -11,8 +11,10 @@ import { SolRequirementModal } from '@/components/futures/SolRequirementModal';
 import { FuturesChart } from '@/components/futures/FuturesChart';
 import { FuturesWalletBalance } from '@/components/futures/FuturesWalletBalance';
 import { CollateralPanel } from '@/components/futures/CollateralPanel';
+import { DriftAccountStatus } from '@/components/futures/DriftAccountStatus';
 import { useFuturesData } from '@/hooks/useFuturesData';
 import { useFuturesStore } from '@/store/futuresStore';
+import { useDrift } from '@/app/context/driftContext';
 import { Icon } from '@iconify/react';
 
 interface SolBalanceCheck {
@@ -29,6 +31,7 @@ interface SolBalanceCheck {
 const FuturesPage: React.FC = () => {
   const { selectedChain, selectedMarket, markets, walletAddresses, isLoading, setSelectedMarket } = useFuturesStore();
   const { fetchWallet } = useFuturesData();
+  const { isInitialized, needsInitialization, startAutoRefresh, stopAutoRefresh } = useDrift();
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [showSolRequirementModal, setShowSolRequirementModal] = useState(false);
   const [walletChecked, setWalletChecked] = useState(false);
@@ -40,6 +43,14 @@ const FuturesPage: React.FC = () => {
       setSelectedMarket(markets[0]);
     }
   }, [markets, selectedMarket, setSelectedMarket]);
+
+  // Start auto-refresh when account is initialized
+  useEffect(() => {
+    if (isInitialized) {
+      startAutoRefresh(30000); // Refresh every 30 seconds
+      return () => stopAutoRefresh();
+    }
+  }, [isInitialized, startAutoRefresh, stopAutoRefresh]);
 
   useEffect(() => {
     const checkWallet = async () => {
@@ -89,6 +100,9 @@ const FuturesPage: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      {/* Drift Account Status */}
+      <DriftAccountStatus />
+
       {/* SOL Requirement Warning Banner */}
       {solBalanceCheck && !solBalanceCheck.isDriftInitialized && !solBalanceCheck.hasSufficientSol && (
         <div className="bg-warning/10 border-2 border-warning/30 rounded-lg p-4">

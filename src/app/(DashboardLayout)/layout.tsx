@@ -15,6 +15,7 @@ import { SolanaProvider } from "@/app/context/solanaContext";
 import { EvmProvider } from "@/app/context/evmContext";
 import { BitcoinProvider } from "@/app/context/bitcoinContext";
 import { SwapProvider } from "@/app/context/swapContext";
+import { DriftProvider } from "@/app/context/driftContext";
 
 import { PinSetupModal, WalletAddressSync } from "@/components/wallet";
 import DashboardVividProvider from "@/components/dashboard/DashboardVividProvider";
@@ -77,49 +78,51 @@ export default function Layout({
                   <EvmProvider>
                     <BitcoinProvider>
                       <SwapProvider>
+                        <DriftProvider>
 
-                        {/* Syncs wallet addresses to chain contexts */}
-                        <WalletAddressSync />
-                        <DashboardVividProvider>
-                          <div className="flex w-full h-screen overflow-hidden">
-                            <div className="page-wrapper flex w-full h-full">
-                              {/* Header/sidebar */}
-                              {activeLayout == "vertical" ? <Sidebar /> : null}
-                              <div className="body-wrapper w-full h-full flex flex-col overflow-hidden">
-                                {/* Top Header  */}
-                                {activeLayout == "horizontal" ? (
-                                  <Header layoutType="horizontal" />
-                                ) : (
-                                  <Header layoutType="vertical" />
-                                )}
+                          {/* Syncs wallet addresses to chain contexts */}
+                          <WalletAddressSync />
+                          <DashboardVividProvider>
+                            <div className="flex w-full h-screen overflow-hidden">
+                              <div className="page-wrapper flex w-full h-full">
+                                {/* Header/sidebar */}
+                                {activeLayout == "vertical" ? <Sidebar /> : null}
+                                <div className="body-wrapper w-full h-full flex flex-col overflow-hidden">
+                                  {/* Top Header  */}
+                                  {activeLayout == "horizontal" ? (
+                                    <Header layoutType="horizontal" />
+                                  ) : (
+                                    <Header layoutType="vertical" />
+                                  )}
 
-                                {/* Body Content - Scrollable */}
-                                <div className="relative z-0 flex-1 bg-herobg dark:bg-dark transition-colors duration-300 overflow-y-auto overflow-x-hidden">
-                                  {/* Subtle ambient glow */}
-                                  <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/5 blur-[120px] rounded-full -translate-y-1/2 translate-x-1/3 pointer-events-none" />
-                                  <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-warning/3 blur-[100px] rounded-full translate-y-1/3 -translate-x-1/4 pointer-events-none" />
-                                  <div
-                                    className={`relative z-1 ${isLayout == "full"
-                                      ? "w-full p-6 lg:p-8"
-                                      : "container xl:max-w-7xl mx-auto px-6 lg:px-8 py-6 lg:py-8"
-                                      } ${activeLayout == "horizontal" ? "xl:mt-3" : ""}
-            `}
-                                  >
-                                    <div className="animate-fade-in">
-                                      {children}
+                                  {/* Body Content - Scrollable */}
+                                  <div className="relative z-0 flex-1 bg-herobg dark:bg-dark transition-colors duration-300 overflow-y-auto overflow-x-hidden">
+                                    {/* Subtle ambient glow */}
+                                    <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/5 blur-[120px] rounded-full -translate-y-1/2 translate-x-1/3 pointer-events-none" />
+                                    <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-warning/3 blur-[100px] rounded-full translate-y-1/3 -translate-x-1/4 pointer-events-none" />
+                                    <div
+                                      className={`relative z-1 ${isLayout == "full"
+                                        ? "w-full p-6 lg:p-8"
+                                        : "container xl:max-w-7xl mx-auto px-6 lg:px-8 py-6 lg:py-8"
+                                        } ${activeLayout == "horizontal" ? "xl:mt-3" : ""}
+              `}
+                                    >
+                                      <div className="animate-fade-in">
+                                        {children}
+                                      </div>
                                     </div>
                                   </div>
+                                  <Customizer />
+                                  <ProfileDrawer />
                                 </div>
-                                <Customizer />
-                                <ProfileDrawer />
                               </div>
                             </div>
-                          </div>
-                      
-                          {/* Wallet PIN Setup Modal */}
-                          <PinSetupModal />
-                        </DashboardVividProvider>
+                        
+                            {/* Wallet PIN Setup Modal */}
+                            <PinSetupModal />
+                          </DashboardVividProvider>
 
+                        </DriftProvider>
                       </SwapProvider>
                     </BitcoinProvider>
                   </EvmProvider>
