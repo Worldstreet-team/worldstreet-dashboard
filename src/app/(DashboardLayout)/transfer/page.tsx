@@ -406,12 +406,19 @@ export default function TransferPage() {
     setLoading(true);
 
     try {
-      // Get the main wallet address for the selected asset
+      // Get the main wallet address for the selected asset and chain
       let destinationAddress = '';
       if (selectedAsset === 'SOL') {
         destinationAddress = addresses?.solana || '';
-      } else if (selectedAsset === 'ETH' || selectedAsset === 'USDT' || selectedAsset === 'USDC') {
+      } else if (selectedAsset === 'ETH') {
         destinationAddress = addresses?.ethereum || '';
+      } else if (selectedAsset === 'USDT' || selectedAsset === 'USDC') {
+        // For stablecoins, use the selected chain
+        if (selectedChain === 'sol') {
+          destinationAddress = addresses?.solana || '';
+        } else {
+          destinationAddress = addresses?.ethereum || '';
+        }
       }
 
       if (!destinationAddress) {
