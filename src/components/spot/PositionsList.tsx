@@ -30,7 +30,12 @@ interface TPSLOrder {
   status: string;
 }
 
-export default function PositionsList() {
+interface PositionsListProps {
+  selectedChartSymbol?: string;
+  onPositionTPSLUpdate?: (symbol: string, tp: string | null, sl: string | null) => void;
+}
+
+export default function PositionsList({ selectedChartSymbol, onPositionTPSLUpdate }: PositionsListProps = {}) {
   const { user } = useAuth();
   const [positions, setPositions] = useState<Position[]>([]);
   const [loading, setLoading] = useState(true);
@@ -97,6 +102,22 @@ export default function PositionsList() {
     );
 
     setTpslOrders(orders);
+
+    // Notify parent about TP/SL for the selected chart symbol
+    if (onPositionTPSLUpdate && selectedChartSymbol) {
+      const matchingPosition = positions.find(p => p.symbol === selectedChartSymbol);
+      if (matchingPosition && orders[matchingPosition.id]) {
+        const tpsl = orders[matchingPosition.id];
+        onPositionTPSLUpdate(
+          matchingPosition.symbol,
+          tpsl.take_profit_price,
+          tpsl.stop_loss_price
+        );
+      } else if (matchingPosition) {
+        // Clear TP/SL if no order exists
+        onPositionTPSLUpdate(matchingPosition.symbol, null, null);
+      }
+    }
   };
 
   const handleOpenTPSL = (position: Position) => {
@@ -109,6 +130,21 @@ export default function PositionsList() {
     fetchTPSLOrders();
     setTimeout(() => setCloseSuccess(null), 5000);
   };
+
+  // Notify parent when selected chart symbol changes
+  useEffect(() => {
+    if (onPositionTPSLUpdate && selectedChartSymbol && positions.length > 0) {
+      const matchingPosition = positions.find(p => p.symbol === selectedChartSymbol);
+      if (matchingPosition && tpslOrders[matchingPosition.id]) {
+        const tpsl = tpslOrders[matchingPosition.id];
+        onPositionTPSLUpdate(
+          matchingPosition.symbol,
+          tpsl.take_profit_price,
+          tpsl.stop_loss_price
+        );
+      }
+    }
+  }, [selectedChartSymbol, positions, tpslOrders, onPositionTPSLUpdate]);
 
   const handleClosePosition = async (positionId: string) => {
     if (!confirm('Are you sure you want to close this position? This will sell your assets at the current market price.')) {

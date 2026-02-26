@@ -11,6 +11,12 @@ export default function SpotTradingPage() {
   const [stopLoss, setStopLoss] = useState('');
   const [takeProfit, setTakeProfit] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
+  const [showTPSLLines, setShowTPSLLines] = useState(true);
+  const [activePositionTPSL, setActivePositionTPSL] = useState<{
+    symbol: string;
+    takeProfit: string | null;
+    stopLoss: string | null;
+  } | null>(null);
 
   const handleUpdateLevels = (sl: string, tp: string) => {
     setStopLoss(sl);
@@ -21,6 +27,19 @@ export default function SpotTradingPage() {
     // Trigger refresh of balances and order history
     setRefreshKey(prev => prev + 1);
   }, []);
+
+  const handlePositionTPSLUpdate = useCallback((symbol: string, tp: string | null, sl: string | null) => {
+    setActivePositionTPSL({ symbol, takeProfit: tp, stopLoss: sl });
+  }, []);
+
+  // Determine which TP/SL to show on chart
+  const chartStopLoss = showTPSLLines && activePositionTPSL?.symbol === selectedPair 
+    ? activePositionTPSL.stopLoss || stopLoss 
+    : stopLoss;
+  
+  const chartTakeProfit = showTPSLLines && activePositionTPSL?.symbol === selectedPair 
+    ? activePositionTPSL.takeProfit || takeProfit 
+    : takeProfit;
 
   return (
     <div className="space-y-6">
@@ -42,15 +61,40 @@ export default function SpotTradingPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Live Chart - Takes 2 columns */}
         <div className="lg:col-span-2 space-y-6">
-          <LiveChart 
-            symbol={selectedPair}
-            stopLoss={stopLoss}
-            takeProfit={takeProfit}
-            onUpdateLevels={handleUpdateLevels}
-          />
+          <div className="relative">
+            <LiveChart 
+              symbol={selectedPair}
+              stopLoss={chartStopLoss}
+              takeProfit={chartTakeProfit}
+              onUpdateLevels={handleUpdateLevels}
+            />
+            
+            {/* TP/SL Toggle Button */}
+            {activePositionTPSL && activePositionTPSL.symbol === selectedPair && (
+              <button
+                onClick={() => setShowTPSLLines(!showTPSLLines)}
+                className={`absolute top-6 right-6 z-10 px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center gap-2 shadow-lg ${
+                  showTPSLLines
+                    ? 'bg-primary text-white hover:bg-primary/90'
+                    : 'bg-white dark:bg-black text-dark dark:text-white border border-border dark:border-darkborder hover:bg-muted/30 dark:hover:bg-white/5'
+                }`}
+                title={showTPSLLines ? 'Hide TP/SL lines' : 'Show TP/SL lines'}
+              >
+                <Icon 
+                  icon={showTPSLLines ? 'ph:eye' : 'ph:eye-slash'} 
+                  width={16} 
+                />
+                {showTPSLLines ? 'Hide' : 'Show'} TP/SL
+              </button>
+            )}
+          </div>
 
           {/* Positions List */}
-          <PositionsList key={`positions-${refreshKey}`} />
+          <PositionsList 
+            key={`positions-${refreshKey}`}
+            selectedChartSymbol={selectedPair}
+            onPositionTPSLUpdate={handlePositionTPSLUpdate}
+          />
 
           {/* Order History */}
           <OrderHistory key={`history-${refreshKey}`} />
