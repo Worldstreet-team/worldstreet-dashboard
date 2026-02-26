@@ -248,34 +248,25 @@ const PortfolioStats = () => {
                   <p className="text-[10px] text-muted mt-0.5">USDT Balance</p>
                 </div>
               </div>
-            </div>
-            
-            {/* Network Selector */}
-            <div className="flex gap-2 mb-3">
-              <button
-                onClick={() => setSelectedNetwork('solana')}
-                className={cn(
-                  "flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5",
-                  selectedNetwork === 'solana'
-                    ? "bg-primary text-white shadow-sm"
-                    : "bg-muted/30 dark:bg-white/5 text-muted hover:bg-muted/50 dark:hover:bg-white/10"
-                )}
-              >
-                <img src="https://cryptologos.cc/logos/solana-sol-logo.png" alt="SOL" className="w-4 h-4 rounded-full" />
-                Solana
-              </button>
-              <button
-                onClick={() => setSelectedNetwork('ethereum')}
-                className={cn(
-                  "flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5",
-                  selectedNetwork === 'ethereum'
-                    ? "bg-primary text-white shadow-sm"
-                    : "bg-muted/30 dark:bg-white/5 text-muted hover:bg-muted/50 dark:hover:bg-white/10"
-                )}
-              >
-                <img src="https://cryptologos.cc/logos/ethereum-eth-logo.png" alt="ETH" className="w-4 h-4 rounded-full" />
-                Ethereum
-              </button>
+              {/* Compact Network Dropdown */}
+              <div className="relative">
+                <select
+                  value={selectedNetwork}
+                  onChange={(e) => setSelectedNetwork(e.target.value as 'solana' | 'ethereum')}
+                  className="appearance-none bg-muted/20 dark:bg-white/5 border border-border/50 dark:border-white/10 rounded-lg pl-7 pr-6 py-1.5 text-[11px] font-medium text-dark dark:text-white cursor-pointer hover:bg-muted/30 dark:hover:bg-white/10 transition-colors focus:outline-none focus:ring-1 focus:ring-primary/50"
+                >
+                  <option value="solana">Solana</option>
+                  <option value="ethereum">Ethereum</option>
+                </select>
+                <img
+                  src={selectedNetwork === 'solana'
+                    ? "https://cryptologos.cc/logos/solana-sol-logo.png"
+                    : "https://cryptologos.cc/logos/ethereum-eth-logo.png"}
+                  alt=""
+                  className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full pointer-events-none"
+                />
+                <Icon icon="solar:alt-arrow-down-linear" className="absolute right-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted pointer-events-none" />
+              </div>
             </div>
 
             <h3 className="text-2xl font-bold text-dark dark:text-white tracking-tight mb-2">
