@@ -10,13 +10,16 @@ import { WalletModal } from '@/components/futures/WalletModal';
 import { FuturesChart } from '@/components/futures/FuturesChart';
 import { FuturesWalletBalance } from '@/components/futures/FuturesWalletBalance';
 import { CollateralPanel } from '@/components/futures/CollateralPanel';
+import { DriftAccountStatus } from '@/components/futures/DriftAccountStatus';
 import { useFuturesData } from '@/hooks/useFuturesData';
 import { useFuturesStore } from '@/store/futuresStore';
+import { useDrift } from '@/app/context/driftContext';
 import { Icon } from '@iconify/react';
 
 const FuturesPage: React.FC = () => {
-  const { selectedChain, selectedMarket, markets, walletAddresses, isLoading, setSelectedMarket } = useFuturesStore();
+  const { selectedChain, selectedMarket, markets, walletAddresses, setSelectedMarket } = useFuturesStore();
   const { fetchWallet } = useFuturesData();
+  const { isInitialized, startAutoRefresh, stopAutoRefresh } = useDrift();
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [walletChecked, setWalletChecked] = useState(false);
 
@@ -26,6 +29,14 @@ const FuturesPage: React.FC = () => {
       setSelectedMarket(markets[0]);
     }
   }, [markets, selectedMarket, setSelectedMarket]);
+
+  // Start auto-refresh when account is initialized
+  useEffect(() => {
+    if (isInitialized) {
+      startAutoRefresh(30000); // Refresh every 30 seconds
+      return () => stopAutoRefresh();
+    }
+  }, [isInitialized, startAutoRefresh, stopAutoRefresh]);
 
   useEffect(() => {
     const checkWallet = async () => {
@@ -61,6 +72,9 @@ const FuturesPage: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      {/* Drift Account Status */}
+      <DriftAccountStatus />
+
       {/* Header */}
       <div className="bg-white dark:bg-darkgray rounded-lg border border-border dark:border-darkborder p-4">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
