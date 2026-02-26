@@ -33,7 +33,8 @@ export const CollateralPanel: React.FC = () => {
   const fetchCollateral = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/futures/collateral?chain=solana');
+      // Use Drift account summary endpoint
+      const response = await fetch('/api/drift/account/summary');
       
       if (response.status === 404) {
         // Wallet not found - show message to create wallet
@@ -44,11 +45,18 @@ export const CollateralPanel: React.FC = () => {
       
       if (response.ok) {
         const data = await response.json();
-        setCollateral(data);
+        // Map Drift account summary to collateral format
+        setCollateral({
+          total: data.totalCollateral || 0,
+          available: data.freeCollateral || 0,
+          used: (data.totalCollateral || 0) - (data.freeCollateral || 0),
+          currency: 'USDC',
+          exists: true,
+        });
         setError('');
       } else {
         const errorData = await response.json();
-        setError(errorData.message || 'Failed to fetch collateral');
+        setError(errorData.error || 'Failed to fetch collateral');
       }
     } catch (err) {
       console.error('Failed to fetch collateral:', err);
@@ -69,11 +77,11 @@ export const CollateralPanel: React.FC = () => {
     setSuccess('');
 
     try {
-      const response = await fetch('/api/futures/collateral/deposit', {
+      // Use Drift deposit endpoint
+      const response = await fetch('/api/drift/collateral/deposit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          chain: 'solana',
           amount: parseFloat(amount),
         }),
       });
@@ -81,7 +89,7 @@ export const CollateralPanel: React.FC = () => {
       const data = await response.json();
 
       if (response.ok) {
-        setSuccess(`Successfully deposited ${amount} USDC`);
+        setSuccess(`Successfully deposited ${amount} USDC. TX: ${data.txSignature?.slice(0, 8)}...`);
         setAmount('');
         setAction(null);
         await fetchCollateral();
@@ -111,11 +119,11 @@ export const CollateralPanel: React.FC = () => {
     setSuccess('');
 
     try {
-      const response = await fetch('/api/futures/collateral/withdraw', {
+      // Use Drift withdraw endpoint
+      const response = await fetch('/api/drift/collateral/withdraw', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          chain: 'solana',
           amount: parseFloat(amount),
         }),
       });
@@ -123,7 +131,7 @@ export const CollateralPanel: React.FC = () => {
       const data = await response.json();
 
       if (response.ok) {
-        setSuccess(`Successfully withdrew ${amount} USDC`);
+        setSuccess(`Successfully withdrew ${amount} USDC. TX: ${data.txSignature?.slice(0, 8)}...`);
         setAmount('');
         setAction(null);
         await fetchCollateral();

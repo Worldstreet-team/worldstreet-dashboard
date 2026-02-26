@@ -58,26 +58,26 @@ export const OrderPanel: React.FC = () => {
       // Determine marketIndex from market symbol
       const marketIndex = markets.findIndex(m => m.id === selectedMarket.id);
       
-      const response = await fetch('/api/futures/open', {
+      // Use Drift API for opening positions
+      const response = await fetch('/api/drift/position/open', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          chain: selectedChain,
-          market: selectedMarket.symbol,
           marketIndex: marketIndex >= 0 ? marketIndex : 0,
-          side,
-          size: parseFloat(size),
+          direction: side,
+          baseAmount: parseFloat(size),
           leverage,
           orderType,
-          limitPrice: limitPrice ? parseFloat(limitPrice) : undefined,
+          price: limitPrice ? parseFloat(limitPrice) : undefined,
         }),
       });
 
       if (response.ok) {
+        const result = await response.json();
         // Reset form
         setSize('');
         setLimitPrice('');
-        alert('Position opened successfully');
+        alert(`Position opened successfully! TX: ${result.txSignature?.slice(0, 8)}...`);
       } else {
         const error = await response.json();
         alert(error.error || 'Failed to open position');

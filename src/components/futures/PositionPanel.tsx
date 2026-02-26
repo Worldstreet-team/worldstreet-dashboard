@@ -1,40 +1,72 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useFuturesStore } from '@/store/futuresStore';
+import { useDriftTrading, DriftPosition } from '@/hooks/useDriftTrading';
 import { Icon } from '@iconify/react';
 
 export const PositionPanel: React.FC = () => {
-  const { positions, selectedChain } = useFuturesStore();
-  const [closingPosition, setClosingPosition] = useState<string | null>(null);
+  const { selectedChain, markets } = useFuturesStore();
+  const { closePosition, fetchPositions } = useDriftTrading();
+  const [positions, setPositions] = useState<DriftPosition[]>([]);
+  const [closingMarketIndex, setClosingMarketIndex] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const handleClose = async (positionId: string) => {
+  // Fetch positions on mount and periodically
+  useEffect(() => {
+    const loadPositions = async () => {
+      setLoading(true);
+      try {
+        const data = await fetchPositions();
+        setPositions(data);
+      } catch (error) {
+        console.error('Failed to load positions:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadPositions();
+    const interval = setInterval(loadPositions, 10000); // Refresh every 10 seconds
+    return () => clearInterval(interval);
+  }, [fetchPositions]);
+
+  const handleClose = async (marketIndex: number) => {
     if (!confirm('Are you sure you want to close this position?')) return;
 
-    setClosingPosition(positionId);
+    setClosingMarketIndex(marketIndex);
     try {
-      const response = await fetch('/api/futures/close', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chain: selectedChain,
-          positionId,
-        }),
-      });
-
-      if (response.ok) {
-        alert('Position closed successfully');
-      } else {
-        const error = await response.json();
-        alert(error.message || 'Failed to close position');
-      }
+      const result = await closePosition(marketIndex);
+      alert(`Position closed successfully! TX: ${result.txSignature?.slice(0, 8)}...`);
+      
+      // Refresh positions
+      const data = await fetchPositions();
+      setPositions(data);
     } catch (error) {
       console.error('Close error:', error);
-      alert('Failed to close position');
+      alert((error as Error).message || 'Failed to close position');
     } finally {
-      setClosingPosition(null);
+      setClosingMarketIndex(null);
     }
   };
+
+  // Get market symbol from index
+  const getMarketSymbol = (marketIndex: number) => {
+    const market = markets[marketIndex];
+    return market?.symbol || `Market ${marketIndex}`;
+  };
+
+  if (loading && positions.length === 0) {
+    return (
+      <div className="bg-white dark:bg-darkgray rounded-lg border border-border dark:border-darkborder p-6">
+        <h3 className="text-lg font-semibold text-dark dark:text-white mb-4">Open Positions</h3>
+        <div className="text-center py-8">
+          <Icon icon="svg-spinners:ring-resize" className="mx-auto text-primary mb-2" height={32} />
+          <p className="text-muted dark:text-darklink text-sm">Loading positions...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (positions.length === 0) {
     return (
@@ -50,7 +82,19 @@ export const PositionPanel: React.FC = () => {
 
   return (
     <div className="bg-white dark:bg-darkgray rounded-lg border border-border dark:border-darkborder p-4">
-      <h3 className="text-lg font-semibold text-dark dark:text-white mb-4">Open Positions</h3>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold text-dark dark:text-white">Open Positions</h3>
+        <button
+          onClick={async () => {
+            const data = await fetchPositions();
+            setPositions(data);
+          }}
+          className="p-1.5 hover:bg-muted/30 dark:hover:bg-white/5 rounded-lg transition-colors"
+          title="Refresh"
+        >
+          <Icon icon="ph:arrow-clockwise" className="text-muted" width={18} />
+        </button>
+      </div>
       
       <div className="overflow-x-auto">
         <table className="w-full">
@@ -60,49 +104,51 @@ export const PositionPanel: React.FC = () => {
               <th className="text-left py-2 px-2 text-xs font-medium text-muted dark:text-darklink">Side</th>
               <th className="text-right py-2 px-2 text-xs font-medium text-muted dark:text-darklink">Size</th>
               <th className="text-right py-2 px-2 text-xs font-medium text-muted dark:text-darklink">Entry</th>
-              <th className="text-right py-2 px-2 text-xs font-medium text-muted dark:text-darklink">Mark</th>
+              <th className="text-right py-2 px-2 text-xs font-medium text-muted dark:text-darklink">Value</th>
               <th className="text-right py-2 px-2 text-xs font-medium text-muted dark:text-darklink">PnL</th>
               <th className="text-right py-2 px-2 text-xs font-medium text-muted dark:text-darklink">Leverage</th>
-              <th className="text-right py-2 px-2 text-xs font-medium text-muted dark:text-darklink">Liq. Price</th>
-              <th className="text-right py-2 px-2 text-xs font-medium text-muted dark:text-darklink">Margin Ratio</th>
               <th className="text-center py-2 px-2 text-xs font-medium text-muted dark:text-darklink">Actions</th>
             </tr>
           </thead>
           <tbody>
             {positions.map((position) => (
-              <tr key={position.id} className="border-b border-border dark:border-darkborder hover:bg-gray-50 dark:hover:bg-dark">
-                <td className="py-3 px-2 text-sm font-medium text-dark dark:text-white">{position.market}</td>
+              <tr key={position.marketIndex} className="border-b border-border dark:border-darkborder hover:bg-gray-50 dark:hover:bg-dark">
+                <td className="py-3 px-2 text-sm font-medium text-dark dark:text-white">
+                  {getMarketSymbol(position.marketIndex)}
+                </td>
                 <td className="py-3 px-2">
                   <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                    position.side === 'long' 
+                    position.direction === 'long' 
                       ? 'bg-success/10 text-success' 
                       : 'bg-error/10 text-error'
                   }`}>
-                    {position.side.toUpperCase()}
+                    {position.direction.toUpperCase()}
                   </span>
                 </td>
-                <td className="py-3 px-2 text-sm text-right text-dark dark:text-white">{position.size.toFixed(4)}</td>
-                <td className="py-3 px-2 text-sm text-right text-dark dark:text-white">${position.entryPrice.toFixed(2)}</td>
-                <td className="py-3 px-2 text-sm text-right text-dark dark:text-white">${position.markPrice.toFixed(2)}</td>
-                <td className={`py-3 px-2 text-sm text-right font-semibold ${
-                  position.unrealizedPnL >= 0 ? 'text-success' : 'text-error'
-                }`}>
-                  {position.unrealizedPnL >= 0 ? '+' : ''}${position.unrealizedPnL.toFixed(2)}
+                <td className="py-3 px-2 text-sm text-right text-dark dark:text-white">
+                  {position.baseAmount.toFixed(4)}
                 </td>
-                <td className="py-3 px-2 text-sm text-right text-dark dark:text-white">{position.leverage}x</td>
-                <td className="py-3 px-2 text-sm text-right text-error">${position.liquidationPrice.toFixed(2)}</td>
-                <td className={`py-3 px-2 text-sm text-right font-medium ${
-                  position.marginRatio < 0.2 ? 'text-error' : 'text-dark dark:text-white'
+                <td className="py-3 px-2 text-sm text-right text-dark dark:text-white">
+                  ${position.entryPrice.toFixed(2)}
+                </td>
+                <td className="py-3 px-2 text-sm text-right text-dark dark:text-white">
+                  ${position.quoteAmount.toFixed(2)}
+                </td>
+                <td className={`py-3 px-2 text-sm text-right font-semibold ${
+                  position.unrealizedPnl >= 0 ? 'text-success' : 'text-error'
                 }`}>
-                  {(position.marginRatio * 100).toFixed(2)}%
+                  {position.unrealizedPnl >= 0 ? '+' : ''}${position.unrealizedPnl.toFixed(2)}
+                </td>
+                <td className="py-3 px-2 text-sm text-right text-dark dark:text-white">
+                  {position.leverage.toFixed(1)}x
                 </td>
                 <td className="py-3 px-2 text-center">
                   <button
-                    onClick={() => handleClose(position.id)}
-                    disabled={closingPosition === position.id}
+                    onClick={() => handleClose(position.marketIndex)}
+                    disabled={closingMarketIndex === position.marketIndex}
                     className="px-3 py-1 rounded text-xs font-medium bg-error/10 text-error hover:bg-error/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
-                    {closingPosition === position.id ? 'Closing...' : 'Close'}
+                    {closingMarketIndex === position.marketIndex ? 'Closing...' : 'Close'}
                   </button>
                 </td>
               </tr>
