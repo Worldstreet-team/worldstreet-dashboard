@@ -359,7 +359,6 @@ export function SwapProvider({ children }: { children: ReactNode }) {
         const isFromSolana = swapQuote.fromChain === "solana";
 
         if (isFromSolana) {
-          // ── Solana transaction path ────────────────────────────────────
           if (!encryptedKeys.solana?.encryptedPrivateKey) {
             throw new Error("Solana wallet not available");
           }

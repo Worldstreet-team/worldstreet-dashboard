@@ -33,9 +33,16 @@ interface TPSLOrder {
 interface PositionsListProps {
   selectedChartSymbol?: string;
   onPositionTPSLUpdate?: (symbol: string, tp: string | null, sl: string | null) => void;
+  showTPSLLines?: boolean;
+  onToggleTPSLLines?: () => void;
 }
 
-export default function PositionsList({ selectedChartSymbol, onPositionTPSLUpdate }: PositionsListProps = {}) {
+export default function PositionsList({ 
+  selectedChartSymbol, 
+  onPositionTPSLUpdate,
+  showTPSLLines = true,
+  onToggleTPSLLines
+}: PositionsListProps = {}) {
   const { user } = useAuth();
   const [positions, setPositions] = useState<Position[]>([]);
   const [loading, setLoading] = useState(true);
@@ -224,6 +231,29 @@ export default function PositionsList({ selectedChartSymbol, onPositionTPSLUpdat
             <h3 className="font-semibold text-dark dark:text-white">Positions</h3>
           </div>
           <div className="flex items-center gap-2">
+            {/* TP/SL Chart Toggle - Only show if there's a matching position with TP/SL */}
+            {activeTab === 'OPEN' && selectedChartSymbol && (() => {
+              const matchingPosition = positions.find(p => p.symbol === selectedChartSymbol);
+              const hasTPSL = matchingPosition && tpslOrders[matchingPosition.id];
+              return hasTPSL ? (
+                <button
+                  onClick={onToggleTPSLLines}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+                    showTPSLLines
+                      ? 'bg-primary text-white hover:bg-primary/90'
+                      : 'bg-muted/30 dark:bg-white/5 text-dark dark:text-white hover:bg-muted/40 dark:hover:bg-white/10'
+                  }`}
+                  title={showTPSLLines ? 'Hide TP/SL lines on chart' : 'Show TP/SL lines on chart'}
+                >
+                  <Icon 
+                    icon={showTPSLLines ? 'ph:eye' : 'ph:eye-slash'} 
+                    width={14} 
+                  />
+                  {showTPSLLines ? 'Hide' : 'Show'} Lines
+                </button>
+              ) : null;
+            })()}
+            
             {/* Tab Switcher */}
             <div className="flex bg-muted/30 dark:bg-white/5 rounded-lg p-1">
               <button
