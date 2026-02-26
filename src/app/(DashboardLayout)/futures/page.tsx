@@ -29,11 +29,16 @@ const FuturesPage: React.FC = () => {
 
   useEffect(() => {
     const checkWallet = async () => {
-      const result = await fetchWallet();
-      if (!result.exists) {
-        setShowWalletModal(true);
+      try {
+        const result = await fetchWallet();
+        if (!result.exists) {
+          setShowWalletModal(true);
+        }
+      } catch (error) {
+        console.error('Error checking wallet:', error);
+      } finally {
+        setWalletChecked(true);
       }
-      setWalletChecked(true);
     };
 
     checkWallet();
