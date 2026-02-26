@@ -29,6 +29,8 @@ export default function PositionsList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'OPEN' | 'CLOSED'>('OPEN');
+  const [closingPositionId, setClosingPositionId] = useState<string | null>(null);
+  const [closeSuccess, setCloseSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPositions();
@@ -56,6 +58,44 @@ export default function PositionsList() {
       setError((err as Error).message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleClosePosition = async (positionId: string) => {
+    if (!confirm('Are you sure you want to close this position? This will sell your assets at the current market price.')) {
+      return;
+    }
+
+    setClosingPositionId(positionId);
+    setError(null);
+    setCloseSuccess(null);
+
+    try {
+      const response = await fetch(`/api/positions/${positionId}/close`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slippage: 0.005, // 0.5% slippage
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to close position');
+      }
+
+      setCloseSuccess(data.message);
+      
+      // Refresh positions after successful close
+      await fetchPositions();
+
+      // Clear success message after 5 seconds
+      setTimeout(() => setCloseSuccess(null), 5000);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setClosingPositionId(null);
     }
   };
 
@@ -135,7 +175,19 @@ export default function PositionsList() {
 
       {error && (
         <div className="p-4 bg-error/10 border-b border-error/30">
-          <p className="text-sm text-error">{error}</p>
+          <div className="flex items-center gap-2">
+            <Icon icon="ph:warning-circle" className="text-error" width={18} />
+            <p className="text-sm text-error">{error}</p>
+          </div>
+        </div>
+      )}
+
+      {closeSuccess && (
+        <div className="p-4 bg-success/10 border-b border-success/30">
+          <div className="flex items-center gap-2">
+            <Icon icon="ph:check-circle" className="text-success" width={18} />
+            <p className="text-sm text-success">{closeSuccess}</p>
+          </div>
         </div>
       )}
 
@@ -171,6 +223,9 @@ export default function PositionsList() {
                 <th className="px-4 py-3 text-left text-xs font-semibold text-muted">
                   {activeTab === 'OPEN' ? 'Opened' : 'Closed'}
                 </th>
+                {activeTab === 'OPEN' && (
+                  <th className="px-4 py-3 text-center text-xs font-semibold text-muted">Action</th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -240,6 +295,28 @@ export default function PositionsList() {
                     <td className="px-4 py-3 text-xs text-muted">
                       {formatDate(activeTab === 'OPEN' ? position.createdAt : position.closedAt || position.updatedAt)}
                     </td>
+                    {activeTab === 'OPEN' && (
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          onClick={() => handleClosePosition(position.id)}
+                          disabled={closingPositionId === position.id}
+                          className="px-3 py-1.5 bg-error/10 hover:bg-error/20 text-error rounded-lg text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 mx-auto"
+                          title="Close position and sell assets"
+                        >
+                          {closingPositionId === position.id ? (
+                            <>
+                              <Icon icon="svg-spinners:ring-resize" width={14} />
+                              Closing...
+                            </>
+                          ) : (
+                            <>
+                              <Icon icon="ph:x-circle" width={14} />
+                              Close
+                            </>
+                          )}
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
