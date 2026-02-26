@@ -1,4 +1,6 @@
-import React from "react";
+"use client";
+
+import React, { useState } from "react";
 
 import Footer from "@/components/dashboard/Footer";
 import TradingChart from "@/components/trading/TradingChart";
@@ -7,7 +9,9 @@ import Watchlist from "@/components/trading/Watchlist";
 import RecentTrades from "@/components/trading/RecentTrades";
 import MarketOverview from "@/components/trading/MarketOverview";
 
-const page = () => {
+const DashboardPage = () => {
+  const [selectedSymbol, setSelectedSymbol] = useState("BTC");
+
   return (
     <div className="grid grid-cols-12 gap-5 lg:gap-6">
       {/* Portfolio Stats - Full Width */}
@@ -17,17 +21,17 @@ const page = () => {
 
       {/* Main Trading Chart */}
       <div className="xl:col-span-8 col-span-12">
-        <TradingChart />
+        <TradingChart symbol={selectedSymbol} />
       </div>
 
       {/* Watchlist Sidebar */}
       <div className="xl:col-span-4 col-span-12">
-        <Watchlist />
+        <Watchlist selectedSymbol={selectedSymbol} onSelectPair={setSelectedSymbol} />
       </div>
 
       {/* Recent Trades */}
       <div className="lg:col-span-7 col-span-12">
-        <RecentTrades />
+        <RecentTrades symbol={selectedSymbol} />
       </div>
 
       {/* Market Overview */}
@@ -42,4 +46,4 @@ const page = () => {
   );
 };
 
-export default page;
+export default DashboardPage;

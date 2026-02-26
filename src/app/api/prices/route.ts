@@ -32,7 +32,9 @@ export interface PricesResponse {
 
 let cachedData: Omit<PricesResponse, 'cached' | 'stale'> | null = null;
 let lastFetchedAt = 0;
-const CACHE_TTL = 60_000; // 60 seconds
+let backoffUntil = 0; // timestamp — don't hit CoinGecko before this
+const CACHE_TTL = 5 * 60_000; // 5 minutes (free tier allows ~10-30 req/min)
+const BACKOFF_MS = 90_000;    // 90 s cooldown after a 429
 
 // ── CoinGecko mapping ──────────────────────────────────────────────────────
 
@@ -86,6 +88,12 @@ async function fetchMarketData(): Promise<Omit<PricesResponse, 'cached' | 'stale
     headers: { Accept: "application/json" },
     signal: AbortSignal.timeout(15_000),
   });
+
+  if (coinsRes.status === 429) {
+    // Rate limited — set backoff so we stop retrying for a while
+    backoffUntil = Date.now() + BACKOFF_MS;
+    throw new Error("CoinGecko rate limited (429)");
+  }
 
   if (!coinsRes.ok) {
     throw new Error(`CoinGecko coins returned ${coinsRes.status}`);
@@ -162,6 +170,15 @@ export async function GET() {
     return NextResponse.json({
       ...cachedData,
       cached: true,
+    });
+  }
+
+  // If we're in a backoff window after a 429, return stale cache immediately
+  if (now < backoffUntil && cachedData) {
+    return NextResponse.json({
+      ...cachedData,
+      cached: true,
+      stale: true,
     });
   }
 

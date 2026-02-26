@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Icon } from "@iconify/react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -30,34 +30,77 @@ const CRYPTO_ICONS: Record<string, string> = {
   USDC: "cryptocurrency-color:usdc",
 };
 
-// Default watchlist symbols
-const DEFAULT_WATCHLIST = ["BTC", "ETH", "SOL", "XRP", "DOGE", "LINK", "ADA"];
+// Initial watchlist symbols
+const INITIAL_WATCHLIST = ["BTC", "ETH", "SOL", "XRP", "DOGE", "LINK", "ADA"];
 
-const Watchlist = () => {
+// Coins that cannot be charted (stablecoins)
+const EXCLUDED = new Set(["USDT", "USDC"]);
+
+interface WatchlistProps {
+  selectedSymbol?: string;
+  onSelectPair?: (symbol: string) => void;
+}
+
+const Watchlist = ({ selectedSymbol, onSelectPair }: WatchlistProps) => {
   const { coins, loading } = usePrices();
+  const [watchlistSymbols, setWatchlistSymbols] = useState<string[]>(INITIAL_WATCHLIST);
   const [starred, setStarred] = useState<string[]>(["BTC", "ETH", "SOL"]);
+  const [showAddMenu, setShowAddMenu] = useState(false);
+  const [addSearch, setAddSearch] = useState("");
+  const addMenuRef = useRef<HTMLDivElement>(null);
 
-  // Filter coins to show in watchlist
+  // Close add-menu on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) {
+        setShowAddMenu(false);
+        setAddSearch("");
+      }
+    };
+    if (showAddMenu) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showAddMenu]);
+
+  // Coins currently displayed in the watchlist
   const watchlistCoins = useMemo(() => {
     if (!coins.length) return [];
-    
-    // Show default watchlist coins first, then others
-    const defaultCoins = DEFAULT_WATCHLIST
-      .map(symbol => coins.find(c => c.symbol === symbol))
+    return watchlistSymbols
+      .map((sym) => coins.find((c) => c.symbol === sym))
       .filter((c): c is CoinData => c !== undefined);
-    
-    // Add remaining coins not in default list
-    const otherCoins = coins.filter(c => 
-      !DEFAULT_WATCHLIST.includes(c.symbol) && 
-      c.symbol !== "USDT" && 
-      c.symbol !== "USDC"
-    );
-    
-    return [...defaultCoins, ...otherCoins];
-  }, [coins]);
+  }, [coins, watchlistSymbols]);
 
-  const toggleStar = (symbol: string) => {
-    setStarred(prev => prev.includes(symbol) ? prev.filter(s => s !== symbol) : [...prev, symbol]);
+  // Coins available to add (not yet in watchlist, not stablecoins)
+  const addableCoinsList = useMemo(() => {
+    if (!coins.length) return [];
+    const inList = new Set(watchlistSymbols);
+    return coins.filter((c) => !inList.has(c.symbol) && !EXCLUDED.has(c.symbol));
+  }, [coins, watchlistSymbols]);
+
+  // Filtered by search
+  const filteredAddable = useMemo(() => {
+    if (!addSearch.trim()) return addableCoinsList;
+    const q = addSearch.toLowerCase();
+    return addableCoinsList.filter(
+      (c) => c.symbol.toLowerCase().includes(q) || c.name.toLowerCase().includes(q)
+    );
+  }, [addableCoinsList, addSearch]);
+
+  const addToWatchlist = (symbol: string) => {
+    setWatchlistSymbols((prev) => [...prev, symbol]);
+    setShowAddMenu(false);
+    setAddSearch("");
+  };
+
+  const removeFromWatchlist = (symbol: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setWatchlistSymbols((prev) => prev.filter((s) => s !== symbol));
+  };
+
+  const toggleStar = (symbol: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setStarred((prev) =>
+      prev.includes(symbol) ? prev.filter((s) => s !== symbol) : [...prev, symbol]
+    );
   };
 
   const formatPrice = (price: number) => {
@@ -125,9 +168,68 @@ const Watchlist = () => {
             <h5 className="text-base font-semibold text-dark dark:text-white">Watchlist</h5>
             <p className="text-xs text-muted mt-0.5">Live prices • 60s refresh</p>
           </div>
-          <Button variant="ghost" size="sm" className="text-primary hover:bg-primary/10 h-8 text-xs">
-            <Icon icon="solar:add-circle-linear" className="h-4 w-4 mr-1" /> Add
-          </Button>
+          <div className="relative" ref={addMenuRef}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-primary hover:bg-primary/10 h-8 text-xs cursor-pointer"
+              onClick={() => setShowAddMenu((v) => !v)}
+              disabled={addableCoinsList.length === 0}
+            >
+              <Icon icon="solar:add-circle-linear" className="h-4 w-4 mr-1" /> Add
+            </Button>
+
+            {/* ── Add pair dropdown ────────────────────────── */}
+            {showAddMenu && (
+              <div className="absolute right-0 top-10 z-50 w-64 rounded-xl border border-border/50 dark:border-darkborder bg-white dark:bg-black shadow-xl">
+                {/* Search */}
+                <div className="p-2 border-b border-border/50 dark:border-darkborder">
+                  <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-muted/30 dark:bg-white/5">
+                    <Icon icon="solar:magnifer-linear" className="h-3.5 w-3.5 text-muted flex-shrink-0" />
+                    <input
+                      autoFocus
+                      value={addSearch}
+                      onChange={(e) => setAddSearch(e.target.value)}
+                      placeholder="Search coins…"
+                      className="bg-transparent text-xs text-dark dark:text-white placeholder:text-muted outline-none w-full"
+                    />
+                  </div>
+                </div>
+                {/* Coin list */}
+                <ScrollArea className="max-h-52">
+                  <div className="p-1.5">
+                    {filteredAddable.length === 0 ? (
+                      <p className="text-xs text-muted text-center py-4">No coins found</p>
+                    ) : (
+                      filteredAddable.map((coin) => {
+                        const icon = CRYPTO_ICONS[coin.symbol] || "cryptocurrency:generic";
+                        return (
+                          <button
+                            key={coin.id}
+                            onClick={() => addToWatchlist(coin.symbol)}
+                            className="flex items-center gap-2.5 w-full p-2 rounded-lg hover:bg-muted/30 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                          >
+                            <div className="w-6 h-6 rounded-md bg-muted/40 dark:bg-white/5 flex items-center justify-center overflow-hidden">
+                              {coin.image ? (
+                                <img src={coin.image} alt={coin.symbol} className="h-4 w-4" />
+                              ) : (
+                                <Icon icon={icon} className="h-4 w-4" />
+                              )}
+                            </div>
+                            <div className="text-left">
+                              <p className="text-xs font-medium text-dark dark:text-white">{coin.symbol}</p>
+                              <p className="text-[10px] text-muted">{coin.name}</p>
+                            </div>
+                            <Icon icon="solar:add-circle-linear" className="h-3.5 w-3.5 text-primary ml-auto" />
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+            )}
+          </div>
         </div>
       </CardHeader>
       <CardContent className="pt-1">
@@ -138,15 +240,23 @@ const Watchlist = () => {
               const isStarred = starred.includes(coin.symbol);
               const icon = CRYPTO_ICONS[coin.symbol] || "cryptocurrency:generic";
               
+              const isSelected = selectedSymbol === coin.symbol;
+
               return (
                 <div
                   key={coin.id}
-                  className="group flex items-center justify-between p-2.5 rounded-lg hover:bg-muted/30 dark:hover:bg-white/5 transition-all duration-200 cursor-pointer"
+                  onClick={() => onSelectPair?.(coin.symbol)}
+                  className={cn(
+                    "group flex items-center justify-between p-2.5 rounded-lg transition-all duration-200 cursor-pointer",
+                    isSelected
+                      ? "bg-primary/10 dark:bg-primary/15 ring-1 ring-primary/30"
+                      : "hover:bg-muted/30 dark:hover:bg-white/5"
+                  )}
                   style={{ animationDelay: index * 40 + "ms" }}
                 >
                   <div className="flex items-center gap-2.5">
                     <button
-                      onClick={() => toggleStar(coin.symbol)}
+                      onClick={(e) => toggleStar(coin.symbol, e)}
                       className="opacity-0 group-hover:opacity-100 transition-opacity duration-200"
                     >
                       <Icon
@@ -174,6 +284,14 @@ const Watchlist = () => {
                         {isPositive ? "+" : ""}{coin.change24h.toFixed(2)}%
                       </p>
                     </div>
+                    {/* Remove button */}
+                    <button
+                      onClick={(e) => removeFromWatchlist(coin.symbol, e)}
+                      className="opacity-0 group-hover:opacity-100 ml-1 p-0.5 rounded hover:bg-error/10 transition-all duration-200"
+                      title={`Remove ${coin.symbol}`}
+                    >
+                      <Icon icon="solar:close-circle-linear" className="h-3.5 w-3.5 text-muted hover:text-error transition-colors" />
+                    </button>
                   </div>
                 </div>
               );
