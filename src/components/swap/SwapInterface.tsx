@@ -53,15 +53,32 @@ export function SwapInterface() {
     if (!fromToken) return 0;
     
     if (fromChain === "solana") {
-      if (fromToken.address === "So11111111111111111111111111111111111111112") {
+      // Handle both native SOL and wrapped SOL
+      const isSOL = 
+        fromToken.symbol === "SOL" ||
+        fromToken.address === "So11111111111111111111111111111111111111112" ||
+        fromToken.address === "11111111111111111111111111111111";
+      
+      if (isSOL) {
         return solBalance;
       }
-      const found = solTokens.find(t => t.mint.toLowerCase() === fromToken.address.toLowerCase());
+      
+      // For other tokens, check token balances
+      const found = solTokens.find(t => 
+        t.mint.toLowerCase() === fromToken.address.toLowerCase() ||
+        t.address.toLowerCase() === fromToken.address.toLowerCase()
+      );
       return found?.amount ?? 0;
     } else {
-      if (fromToken.address === "0x0000000000000000000000000000000000000000") {
+      // Ethereum chain
+      const isETH = 
+        fromToken.symbol === "ETH" ||
+        fromToken.address === "0x0000000000000000000000000000000000000000";
+      
+      if (isETH) {
         return ethBalance;
       }
+      
       const found = evmTokens.find(t => t.address.toLowerCase() === fromToken.address.toLowerCase());
       return found?.amount ?? 0;
     }
@@ -137,8 +154,11 @@ export function SwapInterface() {
     if (fromBalance > 0) {
       // Leave some for gas if native token
       const isNative = fromChain === "solana" 
-        ? fromToken?.address === "So11111111111111111111111111111111111111112"
-        : fromToken?.address === "0x0000000000000000000000000000000000000000";
+        ? (fromToken?.symbol === "SOL" || 
+           fromToken?.address === "So11111111111111111111111111111111111111112" ||
+           fromToken?.address === "11111111111111111111111111111111")
+        : (fromToken?.symbol === "ETH" ||
+           fromToken?.address === "0x0000000000000000000000000000000000000000");
       
       const maxAmount = isNative ? Math.max(0, fromBalance - 0.01) : fromBalance;
       setFromAmount(maxAmount.toString());
