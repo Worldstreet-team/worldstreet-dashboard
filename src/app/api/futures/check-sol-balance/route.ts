@@ -3,6 +3,7 @@ import { auth } from '@clerk/nextjs/server';
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
 
 const REQUIRED_SOL_BALANCE = 0.05; // Minimum SOL required for initialization (~$5-6)
+const BASE_API_URL = 'https://trading.watchup.site';
 
 export async function GET() {
   try {
@@ -16,7 +17,6 @@ export async function GET() {
     }
 
     // Get user's futures wallet address
-    const BASE_API_URL = 'https://trading.watchup.site';
     const walletResponse = await fetch(
       `${BASE_API_URL}/api/futures/wallet?userId=${userId}&chain=solana`
     );
@@ -26,6 +26,7 @@ export async function GET() {
         return NextResponse.json({
           hasWallet: false,
           hasSufficientSol: false,
+          isDriftInitialized: false,
           requiredSol: REQUIRED_SOL_BALANCE,
           currentSol: 0,
           message: 'Futures wallet not found. Please create one first.',
@@ -41,13 +42,35 @@ export async function GET() {
       return NextResponse.json({
         hasWallet: false,
         hasSufficientSol: false,
+        isDriftInitialized: false,
         requiredSol: REQUIRED_SOL_BALANCE,
         currentSol: 0,
         message: 'Wallet address not found',
       });
     }
 
-    // Check SOL balance
+    // Check if Drift subaccount is already initialized
+    const accountSummaryResponse = await fetch(
+      `${BASE_API_URL}/api/drift/account/summary?userId=${userId}`
+    );
+
+    const isDriftInitialized = accountSummaryResponse.ok;
+
+    // If Drift is already initialized, no need to check SOL
+    if (isDriftInitialized) {
+      return NextResponse.json({
+        hasWallet: true,
+        hasSufficientSol: true,
+        isDriftInitialized: true,
+        requiredSol: REQUIRED_SOL_BALANCE,
+        currentSol: 0, // Not needed since already initialized
+        shortfall: 0,
+        walletAddress,
+        message: 'Drift account already initialized',
+      });
+    }
+
+    // Check SOL balance only if Drift is not initialized
     const rpcUrl = process.env.NEXT_PUBLIC_SOL_RPC || process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
     const connection = new Connection(rpcUrl, 'confirmed');
     
@@ -60,6 +83,7 @@ export async function GET() {
     return NextResponse.json({
       hasWallet: true,
       hasSufficientSol,
+      isDriftInitialized: false,
       requiredSol: REQUIRED_SOL_BALANCE,
       currentSol: solBalance,
       shortfall: hasSufficientSol ? 0 : REQUIRED_SOL_BALANCE - solBalance,

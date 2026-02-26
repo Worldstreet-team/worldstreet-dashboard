@@ -18,6 +18,7 @@ import { Icon } from '@iconify/react';
 interface SolBalanceCheck {
   hasWallet: boolean;
   hasSufficientSol: boolean;
+  isDriftInitialized: boolean;
   requiredSol: number;
   currentSol: number;
   shortfall: number;
@@ -50,13 +51,14 @@ const FuturesPage: React.FC = () => {
           return;
         }
 
-        // Wallet exists, now check SOL balance
+        // Wallet exists, now check SOL balance and Drift initialization
         const solCheckResponse = await fetch('/api/futures/check-sol-balance');
         if (solCheckResponse.ok) {
           const solCheck: SolBalanceCheck = await solCheckResponse.json();
           setSolBalanceCheck(solCheck);
 
-          if (!solCheck.hasSufficientSol) {
+          // Only show modal if Drift is not initialized AND SOL is insufficient
+          if (!solCheck.isDriftInitialized && !solCheck.hasSufficientSol) {
             setShowSolRequirementModal(true);
           }
         }
@@ -88,7 +90,7 @@ const FuturesPage: React.FC = () => {
   return (
     <div className="space-y-4">
       {/* SOL Requirement Warning Banner */}
-      {solBalanceCheck && !solBalanceCheck.hasSufficientSol && (
+      {solBalanceCheck && !solBalanceCheck.isDriftInitialized && !solBalanceCheck.hasSufficientSol && (
         <div className="bg-warning/10 border-2 border-warning/30 rounded-lg p-4">
           <div className="flex items-start gap-3">
             <Icon icon="ph:warning-duotone" className="text-warning flex-shrink-0 mt-0.5" height={24} />
@@ -173,7 +175,7 @@ const FuturesPage: React.FC = () => {
       />
 
       {/* SOL Requirement Modal */}
-      {solBalanceCheck && !solBalanceCheck.hasSufficientSol && (
+      {solBalanceCheck && !solBalanceCheck.isDriftInitialized && !solBalanceCheck.hasSufficientSol && (
         <SolRequirementModal
           isOpen={showSolRequirementModal}
           onClose={() => setShowSolRequirementModal(false)}
