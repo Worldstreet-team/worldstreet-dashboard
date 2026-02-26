@@ -190,19 +190,19 @@ export const CollateralPanel: React.FC = () => {
         <div className="bg-muted/20 dark:bg-white/5 rounded-lg p-3">
           <p className="text-xs text-muted dark:text-darklink mb-1">Total</p>
           <p className="text-lg font-semibold text-dark dark:text-white">
-            ${collateral?.total.toFixed(2) || '0.00'}
+            ${(collateral?.total ?? 0).toFixed(2)}
           </p>
         </div>
         <div className="bg-muted/20 dark:bg-white/5 rounded-lg p-3">
           <p className="text-xs text-muted dark:text-darklink mb-1">Available</p>
           <p className="text-lg font-semibold text-success">
-            ${collateral?.available.toFixed(2) || '0.00'}
+            ${(collateral?.available ?? 0).toFixed(2)}
           </p>
         </div>
         <div className="bg-muted/20 dark:bg-white/5 rounded-lg p-3">
           <p className="text-xs text-muted dark:text-darklink mb-1">Used</p>
           <p className="text-lg font-semibold text-error">
-            ${collateral?.used.toFixed(2) || '0.00'}
+            ${(collateral?.used ?? 0).toFixed(2)}
           </p>
         </div>
       </div>
@@ -244,7 +244,7 @@ export const CollateralPanel: React.FC = () => {
             />
             {action === 'withdraw' && collateral && (
               <p className="text-xs text-muted dark:text-darklink mt-1">
-                Available: ${collateral.available.toFixed(2)}
+                Available: ${(collateral.available ?? 0).toFixed(2)}
               </p>
             )}
           </div>

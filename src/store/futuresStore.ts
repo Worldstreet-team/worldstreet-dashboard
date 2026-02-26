@@ -48,6 +48,12 @@ export interface PreviewData {
   estimatedFee: number;
   maxLeverageAllowed: number;
   estimatedFundingImpact: number;
+  // New margin validation fields
+  totalRequired: number;
+  freeCollateral: number;
+  marginCheckPassed: boolean;
+  notionalValue?: number;
+  maintenanceMargin?: number;
 }
 
 export interface WalletAddresses {
