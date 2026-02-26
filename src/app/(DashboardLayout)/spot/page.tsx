@@ -29,7 +29,9 @@ export default function SpotTradingPage() {
   }, []);
 
   const handlePositionTPSLUpdate = useCallback((symbol: string, tp: string | null, sl: string | null) => {
-    setActivePositionTPSL({ symbol, takeProfit: tp, stopLoss: sl });
+    // Convert position symbol format (SOL/USDT) to chart format (SOL-USDT)
+    const normalizedSymbol = symbol.replace('/', '-');
+    setActivePositionTPSL({ symbol: normalizedSymbol, takeProfit: tp, stopLoss: sl });
   }, []);
 
   // Determine which TP/SL to show on chart

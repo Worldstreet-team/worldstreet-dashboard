@@ -112,7 +112,9 @@ export default function PositionsList({
 
     // Notify parent about TP/SL for the selected chart symbol
     if (onPositionTPSLUpdate && selectedChartSymbol) {
-      const matchingPosition = positions.find(p => p.symbol === selectedChartSymbol);
+      // Convert chart symbol format (SOL-USDT) to position format (SOL/USDT)
+      const positionSymbol = selectedChartSymbol.replace('-', '/');
+      const matchingPosition = positions.find(p => p.symbol === positionSymbol);
       if (matchingPosition && orders[matchingPosition.id]) {
         const tpsl = orders[matchingPosition.id];
         onPositionTPSLUpdate(
@@ -141,7 +143,9 @@ export default function PositionsList({
   // Notify parent when selected chart symbol changes
   useEffect(() => {
     if (onPositionTPSLUpdate && selectedChartSymbol && positions.length > 0) {
-      const matchingPosition = positions.find(p => p.symbol === selectedChartSymbol);
+      // Convert chart symbol format (SOL-USDT) to position format (SOL/USDT)
+      const positionSymbol = selectedChartSymbol.replace('-', '/');
+      const matchingPosition = positions.find(p => p.symbol === positionSymbol);
       if (matchingPosition && tpslOrders[matchingPosition.id]) {
         const tpsl = tpslOrders[matchingPosition.id];
         onPositionTPSLUpdate(
@@ -233,7 +237,9 @@ export default function PositionsList({
           <div className="flex items-center gap-2">
             {/* TP/SL Chart Toggle - Only show if there's a matching position with TP/SL */}
             {activeTab === 'OPEN' && selectedChartSymbol && (() => {
-              const matchingPosition = positions.find(p => p.symbol === selectedChartSymbol);
+              // Convert chart symbol format (SOL-USDT) to position format (SOL/USDT)
+              const positionSymbol = selectedChartSymbol.replace('-', '/');
+              const matchingPosition = positions.find(p => p.symbol === positionSymbol);
               const hasTPSL = matchingPosition && tpslOrders[matchingPosition.id];
               return hasTPSL ? (
                 <button
