@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { useAuth } from '@/app/context/authContext';
+import TPSLModal from './TPSLModal';
 
 interface Position {
   id: string;
@@ -23,6 +24,12 @@ interface Position {
   closedAt?: string;
 }
 
+interface TPSLOrder {
+  take_profit_price: string | null;
+  stop_loss_price: string | null;
+  status: string;
+}
+
 export default function PositionsList() {
   const { user } = useAuth();
   const [positions, setPositions] = useState<Position[]>([]);
@@ -31,10 +38,19 @@ export default function PositionsList() {
   const [activeTab, setActiveTab] = useState<'OPEN' | 'CLOSED'>('OPEN');
   const [closingPositionId, setClosingPositionId] = useState<string | null>(null);
   const [closeSuccess, setCloseSuccess] = useState<string | null>(null);
+  const [tpslModalOpen, setTpslModalOpen] = useState(false);
+  const [selectedPosition, setSelectedPosition] = useState<Position | null>(null);
+  const [tpslOrders, setTpslOrders] = useState<Record<string, TPSLOrder>>({});
 
   useEffect(() => {
     fetchPositions();
   }, [user, activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'OPEN' && positions.length > 0) {
+      fetchTPSLOrders();
+    }
+  }, [positions, activeTab]);
 
   const fetchPositions = async () => {
     if (!user?.userId) return;
@@ -59,6 +75,39 @@ export default function PositionsList() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchTPSLOrders = async () => {
+    const orders: Record<string, TPSLOrder> = {};
+    
+    await Promise.all(
+      positions.map(async (position) => {
+        try {
+          const response = await fetch(`/api/positions/${position.id}/tpsl`);
+          if (response.ok) {
+            const data = await response.json();
+            if (data.data) {
+              orders[position.id] = data.data;
+            }
+          }
+        } catch (err) {
+          console.error(`Failed to fetch TP/SL for ${position.id}:`, err);
+        }
+      })
+    );
+
+    setTpslOrders(orders);
+  };
+
+  const handleOpenTPSL = (position: Position) => {
+    setSelectedPosition(position);
+    setTpslModalOpen(true);
+  };
+
+  const handleTPSLSuccess = () => {
+    setCloseSuccess('TP/SL updated successfully');
+    fetchTPSLOrders();
+    setTimeout(() => setCloseSuccess(null), 5000);
   };
 
   const handleClosePosition = async (positionId: string) => {
@@ -297,24 +346,37 @@ export default function PositionsList() {
                     </td>
                     {activeTab === 'OPEN' && (
                       <td className="px-4 py-3 text-center">
-                        <button
-                          onClick={() => handleClosePosition(position.id)}
-                          disabled={closingPositionId === position.id}
-                          className="px-3 py-1.5 bg-error/10 hover:bg-error/20 text-error rounded-lg text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 mx-auto"
-                          title="Close position and sell assets"
-                        >
-                          {closingPositionId === position.id ? (
-                            <>
-                              <Icon icon="svg-spinners:ring-resize" width={14} />
-                              Closing...
-                            </>
-                          ) : (
-                            <>
-                              <Icon icon="ph:x-circle" width={14} />
-                              Close
-                            </>
-                          )}
-                        </button>
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => handleOpenTPSL(position)}
+                            className="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5"
+                            title="Set Take Profit / Stop Loss"
+                          >
+                            <Icon icon="ph:target" width={14} />
+                            {tpslOrders[position.id] ? 'TP/SL' : 'Set TP/SL'}
+                            {tpslOrders[position.id] && (
+                              <Icon icon="ph:check-circle" width={12} className="text-success" />
+                            )}
+                          </button>
+                          <button
+                            onClick={() => handleClosePosition(position.id)}
+                            disabled={closingPositionId === position.id}
+                            className="px-3 py-1.5 bg-error/10 hover:bg-error/20 text-error rounded-lg text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                            title="Close position and sell assets"
+                          >
+                            {closingPositionId === position.id ? (
+                              <>
+                                <Icon icon="svg-spinners:ring-resize" width={14} />
+                                Closing...
+                              </>
+                            ) : (
+                              <>
+                                <Icon icon="ph:x-circle" width={14} />
+                                Close
+                              </>
+                            )}
+                          </button>
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -340,6 +402,19 @@ export default function PositionsList() {
             </span>
           </div>
         </div>
+      )}
+
+      {/* TP/SL Modal */}
+      {selectedPosition && (
+        <TPSLModal
+          isOpen={tpslModalOpen}
+          onClose={() => {
+            setTpslModalOpen(false);
+            setSelectedPosition(null);
+          }}
+          position={selectedPosition}
+          onSuccess={handleTPSLSuccess}
+        />
       )}
     </div>
   );
