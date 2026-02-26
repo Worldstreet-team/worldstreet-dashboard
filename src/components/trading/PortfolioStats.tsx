@@ -1,6 +1,5 @@
 "use client";
-import React, { useMemo } from "react";
-import { QRCodeSVG } from "qrcode.react";
+import React, { useMemo, useState, useEffect } from "react";
 import { Icon } from "@iconify/react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,11 +21,76 @@ const PortfolioStats = () => {
   const { balance: btcBalance } = useBitcoin();
   const { prices, coins, loading: pricesLoading } = usePrices();
 
-  // Get USDT balance from Solana network (Main Wallet)
+  // State for network selection and balances
+  const [selectedNetwork, setSelectedNetwork] = useState<'solana' | 'ethereum'>('solana');
+  const [spotBalance, setSpotBalance] = useState(0);
+  const [futuresBalance, setFuturesBalance] = useState(0);
+  const [loadingSpot, setLoadingSpot] = useState(false);
+  const [loadingFutures, setLoadingFutures] = useState(false);
+
+  // Get USDT balance based on selected network
   const mainWalletBalance = useMemo(() => {
-    const usdtToken = solTokens.find(t => t.symbol === "USDT");
-    return usdtToken?.amount ?? 0;
-  }, [solTokens]);
+    if (selectedNetwork === 'solana') {
+      const usdtToken = solTokens.find(t => t.symbol === "USDT");
+      return usdtToken?.amount ?? 0;
+    } else {
+      const usdtToken = ethTokens.find(t => t.symbol === "USDT");
+      return usdtToken?.amount ?? 0;
+    }
+  }, [selectedNetwork, solTokens, ethTokens]);
+
+  // Fetch spot balance (sum of open positions invested value)
+  useEffect(() => {
+    const fetchSpotBalance = async () => {
+      if (!user?.userId) return;
+      setLoadingSpot(true);
+      try {
+        const response = await fetch('/api/positions?status=OPEN');
+        if (response.ok) {
+          const data = await response.json();
+          const positions = Array.isArray(data) ? data : data.positions || [];
+          // Sum up invested quote amounts (in USDT)
+          const total = positions.reduce((sum: number, pos: any) => {
+            return sum + parseFloat(pos.investedQuote || '0');
+          }, 0);
+          setSpotBalance(total);
+        }
+      } catch (error) {
+        console.error('Error fetching spot balance:', error);
+      } finally {
+        setLoadingSpot(false);
+      }
+    };
+
+    fetchSpotBalance();
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchSpotBalance, 30000);
+    return () => clearInterval(interval);
+  }, [user]);
+
+  // Fetch futures balance
+  useEffect(() => {
+    const fetchFuturesBalance = async () => {
+      if (!user?.userId) return;
+      setLoadingFutures(true);
+      try {
+        const response = await fetch('/api/futures/wallet/balance');
+        if (response.ok) {
+          const data = await response.json();
+          setFuturesBalance(data.usdtBalance || 0);
+        }
+      } catch (error) {
+        console.error('Error fetching futures balance:', error);
+      } finally {
+        setLoadingFutures(false);
+      }
+    };
+
+    fetchFuturesBalance();
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchFuturesBalance, 30000);
+    return () => clearInterval(interval);
+  }, [user]);
 
   // Calculate total balance
   const totalBalance = useMemo(() => {
@@ -169,51 +233,125 @@ const PortfolioStats = () => {
         </div>
       </div>
 
-      {/* Main Wallet Card - USDT on Solana */}
-      <Card className="border-2 border-primary/20 shadow-md dark:bg-gradient-to-br dark:from-black dark:to-primary/5 dark:border-primary/30 overflow-hidden animate-fade-in-up">
-        <CardContent className="p-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-[#26A17B] to-[#1a7a5c] flex items-center justify-center shadow-lg">
-                <Icon icon="cryptocurrency-color:usdt" className="h-8 w-8" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <p className="text-xs text-muted font-medium uppercase tracking-wider">Main Wallet</p>
-                  <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">
-                    USDT • Solana
-                  </span>
+      {/* Balance Cards Grid */}
+      <div className="grid lg:grid-cols-3 md:grid-cols-2 grid-cols-1 gap-4">
+        {/* Main Wallet Card - USDT with Network Switch */}
+        <Card className="border-2 border-primary/20 shadow-md dark:bg-gradient-to-br dark:from-black dark:to-primary/5 dark:border-primary/30 overflow-hidden animate-fade-in-up">
+          <CardContent className="p-5">
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#26A17B] to-[#1a7a5c] flex items-center justify-center shadow-lg">
+                  <Icon icon="cryptocurrency-color:usdt" className="h-7 w-7" />
                 </div>
-                <h3 className="text-3xl font-bold text-dark dark:text-white tracking-tight">
-                  ${mainWalletBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </h3>
-                <p className="text-xs text-muted mt-1">
-                  {walletsGenerated && addresses?.solana 
-                    ? `${addresses.solana.slice(0, 6)}...${addresses.solana.slice(-4)}`
-                    : "Set up wallet to view address"
-                  }
-                </p>
+                <div>
+                  <p className="text-xs text-muted font-medium uppercase tracking-wider">Main Wallet</p>
+                  <p className="text-[10px] text-muted mt-0.5">USDT Balance</p>
+                </div>
+              </div>
+            </div>
+            
+            {/* Network Selector */}
+            <div className="flex gap-2 mb-3">
+              <button
+                onClick={() => setSelectedNetwork('solana')}
+                className={cn(
+                  "flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5",
+                  selectedNetwork === 'solana'
+                    ? "bg-primary text-white shadow-sm"
+                    : "bg-muted/30 dark:bg-white/5 text-muted hover:bg-muted/50 dark:hover:bg-white/10"
+                )}
+              >
+                <img src="https://cryptologos.cc/logos/solana-sol-logo.png" alt="SOL" className="w-4 h-4 rounded-full" />
+                Solana
+              </button>
+              <button
+                onClick={() => setSelectedNetwork('ethereum')}
+                className={cn(
+                  "flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5",
+                  selectedNetwork === 'ethereum'
+                    ? "bg-primary text-white shadow-sm"
+                    : "bg-muted/30 dark:bg-white/5 text-muted hover:bg-muted/50 dark:hover:bg-white/10"
+                )}
+              >
+                <img src="https://cryptologos.cc/logos/ethereum-eth-logo.png" alt="ETH" className="w-4 h-4 rounded-full" />
+                Ethereum
+              </button>
+            </div>
+
+            <h3 className="text-2xl font-bold text-dark dark:text-white tracking-tight mb-2">
+              ${mainWalletBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </h3>
+            <p className="text-xs text-muted">
+              {walletsGenerated && addresses?.[selectedNetwork]
+                ? `${addresses[selectedNetwork].slice(0, 8)}...${addresses[selectedNetwork].slice(-6)}`
+                : "Set up wallet to view address"
+              }
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Spot Balance Card */}
+        <Card className="border-2 border-blue-500/20 shadow-md dark:bg-gradient-to-br dark:from-black dark:to-blue-500/5 dark:border-blue-500/30 overflow-hidden animate-fade-in-up" style={{ animationDelay: "40ms" }}>
+          <CardContent className="p-5">
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg">
+                  <Icon icon="solar:chart-2-bold-duotone" className="h-7 w-7 text-white" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted font-medium uppercase tracking-wider">Spot Trading</p>
+                  <p className="text-[10px] text-muted mt-0.5">Open Positions</p>
+                </div>
               </div>
             </div>
 
-            {/* QR Code */}
-            {walletsGenerated && addresses?.solana && (
-              <div className="flex flex-col items-center gap-1.5">
-                <div className="p-2 bg-white rounded-xl shadow-sm border border-border/50">
-                  <QRCodeSVG
-                    value={addresses.solana}
-                    size={80}
-                    bgColor="#ffffff"
-                    fgColor="#000000"
-                    level="M"
-                  />
-                </div>
-                <p className="text-[9px] text-muted font-medium">Scan to receive</p>
+            {loadingSpot ? (
+              <div className="flex items-center gap-2 my-4">
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary/20 border-t-primary" />
+                <span className="text-xs text-muted">Loading...</span>
               </div>
+            ) : (
+              <>
+                <h3 className="text-2xl font-bold text-dark dark:text-white tracking-tight mb-2">
+                  ${spotBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </h3>
+                <p className="text-xs text-muted">Total invested in USDT</p>
+              </>
             )}
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+
+        {/* Futures Balance Card */}
+        <Card className="border-2 border-orange-500/20 shadow-md dark:bg-gradient-to-br dark:from-black dark:to-orange-500/5 dark:border-orange-500/30 overflow-hidden animate-fade-in-up" style={{ animationDelay: "80ms" }}>
+          <CardContent className="p-5">
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center shadow-lg">
+                  <Icon icon="solar:graph-up-bold-duotone" className="h-7 w-7 text-white" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted font-medium uppercase tracking-wider">Futures Trading</p>
+                  <p className="text-[10px] text-muted mt-0.5">Wallet Balance</p>
+                </div>
+              </div>
+            </div>
+
+            {loadingFutures ? (
+              <div className="flex items-center gap-2 my-4">
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary/20 border-t-primary" />
+                <span className="text-xs text-muted">Loading...</span>
+              </div>
+            ) : (
+              <>
+                <h3 className="text-2xl font-bold text-dark dark:text-white tracking-tight mb-2">
+                  ${futuresBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </h3>
+                <p className="text-xs text-muted">Available USDT</p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Stats Cards */}
       <div className="grid xl:grid-cols-4 md:grid-cols-2 grid-cols-1 gap-4 stagger-children">
