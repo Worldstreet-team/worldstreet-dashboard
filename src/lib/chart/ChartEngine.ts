@@ -6,6 +6,8 @@ import {
   HistogramData,
   Time,
   UTCTimestamp,
+  CandlestickSeries,
+  HistogramSeries,
 } from 'lightweight-charts';
 
 export interface Candle {
@@ -57,8 +59,8 @@ export class ChartEngine {
       },
     });
 
-    // Add candlestick series
-    this.candleSeries = this.chart.addCandlestickSeries({
+    // Add candlestick series (v5 API)
+    this.candleSeries = this.chart.addSeries(CandlestickSeries, {
       upColor: '#26a69a',
       downColor: '#ef5350',
       borderVisible: false,
@@ -66,8 +68,8 @@ export class ChartEngine {
       wickDownColor: '#ef5350',
     });
 
-    // Add volume series
-    this.volumeSeries = this.chart.addHistogramSeries({
+    // Add volume series (v5 API)
+    this.volumeSeries = this.chart.addSeries(HistogramSeries, {
       color: '#26a69a',
       priceFormat: {
         type: 'volume',
