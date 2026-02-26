@@ -17,17 +17,19 @@ export interface Market {
   priceChange24h: number;
 }
 
+// Legacy Position interface - no longer used
+// Positions are now managed by PositionPanel using Drift API
 export interface Position {
   id: string;
   market: string;
   side: OrderSide;
   size: number;
   entryPrice: number;
-  markPrice: number;
+  markPrice?: number; // Optional to prevent errors
   leverage: number;
-  liquidationPrice: number;
+  liquidationPrice?: number;
   unrealizedPnL: number;
-  marginRatio: number;
+  marginRatio?: number;
   margin: number;
 }
 
