@@ -6,9 +6,8 @@ All components now auto-update without manual refresh:
 
 | Component | Updates Every | What Updates |
 |-----------|---------------|--------------|
-| Positions | 5 seconds | PnL, prices, status |
-| Collateral | 10 seconds | Balance, available, used |
-| Risk Summary | 10 seconds | Margin ratio, leverage |
+| Positions | 15 seconds | PnL, prices, status |
+| Collateral | 30 seconds | Balance, available, used |
 | Wallet Balance | 15 seconds | USDC, SOL balances |
 
 ## ✅ Post-Action Confirmation

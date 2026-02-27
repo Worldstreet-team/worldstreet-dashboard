@@ -66,9 +66,44 @@ export const CollateralPanel: React.FC = () => {
     }
   }, [loading, collateral]);
 
-  // Auto-polling every 10 seconds
+  // Manual refresh function (shows loading spinner)
+  const handleManualRefresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/drift/account/summary');
+      
+      if (response.status === 404) {
+        setCollateral(null);
+        setError('Futures wallet not found. Please create a futures wallet first.');
+        return;
+      }
+      
+      if (response.ok) {
+        const data = await response.json();
+        setCollateral({
+          total: data.totalCollateral || 0,
+          available: data.freeCollateral || 0,
+          used: (data.totalCollateral || 0) - (data.freeCollateral || 0),
+          currency: 'USDC',
+          exists: true,
+        });
+        setLastUpdate(new Date());
+        setError('');
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Failed to fetch collateral');
+      }
+    } catch (err) {
+      console.error('Failed to fetch collateral:', err);
+      setError('Failed to fetch collateral');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Auto-polling every 30 seconds (increased from 10s)
   useFuturesPolling({
-    interval: 10000,
+    interval: 30000,
     enabled: userId !== '',
     onPoll: fetchCollateral,
     dependencies: [userId],
@@ -219,7 +254,7 @@ export const CollateralPanel: React.FC = () => {
           )}
         </div>
         <button
-          onClick={fetchCollateral}
+          onClick={handleManualRefresh}
           disabled={loading}
           className="p-1 hover:bg-muted/20 dark:hover:bg-white/5 rounded transition-colors disabled:opacity-50"
         >

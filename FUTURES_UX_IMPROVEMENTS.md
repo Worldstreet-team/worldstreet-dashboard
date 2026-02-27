@@ -182,10 +182,9 @@ const debouncedSize = useDebounce(size, 300); // 300ms delay
 
 | Component | Interval | Reason |
 |-----------|----------|--------|
-| Positions | 5s | Frequent PnL updates needed |
-| Collateral | 10s | Balance changes less frequent |
-| Risk Summary | 10s | Margin ratio monitoring |
-| Wallet Balance | 15s | External balance changes rare |
+| Positions | 15s | PnL updates (reduced from 5s) |
+| Collateral | 30s | Balance monitoring (reduced from 10s) |
+| Wallet Balance | 15s | External balance changes |
 | Drift Account | 30s | Account state stable |
 
 ### **Post-Action Polling**

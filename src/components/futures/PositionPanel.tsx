@@ -31,9 +31,23 @@ export const PositionPanel: React.FC = () => {
     }
   }, [fetchPositions, loading]);
 
-  // Auto-polling every 5 seconds
+  // Manual refresh function (shows loading spinner)
+  const handleManualRefresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await fetchPositions();
+      setPositions(data);
+      setLastUpdate(new Date());
+    } catch (error) {
+      console.error('Failed to load positions:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchPositions]);
+
+  // Auto-polling every 15 seconds (increased from 5s)
   useFuturesPolling({
-    interval: 5000,
+    interval: 15000,
     enabled: true,
     onPoll: loadPositions,
     dependencies: [selectedChain],
@@ -109,12 +123,19 @@ export const PositionPanel: React.FC = () => {
           <h3 className="text-lg font-semibold text-dark dark:text-white">Open Positions</h3>
           {lastUpdate && (
             <span className="text-xs text-muted dark:text-darklink">
-              {loading ? 'Updating...' : `Updated ${Math.floor((Date.now() - lastUpdate.getTime()) / 1000)}s ago`}
+              {loading ? (
+                <span className="flex items-center gap-1">
+                  <Icon icon="svg-spinners:ring-resize" height={12} className="opacity-50" />
+                  Updating...
+                </span>
+              ) : (
+                `Updated ${Math.floor((Date.now() - lastUpdate.getTime()) / 1000)}s ago`
+              )}
             </span>
           )}
         </div>
         <button
-          onClick={loadPositions}
+          onClick={handleManualRefresh}
           disabled={loading}
           className="p-1.5 hover:bg-muted/30 dark:hover:bg-white/5 rounded-lg transition-colors disabled:opacity-50"
           title="Refresh"

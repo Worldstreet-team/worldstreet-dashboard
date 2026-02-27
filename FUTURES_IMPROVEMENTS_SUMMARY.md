@@ -54,9 +54,8 @@ Three custom hooks for intelligent data management:
 ### Regular Polling Intervals
 | Component | Interval | Reason |
 |-----------|----------|--------|
-| Positions | 5s | Frequent PnL updates |
-| Collateral | 10s | Balance monitoring |
-| Risk Summary | 10s | Margin safety |
+| Positions | 15s | PnL updates |
+| Collateral | 30s | Balance monitoring |
 | Wallet Balance | 15s | External changes |
 
 ### Post-Action Polling
