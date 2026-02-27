@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useFuturesStore } from '@/store/futuresStore';
 import { useDriftTrading, DriftPosition } from '@/hooks/useDriftTrading';
+import { useFuturesPolling, usePostActionPolling } from '@/hooks/useFuturesPolling';
 import { Icon } from '@iconify/react';
 
 export const PositionPanel: React.FC = () => {
@@ -11,41 +12,77 @@ export const PositionPanel: React.FC = () => {
   const [positions, setPositions] = useState<DriftPosition[]>([]);
   const [closingMarketIndex, setClosingMarketIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [initialLoad, setInitialLoad] = useState(true);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const { isPolling: isConfirmingClose, startPostActionPolling } = usePostActionPolling();
 
-  // Fetch positions on mount and periodically
-  useEffect(() => {
-    const loadPositions = async () => {
-      setLoading(true);
-      try {
-        const data = await fetchPositions();
-        setPositions(data);
-      } catch (error) {
-        console.error('Failed to load positions:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Load positions function (silent background update)
+  const loadPositions = useCallback(async () => {
+    if (loading) return; // Prevent overlapping requests
+    
+    // Don't set loading to true - keep showing current data
+    try {
+      const data = await fetchPositions();
+      setPositions(data);
+      setLastUpdate(new Date());
+      setInitialLoad(false);
+    } catch (error) {
+      console.error('Failed to load positions:', error);
+      setInitialLoad(false);
+    }
+  }, [fetchPositions, loading]);
 
-    loadPositions();
-    const interval = setInterval(loadPositions, 10000); // Refresh every 10 seconds
-    return () => clearInterval(interval);
+  // Manual refresh function (shows loading spinner)
+  const handleManualRefresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await fetchPositions();
+      setPositions(data);
+      setLastUpdate(new Date());
+    } catch (error) {
+      console.error('Failed to load positions:', error);
+    } finally {
+      setLoading(false);
+    }
   }, [fetchPositions]);
+
+  // Auto-polling every 15 seconds (increased from 5s)
+  useFuturesPolling({
+    interval: 15000,
+    enabled: true,
+    onPoll: loadPositions,
+    dependencies: [selectedChain],
+  });
 
   const handleClose = async (marketIndex: number) => {
     if (!confirm('Are you sure you want to close this position?')) return;
 
     setClosingMarketIndex(marketIndex);
     try {
-      const result = await closePosition(marketIndex);
-      alert(`Position closed successfully! TX: ${result.txSignature?.slice(0, 8)}...`);
+      await closePosition(marketIndex);
       
-      // Refresh positions
-      const data = await fetchPositions();
-      setPositions(data);
+      // Start post-action polling to confirm position is closed
+      startPostActionPolling({
+        checkCondition: async () => {
+          const data = await fetchPositions();
+          setPositions(data);
+          // Check if position is gone
+          return !data.some(p => p.marketIndex === marketIndex);
+        },
+        onSuccess: () => {
+          setClosingMarketIndex(null);
+          // Success feedback handled by UI
+        },
+        onTimeout: () => {
+          setClosingMarketIndex(null);
+          alert('Position close is taking longer than expected. Please check your positions.');
+        },
+        maxAttempts: 15,
+        interval: 1000,
+      });
     } catch (error) {
       console.error('Close error:', error);
       alert((error as Error).message || 'Failed to close position');
-    } finally {
       setClosingMarketIndex(null);
     }
   };
@@ -56,7 +93,7 @@ export const PositionPanel: React.FC = () => {
     return market?.symbol || `Market ${marketIndex}`;
   };
 
-  if (loading && positions.length === 0) {
+  if (initialLoad && positions.length === 0) {
     return (
       <div className="bg-white dark:bg-darkgray rounded-lg border border-border dark:border-darkborder p-6">
         <h3 className="text-lg font-semibold text-dark dark:text-white mb-4">Open Positions</h3>
@@ -68,7 +105,7 @@ export const PositionPanel: React.FC = () => {
     );
   }
 
-  if (positions.length === 0) {
+  if (!initialLoad && positions.length === 0) {
     return (
       <div className="bg-white dark:bg-darkgray rounded-lg border border-border dark:border-darkborder p-6">
         <h3 className="text-lg font-semibold text-dark dark:text-white mb-4">Open Positions</h3>
@@ -83,16 +120,32 @@ export const PositionPanel: React.FC = () => {
   return (
     <div className="bg-white dark:bg-darkgray rounded-lg border border-border dark:border-darkborder p-4">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-dark dark:text-white">Open Positions</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-lg font-semibold text-dark dark:text-white">Open Positions</h3>
+          {lastUpdate && (
+            <span className="text-xs text-muted dark:text-darklink">
+              {loading ? (
+                <span className="flex items-center gap-1">
+                  <Icon icon="svg-spinners:ring-resize" height={12} className="opacity-50" />
+                  Updating...
+                </span>
+              ) : (
+                `Updated ${Math.floor((Date.now() - lastUpdate.getTime()) / 1000)}s ago`
+              )}
+            </span>
+          )}
+        </div>
         <button
-          onClick={async () => {
-            const data = await fetchPositions();
-            setPositions(data);
-          }}
-          className="p-1.5 hover:bg-muted/30 dark:hover:bg-white/5 rounded-lg transition-colors"
+          onClick={handleManualRefresh}
+          disabled={loading}
+          className="p-1.5 hover:bg-muted/30 dark:hover:bg-white/5 rounded-lg transition-colors disabled:opacity-50"
           title="Refresh"
         >
-          <Icon icon="ph:arrow-clockwise" className="text-muted" width={18} />
+          <Icon 
+            icon="ph:arrow-clockwise" 
+            className={`text-muted ${loading ? 'animate-spin' : ''}`} 
+            width={18} 
+          />
         </button>
       </div>
       
@@ -145,10 +198,21 @@ export const PositionPanel: React.FC = () => {
                 <td className="py-3 px-2 text-center">
                   <button
                     onClick={() => handleClose(position.marketIndex)}
-                    disabled={closingMarketIndex === position.marketIndex}
+                    disabled={closingMarketIndex === position.marketIndex || isConfirmingClose}
                     className="px-3 py-1 rounded text-xs font-medium bg-error/10 text-error hover:bg-error/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
-                    {closingMarketIndex === position.marketIndex ? 'Closing...' : 'Close'}
+                    {closingMarketIndex === position.marketIndex ? (
+                      isConfirmingClose ? (
+                        <span className="flex items-center gap-1">
+                          <Icon icon="svg-spinners:ring-resize" height={12} />
+                          Confirming...
+                        </span>
+                      ) : (
+                        'Closing...'
+                      )
+                    ) : (
+                      'Close'
+                    )}
                   </button>
                 </td>
               </tr>

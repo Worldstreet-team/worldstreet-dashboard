@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Icon } from '@iconify/react';
 import { useFuturesStore } from '@/store/futuresStore';
 
@@ -18,6 +18,14 @@ interface FuturesChartProps {
   isDarkMode?: boolean;
 }
 
+interface TouchState {
+  startX: number;
+  startY: number;
+  lastX: number;
+  lastY: number;
+  startDistance: number;
+}
+
 export const FuturesChart: React.FC<FuturesChartProps> = ({
   symbol: propSymbol,
   isDarkMode = true,
@@ -31,8 +39,15 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [pollingStatus, setPollingStatus] = useState<'active' | 'paused' | 'error'>('paused');
   
+  // Zoom and pan state
+  const [zoom, setZoom] = useState(1);
+  const [panOffset, setPanOffset] = useState(0);
+  const [visibleCandles, setVisibleCandles] = useState(50);
+  
   const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const touchStateRef = useRef<TouchState | null>(null);
 
   // Auto-select first market when markets load
   useEffect(() => {
@@ -68,6 +83,107 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
       drawChart();
     }
   }, [canvasRef.current]);
+
+  // Redraw when zoom or pan changes
+  useEffect(() => {
+    if (chartData.length > 0 && canvasRef.current) {
+      drawChart();
+    }
+  }, [zoom, panOffset, visibleCandles]);
+
+  // Touch event handlers for mobile
+  const handleTouchStart = useCallback((e: TouchEvent) => {
+    if (e.touches.length === 1) {
+      // Single touch - pan
+      touchStateRef.current = {
+        startX: e.touches[0].clientX,
+        startY: e.touches[0].clientY,
+        lastX: e.touches[0].clientX,
+        lastY: e.touches[0].clientY,
+        startDistance: 0,
+      };
+    } else if (e.touches.length === 2) {
+      // Two touches - zoom
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      touchStateRef.current = {
+        startX: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+        startY: (e.touches[0].clientY + e.touches[1].clientY) / 2,
+        lastX: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+        lastY: (e.touches[0].clientY + e.touches[1].clientY) / 2,
+        startDistance: distance,
+      };
+    }
+  }, []);
+
+  const handleTouchMove = useCallback((e: TouchEvent) => {
+    if (!touchStateRef.current) return;
+
+    if (e.touches.length === 1 && touchStateRef.current.startDistance === 0) {
+      // Pan
+      const deltaX = e.touches[0].clientX - touchStateRef.current.lastX;
+      const candlesPerPixel = visibleCandles / (canvasRef.current?.width || 1200);
+      const candlesDelta = Math.round(deltaX * candlesPerPixel);
+      
+      setPanOffset(prev => {
+        const newOffset = prev - candlesDelta;
+        const maxOffset = Math.max(0, chartData.length - visibleCandles);
+        return Math.max(0, Math.min(maxOffset, newOffset));
+      });
+      
+      touchStateRef.current.lastX = e.touches[0].clientX;
+      touchStateRef.current.lastY = e.touches[0].clientY;
+    } else if (e.touches.length === 2) {
+      // Zoom
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      const scale = distance / touchStateRef.current.startDistance;
+      const newVisibleCandles = Math.round(visibleCandles / scale);
+      
+      setVisibleCandles(Math.max(10, Math.min(200, newVisibleCandles)));
+      
+      touchStateRef.current.startDistance = distance;
+    }
+
+    e.preventDefault();
+  }, [chartData.length, visibleCandles]);
+
+  const handleTouchEnd = useCallback(() => {
+    touchStateRef.current = null;
+  }, []);
+
+  // Mouse wheel zoom for desktop
+  const handleWheel = useCallback((e: WheelEvent) => {
+    e.preventDefault();
+    
+    const delta = e.deltaY > 0 ? 1.1 : 0.9;
+    setVisibleCandles(prev => {
+      const newValue = Math.round(prev * delta);
+      return Math.max(10, Math.min(200, newValue));
+    });
+  }, []);
+
+  // Setup touch and wheel listeners
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+    canvas.addEventListener('touchend', handleTouchEnd);
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
+
+    return () => {
+      canvas.removeEventListener('touchstart', handleTouchStart);
+      canvas.removeEventListener('touchmove', handleTouchMove);
+      canvas.removeEventListener('touchend', handleTouchEnd);
+      canvas.removeEventListener('wheel', handleWheel);
+    };
+  }, [handleTouchStart, handleTouchMove, handleTouchEnd, handleWheel]);
 
   const fetchHistoricalData = async () => {
     setLoading(true);
@@ -197,7 +313,7 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
       return;
     }
 
-    console.log(`Drawing chart with ${chartData.length} candles`);
+    console.log(`Drawing chart with ${chartData.length} candles, visible: ${visibleCandles}, offset: ${panOffset}`);
 
     const width = canvas.width;
     const height = canvas.height;
@@ -206,11 +322,18 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
     ctx.fillStyle = isDarkMode ? '#1a1a1a' : '#ffffff';
     ctx.fillRect(0, 0, width, height);
 
-    const prices = chartData.flatMap(c => [c.high, c.low]);
+    // Calculate visible data range
+    const endIndex = Math.min(chartData.length, chartData.length - panOffset);
+    const startIndex = Math.max(0, endIndex - visibleCandles);
+    const visibleData = chartData.slice(startIndex, endIndex);
+
+    if (visibleData.length === 0) return;
+
+    const prices = visibleData.flatMap(c => [c.high, c.low]);
     const maxPrice = Math.max(...prices);
     const minPrice = Math.min(...prices);
-    const priceRange = maxPrice - minPrice;
-    const padding = 40;
+    const priceRange = maxPrice - minPrice || 1;
+    const padding = 60; // Increased for mobile readability
 
     console.log(`Price range: ${minPrice} - ${maxPrice}`);
 
@@ -226,14 +349,15 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
 
       const price = maxPrice - (priceRange * i / 5);
       ctx.fillStyle = isDarkMode ? '#94a3b8' : '#64748b';
-      ctx.font = '10px monospace';
-      ctx.fillText(price.toFixed(2), 5, y + 3);
+      ctx.font = 'bold 12px monospace'; // Larger font for mobile
+      ctx.textAlign = 'right';
+      ctx.fillText(price.toFixed(2), padding - 5, y + 4);
     }
 
     // Draw candlesticks
-    const candleWidth = Math.max(2, (width - 2 * padding) / chartData.length - 2);
-    chartData.forEach((candle, index) => {
-      const x = padding + (index * (width - 2 * padding) / chartData.length);
+    const candleWidth = Math.max(3, (width - 2 * padding) / visibleData.length - 2);
+    visibleData.forEach((candle, index) => {
+      const x = padding + (index * (width - 2 * padding) / visibleData.length);
       const yHigh = padding + (height - 2 * padding) * (1 - (candle.high - minPrice) / priceRange);
       const yLow = padding + (height - 2 * padding) * (1 - (candle.low - minPrice) / priceRange);
       const yOpen = padding + (height - 2 * padding) * (1 - (candle.open - minPrice) / priceRange);
@@ -242,6 +366,7 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
       const isGreen = candle.close >= candle.open;
       ctx.strokeStyle = isGreen ? '#26a69a' : '#ef5350';
       ctx.fillStyle = isGreen ? '#26a69a' : '#ef5350';
+      ctx.lineWidth = Math.max(1, candleWidth / 4);
 
       // Draw wick
       ctx.beginPath();
@@ -252,16 +377,16 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
       // Draw body
       const bodyHeight = Math.abs(yClose - yOpen);
       const bodyY = Math.min(yOpen, yClose);
-      ctx.fillRect(x, bodyY, candleWidth, Math.max(1, bodyHeight));
+      ctx.fillRect(x, bodyY, candleWidth, Math.max(2, bodyHeight));
     });
 
     // Draw current price line
-    if (chartData.length > 0) {
-      const lastPrice = chartData[chartData.length - 1].close;
+    if (visibleData.length > 0) {
+      const lastPrice = visibleData[visibleData.length - 1].close;
       const y = padding + (height - 2 * padding) * (1 - (lastPrice - minPrice) / priceRange);
 
       ctx.strokeStyle = '#3b82f6';
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 2;
       ctx.setLineDash([5, 5]);
       ctx.beginPath();
       ctx.moveTo(padding, y);
@@ -269,15 +394,26 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
       ctx.stroke();
       ctx.setLineDash([]);
 
+      // Price label
       ctx.fillStyle = '#3b82f6';
-      ctx.fillRect(width - padding + 5, y - 10, 60, 20);
+      const labelWidth = 80;
+      const labelHeight = 24;
+      ctx.fillRect(width - padding + 5, y - labelHeight / 2, labelWidth, labelHeight);
       ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 11px monospace';
-      ctx.fillText(lastPrice.toFixed(2), width - padding + 10, y + 3);
+      ctx.font = 'bold 13px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(lastPrice.toFixed(2), width - padding + 10, y + 5);
     }
 
     console.log('Chart drawn successfully');
   };
+
+  // Reset zoom and pan
+  const handleResetView = useCallback(() => {
+    setZoom(1);
+    setPanOffset(0);
+    setVisibleCandles(50);
+  }, []);
 
   const currentPrice = chartData.length > 0 ? chartData[chartData.length - 1].close : null;
   const priceChange = chartData.length > 1 
@@ -321,27 +457,39 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
           </div>
         </div>
 
-        {/* Interval Selector */}
-        <div className="flex items-center gap-1">
+        {/* Controls */}
+        <div className="flex items-center gap-2">
+          {/* Interval Selector */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setTimeInterval('1min')}
+              className={`px-2 sm:px-3 py-1.5 rounded text-xs sm:text-sm font-medium transition-colors ${
+                timeInterval === '1min'
+                  ? 'bg-primary text-white'
+                  : 'bg-gray-100 dark:bg-dark text-dark dark:text-white hover:bg-gray-200 dark:hover:bg-darkgray'
+              }`}
+            >
+              1m
+            </button>
+            <button
+              onClick={() => setTimeInterval('5min')}
+              className={`px-2 sm:px-3 py-1.5 rounded text-xs sm:text-sm font-medium transition-colors ${
+                timeInterval === '5min'
+                  ? 'bg-primary text-white'
+                  : 'bg-gray-100 dark:bg-dark text-dark dark:text-white hover:bg-gray-200 dark:hover:bg-darkgray'
+              }`}
+            >
+              5m
+            </button>
+          </div>
+
+          {/* Reset View Button */}
           <button
-            onClick={() => setTimeInterval('1min')}
-            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-              timeInterval === '1min'
-                ? 'bg-primary text-white'
-                : 'bg-gray-100 dark:bg-dark text-dark dark:text-white hover:bg-gray-200 dark:hover:bg-darkgray'
-            }`}
+            onClick={handleResetView}
+            className="p-1.5 rounded bg-gray-100 dark:bg-dark text-dark dark:text-white hover:bg-gray-200 dark:hover:bg-darkgray transition-colors"
+            title="Reset zoom and pan"
           >
-            1m
-          </button>
-          <button
-            onClick={() => setTimeInterval('5min')}
-            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
-              timeInterval === '5min'
-                ? 'bg-primary text-white'
-                : 'bg-gray-100 dark:bg-dark text-dark dark:text-white hover:bg-gray-200 dark:hover:bg-darkgray'
-            }`}
-          >
-            5m
+            <Icon icon="ph:arrows-out" height={18} />
           </button>
         </div>
       </div>
@@ -379,7 +527,7 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
       )}
 
       {/* Chart Container */}
-      <div className="relative flex-1 p-4">
+      <div ref={containerRef} className="relative flex-1 p-2 sm:p-4 overflow-hidden">
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-darkgray/50 z-10">
             <div className="flex flex-col items-center gap-2">
@@ -390,7 +538,7 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
         )}
 
         {error && (
-          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10">
+          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 max-w-[90%]">
             <div className="bg-error/10 border border-error/20 rounded-lg px-4 py-2 flex items-center gap-2">
               <Icon icon="ph:warning-duotone" className="text-error" height={20} />
               <span className="text-sm text-error">{error}</span>
@@ -399,12 +547,34 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
         )}
 
         {!loading && !error && (
-          <canvas
-            ref={canvasRef}
-            width={1200}
-            height={500}
-            className="w-full h-auto rounded-lg"
-          />
+          <>
+            <canvas
+              ref={canvasRef}
+              width={1200}
+              height={500}
+              className="w-full h-auto rounded-lg touch-none"
+              style={{ touchAction: 'none' }}
+            />
+            
+            {/* Mobile Instructions */}
+            <div className="mt-2 flex items-center justify-center gap-4 text-xs text-muted dark:text-darklink sm:hidden">
+              <span className="flex items-center gap-1">
+                <Icon icon="ph:hand-swipe-right" height={14} />
+                Swipe to pan
+              </span>
+              <span className="flex items-center gap-1">
+                <Icon icon="ph:magnifying-glass-plus" height={14} />
+                Pinch to zoom
+              </span>
+            </div>
+
+            {/* Zoom Indicator */}
+            {visibleCandles !== 50 && (
+              <div className="absolute top-4 right-4 bg-primary/90 text-white px-3 py-1 rounded-full text-xs font-medium">
+                {visibleCandles} candles
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

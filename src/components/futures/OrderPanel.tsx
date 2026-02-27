@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { useFuturesStore, OrderSide, OrderType } from '@/store/futuresStore';
+import { usePostActionPolling, useDebounce } from '@/hooks/useFuturesPolling';
+import { useDriftTrading } from '@/hooks/useDriftTrading';
 import { Icon } from '@iconify/react';
 
 interface ErrorState {
@@ -19,6 +21,8 @@ interface ErrorState {
 
 export const OrderPanel: React.FC = () => {
   const { selectedMarket, selectedChain, setPreviewData, previewData, markets } = useFuturesStore();
+  const { fetchPositions, fetchAccountSummary } = useDriftTrading();
+  const { isPolling: isConfirmingOrder, startPostActionPolling } = usePostActionPolling();
   
   const [side, setSide] = useState<OrderSide>('long');
   const [orderType, setOrderType] = useState<OrderType>('market');
@@ -28,10 +32,15 @@ export const OrderPanel: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<ErrorState>({ type: null, message: '' });
   const [retryCountdown, setRetryCountdown] = useState(0);
+  const [successMessage, setSuccessMessage] = useState('');
 
-  // Preview calculation
+  // Debounce size input for preview calculation
+  const debouncedSize = useDebounce(size, 300);
+  const debouncedLimitPrice = useDebounce(limitPrice, 300);
+
+  // Preview calculation with debounced values
   useEffect(() => {
-    if (!selectedMarket || !size || parseFloat(size) <= 0) {
+    if (!selectedMarket || !debouncedSize || parseFloat(debouncedSize) <= 0) {
       setPreviewData(null);
       setError({ type: null, message: '' });
       return;
@@ -46,10 +55,10 @@ export const OrderPanel: React.FC = () => {
             chain: selectedChain,
             market: selectedMarket.symbol,
             side,
-            size: parseFloat(size),
+            size: parseFloat(debouncedSize),
             leverage,
             orderType,
-            limitPrice: limitPrice ? parseFloat(limitPrice) : undefined,
+            limitPrice: debouncedLimitPrice ? parseFloat(debouncedLimitPrice) : undefined,
           }),
         });
 
@@ -74,9 +83,8 @@ export const OrderPanel: React.FC = () => {
       }
     };
 
-    const debounce = setTimeout(fetchPreview, 300);
-    return () => clearTimeout(debounce);
-  }, [selectedMarket, size, leverage, side, orderType, limitPrice, selectedChain, setPreviewData]);
+    fetchPreview();
+  }, [selectedMarket, debouncedSize, leverage, side, orderType, debouncedLimitPrice, selectedChain, setPreviewData]);
 
   // Retry countdown effect
   useEffect(() => {
@@ -189,8 +197,9 @@ export const OrderPanel: React.FC = () => {
   const handleSubmit = async () => {
     if (!selectedMarket || !size || !previewData) return;
 
-    // Clear previous errors
+    // Clear previous messages
     setError({ type: null, message: '' });
+    setSuccessMessage('');
 
     // Check margin before submitting
     if (!previewData.marginCheckPassed) {
@@ -228,17 +237,40 @@ export const OrderPanel: React.FC = () => {
       const result = await response.json();
 
       if (response.ok) {
-        // Reset form
-        setSize('');
-        setLimitPrice('');
-        setError({ type: null, message: '' });
+        // Show success message
+        setSuccessMessage(`Position opened! TX: ${result.txSignature?.slice(0, 8)}...`);
         
-        // Show success message (you can replace alert with a toast notification)
-        alert(`Position opened successfully! TX: ${result.txSignature?.slice(0, 8)}...`);
+        // Start post-action polling to confirm position appears
+        startPostActionPolling({
+          checkCondition: async () => {
+            const positions = await fetchPositions();
+            const summary = await fetchAccountSummary();
+            // Check if new position exists
+            return positions.length > 0 || (summary !== null && summary.openPositions > 0);
+          },
+          onSuccess: () => {
+            // Reset form
+            setSize('');
+            setLimitPrice('');
+            setError({ type: null, message: '' });
+            setIsSubmitting(false);
+            
+            // Clear success message after 5 seconds
+            setTimeout(() => setSuccessMessage(''), 5000);
+          },
+          onTimeout: () => {
+            setIsSubmitting(false);
+            setSuccessMessage('Position opened but taking longer to confirm. Check your positions.');
+            setTimeout(() => setSuccessMessage(''), 5000);
+          },
+          maxAttempts: 15,
+          interval: 1000,
+        });
       } else {
         // Parse and display error
         const parsedError = parseError(result.error || '', result.message || result.error || '');
         setError(parsedError);
+        setIsSubmitting(false);
 
         // Auto-retry for temporary errors
         if (parsedError.type === 'oracle_unavailable' || parsedError.type === 'volatility') {
@@ -251,7 +283,6 @@ export const OrderPanel: React.FC = () => {
         type: 'generic',
         message: 'Network error. Please check your connection and try again.',
       });
-    } finally {
       setIsSubmitting(false);
     }
   };
@@ -420,6 +451,23 @@ export const OrderPanel: React.FC = () => {
                 ${(previewData?.estimatedFundingImpact ?? 0).toFixed(4)}
               </span>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success Message */}
+      {successMessage && (
+        <div className="mb-4 p-3 bg-success/10 border border-success/20 rounded-lg flex items-start gap-2">
+          <Icon icon="ph:check-circle" className="text-success flex-shrink-0 mt-0.5" height={20} />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-success">Success!</p>
+            <p className="text-xs text-success/80 mt-1">{successMessage}</p>
+            {isConfirmingOrder && (
+              <p className="text-xs text-success/60 mt-1 flex items-center gap-1">
+                <Icon icon="svg-spinners:ring-resize" height={12} />
+                Confirming on-chain...
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -599,16 +647,25 @@ export const OrderPanel: React.FC = () => {
       {/* Submit Button */}
       <button
         onClick={handleSubmit}
-        disabled={isDisabled}
+        disabled={isDisabled || isConfirmingOrder}
         className={`w-full py-3 rounded-lg font-semibold transition-colors ${
-          isDisabled
+          isDisabled || isConfirmingOrder
             ? 'bg-gray-300 dark:bg-darkgray text-gray-500 cursor-not-allowed'
             : side === 'long'
             ? 'bg-success hover:bg-success/90 text-white'
             : 'bg-error hover:bg-error/90 text-white'
         }`}
       >
-        {isSubmitting ? 'Opening...' : `Open ${side === 'long' ? 'Long' : 'Short'}`}
+        {isConfirmingOrder ? (
+          <span className="flex items-center justify-center gap-2">
+            <Icon icon="svg-spinners:ring-resize" height={18} />
+            Confirming...
+          </span>
+        ) : isSubmitting ? (
+          'Opening...'
+        ) : (
+          `Open ${side === 'long' ? 'Long' : 'Short'}`
+        )}
       </button>
 
       {/* Insufficient Margin Warning */}
