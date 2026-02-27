@@ -80,9 +80,6 @@ importers:
       flowbite-react:
         specifier: ^0.11.9
         version: 0.11.9(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwindcss@4.1.18)(typescript@5.9.3)
-      globalpay-react:
-        specifier: file:globalpay-react-1.2.5.tgz
-        version: file:globalpay-react-1.2.5.tgz(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       i18next:
         specifier: ^25.0.2
         version: 25.8.6(typescript@5.9.3)
@@ -2071,13 +2068,6 @@ packages:
 
   glob-to-regexp@0.4.1:
     resolution: {integrity: sha512-lkX1HJXwyMcprw/5YUZc2s7DrpAiHB21/V+E1rHUrVNokkvB6bqMzT0VfV6/86ZNabt1k14YOIaT7nDvOX3Iiw==}
-
-  globalpay-react@file:globalpay-react-1.2.5.tgz:
-    resolution: {integrity: sha512-YUkX3RYmZ0QpJcGdsUxXBgjvm/TPdBC2xr6D1mroxMK0k9xNYaN7pl21rzv+vquNKiRmLlBqYNTmd/cVS3DCWg==, tarball: file:globalpay-react-1.2.5.tgz}
-    version: 1.2.5
-    peerDependencies:
-      react: ^18.2.0
-      react-dom: ^18.2.0
 
   globals@14.0.0:
     resolution: {integrity: sha512-oahGvuMGQlPw/ivIYBjVSrWAfWLBeku5tpPE2fOPLi+WHffIWbuh2tCjhyQhTBPMf5E9jDEH4FOmTYgYwbKwtQ==}
@@ -5339,11 +5329,6 @@ snapshots:
       is-glob: 4.0.3
 
   glob-to-regexp@0.4.1: {}
-
-  globalpay-react@file:globalpay-react-1.2.5.tgz(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
-    dependencies:
-      react: 19.2.4
-      react-dom: 19.2.4(react@19.2.4)
 
   globals@14.0.0: {}
 
