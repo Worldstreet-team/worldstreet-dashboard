@@ -127,6 +127,7 @@ export default function DepositPage() {
 
   // Deposit state
   const [activeDeposit, setActiveDeposit] = useState<DepositRecord | null>(null);
+  const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [verifying, setVerifying] = useState(false);
@@ -161,6 +162,7 @@ export default function DepositPage() {
       const data = await res.json();
       if (data.success && data.deposit) {
         setActiveDeposit(data.deposit);
+        setPaymentUrl(data.paymentLink || data.paymentUrl || data.checkoutUrl || null);
       }
     } catch {
       console.error("Failed to load deposit");
@@ -242,6 +244,7 @@ export default function DepositPage() {
       }
 
       setActiveDeposit(data.deposit);
+      setPaymentUrl(data.paymentLink || data.paymentUrl || data.checkoutUrl || null);
       setUsdtAmount("");
     } catch {
       setError("Something went wrong. Please try again.");
@@ -296,6 +299,7 @@ export default function DepositPage() {
       const data = await res.json();
       if (data.success) {
         setActiveDeposit(null);
+        setPaymentUrl(null);
         setError("");
         setVerifyMessage("");
       }
@@ -309,8 +313,13 @@ export default function DepositPage() {
   // ── Open payment page ───────────────────────────────────────────────────
 
   const openPayment = () => {
-    if (!activeDeposit || typeof window === "undefined") return;
-    window.open(`/api/deposit/initiate?depositId=${activeDeposit._id}`, "_blank", "noopener,noreferrer");
+    if (typeof window === "undefined") return;
+    if (!paymentUrl) {
+      setError("Payment link not available yet. Please try again or contact support.");
+      return;
+    }
+
+    window.open(paymentUrl, "_blank", "noopener,noreferrer");
   };
 
   // ── No wallet state ────────────────────────────────────────────────────
@@ -523,11 +532,16 @@ export default function DepositPage() {
                     </p>
                     <button
                       onClick={openPayment}
+                      disabled={!paymentUrl}
                       className="w-full py-3.5 px-4 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-xl transition-colors"
                     >
                       {`Pay ${CURRENCY_SYMBOLS[activeDeposit.fiatCurrency]}${activeDeposit.fiatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
                     </button>
-                    <p className="text-xs text-muted">If payment does not open, click the button again.</p>
+                    <p className="text-xs text-muted">
+                      {paymentUrl
+                        ? "If payment does not open, click the button again."
+                        : "Payment link is being prepared."}
+                    </p>
                   </div>
 
                   {/* Divider */}
@@ -694,6 +708,7 @@ export default function DepositPage() {
                     <button
                       onClick={() => {
                         setActiveDeposit(null);
+                        setPaymentUrl(null);
                         setError("");
                         setVerifyMessage("");
                       }}
