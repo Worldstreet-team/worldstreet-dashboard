@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/app/context/authContext'
 import { useProfile } from '@/app/context/profileContext'
 import { allFunctions } from '@/lib/vivid-functions'
-import VividOrb from '@/components/vivid/VividOrb'
+import VividVoiceControl from './VividVoiceControl'
 
 /**
  * Wraps VividProvider inside the DashboardLayout so it has access to
@@ -95,7 +95,7 @@ ${portfolioContext}
       }}
     >
       {children as any}
-      <VividOrb />
+      <VividVoiceControl />
     </VividProvider>
   )
 }
