@@ -8,6 +8,7 @@ import PortfolioStats from "@/components/trading/PortfolioStats";
 import Watchlist from "@/components/trading/Watchlist";
 import RecentTrades from "@/components/trading/RecentTrades";
 import MarketOverview from "@/components/trading/MarketOverview";
+import { SwapInterface } from "@/components/swap/SwapInterface";
 
 const DashboardPage = () => {
   const [selectedSymbol, setSelectedSymbol] = useState("BTC");
@@ -34,8 +35,13 @@ const DashboardPage = () => {
         <RecentTrades symbol={selectedSymbol} />
       </div>
 
-      {/* Market Overview */}
+      {/* Quick Swap */}
       <div className="lg:col-span-5 col-span-12">
+        <SwapInterface />
+      </div>
+
+      {/* Market Overview - Full Width */}
+      <div className="col-span-12">
         <MarketOverview />
       </div>
 

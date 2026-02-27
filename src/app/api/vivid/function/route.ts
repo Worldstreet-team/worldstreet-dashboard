@@ -1,6 +1,6 @@
 import { createFunctionHandler } from '@worldstreet/vivid-voice/server'
-import { serverFunctions } from '@/lib/vivid-functions'
+import { allFunctions } from '@/lib/vivid-functions'
 
 export const POST = createFunctionHandler({
-  functions: serverFunctions,
+  functions: allFunctions,
 })
