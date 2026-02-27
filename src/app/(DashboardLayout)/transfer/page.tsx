@@ -61,7 +61,7 @@ export default function TransferPage() {
     sendTokenTransaction: sendEthTokenTransaction,
   } = useEvm();
 
-  const [direction, setDirection] = useState<'main-to-spot' | 'spot-to-main' | 'spot-to-futures' | 'futures-to-spot'>('main-to-spot');
+  const [direction, setDirection] = useState<'main-to-spot' | 'spot-to-main' | 'spot-to-futures' | 'futures-to-spot' | 'main-to-futures' | 'futures-to-main'>('main-to-spot');
   const [selectedAsset, setSelectedAsset] = useState('USDT');
   const [selectedChain, setSelectedChain] = useState<'sol' | 'evm'>('sol'); // Chain selection for stablecoins
   const [amount, setAmount] = useState('');
@@ -72,6 +72,7 @@ export default function TransferPage() {
   const [spotWalletsLoading, setSpotWalletsLoading] = useState(true);
   const [futuresWalletAddress, setFuturesWalletAddress] = useState<string | null>(null);
   const [futuresWalletLoading, setFuturesWalletLoading] = useState(false);
+  const [futuresBalance, setFuturesBalance] = useState<{ usdc: number; sol: number } | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [generatingWallet, setGeneratingWallet] = useState(false);
@@ -124,13 +125,34 @@ export default function TransferPage() {
       if (response.ok) {
         const data = await response.json();
         setFuturesWalletAddress(data.address);
+        // Fetch futures balance
+        await fetchFuturesBalance(data.address);
       } else if (response.status === 404) {
         setFuturesWalletAddress(null);
+        setFuturesBalance(null);
       }
     } catch (err) {
       console.error('Failed to fetch futures wallet:', err);
     } finally {
       setFuturesWalletLoading(false);
+    }
+  };
+
+  const fetchFuturesBalance = async (address?: string) => {
+    const walletAddress = address || futuresWalletAddress;
+    if (!walletAddress) return;
+
+    try {
+      const response = await fetch(`/api/futures/wallet/balance?address=${encodeURIComponent(walletAddress)}`);
+      if (response.ok) {
+        const data = await response.json();
+        setFuturesBalance({
+          usdc: data.usdcBalance || 0,
+          sol: data.solBalance || 0,
+        });
+      }
+    } catch (err) {
+      console.error('Failed to fetch futures balance:', err);
     }
   };
 
@@ -210,7 +232,7 @@ export default function TransferPage() {
     }
 
     // Validate futures transfers
-    if (direction === 'spot-to-futures' || direction === 'futures-to-spot') {
+    if (direction === 'spot-to-futures' || direction === 'futures-to-spot' || direction === 'main-to-futures' || direction === 'futures-to-main') {
       if (selectedAsset !== 'USDT' && selectedAsset !== 'SOL') {
         setError('Only USDT and SOL can be transferred to/from futures wallet');
         return;
@@ -231,11 +253,14 @@ export default function TransferPage() {
     if (direction === 'main-to-spot') {
       // Main to Spot: Show PIN modal
       setShowPinModal(true);
+    } else if (direction === 'main-to-futures') {
+      // Main to Futures: Show PIN modal
+      setShowPinModal(true);
     } else if (direction === 'spot-to-futures' || direction === 'futures-to-spot') {
       // Futures transfers: Execute via backend
       await executeFuturesTransfer();
     } else {
-      // Spot to Main: Execute directly via backend
+      // Spot to Main or Futures to Main: Execute directly via backend
       await executeSpotToMain();
     }
   };
@@ -248,30 +273,44 @@ export default function TransferPage() {
     setPinError('');
 
     try {
-      // Get the spot wallet address for the selected asset and chain
-      const spotWallet = getSpotWallet(selectedAsset, selectedChain);
-      console.log('=== TRANSFER VALIDATION ===');
-      console.log('Selected asset:', selectedAsset);
-      console.log('Selected chain:', selectedChain);
-      console.log('All spot wallets:', JSON.stringify(spotWallets, null, 2));
-      console.log('Found spot wallet:', JSON.stringify(spotWallet, null, 2));
+      // Determine destination address based on direction
+      let recipientAddress = '';
       
-      if (!spotWallet) {
-        setPinError(`No spot wallet found for ${selectedAsset}. Please generate spot wallets first.`);
-        setLoading(false);
-        return;
-      }
+      if (direction === 'main-to-spot') {
+        // Get the spot wallet address for the selected asset and chain
+        const spotWallet = getSpotWallet(selectedAsset, selectedChain);
+        console.log('=== TRANSFER VALIDATION ===');
+        console.log('Selected asset:', selectedAsset);
+        console.log('Selected chain:', selectedChain);
+        console.log('All spot wallets:', JSON.stringify(spotWallets, null, 2));
+        console.log('Found spot wallet:', JSON.stringify(spotWallet, null, 2));
+        
+        if (!spotWallet) {
+          setPinError(`No spot wallet found for ${selectedAsset}. Please generate spot wallets first.`);
+          setLoading(false);
+          return;
+        }
 
-      if (!spotWallet.public_address) {
-        setPinError(`Spot wallet for ${selectedAsset} has no address. Please regenerate spot wallets.`);
-        setLoading(false);
-        return;
+        if (!spotWallet.public_address) {
+          setPinError(`Spot wallet for ${selectedAsset} has no address. Please regenerate spot wallets.`);
+          setLoading(false);
+          return;
+        }
+
+        recipientAddress = spotWallet.public_address.trim();
+      } else if (direction === 'main-to-futures') {
+        // Get the futures wallet address
+        if (!futuresWalletAddress) {
+          setPinError('Futures wallet not found. Please create one from the Futures page.');
+          setLoading(false);
+          return;
+        }
+        recipientAddress = futuresWalletAddress.trim();
       }
 
       // Validate the address format
-      const recipientAddress = spotWallet.public_address.trim();
       if (!recipientAddress) {
-        setPinError(`Invalid spot wallet address for ${selectedAsset} (empty after trim)`);
+        setPinError(`Invalid destination address for ${selectedAsset} (empty after trim)`);
         setLoading(false);
         return;
       }
@@ -381,7 +420,8 @@ export default function TransferPage() {
         }
       }
 
-      setSuccess(`Successfully transferred ${amount} ${selectedAsset}. TX: ${txHash.slice(0, 8)}...`);
+      const destinationType = direction === 'main-to-spot' ? 'Spot' : 'Futures';
+      setSuccess(`Successfully transferred ${amount} ${selectedAsset} to ${destinationType}. TX: ${txHash.slice(0, 8)}...`);
       setAmount('');
       setShowPinModal(false);
       setPin(['', '', '', '', '', '']);
@@ -394,6 +434,9 @@ export default function TransferPage() {
         ]);
       }
       await fetchSpotWallets();
+      if (direction === 'main-to-futures') {
+        await fetchFuturesBalance();
+      }
     } catch (err) {
       console.error('Transfer error:', err);
       setPinError(err instanceof Error ? err.message : 'Transfer failed');
@@ -427,22 +470,39 @@ export default function TransferPage() {
         return;
       }
 
-      const response = await fetch('/api/transfer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      // Determine endpoint and request body based on direction
+      let endpoint = '/api/transfer';
+      let requestBody: any = {};
+
+      if (direction === 'futures-to-main') {
+        // Use futures transfer endpoint
+        endpoint = '/api/futures/transfer';
+        requestBody = {
+          destinationAddress,
+          amount: parseFloat(amount),
+        };
+      } else {
+        // Use regular transfer endpoint for spot-to-main
+        requestBody = {
           userId,
           asset: selectedAsset,
           amount: parseFloat(amount),
           direction,
           destinationAddress,
-        }),
+        };
+      }
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        setSuccess(`Successfully transferred ${amount} ${selectedAsset}. TX: ${data.txHash?.slice(0, 8)}...`);
+        const sourceType = direction === 'futures-to-main' ? 'Futures' : 'Spot';
+        setSuccess(`Successfully transferred ${amount} ${selectedAsset} from ${sourceType} to Main. TX: ${data.txHash?.slice(0, 8)}...`);
         setAmount('');
         
         // Refresh balances
@@ -453,6 +513,9 @@ export default function TransferPage() {
           ]);
         }
         await fetchSpotWallets();
+        if (direction === 'futures-to-main') {
+          await fetchFuturesBalance();
+        }
       } else {
         setError(data.error || 'Transfer failed');
       }
@@ -527,18 +590,20 @@ export default function TransferPage() {
   };
 
   const toggleDirection = () => {
-    const directions: Array<'main-to-spot' | 'spot-to-main' | 'spot-to-futures' | 'futures-to-spot'> = [
+    const directions: Array<'main-to-spot' | 'spot-to-main' | 'main-to-futures' | 'spot-to-futures' | 'futures-to-spot' | 'futures-to-main'> = [
       'main-to-spot',
       'spot-to-main',
+      'main-to-futures',
       'spot-to-futures',
-      'futures-to-spot'
+      'futures-to-spot',
+      'futures-to-main'
     ];
     const currentIndex = directions.indexOf(direction);
     const nextIndex = (currentIndex + 1) % directions.length;
     setDirection(directions[nextIndex]);
     
     // Auto-set to Solana for futures transfers (keep current asset if it's USDT or SOL)
-    if (directions[nextIndex] === 'spot-to-futures' || directions[nextIndex] === 'futures-to-spot') {
+    if (directions[nextIndex].includes('futures')) {
       if (selectedAsset !== 'USDT' && selectedAsset !== 'SOL') {
         setSelectedAsset('USDT');
       }
@@ -590,12 +655,23 @@ export default function TransferPage() {
     return spotWallets.find(w => w.assetChain === assetChain);
   };
 
-  const currentBalance = direction === 'main-to-spot' 
+  // Get futures wallet balance
+  const getFuturesBalance = (asset: string): number => {
+    if (!futuresBalance) return 0;
+    if (asset === 'USDT' || asset === 'USDC') {
+      return futuresBalance.usdc;
+    } else if (asset === 'SOL') {
+      return futuresBalance.sol;
+    }
+    return 0;
+  };
+
+  const currentBalance = direction === 'main-to-spot' || direction === 'main-to-futures'
     ? getMainBalance(selectedAsset)
-    : direction === 'spot-to-futures'
+    : direction === 'spot-to-futures' || direction === 'spot-to-main'
     ? getSpotBalance(selectedAsset)
-    : direction === 'futures-to-spot'
-    ? 0 // Will be fetched from futures wallet
+    : direction === 'futures-to-spot' || direction === 'futures-to-main'
+    ? getFuturesBalance(selectedAsset)
     : getSpotBalance(selectedAsset);
 
   const hasSpotWallets = spotWallets.length > 0;
@@ -651,7 +727,7 @@ export default function TransferPage() {
       <div>
         <h1 className="text-2xl font-bold text-dark dark:text-white">Transfer Funds</h1>
         <p className="text-muted text-sm mt-1">
-          Move funds between your main wallet and spot trading wallet
+          Move funds between your main wallet, spot trading wallet, and futures wallet
         </p>
       </div>
 
@@ -695,11 +771,27 @@ export default function TransferPage() {
           {/* Direction Toggle */}
           <div className="bg-white dark:bg-black rounded-2xl border border-border/50 dark:border-darkborder p-6 shadow-sm">
             <h3 className="font-semibold text-dark dark:text-white mb-4">Transfer Direction</h3>
+            
+            {/* Current Direction Display */}
+            <div className="mb-4 p-3 bg-primary/5 border border-primary/20 rounded-xl">
+              <div className="flex items-center justify-center gap-2 text-primary">
+                <Icon icon="ph:arrow-right" width={18} />
+                <span className="font-semibold text-sm">
+                  {direction === 'main-to-spot' && 'Main Wallet → Spot Wallet'}
+                  {direction === 'spot-to-main' && 'Spot Wallet → Main Wallet'}
+                  {direction === 'main-to-futures' && 'Main Wallet → Futures Wallet'}
+                  {direction === 'spot-to-futures' && 'Spot Wallet → Futures Wallet'}
+                  {direction === 'futures-to-spot' && 'Futures Wallet → Spot Wallet'}
+                  {direction === 'futures-to-main' && 'Futures Wallet → Main Wallet'}
+                </span>
+              </div>
+            </div>
+            
             <div className="flex items-center justify-center">
               <div className="inline-flex flex-col items-center gap-3 bg-muted/30 dark:bg-white/5 p-4 rounded-xl w-full max-w-md">
                 {/* Main Wallet */}
                 <div className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all w-full justify-center ${
-                  direction === 'main-to-spot' 
+                  direction === 'main-to-spot' || direction === 'main-to-futures'
                     ? 'bg-primary text-white shadow-sm' 
                     : 'text-muted'
                 }`}>
@@ -725,8 +817,8 @@ export default function TransferPage() {
                   <span className="font-medium">Spot Wallet</span>
                 </div>
                 
-                {/* Arrow */}
-                {(direction === 'spot-to-futures' || direction === 'futures-to-spot') && (
+                {/* Arrow for futures */}
+                {(direction.includes('futures')) && (
                   <>
                     <button
                       onClick={toggleDirection}
@@ -737,7 +829,7 @@ export default function TransferPage() {
                     
                     {/* Futures Wallet */}
                     <div className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all w-full justify-center ${
-                      direction === 'futures-to-spot'
+                      direction === 'futures-to-spot' || direction === 'futures-to-main'
                         ? 'bg-primary text-white shadow-sm' 
                         : 'text-muted'
                     }`}>
@@ -749,10 +841,7 @@ export default function TransferPage() {
                 )}
                 
                 <p className="text-xs text-center text-muted mt-2">
-                  {direction === 'main-to-spot' && 'Transfer from Main to Spot'}
-                  {direction === 'spot-to-main' && 'Transfer from Spot to Main'}
-                  {direction === 'spot-to-futures' && 'Transfer USDT or SOL from Spot to Futures (Solana only)'}
-                  {direction === 'futures-to-spot' && 'Transfer USDT or SOL from Futures to Spot (Solana only)'}
+                  Click the arrows to change direction
                 </p>
               </div>
             </div>
@@ -900,7 +989,7 @@ export default function TransferPage() {
             )}
 
             {/* Alerts */}
-            {(direction === 'spot-to-futures' || direction === 'futures-to-spot') && (
+            {(direction.includes('futures')) && (
               <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-start gap-3">
                 <Icon icon="ph:info" className="text-blue-500 shrink-0" width={20} />
                 <div className="text-sm text-blue-600 dark:text-blue-400">
@@ -942,7 +1031,12 @@ export default function TransferPage() {
               ) : (
                 <>
                   <Icon icon="ph:arrow-right" width={20} />
-                  Transfer {direction === 'main-to-spot' ? 'to Spot' : 'to Main'}
+                  {direction === 'main-to-spot' && 'Transfer Main → Spot'}
+                  {direction === 'spot-to-main' && 'Transfer Spot → Main'}
+                  {direction === 'main-to-futures' && 'Transfer Main → Futures'}
+                  {direction === 'spot-to-futures' && 'Transfer Spot → Futures'}
+                  {direction === 'futures-to-spot' && 'Transfer Futures → Spot'}
+                  {direction === 'futures-to-main' && 'Transfer Futures → Main'}
                 </>
               )}
             </button>
@@ -1152,6 +1246,76 @@ export default function TransferPage() {
             )}
           </div>
 
+          {/* Futures Wallet Balance */}
+          <div className="bg-gradient-to-br from-orange-500/10 to-orange-600/5 rounded-2xl border border-border/50 dark:border-darkborder p-6 shadow-sm">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
+                <Icon icon="ph:trend-up" className="text-orange-500" width={20} />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-dark dark:text-white">Futures Wallet</h3>
+                <p className="text-xs text-muted">Solana Only</p>
+              </div>
+              <button
+                onClick={() => fetchFuturesBalance()}
+                disabled={futuresWalletLoading || !futuresWalletAddress}
+                className="p-1 hover:bg-muted/20 dark:hover:bg-white/5 rounded transition-colors disabled:opacity-50"
+              >
+                <Icon 
+                  icon="ph:arrow-clockwise" 
+                  className={`text-muted dark:text-darklink ${futuresWalletLoading ? 'animate-spin' : ''}`} 
+                  height={16} 
+                />
+              </button>
+            </div>
+            {futuresWalletLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : futuresWalletAddress ? (
+              <div className="space-y-3">
+                {/* USDT/USDC Balance */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <img src={ASSET_ICONS['USDT']} alt="USDT" className="w-6 h-6 rounded-full" />
+                      <span className="text-sm font-medium text-dark dark:text-white">USDT</span>
+                      <span className="text-xs text-muted bg-muted/20 px-2 py-0.5 rounded">SOL</span>
+                    </div>
+                    <span className="text-sm font-semibold text-dark dark:text-white">
+                      {(futuresBalance?.usdc || 0).toFixed(6)}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-muted truncate ml-8">
+                    {futuresWalletAddress}
+                  </p>
+                </div>
+                {/* SOL Balance */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <img src={ASSET_ICONS['SOL']} alt="SOL" className="w-6 h-6 rounded-full" />
+                      <span className="text-sm font-medium text-dark dark:text-white">SOL</span>
+                      <span className="text-xs text-muted">(Gas)</span>
+                    </div>
+                    <span className={`text-sm font-semibold ${
+                      (futuresBalance?.sol || 0) < 0.01 ? 'text-error' : 'text-dark dark:text-white'
+                    }`}>
+                      {(futuresBalance?.sol || 0).toFixed(6)}
+                    </span>
+                  </div>
+                  {(futuresBalance?.sol || 0) < 0.01 && (
+                    <p className="text-[10px] text-error ml-8">
+                      ⚠️ Low balance - keep at least 0.01 SOL for gas
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-muted text-center py-4">No futures wallet found</p>
+            )}
+          </div>
+
           {/* Info Card */}
           <div className="bg-white dark:bg-black rounded-2xl border border-border/50 dark:border-darkborder p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-3">
@@ -1186,7 +1350,9 @@ export default function TransferPage() {
             </p>
             <p className="text-sm text-muted text-center mb-1">
               From <span className="font-semibold text-dark dark:text-white">Main Wallet</span> to{' '}
-              <span className="font-semibold text-dark dark:text-white">Spot Wallet</span>
+              <span className="font-semibold text-dark dark:text-white">
+                {direction === 'main-to-spot' ? 'Spot Wallet' : 'Futures Wallet'}
+              </span>
             </p>
             <p className="text-xs text-muted text-center mb-6">
               Enter your 6-digit PIN to authorize this transfer.
