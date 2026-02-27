@@ -182,9 +182,12 @@ export const CollateralPanel: React.FC = () => {
     }
 
     if (collateral && parseFloat(amount) > collateral.available) {
-      setError('Insufficient available collateral');
+      setError(`Insufficient available collateral. Available: ${collateral.available.toFixed(2)} USDC`);
       return;
     }
+
+    const withdrawAmount = parseFloat(amount);
+    const previousTotal = collateral?.total || 0;
 
     setProcessing(true);
     setError('');
@@ -196,23 +199,72 @@ export const CollateralPanel: React.FC = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amount: parseFloat(amount),
+          amount: withdrawAmount,
         }),
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        setSuccess(`Successfully withdrew ${amount} USDC. TX: ${data.txSignature?.slice(0, 8)}...`);
-        setAmount('');
-        setAction(null);
-        await fetchCollateral();
+        // Show detailed success message with both transaction hashes
+        const driftTx = data.driftWithdrawTx?.slice(0, 8) || 'N/A';
+        const transferTx = data.transferToUserTx?.slice(0, 8) || 'N/A';
+        
+        setSuccess(
+          `Withdrawing ${amount} USDC...\n` +
+          `Step 1: Drift withdrawal (${driftTx}...)\n` +
+          `Step 2: Transfer to wallet (${transferTx}...)`
+        );
+        
+        // Start post-action polling to confirm withdrawal
+        startPostActionPolling({
+          checkCondition: async () => {
+            await fetchCollateral();
+            const newTotal = collateral?.total || 0;
+            // Check if balance decreased
+            return newTotal <= previousTotal - withdrawAmount * 0.99; // Allow 1% tolerance
+          },
+          onSuccess: () => {
+            setSuccess(
+              `Successfully withdrew ${amount} USDC!\n` +
+              `Funds transferred to your futures wallet.\n` +
+              `Drift TX: ${driftTx}... | Transfer TX: ${transferTx}...`
+            );
+            setAmount('');
+            setAction(null);
+            setProcessing(false);
+            setTimeout(() => setSuccess(''), 8000);
+          },
+          onTimeout: () => {
+            setSuccess(
+              `Withdrawal submitted but taking longer to confirm.\n` +
+              `Check your futures wallet balance.\n` +
+              `Drift TX: ${driftTx}... | Transfer TX: ${transferTx}...`
+            );
+            setAmount('');
+            setAction(null);
+            setProcessing(false);
+            setTimeout(() => setSuccess(''), 8000);
+          },
+          maxAttempts: 20,
+          interval: 1000,
+        });
       } else {
-        setError(data.error || 'Failed to withdraw collateral');
+        // Handle specific error cases
+        if (response.status === 404) {
+          setError('Futures wallet not found. Please create a futures wallet first.');
+        } else if (data.error?.includes('Insufficient balance')) {
+          setError(data.message || data.error);
+        } else if (data.error?.includes('not properly loaded')) {
+          setError('Temporary synchronization issue. Please try again in a few seconds.');
+        } else {
+          setError(data.message || data.error || 'Failed to withdraw collateral');
+        }
+        setProcessing(false);
       }
     } catch (err) {
+      console.error('Withdraw error:', err);
       setError('Network error. Please try again.');
-    } finally {
       setProcessing(false);
     }
   };
@@ -327,9 +379,42 @@ export const CollateralPanel: React.FC = () => {
               className="w-full px-3 py-2 rounded-lg border border-border dark:border-darkborder bg-white dark:bg-dark text-dark dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
             />
             {action === 'withdraw' && collateral && (
-              <p className="text-xs text-muted dark:text-darklink mt-1">
-                Available: ${(collateral.available ?? 0).toFixed(2)}
-              </p>
+              <>
+                <p className="text-xs text-muted dark:text-darklink mt-1">
+                  Available: ${(collateral.available ?? 0).toFixed(2)}
+                </p>
+                {/* Quick amount buttons for withdraw */}
+                <div className="flex gap-2 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setAmount((collateral.available * 0.25).toFixed(2))}
+                    className="flex-1 px-2 py-1 bg-muted/30 dark:bg-white/5 rounded text-xs font-medium text-dark dark:text-white hover:bg-muted/40 dark:hover:bg-white/10 transition-colors"
+                  >
+                    25%
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAmount((collateral.available * 0.5).toFixed(2))}
+                    className="flex-1 px-2 py-1 bg-muted/30 dark:bg-white/5 rounded text-xs font-medium text-dark dark:text-white hover:bg-muted/40 dark:hover:bg-white/10 transition-colors"
+                  >
+                    50%
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAmount((collateral.available * 0.75).toFixed(2))}
+                    className="flex-1 px-2 py-1 bg-muted/30 dark:bg-white/5 rounded text-xs font-medium text-dark dark:text-white hover:bg-muted/40 dark:hover:bg-white/10 transition-colors"
+                  >
+                    75%
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAmount(collateral.available.toFixed(2))}
+                    className="flex-1 px-2 py-1 bg-primary/10 text-primary rounded text-xs font-medium hover:bg-primary/20 transition-colors"
+                  >
+                    Max
+                  </button>
+                </div>
+              </>
             )}
           </div>
 
@@ -343,7 +428,7 @@ export const CollateralPanel: React.FC = () => {
           {success && (
             <div className="p-3 bg-success/10 border border-success/20 rounded-lg flex items-start gap-2">
               <Icon icon="ph:check-circle" className="text-success flex-shrink-0 mt-0.5" height={16} />
-              <p className="text-sm text-success">{success}</p>
+              <p className="text-sm text-success whitespace-pre-line">{success}</p>
             </div>
           )}
 
@@ -390,9 +475,16 @@ export const CollateralPanel: React.FC = () => {
       <div className="mt-4 pt-4 border-t border-border dark:border-darkborder">
         <div className="flex items-start gap-2">
           <Icon icon="ph:info" className="text-primary flex-shrink-0 mt-0.5" height={16} />
-          <p className="text-xs text-muted dark:text-darklink">
-            Collateral is used as margin for your futures positions. Deposit USDC to increase your trading capacity.
-          </p>
+          <div className="text-xs text-muted dark:text-darklink space-y-1">
+            <p>
+              Collateral is used as margin for your futures positions. Deposit USDC to increase your trading capacity.
+            </p>
+            {action === 'withdraw' && (
+              <p className="text-blue-600 dark:text-blue-400 mt-2">
+                Withdrawal is a 2-step process: (1) Withdraw from Drift account, (2) Transfer to your futures wallet.
+              </p>
+            )}
+          </div>
         </div>
       </div>
     </div>
