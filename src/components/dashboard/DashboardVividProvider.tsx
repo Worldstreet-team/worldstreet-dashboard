@@ -1,11 +1,12 @@
 'use client'
 
 import { useEffect } from 'react'
-import { VividProvider, VividWidget } from '@worldstreet/vivid-voice'
+import { VividProvider } from '@worldstreet/vivid-voice'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/app/context/authContext'
 import { useProfile } from '@/app/context/profileContext'
 import { allFunctions } from '@/lib/vivid-functions'
+import VividOrb from '@/components/vivid/VividOrb'
 
 /**
  * Wraps VividProvider inside the DashboardLayout so it has access to
@@ -94,15 +95,7 @@ ${portfolioContext}
       }}
     >
       {children as any}
-      <VividWidget
-        showTranscript={true}
-        size="md"
-        position={{ bottom: '24px', right: '24px' }}
-        classNames={{
-          container:
-            'fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3 max-sm:bottom-5 max-sm:right-4 max-sm:scale-75 max-sm:origin-bottom-right',
-        }}
-      />
+      <VividOrb />
     </VividProvider>
   )
 }
