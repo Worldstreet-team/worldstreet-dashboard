@@ -3,10 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { useWallet } from "@/app/context/walletContext";
-import { useAuth } from "@/app/context/authContext";
 import Footer from "@/components/dashboard/Footer";
-import { GlobalPay } from "globalpay-react";
-import type { GeneratePaymentLinkPayload } from "globalpay-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -117,7 +114,6 @@ function DepositSteps({ currentStep }: { currentStep: number }) {
 
 export default function DepositPage() {
   const { walletsGenerated } = useWallet();
-  const { user } = useAuth();
   const searchParams = useSearchParams();
 
   // UI state
@@ -310,31 +306,11 @@ export default function DepositPage() {
     }
   };
 
-  // ── GlobalPay error handler ────────────────────────────────────────────
+  // ── Open payment page ───────────────────────────────────────────────────
 
-  const handleGlobalPayError = (err: { message: string; details: unknown }) => {
-    console.error("GlobalPay error:", err);
-    setError(err.message || "Payment gateway error. Please try again.");
-  };
-
-  // ── Build GlobalPay payload ────────────────────────────────────────────
-
-  const buildPayload = (): GeneratePaymentLinkPayload | null => {
-    if (!activeDeposit || !user) return null;
-
-    return {
-      amount: activeDeposit.fiatAmount,
-      merchantTransactionReference: activeDeposit.merchantTransactionReference,
-      redirectUrl: `${typeof window !== "undefined" ? window.location.origin : ""}/deposit?depositId=${activeDeposit._id}`,
-      customer: {
-        lastName: user.lastName || "Customer",
-        firstName: user.firstName || "WorldStreet",
-        currency: activeDeposit.fiatCurrency,
-        phoneNumber: "N/A",
-        address: "N/A",
-        emailAddress: user.email || "",
-      },
-    };
+  const openPayment = () => {
+    if (!activeDeposit || typeof window === "undefined") return;
+    window.open(`/api/deposit/initiate?depositId=${activeDeposit._id}`, "_blank", "noopener,noreferrer");
   };
 
   // ── No wallet state ────────────────────────────────────────────────────
@@ -369,9 +345,6 @@ export default function DepositPage() {
   // ────────────────────────────────────────────────────────────────────────
   // Render
   // ────────────────────────────────────────────────────────────────────────
-
-  const payload = buildPayload();
-  const apiKey = process.env.NEXT_PUBLIC_GLOBALPAY_API_KEY || "";
 
   return (
     <>
@@ -539,47 +512,23 @@ export default function DepositPage() {
                     </div>
                   </div>
 
-                  {/* GlobalPay button */}
-                  {payload && apiKey && (
-                    <div className="space-y-3">
-                      <p className="text-sm text-muted">
-                        Click the button below to pay{" "}
-                        <strong className="text-dark dark:text-white">
-                          {CURRENCY_SYMBOLS[activeDeposit.fiatCurrency]}
-                          {activeDeposit.fiatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </strong>{" "}
-                        via GlobalPay:
-                      </p>
-                      <div className="flex justify-center py-2 [&>div]:w-full [&_button]:!w-full [&_button]:!justify-center">
-                        <GlobalPay
-                          apiKey={apiKey}
-                          isLive={process.env.NODE_ENV === "production"}
-                          buttonText={`Pay ${CURRENCY_SYMBOLS[activeDeposit.fiatCurrency]}${activeDeposit.fiatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
-                          buttonStyle={{
-                            background: "#22c55e",
-                            color: "#fff",
-                            padding: "14px 32px",
-                            borderRadius: "12px",
-                            fontSize: "16px",
-                            fontWeight: "600",
-                            cursor: "pointer",
-                            width: "100%",
-                            justifyContent: "center",
-                          }}
-                          payload={payload}
-                          onError={handleGlobalPayError}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {!apiKey && (
-                    <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                      <p className="text-sm text-yellow-600 dark:text-yellow-400">
-                        Payment gateway is not configured. Please contact support.
-                      </p>
-                    </div>
-                  )}
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted">
+                      Click the button below to pay{" "}
+                      <strong className="text-dark dark:text-white">
+                        {CURRENCY_SYMBOLS[activeDeposit.fiatCurrency]}
+                        {activeDeposit.fiatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </strong>{" "}
+                      via GlobalPay:
+                    </p>
+                    <button
+                      onClick={openPayment}
+                      className="w-full py-3.5 px-4 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-xl transition-colors"
+                    >
+                      {`Pay ${CURRENCY_SYMBOLS[activeDeposit.fiatCurrency]}${activeDeposit.fiatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                    </button>
+                    <p className="text-xs text-muted">If payment does not open, click the button again.</p>
+                  </div>
 
                   {/* Divider */}
                   <div className="flex items-center gap-3">
