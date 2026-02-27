@@ -16,7 +16,8 @@ interface CollateralData {
 export const CollateralPanel: React.FC = () => {
   const { user } = useAuth();
   const [collateral, setCollateral] = useState<CollateralData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [initialLoad, setInitialLoad] = useState(true);
   const [action, setAction] = useState<'deposit' | 'withdraw' | null>(null);
   const [amount, setAmount] = useState('');
   const [processing, setProcessing] = useState(false);
@@ -30,7 +31,7 @@ export const CollateralPanel: React.FC = () => {
   const fetchCollateral = useCallback(async () => {
     if (loading && collateral) return; // Prevent overlapping requests
     
-    setLoading(true);
+    // Don't set loading to true - keep showing current data
     try {
       // Use Drift account summary endpoint
       const response = await fetch('/api/drift/account/summary');
@@ -39,6 +40,7 @@ export const CollateralPanel: React.FC = () => {
         // Wallet not found - show message to create wallet
         setCollateral(null);
         setError('Futures wallet not found. Please create a futures wallet first.');
+        setInitialLoad(false);
         return;
       }
       
@@ -54,15 +56,16 @@ export const CollateralPanel: React.FC = () => {
         });
         setLastUpdate(new Date());
         setError('');
+        setInitialLoad(false);
       } else {
         const errorData = await response.json();
         setError(errorData.error || 'Failed to fetch collateral');
+        setInitialLoad(false);
       }
     } catch (err) {
       console.error('Failed to fetch collateral:', err);
       setError('Failed to fetch collateral');
-    } finally {
-      setLoading(false);
+      setInitialLoad(false);
     }
   }, [loading, collateral]);
 
@@ -214,7 +217,7 @@ export const CollateralPanel: React.FC = () => {
     }
   };
 
-  if (loading) {
+  if (initialLoad) {
     return (
       <div className="bg-white dark:bg-darkgray rounded-lg border border-border dark:border-darkborder p-6">
         <div className="flex items-center justify-center py-8">

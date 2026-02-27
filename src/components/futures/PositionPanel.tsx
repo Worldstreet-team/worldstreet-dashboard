@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useFuturesStore } from '@/store/futuresStore';
 import { useDriftTrading, DriftPosition } from '@/hooks/useDriftTrading';
 import { useFuturesPolling, usePostActionPolling } from '@/hooks/useFuturesPolling';
@@ -12,22 +12,23 @@ export const PositionPanel: React.FC = () => {
   const [positions, setPositions] = useState<DriftPosition[]>([]);
   const [closingMarketIndex, setClosingMarketIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  const [initialLoad, setInitialLoad] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const { isPolling: isConfirmingClose, startPostActionPolling } = usePostActionPolling();
 
-  // Load positions function
+  // Load positions function (silent background update)
   const loadPositions = useCallback(async () => {
     if (loading) return; // Prevent overlapping requests
     
-    setLoading(true);
+    // Don't set loading to true - keep showing current data
     try {
       const data = await fetchPositions();
       setPositions(data);
       setLastUpdate(new Date());
+      setInitialLoad(false);
     } catch (error) {
       console.error('Failed to load positions:', error);
-    } finally {
-      setLoading(false);
+      setInitialLoad(false);
     }
   }, [fetchPositions, loading]);
 
@@ -58,7 +59,7 @@ export const PositionPanel: React.FC = () => {
 
     setClosingMarketIndex(marketIndex);
     try {
-      const result = await closePosition(marketIndex);
+      await closePosition(marketIndex);
       
       // Start post-action polling to confirm position is closed
       startPostActionPolling({
@@ -92,7 +93,7 @@ export const PositionPanel: React.FC = () => {
     return market?.symbol || `Market ${marketIndex}`;
   };
 
-  if (loading && positions.length === 0) {
+  if (initialLoad && positions.length === 0) {
     return (
       <div className="bg-white dark:bg-darkgray rounded-lg border border-border dark:border-darkborder p-6">
         <h3 className="text-lg font-semibold text-dark dark:text-white mb-4">Open Positions</h3>
@@ -104,7 +105,7 @@ export const PositionPanel: React.FC = () => {
     );
   }
 
-  if (positions.length === 0) {
+  if (!initialLoad && positions.length === 0) {
     return (
       <div className="bg-white dark:bg-darkgray rounded-lg border border-border dark:border-darkborder p-6">
         <h3 className="text-lg font-semibold text-dark dark:text-white mb-4">Open Positions</h3>
