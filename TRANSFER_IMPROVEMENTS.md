@@ -6,7 +6,7 @@ Enhanced the transfer page to support direct transfers from main wallet to futur
 ## New Features
 
 ### 1. Main Wallet → Futures Wallet Direct Transfer
-Users can now transfer USDT and SOL directly from their main wallet to futures wallet without going through spot wallet first.
+Users can now transfer USDT, USDC, and SOL directly from their main wallet to futures wallet without going through spot wallet first.
 
 **Supported Transfer Directions:**
 1. Main Wallet → Spot Wallet (existing)
@@ -19,7 +19,7 @@ Users can now transfer USDT and SOL directly from their main wallet to futures w
 **Transfer Flow:**
 - Main → Futures: Uses PIN authentication, sends directly from main wallet to futures wallet address
 - Futures → Main: Uses backend API to transfer from futures wallet to main wallet
-- Only USDT and SOL supported on Solana network for futures transfers
+- Only USDT, USDC, and SOL supported on Solana network for futures transfers
 
 ### 2. Futures Balance Display
 Added real-time futures wallet balance display in the transfer page sidebar.
@@ -162,7 +162,7 @@ Response:
 - Low balance warnings
 
 ### Transfer Validation
-- Validates futures transfers only support USDT & SOL
+- Validates futures transfers only support USDT, USDC & SOL
 - Checks Solana network requirement
 - Verifies futures wallet exists
 - Shows helpful error messages
@@ -215,7 +215,8 @@ Response:
 ## Notes
 
 - Futures transfers only support Solana network
-- Only USDT and SOL can be transferred to/from futures
+- Only USDT, USDC, and SOL can be transferred to/from futures
 - Minimum 0.01 SOL recommended for gas fees
 - Balances are fetched from Solana RPC, not cached
 - PIN required for main wallet transfers
+- USDT and USDC share the same balance (both use USDC token on Solana)
