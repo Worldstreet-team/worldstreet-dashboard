@@ -140,8 +140,6 @@ const SidebarContent: MenuItem[] = [
         icon: 'ph:trend-up-duotone',
         id: uniqueId(),
         url: "/futures",
-        badge: true,
-        badgeType: "filled",
       },
       {
         name: "Swap",
