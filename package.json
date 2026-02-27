@@ -34,7 +34,7 @@
     "ecpair": "^3.0.0",
     "ethers": "^6.16.0",
     "flowbite-react": "^0.11.9",
-    "globalpay-react": "file:globalpay-react-1.2.5.tgz",
+
     "i18next": "^25.0.2",
     "lightweight-charts": "^5.1.0",
     "lodash": "^4.17.23",
