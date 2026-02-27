@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Icon } from '@iconify/react';
 import { useAuth } from '@/app/context/authContext';
+import { useFuturesPolling, usePostActionPolling } from '@/hooks/useFuturesPolling';
 
 interface CollateralData {
   total: number;
@@ -21,16 +22,14 @@ export const CollateralPanel: React.FC = () => {
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const { isPolling: isConfirmingAction, startPostActionPolling } = usePostActionPolling();
 
   const userId = user?.userId || '';
 
-  useEffect(() => {
-    if (userId) {
-      fetchCollateral();
-    }
-  }, [userId]);
-
-  const fetchCollateral = async () => {
+  const fetchCollateral = useCallback(async () => {
+    if (loading && collateral) return; // Prevent overlapping requests
+    
     setLoading(true);
     try {
       // Use Drift account summary endpoint
@@ -53,6 +52,7 @@ export const CollateralPanel: React.FC = () => {
           currency: 'USDC',
           exists: true,
         });
+        setLastUpdate(new Date());
         setError('');
       } else {
         const errorData = await response.json();
@@ -64,13 +64,24 @@ export const CollateralPanel: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [loading, collateral]);
+
+  // Auto-polling every 10 seconds
+  useFuturesPolling({
+    interval: 10000,
+    enabled: userId !== '',
+    onPoll: fetchCollateral,
+    dependencies: [userId],
+  });
 
   const handleDeposit = async () => {
     if (!amount || parseFloat(amount) <= 0) {
       setError('Please enter a valid amount');
       return;
     }
+
+    const depositAmount = parseFloat(amount);
+    const previousTotal = collateral?.total || 0;
 
     setProcessing(true);
     setError('');
@@ -82,23 +93,46 @@ export const CollateralPanel: React.FC = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amount: parseFloat(amount),
+          amount: depositAmount,
         }),
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        setSuccess(`Successfully deposited ${amount} USDC. TX: ${data.txSignature?.slice(0, 8)}...`);
-        setAmount('');
-        setAction(null);
-        await fetchCollateral();
+        setSuccess(`Depositing ${amount} USDC... TX: ${data.txSignature?.slice(0, 8)}...`);
+        
+        // Start post-action polling to confirm deposit
+        startPostActionPolling({
+          checkCondition: async () => {
+            await fetchCollateral();
+            const newTotal = collateral?.total || 0;
+            // Check if balance increased
+            return newTotal >= previousTotal + depositAmount * 0.99; // Allow 1% slippage
+          },
+          onSuccess: () => {
+            setSuccess(`Successfully deposited ${amount} USDC!`);
+            setAmount('');
+            setAction(null);
+            setProcessing(false);
+            setTimeout(() => setSuccess(''), 5000);
+          },
+          onTimeout: () => {
+            setSuccess('Deposit submitted but taking longer to confirm. Check your balance.');
+            setAmount('');
+            setAction(null);
+            setProcessing(false);
+            setTimeout(() => setSuccess(''), 5000);
+          },
+          maxAttempts: 20,
+          interval: 1000,
+        });
       } else {
         setError(data.error || 'Failed to deposit collateral');
+        setProcessing(false);
       }
     } catch (err) {
       setError('Network error. Please try again.');
-    } finally {
       setProcessing(false);
     }
   };
@@ -176,12 +210,24 @@ export const CollateralPanel: React.FC = () => {
   return (
     <div className="bg-white dark:bg-darkgray rounded-lg border border-border dark:border-darkborder p-4">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-dark dark:text-white">Collateral (USDC)</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-lg font-semibold text-dark dark:text-white">Collateral (USDC)</h3>
+          {lastUpdate && !loading && (
+            <span className="text-xs text-muted dark:text-darklink">
+              {Math.floor((Date.now() - lastUpdate.getTime()) / 1000)}s ago
+            </span>
+          )}
+        </div>
         <button
           onClick={fetchCollateral}
-          className="p-1 hover:bg-muted/20 dark:hover:bg-white/5 rounded transition-colors"
+          disabled={loading}
+          className="p-1 hover:bg-muted/20 dark:hover:bg-white/5 rounded transition-colors disabled:opacity-50"
         >
-          <Icon icon="ph:arrow-clockwise" className="text-muted dark:text-darklink" height={18} />
+          <Icon 
+            icon="ph:arrow-clockwise" 
+            className={`text-muted dark:text-darklink ${loading ? 'animate-spin' : ''}`} 
+            height={18} 
+          />
         </button>
       </div>
 
@@ -278,14 +324,25 @@ export const CollateralPanel: React.FC = () => {
             </button>
             <button
               onClick={action === 'deposit' ? handleDeposit : handleWithdraw}
-              disabled={processing || !amount || parseFloat(amount) <= 0}
+              disabled={processing || isConfirmingAction || !amount || parseFloat(amount) <= 0}
               className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                 action === 'deposit'
                   ? 'bg-success hover:bg-success/90 text-white'
                   : 'bg-primary hover:bg-primary/90 text-white'
               }`}
             >
-              {processing ? 'Processing...' : action === 'deposit' ? 'Deposit' : 'Withdraw'}
+              {isConfirmingAction ? (
+                <span className="flex items-center justify-center gap-1">
+                  <Icon icon="svg-spinners:ring-resize" height={14} />
+                  Confirming...
+                </span>
+              ) : processing ? (
+                'Processing...'
+              ) : action === 'deposit' ? (
+                'Deposit'
+              ) : (
+                'Withdraw'
+              )}
             </button>
           </div>
         </div>
