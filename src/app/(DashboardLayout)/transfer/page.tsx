@@ -233,8 +233,8 @@ export default function TransferPage() {
 
     // Validate futures transfers
     if (direction === 'spot-to-futures' || direction === 'futures-to-spot' || direction === 'main-to-futures' || direction === 'futures-to-main') {
-      if (selectedAsset !== 'USDT' && selectedAsset !== 'SOL') {
-        setError('Only USDT and SOL can be transferred to/from futures wallet');
+      if (selectedAsset !== 'USDT' && selectedAsset !== 'USDC' && selectedAsset !== 'SOL') {
+        setError('Only USDT, USDC, and SOL can be transferred to/from futures wallet');
         return;
       }
       if (selectedChain !== 'sol') {
@@ -602,9 +602,9 @@ export default function TransferPage() {
     const nextIndex = (currentIndex + 1) % directions.length;
     setDirection(directions[nextIndex]);
     
-    // Auto-set to Solana for futures transfers (keep current asset if it's USDT or SOL)
+    // Auto-set to Solana for futures transfers (keep current asset if it's USDT, USDC, or SOL)
     if (directions[nextIndex].includes('futures')) {
-      if (selectedAsset !== 'USDT' && selectedAsset !== 'SOL') {
+      if (selectedAsset !== 'USDT' && selectedAsset !== 'USDC' && selectedAsset !== 'SOL') {
         setSelectedAsset('USDT');
       }
       setSelectedChain('sol');
@@ -835,7 +835,7 @@ export default function TransferPage() {
                     }`}>
                       <Icon icon="ph:trend-up" width={18} />
                       <span className="font-medium">Futures Wallet</span>
-                      <span className="text-xs bg-white/20 px-2 py-0.5 rounded">USDT & SOL</span>
+                      <span className="text-xs bg-white/20 px-2 py-0.5 rounded">USDT, USDC & SOL</span>
                     </div>
                   </>
                 )}
@@ -995,7 +995,7 @@ export default function TransferPage() {
                 <div className="text-sm text-blue-600 dark:text-blue-400">
                   <p className="font-semibold mb-1">Futures Transfer Requirements:</p>
                   <ul className="list-disc list-inside space-y-1 text-xs">
-                    <li>Only USDT and SOL on Solana network are supported</li>
+                    <li>Only USDT, USDC, and SOL on Solana network are supported</li>
                     <li>Keep at least 0.01 SOL in your futures wallet for gas fees</li>
                     <li>SOL is needed for transaction fees when trading futures</li>
                   </ul>
@@ -1278,8 +1278,8 @@ export default function TransferPage() {
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2">
-                      <img src={ASSET_ICONS['USDT']} alt="USDT" className="w-6 h-6 rounded-full" />
-                      <span className="text-sm font-medium text-dark dark:text-white">USDT</span>
+                      <img src={ASSET_ICONS['USDC']} alt="USDC" className="w-6 h-6 rounded-full" />
+                      <span className="text-sm font-medium text-dark dark:text-white">USDC</span>
                       <span className="text-xs text-muted bg-muted/20 px-2 py-0.5 rounded">SOL</span>
                     </div>
                     <span className="text-sm font-semibold text-dark dark:text-white">
@@ -1288,6 +1288,9 @@ export default function TransferPage() {
                   </div>
                   <p className="text-[10px] text-muted truncate ml-8">
                     {futuresWalletAddress}
+                  </p>
+                  <p className="text-[10px] text-muted ml-8 mt-0.5">
+                    USDT and USDC share the same balance
                   </p>
                 </div>
                 {/* SOL Balance */}
