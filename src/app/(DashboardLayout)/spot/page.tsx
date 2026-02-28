@@ -106,7 +106,7 @@ export default function SpotTradingPage() {
         </div>
 
         {/* Bottom Tabs - Full Width */}
-        <div className="border-t border-border dark:border-darkborder h-[250px] flex-shrink-0">
+        <div className="border-t border-border dark:border-darkborder h-[350px] flex-shrink-0">
           <BottomTabs 
             refreshKey={refreshKey}
             selectedChartSymbol={selectedPair}
