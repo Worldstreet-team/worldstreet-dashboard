@@ -118,13 +118,14 @@ export default function PairInfoBar({ selectedPair, onSelectPair }: PairInfoBarP
   const isPositive = tickerData.change24h >= 0;
 
   return (
-    <div className="bg-white dark:bg-darkgray border-b border-border dark:border-darkborder relative z-99999">
+    <div className="bg-white dark:bg-darkgray border-b border-border dark:border-darkborder relative">
       <div className="px-3 md:px-4 py-2 md:py-3 flex items-center gap-1 overflow-x-auto">
         {/* Pair Selector */}
         <div className="relative">
           <button
             onClick={() => setShowPairSelector(!showPairSelector)}
             className="flex items-center gap-1.5 px-3 py-2 hover:bg-muted/20 dark:hover:bg-white/5 rounded transition-colors"
+            id="pair-selector-button"
           >
             <span className="font-bold text-dark dark:text-white text-base md:text-sm">
               {selectedPair.replace('-', '/')}
@@ -136,14 +137,27 @@ export default function PairInfoBar({ selectedPair, onSelectPair }: PairInfoBarP
             />
           </button>
 
-          {/* Dropdown */}
+          {/* Dropdown - Using fixed positioning to escape overflow */}
           {showPairSelector && (
             <>
+              {/* Backdrop */}
               <div 
-                className="fixed inset-0 z-[99999]" 
+                className="fixed inset-0 z-[9998]" 
                 onClick={() => setShowPairSelector(false)}
               />
-              <div className="absolute top-full left-0 mt-1 bg-white dark:bg-darkgray border border-border dark:border-darkborder rounded shadow-xl z-[99999] min-w-[220px] max-h-[400px] overflow-y-auto">
+              
+              {/* Dropdown Menu */}
+              <div 
+                className="fixed bg-white dark:bg-darkgray border border-border dark:border-darkborder rounded shadow-2xl z-[9999] min-w-[220px] max-h-[400px] overflow-y-auto"
+                style={{
+                  top: typeof window !== 'undefined' 
+                    ? `${document.getElementById('pair-selector-button')?.getBoundingClientRect().bottom || 0}px`
+                    : '0px',
+                  left: typeof window !== 'undefined'
+                    ? `${document.getElementById('pair-selector-button')?.getBoundingClientRect().left || 0}px`
+                    : '0px'
+                }}
+              >
                 {allTickers.map((ticker) => (
                   <button
                     key={ticker.symbol}
