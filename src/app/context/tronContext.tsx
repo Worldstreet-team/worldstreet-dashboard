@@ -149,8 +149,24 @@ export function TronProvider({ children }: { children: ReactNode }) {
         
         const checkTronWeb = async (): Promise<any> => {
           while (attempts < maxAttempts) {
-            if (typeof window !== "undefined" && (window as any).TronWeb) {
-              return (window as any).TronWeb;
+            if (typeof window !== "undefined") {
+              const win = window as any;
+              
+              // Check different possible locations for TronWeb
+              if (win.TronWeb) {
+                // If TronWeb is a constructor function
+                if (typeof win.TronWeb === 'function') {
+                  return win.TronWeb;
+                }
+                // If TronWeb is an object with a default export
+                if (win.TronWeb.default && typeof win.TronWeb.default === 'function') {
+                  return win.TronWeb.default;
+                }
+                // If TronWeb is already an instance, return its constructor
+                if (win.TronWeb.constructor) {
+                  return win.TronWeb.constructor;
+                }
+              }
             }
             await new Promise(resolve => setTimeout(resolve, 100));
             attempts++;
@@ -159,9 +175,13 @@ export function TronProvider({ children }: { children: ReactNode }) {
         };
 
         const TronWebConstructor = await checkTronWeb();
+        console.log('[TronContext] TronWeb loaded, type:', typeof TronWebConstructor);
+        
         const instance = new TronWebConstructor({
           fullHost: TRON_RPC,
         });
+        
+        console.log('[TronContext] TronWeb instance created');
         setTronWeb(instance);
       } catch (error) {
         console.error("Error initializing TronWeb:", error);

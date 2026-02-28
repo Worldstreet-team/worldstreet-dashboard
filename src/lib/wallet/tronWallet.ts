@@ -21,12 +21,28 @@ interface TronWeb {
 }
 
 /**
- * Wait for TronWeb to be available
+ * Wait for TronWeb to be available and return the correct constructor
  */
 async function waitForTronWeb(maxAttempts = 20): Promise<any> {
   for (let i = 0; i < maxAttempts; i++) {
-    if (typeof window !== "undefined" && (window as any).TronWeb) {
-      return (window as any).TronWeb;
+    if (typeof window !== "undefined") {
+      const win = window as any;
+      
+      // Check different possible locations for TronWeb
+      if (win.TronWeb) {
+        // If TronWeb is a constructor function
+        if (typeof win.TronWeb === 'function') {
+          return win.TronWeb;
+        }
+        // If TronWeb is an object with a default export
+        if (win.TronWeb.default && typeof win.TronWeb.default === 'function') {
+          return win.TronWeb.default;
+        }
+        // If TronWeb is already an instance, return its constructor
+        if (win.TronWeb.constructor) {
+          return win.TronWeb.constructor;
+        }
+      }
     }
     await new Promise(resolve => setTimeout(resolve, 100));
   }
@@ -47,13 +63,20 @@ export async function generateTronWallet(pin: string): Promise<{
     // Wait for TronWeb to be available
     const TronWebConstructor = await waitForTronWeb();
     
+    console.log('[TronWallet] TronWeb type:', typeof TronWebConstructor);
+    console.log('[TronWallet] TronWeb:', TronWebConstructor);
+    
     // Create TronWeb instance
-    const tronWeb: TronWeb = new TronWebConstructor({
+    const tronWeb = new TronWebConstructor({
       fullHost: TRON_RPC,
     });
 
+    console.log('[TronWallet] TronWeb instance created:', tronWeb);
+
     // Generate new account
     const account = tronWeb.createAccount();
+    
+    console.log('[TronWallet] Account generated:', account);
     
     // Extract private key (without 0x prefix if present)
     const privateKey = account.privateKey.startsWith("0x") 
@@ -62,6 +85,8 @@ export async function generateTronWallet(pin: string): Promise<{
     
     // Get address
     const address = account.address.base58;
+
+    console.log('[TronWallet] Address:', address);
 
     // Encrypt private key with PIN
     const encryptedPrivateKey = encryptWithPIN(privateKey, pin);
