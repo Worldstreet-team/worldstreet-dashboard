@@ -31,6 +31,8 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <ThemeModeScript />
+        {/* TronWeb library for Tron blockchain interactions */}
+        <script src="https://cdn.jsdelivr.net/npm/tronweb@latest/dist/TronWeb.js" async></script>
       </head>
       <body className={`${font.className}`}>
         <ClerkProvider

@@ -1,6 +1,6 @@
 /**
  * Multi-chain wallet generation utilities.
- * Generates wallets for Solana, Ethereum, and Bitcoin.
+ * Generates wallets for Solana, Ethereum, Bitcoin, and Tron.
  * 
  * ALL GENERATION HAPPENS CLIENT-SIDE - the server never sees raw private keys.
  * 
@@ -14,6 +14,7 @@ import * as bitcoin from "bitcoinjs-lib";
 import { ECPairFactory, ECPairInterface } from "ecpair";
 import * as ecc from "tiny-secp256k1";
 import { encryptWithPIN } from "./encryption";
+import { generateTronWallet as generateTronWalletUtil } from "./tronWallet";
 
 // Initialize Bitcoin ECPair with secp256k1
 const ECPair = ECPairFactory(ecc);
@@ -28,7 +29,7 @@ if (typeof window !== "undefined" && !window.Buffer) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface GeneratedWallet {
-  chain: "solana" | "ethereum" | "bitcoin";
+  chain: "solana" | "ethereum" | "bitcoin" | "tron";
   address: string;
   encryptedPrivateKey: string;
 }
@@ -37,6 +38,7 @@ export interface AllWallets {
   solana: GeneratedWallet;
   ethereum: GeneratedWallet;
   bitcoin: GeneratedWallet;
+  tron: GeneratedWallet;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -207,6 +209,23 @@ export function decryptBitcoinWallet(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Tron Wallet
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Generate a new Tron wallet and encrypt the private key with PIN.
+ */
+export async function generateTronWallet(pin: string): Promise<GeneratedWallet> {
+  const wallet = await generateTronWalletUtil(pin);
+  
+  return {
+    chain: "tron",
+    address: wallet.address,
+    encryptedPrivateKey: wallet.encryptedPrivateKey,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Generate All Wallets
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -215,16 +234,24 @@ export function decryptBitcoinWallet(
  * This is called when a user first sets up their wallet PIN.
  * 
  * @param pin - User's chosen PIN (4-6 digits)
- * @returns Object containing all three wallet objects
+ * @returns Object containing all four wallet objects
  */
-export function generateAllWallets(pin: string): AllWallets {
+export async function generateAllWallets(pin: string): Promise<AllWallets> {
   if (!pin || pin.length < 4) {
     throw new Error("PIN must be at least 4 characters");
   }
 
+  const [solana, ethereum, bitcoin, tron] = await Promise.all([
+    Promise.resolve(generateSolanaWallet(pin)),
+    Promise.resolve(generateEthereumWallet(pin)),
+    Promise.resolve(generateBitcoinWallet(pin)),
+    generateTronWallet(pin),
+  ]);
+
   return {
-    solana: generateSolanaWallet(pin),
-    ethereum: generateEthereumWallet(pin),
-    bitcoin: generateBitcoinWallet(pin),
+    solana,
+    ethereum,
+    bitcoin,
+    tron,
   };
 }

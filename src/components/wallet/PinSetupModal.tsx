@@ -253,6 +253,7 @@ export function PinSetupModal() {
             solana: { address: wallets.solana.address, encryptedPrivateKey: wallets.solana.encryptedPrivateKey },
             ethereum: { address: wallets.ethereum.address, encryptedPrivateKey: wallets.ethereum.encryptedPrivateKey },
             bitcoin: { address: wallets.bitcoin.address, encryptedPrivateKey: wallets.bitcoin.encryptedPrivateKey },
+            tron: { address: wallets.tron.address, encryptedPrivateKey: wallets.tron.encryptedPrivateKey },
           },
           pinHash,
         }),
@@ -269,6 +270,7 @@ export function PinSetupModal() {
         solana: wallets.solana.address,
         ethereum: wallets.ethereum.address,
         bitcoin: wallets.bitcoin.address,
+        tron: wallets.tron.address,
       });
 
       setTimeout(() => closePinSetupModal(), 3000);
@@ -333,10 +335,11 @@ export function PinSetupModal() {
               <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">
                 Wallets to be created
               </p>
-              <div className="grid grid-cols-3 gap-2 mb-8">
+              <div className="grid grid-cols-2 gap-2 mb-8">
                 <ChainBadge name="Solana" symbol="SOL" color="bg-gradient-to-br from-purple-500 to-blue-500" />
                 <ChainBadge name="Ethereum" symbol="ETH" color="bg-gradient-to-br from-blue-500 to-indigo-600" />
                 <ChainBadge name="Bitcoin" symbol="BTC" color="bg-gradient-to-br from-orange-400 to-orange-600" />
+                <ChainBadge name="Tron" symbol="TRX" color="bg-gradient-to-br from-red-500 to-red-600" />
               </div>
 
               <div className="flex gap-3">
@@ -478,14 +481,17 @@ export function PinSetupModal() {
               </DialogHeader>
 
               <div className="mt-8 space-y-2">
-                <div className={`text-sm ${generationProgress > 20 ? "text-gray-700 dark:text-gray-300" : "text-gray-400"} transition-colors`}>
-                  {generationProgress > 20 ? "✓" : "○"} Generating Solana keypair
+                <div className={`text-sm ${generationProgress > 15 ? "text-gray-700 dark:text-gray-300" : "text-gray-400"} transition-colors`}>
+                  {generationProgress > 15 ? "✓" : "○"} Generating Solana keypair
                 </div>
-                <div className={`text-sm ${generationProgress > 45 ? "text-gray-700 dark:text-gray-300" : "text-gray-400"} transition-colors`}>
-                  {generationProgress > 45 ? "✓" : "○"} Generating Ethereum wallet
+                <div className={`text-sm ${generationProgress > 35 ? "text-gray-700 dark:text-gray-300" : "text-gray-400"} transition-colors`}>
+                  {generationProgress > 35 ? "✓" : "○"} Generating Ethereum wallet
                 </div>
-                <div className={`text-sm ${generationProgress > 70 ? "text-gray-700 dark:text-gray-300" : "text-gray-400"} transition-colors`}>
-                  {generationProgress > 70 ? "✓" : "○"} Generating Bitcoin address
+                <div className={`text-sm ${generationProgress > 55 ? "text-gray-700 dark:text-gray-300" : "text-gray-400"} transition-colors`}>
+                  {generationProgress > 55 ? "✓" : "○"} Generating Bitcoin address
+                </div>
+                <div className={`text-sm ${generationProgress > 75 ? "text-gray-700 dark:text-gray-300" : "text-gray-400"} transition-colors`}>
+                  {generationProgress > 75 ? "✓" : "○"} Generating Tron wallet
                 </div>
                 <div className={`text-sm ${generationProgress > 90 ? "text-gray-700 dark:text-gray-300" : "text-gray-400"} transition-colors`}>
                   {generationProgress > 90 ? "✓" : "○"} Encrypting & securing

@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!wallets || !wallets.solana || !wallets.ethereum || !wallets.bitcoin) {
+    if (!wallets || !wallets.solana || !wallets.ethereum || !wallets.bitcoin || !wallets.tron) {
       return NextResponse.json(
         { success: false, message: "All wallet data is required" },
         { status: 400 }
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate each wallet has address and encrypted key
-    for (const chain of ["solana", "ethereum", "bitcoin"] as const) {
+    for (const chain of ["solana", "ethereum", "bitcoin", "tron"] as const) {
       const wallet = wallets[chain];
       if (!wallet.address || !wallet.encryptedPrivateKey) {
         return NextResponse.json(
@@ -96,6 +96,10 @@ export async function POST(request: NextRequest) {
               address: wallets.bitcoin.address,
               encryptedPrivateKey: wallets.bitcoin.encryptedPrivateKey,
             },
+            tron: {
+              address: wallets.tron.address,
+              encryptedPrivateKey: wallets.tron.encryptedPrivateKey,
+            },
           },
           walletPinHash: pinHash,
           walletsGenerated: true,
@@ -119,6 +123,7 @@ export async function POST(request: NextRequest) {
         solana: { address: wallets.solana.address },
         ethereum: { address: wallets.ethereum.address },
         bitcoin: { address: wallets.bitcoin.address },
+        tron: { address: wallets.tron.address },
       },
     });
   } catch (error) {
@@ -175,6 +180,7 @@ export async function GET(request: NextRequest) {
         solana: { address: profile.wallets?.solana?.address || "" },
         ethereum: { address: profile.wallets?.ethereum?.address || "" },
         bitcoin: { address: profile.wallets?.bitcoin?.address || "" },
+        tron: { address: profile.wallets?.tron?.address || "" },
       },
     });
   } catch (error) {
