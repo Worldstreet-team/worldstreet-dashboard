@@ -58,7 +58,7 @@ export default function BottomTabs({
       </div>
 
       {/* Tab Content */}
-      <div className="min-h-[300px] max-h-[400px] overflow-auto">
+      <div className="min-h-[150px] md:min-h-[300px] max-h-[180px] md:max-h-[400px] overflow-auto">
         {activeTab === 'orders' && (
           <div className="p-8 text-center">
             <div className="w-16 h-16 rounded-full bg-muted/30 dark:bg-white/5 flex items-center justify-center mx-auto mb-3">

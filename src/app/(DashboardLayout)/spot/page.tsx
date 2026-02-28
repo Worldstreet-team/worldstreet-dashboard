@@ -83,8 +83,8 @@ export default function SpotTradingPage() {
         </div>
       </div>
 
-      {/* Bottom Tabs - Full Width, scrollable on mobile */}
-      <div className="border-t border-border dark:border-darkborder">
+      {/* Bottom Tabs - Smaller on mobile for bigger chart */}
+      <div className="border-t border-border dark:border-darkborder h-[180px] md:h-auto">
         <BottomTabs 
           refreshKey={refreshKey}
           selectedChartSymbol={selectedPair}
@@ -109,15 +109,15 @@ export default function SpotTradingPage() {
           className={`fixed bottom-0 left-0 right-0 bg-white dark:bg-darkgray border-t border-border dark:border-darkborder z-50 transition-transform duration-300 ease-out ${
             showMobileTradingPanel ? 'translate-y-0' : 'translate-y-full'
           }`}
-          style={{ maxHeight: '80vh' }}
+          style={{ maxHeight: '85vh' }}
         >
           {/* Handle Bar */}
-          <div className="flex items-center justify-center py-2 border-b border-border dark:border-darkborder">
-            <div className="w-12 h-1 bg-muted/50 rounded-full" />
+          <div className="flex items-center justify-center py-3 border-b border-border dark:border-darkborder">
+            <div className="w-12 h-1.5 bg-muted/50 rounded-full" />
           </div>
           
           {/* Trading Panel Content */}
-          <div className="overflow-y-auto" style={{ maxHeight: 'calc(80vh - 40px)' }}>
+          <div className="overflow-y-auto" style={{ maxHeight: 'calc(85vh - 50px)' }}>
             <TradingPanel 
               selectedPair={selectedPair}
               onTradeExecuted={handleTradeExecuted}
@@ -125,12 +125,12 @@ export default function SpotTradingPage() {
           </div>
         </div>
 
-        {/* Floating Trade Button */}
+        {/* Floating Trade Button - Bigger and more visible */}
         <button
           onClick={() => setShowMobileTradingPanel(true)}
-          className="fixed bottom-20 right-4 w-14 h-14 bg-primary hover:bg-primary/90 text-white rounded-full shadow-lg flex items-center justify-center z-30 transition-all active:scale-95"
+          className="fixed bottom-6 right-6 w-16 h-16 bg-primary hover:bg-primary/90 text-white rounded-full shadow-2xl flex items-center justify-center z-30 transition-all active:scale-95"
         >
-          <Icon icon="ph:chart-line-up" width={24} />
+          <Icon icon="ph:chart-line-up" width={28} />
         </button>
       </div>
     </div>
