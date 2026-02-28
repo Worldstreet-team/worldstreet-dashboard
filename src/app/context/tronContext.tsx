@@ -110,7 +110,7 @@ const TRC20_ABI = [
 /* ----------------------------- PROVIDER ----------------------------- */
 
 export function TronProvider({ children }: { children: ReactNode }) {
-  const [tronWeb, setTronWeb] = useState<typeof TronWeb | null>(null);
+  const [tronWeb, setTronWeb] = useState<InstanceType<typeof TronWeb> | null>(null);
   const [address, setAddress] = useState<string | null>(null);
   const [balance, setBalance] = useState(0);
   const [tokenBalances, setTokenBalances] = useState<TokenBalance[]>([]);
@@ -121,10 +121,12 @@ export function TronProvider({ children }: { children: ReactNode }) {
   /* ----------------------------- INIT ----------------------------- */
 
   useEffect(() => {
+    // Initialize TronWeb with fullHost as per documentation
     const instance = new TronWeb({
       fullHost: TRON_RPC,
     });
 
+    console.log('[TronContext] TronWeb instance created');
     setTronWeb(instance);
   }, []);
 
@@ -236,8 +238,7 @@ export function TronProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       try {
         const privateKey = decryptWithPIN(encryptedKey, pin);
-        const fromAddress =
-          tronWeb.address.fromPrivateKey(privateKey);
+        const fromAddress = tronWeb.address.fromPrivateKey(privateKey);
 
         const tx = await tronWeb.trx.sendTransaction(
           recipient,
@@ -273,8 +274,7 @@ export function TronProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       try {
         const privateKey = decryptWithPIN(encryptedKey, pin);
-        const fromAddress =
-          tronWeb.address.fromPrivateKey(privateKey);
+        const fromAddress = tronWeb.address.fromPrivateKey(privateKey);
 
         const contract = await tronWeb.contract(
           TRC20_ABI,

@@ -1,24 +1,53 @@
 # Install TronWeb Package
 
 ## Issue
-The code has been updated to use the `tronweb` npm package instead of the CDN, but the package is not installed yet.
+The code uses the `tronweb` npm package for reliable Tron blockchain interactions.
 
 ## Solution
 
 Run this command to install TronWeb:
 
 ```bash
-npm install tronweb@5.3.2
+npm install tronweb
 ```
 
 Or if using yarn:
 ```bash
-yarn add tronweb@5.3.2
+yarn add tronweb
 ```
 
 Or if using pnpm:
 ```bash
-pnpm add tronweb@5.3.2
+pnpm add tronweb
+```
+
+## Correct Usage (Based on Official Documentation)
+
+### Import Statement
+```typescript
+// Correct way (default import)
+import TronWeb from "tronweb";
+
+// NOT this (named import)
+// import { TronWeb } from "tronweb"; // ❌ Wrong
+```
+
+### Creating Instance
+```typescript
+// Using fullHost (recommended for single endpoint)
+const tronWeb = new TronWeb({
+  fullHost: 'https://api.trongrid.io',
+  headers: { "TRON-PRO-API-KEY": 'your api key' }, // Optional
+  privateKey: 'your private key' // Optional
+});
+
+// Or using separate endpoints
+const tronWeb = new TronWeb({
+  fullNode: 'https://some-node.tld',
+  solidityNode: 'https://some-other-node.tld',
+  eventServer: 'https://some-event-server.tld',
+  privateKey: 'your private key'
+});
 ```
 
 ## Why This Approach is Better

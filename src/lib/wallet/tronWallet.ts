@@ -26,7 +26,7 @@ export async function generateTronWallet(pin: string): Promise<{
   try {
     console.log('[TronWallet] Creating TronWeb instance...');
     
-    // Create TronWeb instance
+    // Create TronWeb instance using fullHost as per documentation
     const tronWeb = new TronWeb({
       fullHost: TRON_RPC,
     });

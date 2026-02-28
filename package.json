@@ -34,7 +34,6 @@
     "ecpair": "^3.0.0",
     "ethers": "^6.16.0",
     "flowbite-react": "^0.11.9",
-
     "i18next": "^25.0.2",
     "lightweight-charts": "^5.1.0",
     "lodash": "^4.17.23",
@@ -54,6 +53,7 @@
     "simplebar-react": "^3.3.0",
     "tailwind-merge": "^3.4.0",
     "tiny-secp256k1": "^2.2.4",
+    "tronweb": "^6.2.1",
     "zustand": "^5.0.11"
   },
   "devDependencies": {
