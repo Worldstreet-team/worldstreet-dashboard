@@ -118,7 +118,7 @@ export default function PairInfoBar({ selectedPair, onSelectPair }: PairInfoBarP
   const isPositive = tickerData.change24h >= 0;
 
   return (
-    <div className="bg-white dark:bg-darkgray border-b border-border dark:border-darkborder relative z-50">
+    <div className="bg-white dark:bg-darkgray border-b border-border dark:border-darkborder relative z-99999">
       <div className="px-3 md:px-4 py-2 md:py-3 flex items-center gap-1 overflow-x-auto">
         {/* Pair Selector */}
         <div className="relative">
@@ -140,10 +140,10 @@ export default function PairInfoBar({ selectedPair, onSelectPair }: PairInfoBarP
           {showPairSelector && (
             <>
               <div 
-                className="fixed inset-0 z-[60]" 
+                className="fixed inset-0 z-[99999]" 
                 onClick={() => setShowPairSelector(false)}
               />
-              <div className="absolute top-full left-0 mt-1 bg-white dark:bg-darkgray border border-border dark:border-darkborder rounded shadow-xl z-[100] min-w-[220px] max-h-[400px] overflow-y-auto">
+              <div className="absolute top-full left-0 mt-1 bg-white dark:bg-darkgray border border-border dark:border-darkborder rounded shadow-xl z-[99999] min-w-[220px] max-h-[400px] overflow-y-auto">
                 {allTickers.map((ticker) => (
                   <button
                     key={ticker.symbol}
