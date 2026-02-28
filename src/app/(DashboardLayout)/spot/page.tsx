@@ -3,8 +3,13 @@
 import React, { useState, useCallback } from "react";
 import { Icon } from "@iconify/react";
 import Footer from "@/components/dashboard/Footer";
-import { MarketTicker, LiveChart, TradingPanel, OrderHistory, BalanceDisplay } from "@/components/spot";
-import PositionsList from "@/components/spot/PositionsList";
+import { 
+  PairInfoBar, 
+  OrderBook, 
+  LiveChart, 
+  TradingPanel, 
+  BottomTabs 
+} from "@/components/spot";
 
 export default function SpotTradingPage() {
   const [selectedPair, setSelectedPair] = useState('BTC-USDT');
@@ -12,6 +17,7 @@ export default function SpotTradingPage() {
   const [takeProfit, setTakeProfit] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
   const [showTPSLLines, setShowTPSLLines] = useState(true);
+  const [showMobileTradingPanel, setShowMobileTradingPanel] = useState(false);
   const [activePositionTPSL, setActivePositionTPSL] = useState<{
     symbol: string;
     takeProfit: string | null;
@@ -44,130 +50,89 @@ export default function SpotTradingPage() {
     : takeProfit;
 
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-dark dark:text-white">Spot Trading</h1>
-        <p className="text-muted text-sm mt-1">
-          Trade cryptocurrencies with real-time charts and DEX execution via 1inch
-        </p>
-      </div>
-
-      {/* Market Ticker */}
-      <MarketTicker 
-        selectedPair={selectedPair} 
-        onSelectPair={setSelectedPair} 
+    <div className="flex flex-col h-[calc(100vh-80px)]">
+      {/* Pair Info Bar - Full Width */}
+      <PairInfoBar 
+        selectedPair={selectedPair}
+        onSelectPair={setSelectedPair}
       />
 
-      {/* Main Trading Interface */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Live Chart - Takes 2 columns */}
-        <div className="lg:col-span-2 space-y-6">
+      {/* Main Trading Grid - Responsive 3 Columns */}
+      <div className="flex-1 grid grid-cols-1 md:grid-cols-[30%_70%] lg:grid-cols-[20%_55%_25%] overflow-hidden">
+        {/* Left: Order Book - Hidden on mobile, visible on tablet+ */}
+        <div className="hidden md:block h-full overflow-hidden">
+          <OrderBook selectedPair={selectedPair} />
+        </div>
+
+        {/* Center: Chart - Always visible, full width on mobile */}
+        <div className="h-full overflow-hidden">
           <LiveChart 
             symbol={selectedPair}
             stopLoss={chartStopLoss}
             takeProfit={chartTakeProfit}
             onUpdateLevels={handleUpdateLevels}
           />
-
-          {/* Positions List */}
-          <PositionsList 
-            key={`positions-${refreshKey}`}
-            selectedChartSymbol={selectedPair}
-            onPositionTPSLUpdate={handlePositionTPSLUpdate}
-            showTPSLLines={showTPSLLines}
-            onToggleTPSLLines={() => setShowTPSLLines(!showTPSLLines)}
-          />
-
-          {/* Order History */}
-          <OrderHistory key={`history-${refreshKey}`} />
         </div>
 
-        {/* Trading Panel & Balances */}
-        <div className="space-y-6">
-          {/* Trading Panel */}
+        {/* Right: Trading Panel - Hidden on mobile/tablet, visible on desktop */}
+        <div className="hidden lg:block h-full overflow-hidden">
           <TradingPanel 
             selectedPair={selectedPair}
             onTradeExecuted={handleTradeExecuted}
           />
-
-          {/* Balance Display */}
-          <BalanceDisplay key={`balance-${refreshKey}`} />
-
-          {/* Market Info */}
-          <div className="bg-gradient-to-br from-primary/5 to-secondary/5 rounded-2xl border border-border/50 dark:border-darkborder p-6 shadow-sm">
-            <h3 className="font-semibold text-dark dark:text-white mb-3">Market Info</h3>
-            
-            <div className="space-y-3">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted">24h Change:</span>
-                <span className="text-success font-semibold">+5.23%</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted">24h High:</span>
-                <span className="text-dark dark:text-white font-semibold">$45,234.56</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted">24h Low:</span>
-                <span className="text-dark dark:text-white font-semibold">$42,123.45</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted">24h Volume:</span>
-                <span className="text-dark dark:text-white font-semibold">$1.2B</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Trading Info */}
-          <div className="bg-white dark:bg-black rounded-2xl border border-border/50 dark:border-darkborder p-6 shadow-sm">
-            <div className="flex items-center gap-2 mb-3">
-              <Icon icon="ph:info" className="text-primary" width={18} />
-              <h3 className="font-semibold text-dark dark:text-white text-sm">How It Works</h3>
-            </div>
-            
-            <div className="space-y-3">
-              <div className="flex gap-3">
-                <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                  <span className="text-xs font-bold text-primary">1</span>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-dark dark:text-white">Get Quote</p>
-                  <p className="text-xs text-muted">View expected output, fees, and price impact</p>
-                </div>
-              </div>
-
-              <div className="flex gap-3">
-                <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                  <span className="text-xs font-bold text-primary">2</span>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-dark dark:text-white">Execute Trade</p>
-                  <p className="text-xs text-muted">Funds are locked and trade is executed on-chain</p>
-                </div>
-              </div>
-
-              <div className="flex gap-3">
-                <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                  <span className="text-xs font-bold text-primary">3</span>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-dark dark:text-white">Confirmation</p>
-                  <p className="text-xs text-muted">Receive tokens and view transaction details</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-4 pt-4 border-t border-border/50 dark:border-darkborder">
-              <div className="flex items-center gap-2 text-xs">
-                <Icon icon="ph:shield-check" className="text-success" width={14} />
-                <span className="text-muted">Powered by 1inch DEX Aggregator</span>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 
-      <Footer />
+      {/* Bottom Tabs - Full Width, scrollable on mobile */}
+      <div className="border-t border-border dark:border-darkborder">
+        <BottomTabs 
+          refreshKey={refreshKey}
+          selectedChartSymbol={selectedPair}
+          onPositionTPSLUpdate={handlePositionTPSLUpdate}
+          showTPSLLines={showTPSLLines}
+          onToggleTPSLLines={() => setShowTPSLLines(!showTPSLLines)}
+        />
+      </div>
+
+      {/* Mobile/Tablet: Trading Panel as Slide-up Sheet */}
+      <div className="lg:hidden">
+        {/* Backdrop */}
+        <div 
+          className={`fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300 z-40 ${
+            showMobileTradingPanel ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          }`}
+          onClick={() => setShowMobileTradingPanel(false)}
+        />
+        
+        {/* Slide-up Panel */}
+        <div 
+          className={`fixed bottom-0 left-0 right-0 bg-white dark:bg-darkgray border-t border-border dark:border-darkborder z-50 transition-transform duration-300 ease-out ${
+            showMobileTradingPanel ? 'translate-y-0' : 'translate-y-full'
+          }`}
+          style={{ maxHeight: '80vh' }}
+        >
+          {/* Handle Bar */}
+          <div className="flex items-center justify-center py-2 border-b border-border dark:border-darkborder">
+            <div className="w-12 h-1 bg-muted/50 rounded-full" />
+          </div>
+          
+          {/* Trading Panel Content */}
+          <div className="overflow-y-auto" style={{ maxHeight: 'calc(80vh - 40px)' }}>
+            <TradingPanel 
+              selectedPair={selectedPair}
+              onTradeExecuted={handleTradeExecuted}
+            />
+          </div>
+        </div>
+
+        {/* Floating Trade Button */}
+        <button
+          onClick={() => setShowMobileTradingPanel(true)}
+          className="fixed bottom-20 right-4 w-14 h-14 bg-primary hover:bg-primary/90 text-white rounded-full shadow-lg flex items-center justify-center z-30 transition-all active:scale-95"
+        >
+          <Icon icon="ph:chart-line-up" width={24} />
+        </button>
+      </div>
     </div>
   );
 }
