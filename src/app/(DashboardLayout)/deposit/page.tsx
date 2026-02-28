@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { useWallet } from "@/app/context/walletContext";
 import Footer from "@/components/dashboard/Footer";
@@ -14,26 +14,18 @@ interface Rate {
   symbol: string;
 }
 
-interface BankDetails {
-  bankName: string;
-  accountNumber: string;
-  accountName: string;
-}
-
-interface P2POrder {
+interface DepositRecord {
   _id: string;
-  orderType: "buy" | "sell";
   usdtAmount: number;
   fiatAmount: number;
   fiatCurrency: string;
   exchangeRate: number;
+  merchantTransactionReference: string;
   status: string;
-  paymentReference?: string;
   txHash?: string;
-  userBankDetails?: BankDetails;
+  deliveryError?: string;
   createdAt: string;
   completedAt?: string;
-  expiresAt: string;
 }
 
 type FiatCurrency = "NGN";
@@ -49,11 +41,14 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
 function StatusBadge({ status }: { status: string }) {
   const config: Record<string, { bg: string; text: string; label: string }> = {
     pending: { bg: "bg-yellow-500/10", text: "text-yellow-500", label: "Pending" },
-    awaiting_payment: { bg: "bg-blue-500/10", text: "text-blue-500", label: "Awaiting Payment" },
-    payment_sent: { bg: "bg-orange-500/10", text: "text-orange-500", label: "Payment Sent" },
+    awaiting_verification: { bg: "bg-blue-500/10", text: "text-blue-500", label: "Awaiting Verification" },
+    verifying: { bg: "bg-blue-500/10", text: "text-blue-500", label: "Verifying..." },
+    payment_confirmed: { bg: "bg-green-500/10", text: "text-green-500", label: "Payment Confirmed" },
+    sending_usdt: { bg: "bg-orange-500/10", text: "text-orange-500", label: "Sending USDT..." },
     completed: { bg: "bg-green-500/10", text: "text-green-500", label: "Completed" },
-    cancelled: { bg: "bg-red-500/10", text: "text-red-500", label: "Cancelled" },
-    expired: { bg: "bg-gray-500/10", text: "text-gray-500", label: "Expired" },
+    payment_failed: { bg: "bg-red-500/10", text: "text-red-500", label: "Payment Failed" },
+    delivery_failed: { bg: "bg-red-500/10", text: "text-red-500", label: "Delivery Failed" },
+    cancelled: { bg: "bg-gray-500/10", text: "text-gray-500", label: "Cancelled" },
   };
   const c = config[status] || config.pending;
   return (
@@ -68,9 +63,8 @@ function StatusBadge({ status }: { status: string }) {
 function DepositSteps({ currentStep }: { currentStep: number }) {
   const steps = [
     { label: "Enter Amount", icon: "1" },
-    { label: "Pay to Bank", icon: "2" },
-    { label: "Confirm Payment", icon: "3" },
-    { label: "Receive USDT", icon: "4" },
+    { label: "Pay", icon: "2" },
+    { label: "Receive USDT", icon: "3" },
   ];
 
   return (
@@ -95,16 +89,20 @@ function DepositSteps({ currentStep }: { currentStep: number }) {
                 step.icon
               )}
             </div>
-            <span className={`text-[10px] sm:text-xs font-medium whitespace-nowrap ${
-              i <= currentStep ? "text-dark dark:text-white" : "text-muted"
-            }`}>
+            <span
+              className={`text-[10px] sm:text-xs font-medium whitespace-nowrap ${
+                i <= currentStep ? "text-dark dark:text-white" : "text-muted"
+              }`}
+            >
               {step.label}
             </span>
           </div>
           {i < steps.length - 1 && (
-            <div className={`flex-1 h-0.5 mx-1 sm:mx-2 rounded-full ${
-              i < currentStep ? "bg-green-500" : "bg-muted/30 dark:bg-white/10"
-            }`} />
+            <div
+              className={`flex-1 h-0.5 mx-1 sm:mx-2 rounded-full ${
+                i < currentStep ? "bg-green-500" : "bg-muted/30 dark:bg-white/10"
+              }`}
+            />
           )}
         </React.Fragment>
       ))}
@@ -121,22 +119,20 @@ export default function DepositPage() {
   // UI state
   const [fiatCurrency] = useState<FiatCurrency>("NGN");
   const [usdtAmount, setUsdtAmount] = useState(() => {
-    // Pre-fill from URL query param if present
     const urlAmount = searchParams.get("amount");
     return urlAmount && !isNaN(parseFloat(urlAmount)) ? urlAmount : "";
   });
   const [rates, setRates] = useState<Record<string, Rate>>({});
   const [ratesLoading, setRatesLoading] = useState(true);
 
-  // Active order state
-  const [activeOrder, setActiveOrder] = useState<P2POrder | null>(null);
-  const [platformBank, setPlatformBank] = useState<BankDetails | null>(null);
-  const [paymentRef, setPaymentRef] = useState("");
-
-  // General
+  // Deposit state
+  const [activeDeposit, setActiveDeposit] = useState<DepositRecord | null>(null);
+  const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [copied, setCopied] = useState<string>("");
+  const [verifying, setVerifying] = useState(false);
+  const [verifyMessage, setVerifyMessage] = useState("");
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Fetch rates ────────────────────────────────────────────────────────
 
@@ -158,32 +154,55 @@ export default function DepositPage() {
     return () => clearInterval(interval);
   }, [fetchRates]);
 
-  // ── Fetch active order ─────────────────────────────────────────────────
+  // ── Resume from GlobalPay redirect ─────────────────────────────────────
 
-  const fetchActiveOrder = useCallback(async () => {
+  const loadDeposit = useCallback(async (depositId: string) => {
     try {
-      const res = await fetch("/api/p2p/orders");
+      const res = await fetch(`/api/deposit/status/${depositId}`);
       const data = await res.json();
-      if (data.success && data.orders) {
-        const active = data.orders.find(
-          (o: P2POrder) =>
-            o.orderType === "buy" &&
-            ["pending", "awaiting_payment", "payment_sent"].includes(o.status)
-        );
-        if (active) setActiveOrder(active);
+      if (data.success && data.deposit) {
+        setActiveDeposit(data.deposit);
+        setPaymentUrl(data.paymentLink || data.paymentUrl || data.checkoutUrl || null);
       }
     } catch {
-      console.error("Failed to fetch orders");
+      console.error("Failed to load deposit");
     }
   }, []);
 
   useEffect(() => {
-    if (walletsGenerated) {
-      fetchActiveOrder();
-      const interval = setInterval(fetchActiveOrder, 15_000);
-      return () => clearInterval(interval);
+    const depositId = searchParams.get("depositId");
+    if (depositId) {
+      loadDeposit(depositId);
     }
-  }, [walletsGenerated, fetchActiveOrder]);
+  }, [searchParams, loadDeposit]);
+
+  // ── Status polling ─────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (
+      activeDeposit &&
+      ["verifying", "payment_confirmed", "sending_usdt"].includes(activeDeposit.status)
+    ) {
+      pollRef.current = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/deposit/status/${activeDeposit._id}`);
+          const data = await res.json();
+          if (data.success && data.deposit) {
+            setActiveDeposit(data.deposit);
+            if (["completed", "payment_failed", "delivery_failed", "cancelled"].includes(data.deposit.status)) {
+              if (pollRef.current) clearInterval(pollRef.current);
+            }
+          }
+        } catch {
+          // Continue polling
+        }
+      }, 5000);
+
+      return () => {
+        if (pollRef.current) clearInterval(pollRef.current);
+      };
+    }
+  }, [activeDeposit?.status, activeDeposit?._id]);
 
   // ── Calculations ───────────────────────────────────────────────────────
 
@@ -193,33 +212,29 @@ export default function DepositPage() {
   const fiatAmount = amountNum * (buyRate || 0);
   const isValidAmount = amountNum >= 5 && amountNum <= 5000;
 
-  // ── Get current step ───────────────────────────────────────────────────
+  // ── Determine current step ─────────────────────────────────────────────
 
-  const getStep = () => {
-    if (!activeOrder) return 0;
-    if (activeOrder.status === "awaiting_payment") return 1;
-    if (activeOrder.status === "payment_sent") return 2;
-    if (activeOrder.status === "completed") return 3;
+  const getStep = (): number => {
+    if (!activeDeposit) return 0;
+    const st = activeDeposit.status;
+    if (st === "pending" || st === "awaiting_verification" || st === "payment_failed") return 1;
+    if (st === "verifying" || st === "payment_confirmed" || st === "sending_usdt") return 2;
+    if (st === "completed" || st === "delivery_failed") return 2;
     return 0;
   };
 
   // ── Create deposit order ───────────────────────────────────────────────
 
-  const handleDeposit = async () => {
+  const handleInitiate = async () => {
     if (!isValidAmount || !buyRate) return;
     setError("");
     setLoading(true);
 
     try {
-      const res = await fetch("/api/p2p/orders", {
+      const res = await fetch("/api/deposit/initiate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orderType: "buy",
-          usdtAmount: amountNum,
-          fiatCurrency,
-          exchangeRate: buyRate,
-        }),
+        body: JSON.stringify({ usdtAmount: amountNum, fiatCurrency }),
       });
 
       const data = await res.json();
@@ -228,8 +243,8 @@ export default function DepositPage() {
         return;
       }
 
-      setActiveOrder(data.order);
-      if (data.platformBankDetails) setPlatformBank(data.platformBankDetails);
+      setActiveDeposit(data.deposit);
+      setPaymentUrl(data.paymentLink || data.paymentUrl || data.checkoutUrl || null);
       setUsdtAmount("");
     } catch {
       setError("Something went wrong. Please try again.");
@@ -238,39 +253,44 @@ export default function DepositPage() {
     }
   };
 
-  // ── Mark as paid ───────────────────────────────────────────────────────
+  // ── Verify payment (user clicks "I've Paid") ──────────────────────────
 
-  const handleMarkPaid = async () => {
-    if (!activeOrder || !paymentRef.trim()) return;
-    setLoading(true);
+  const handleVerify = async () => {
+    if (!activeDeposit) return;
+    setVerifying(true);
+    setVerifyMessage("");
+    setError("");
 
     try {
-      const res = await fetch(`/api/p2p/orders/${activeOrder._id}`, {
-        method: "PATCH",
+      const res = await fetch("/api/deposit/verify", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "mark_paid", paymentReference: paymentRef }),
+        body: JSON.stringify({ depositId: activeDeposit._id }),
       });
 
       const data = await res.json();
-      if (data.success) {
-        setActiveOrder(data.order);
-        setPaymentRef("");
+      if (data.deposit) {
+        setActiveDeposit(data.deposit);
+      }
+
+      if (!data.success) {
+        setVerifyMessage(data.message || "Verification failed");
       }
     } catch {
-      setError("Failed to update order");
+      setError("Failed to verify payment. Please try again.");
     } finally {
-      setLoading(false);
+      setVerifying(false);
     }
   };
 
-  // ── Cancel order ───────────────────────────────────────────────────────
+  // ── Cancel deposit ─────────────────────────────────────────────────────
 
   const handleCancel = async () => {
-    if (!activeOrder) return;
+    if (!activeDeposit) return;
     setLoading(true);
 
     try {
-      const res = await fetch(`/api/p2p/orders/${activeOrder._id}`, {
+      const res = await fetch(`/api/deposit/status/${activeDeposit._id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "cancel" }),
@@ -278,21 +298,28 @@ export default function DepositPage() {
 
       const data = await res.json();
       if (data.success) {
-        setActiveOrder(null);
+        setActiveDeposit(null);
+        setPaymentUrl(null);
+        setError("");
+        setVerifyMessage("");
       }
     } catch {
-      setError("Failed to cancel order");
+      setError("Failed to cancel deposit");
     } finally {
       setLoading(false);
     }
   };
 
-  // ── Copy helper ────────────────────────────────────────────────────────
+  // ── Open payment page ───────────────────────────────────────────────────
 
-  const handleCopy = async (text: string, key: string) => {
-    await navigator.clipboard.writeText(text);
-    setCopied(key);
-    setTimeout(() => setCopied(""), 2000);
+  const openPayment = () => {
+    if (typeof window === "undefined") return;
+    if (!paymentUrl) {
+      setError("Payment link not available yet. Please try again or contact support.");
+      return;
+    }
+
+    window.open(paymentUrl, "_blank", "noopener,noreferrer");
   };
 
   // ── No wallet state ────────────────────────────────────────────────────
@@ -303,7 +330,12 @@ export default function DepositPage() {
         <div className="text-center">
           <div className="w-20 h-20 rounded-full bg-muted/30 dark:bg-white/5 flex items-center justify-center mx-auto mb-4">
             <svg className="w-10 h-10 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 11-6 0H5.25A2.25 2.25 0 003 12m18 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 9m18 0V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v3" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 11-6 0H5.25A2.25 2.25 0 003 12m18 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 9m18 0V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v3"
+              />
             </svg>
           </div>
           <h2 className="text-xl font-semibold text-dark dark:text-white mb-2">Wallet Required</h2>
@@ -330,7 +362,7 @@ export default function DepositPage() {
           {/* Header */}
           <div className="mb-6">
             <h1 className="text-2xl font-bold text-dark dark:text-white">Deposit</h1>
-            <p className="text-muted mt-1">Fund your wallet with USDT via bank transfer</p>
+            <p className="text-muted mt-1">Fund your wallet with USDT</p>
           </div>
 
           {/* Steps */}
@@ -338,19 +370,28 @@ export default function DepositPage() {
 
           {/* Main Card */}
           <div className="bg-white dark:bg-black border border-border/50 dark:border-darkborder rounded-2xl shadow-sm overflow-hidden">
-
             {/* ── Step 0: Enter amount ─────────────────────────────────── */}
-            {!activeOrder && (
+            {!activeDeposit && (
               <div className="p-6 space-y-5">
                 {/* Info banner */}
                 <div className="flex items-start gap-3 p-4 bg-blue-500/5 border border-blue-500/10 rounded-xl">
-                  <svg className="w-5 h-5 text-blue-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <svg
+                    className="w-5 h-5 text-blue-500 mt-0.5 shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
                   </svg>
                   <div>
                     <p className="text-sm text-dark dark:text-white font-medium">How deposit works</p>
                     <p className="text-xs text-muted mt-1">
-                      Enter USDT amount → Transfer NGN to our bank → We send USDT to your Solana wallet.
+                      Enter USDT amount → Pay via GlobalPay → USDT is sent to your Solana wallet automatically.
                     </p>
                   </div>
                 </div>
@@ -439,7 +480,7 @@ export default function DepositPage() {
 
                 {/* Continue button */}
                 <button
-                  onClick={handleDeposit}
+                  onClick={handleInitiate}
                   disabled={!isValidAmount || !buyRate || loading}
                   className="w-full py-3.5 px-4 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -448,172 +489,199 @@ export default function DepositPage() {
               </div>
             )}
 
-            {/* ── Step 1-2: Awaiting payment — show bank details ────── */}
-            {activeOrder && activeOrder.status === "awaiting_payment" && (
-              <div className="p-6 space-y-6">
-                {/* Order summary */}
-                <div className="bg-muted/30 dark:bg-white/5 rounded-xl p-4 space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-muted">Deposit Amount</span>
-                    <span className="text-dark dark:text-white font-semibold">
-                      {activeOrder.usdtAmount} USDT
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted">Total to Pay</span>
-                    <span className="text-lg font-bold text-dark dark:text-white">
-                      {CURRENCY_SYMBOLS[activeOrder.fiatCurrency]}
-                      {activeOrder.fiatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted">Rate</span>
-                    <span className="text-dark dark:text-white">
-                      1 USDT = {CURRENCY_SYMBOLS[activeOrder.fiatCurrency]}{activeOrder.exchangeRate.toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Bank details */}
-                <div>
-                  <h3 className="text-sm font-semibold text-dark dark:text-white mb-3 flex items-center gap-2">
-                    <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                    </svg>
-                    Transfer to this account
-                  </h3>
+            {/* ── Step 1: Pay via GlobalPay ────────────────────────────── */}
+            {activeDeposit &&
+              ["pending", "awaiting_verification", "payment_failed"].includes(activeDeposit.status) && (
+                <div className="p-6 space-y-6">
+                  {/* Order summary */}
                   <div className="bg-muted/30 dark:bg-white/5 rounded-xl p-4 space-y-3">
-                    {platformBank ? (
-                      <>
-                        <div className="flex justify-between items-center">
-                          <div>
-                            <p className="text-xs text-muted">Bank Name</p>
-                            <p className="text-dark dark:text-white font-medium">{platformBank.bankName}</p>
-                          </div>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <div>
-                            <p className="text-xs text-muted">Account Number</p>
-                            <p className="text-dark dark:text-white font-medium font-mono text-lg">{platformBank.accountNumber}</p>
-                          </div>
-                          <button
-                            onClick={() => handleCopy(platformBank.accountNumber, "acct")}
-                            className="text-primary text-sm hover:text-primary/80 font-medium"
-                          >
-                            {copied === "acct" ? "✓ Copied" : "Copy"}
-                          </button>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <div>
-                            <p className="text-xs text-muted">Account Name</p>
-                            <p className="text-dark dark:text-white font-medium">{platformBank.accountName}</p>
-                          </div>
-                        </div>
-                        <div className="border-t border-border/50 dark:border-darkborder pt-3">
-                          <div className="flex justify-between items-center">
-                            <div>
-                              <p className="text-xs text-muted">Exact Amount to Send</p>
-                              <p className="text-xl font-bold text-dark dark:text-white">
-                                {CURRENCY_SYMBOLS[activeOrder.fiatCurrency]}
-                                {activeOrder.fiatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                              </p>
-                            </div>
-                            <button
-                              onClick={() => handleCopy(activeOrder.fiatAmount.toFixed(2), "amt")}
-                              className="text-primary text-sm hover:text-primary/80 font-medium"
-                            >
-                              {copied === "amt" ? "✓ Copied" : "Copy"}
-                            </button>
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      <p className="text-muted text-center py-4">
-                        Bank details not available for {activeOrder.fiatCurrency}. Please contact support.
-                      </p>
-                    )}
+                    <div className="flex justify-between">
+                      <span className="text-muted">Deposit Amount</span>
+                      <span className="text-dark dark:text-white font-semibold">
+                        {activeDeposit.usdtAmount} USDT
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted">Total to Pay</span>
+                      <span className="text-lg font-bold text-dark dark:text-white">
+                        {CURRENCY_SYMBOLS[activeDeposit.fiatCurrency]}
+                        {activeDeposit.fiatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted">Rate</span>
+                      <span className="text-dark dark:text-white">
+                        1 USDT = {CURRENCY_SYMBOLS[activeDeposit.fiatCurrency]}
+                        {activeDeposit.exchangeRate.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted">Status</span>
+                      <StatusBadge status={activeDeposit.status} />
+                    </div>
                   </div>
-                </div>
 
-                {/* Timer */}
-                <div className="flex items-center gap-2 text-sm text-muted">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Order expires in 30 minutes. Complete your transfer and confirm below.
-                </div>
-
-                {/* Payment reference + confirm */}
-                <div>
-                  <label className="block text-sm text-muted mb-2">Payment Reference / Sender Name</label>
-                  <input
-                    type="text"
-                    value={paymentRef}
-                    onChange={(e) => setPaymentRef(e.target.value)}
-                    placeholder="Enter transfer reference or sender name"
-                    className="w-full px-4 py-3 bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-darkborder rounded-xl text-dark dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
-                </div>
-
-                {/* Error */}
-                {error && (
-                  <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                    <p className="text-sm text-red-500">{error}</p>
-                  </div>
-                )}
-
-                <div className="flex gap-3">
-                  <button
-                    onClick={handleCancel}
-                    disabled={loading}
-                    className="flex-1 py-3 px-4 bg-muted/30 dark:bg-white/5 hover:bg-muted/40 dark:hover:bg-white/10 text-dark dark:text-white font-medium rounded-xl transition-colors disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleMarkPaid}
-                    disabled={loading || !paymentRef.trim()}
-                    className="flex-1 py-3 px-4 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-xl transition-colors disabled:opacity-50"
-                  >
-                    {loading ? "Processing..." : "I Have Paid"}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* ── Step 3: Payment sent — waiting verification ───────── */}
-            {activeOrder && activeOrder.status === "payment_sent" && (
-              <div className="p-6">
-                <div className="text-center py-8">
-                  <div className="w-20 h-20 mx-auto mb-5 rounded-full bg-orange-500/10 flex items-center justify-center">
-                    <svg className="w-10 h-10 text-orange-500 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <h3 className="text-xl font-semibold text-dark dark:text-white mb-3">
-                    Verifying Your Payment
-                  </h3>
-                  <p className="text-muted max-w-sm mx-auto">
-                    We&apos;re verifying your bank transfer. Once confirmed, <strong className="text-dark dark:text-white">{activeOrder.usdtAmount} USDT</strong> will be sent to your Solana wallet.
-                  </p>
-                  <p className="text-sm text-muted mt-4">This usually takes 5–30 minutes.</p>
-                  {activeOrder.paymentReference && (
-                    <p className="text-xs text-muted mt-2 font-mono">
-                      Ref: {activeOrder.paymentReference}
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted">
+                      Click the button below to pay{" "}
+                      <strong className="text-dark dark:text-white">
+                        {CURRENCY_SYMBOLS[activeDeposit.fiatCurrency]}
+                        {activeDeposit.fiatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </strong>{" "}
+                      via GlobalPay:
                     </p>
-                  )}
-                  <div className="mt-6 p-3 bg-muted/30 dark:bg-white/5 rounded-xl inline-flex items-center gap-2 text-sm text-muted">
-                    <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                    </svg>
-                    Your funds are safe. Status updates automatically.
+                    <button
+                      onClick={openPayment}
+                      disabled={!paymentUrl}
+                      className="w-full py-3.5 px-4 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-xl transition-colors"
+                    >
+                      {`Pay ${CURRENCY_SYMBOLS[activeDeposit.fiatCurrency]}${activeDeposit.fiatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                    </button>
+                    <p className="text-xs text-muted">
+                      {paymentUrl
+                        ? "If payment does not open, click the button again."
+                        : "Payment link is being prepared."}
+                    </p>
+                  </div>
+
+                  {/* Divider */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 h-px bg-border/50 dark:bg-darkborder" />
+                    <span className="text-xs text-muted">after paying</span>
+                    <div className="flex-1 h-px bg-border/50 dark:bg-darkborder" />
+                  </div>
+
+                  {/* I've Paid section */}
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted">
+                      Completed your payment? Click below to verify and receive your USDT:
+                    </p>
+
+                    {verifyMessage && (
+                      <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                        <p className="text-sm text-yellow-600 dark:text-yellow-400">{verifyMessage}</p>
+                      </div>
+                    )}
+
+                    {activeDeposit.status === "payment_failed" && (
+                      <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                        <p className="text-sm text-red-500">
+                          Previous payment verification failed. You can pay again using the button above or try
+                          verifying again.
+                        </p>
+                      </div>
+                    )}
+
+                    {error && (
+                      <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                        <p className="text-sm text-red-500">{error}</p>
+                      </div>
+                    )}
+
+                    <div className="flex gap-3">
+                      <button
+                        onClick={handleCancel}
+                        disabled={loading || verifying}
+                        className="flex-1 py-3 px-4 bg-muted/30 dark:bg-white/5 hover:bg-muted/40 dark:hover:bg-white/10 text-dark dark:text-white font-medium rounded-xl transition-colors disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleVerify}
+                        disabled={verifying}
+                        className="flex-1 py-3 px-4 bg-primary hover:bg-primary/90 text-white font-semibold rounded-xl transition-colors disabled:opacity-50"
+                      >
+                        {verifying ? (
+                          <span className="flex items-center justify-center gap-2">
+                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                              <circle
+                                className="opacity-25"
+                                cx="12"
+                                cy="12"
+                                r="10"
+                                stroke="currentColor"
+                                strokeWidth="4"
+                                fill="none"
+                              />
+                              <path
+                                className="opacity-75"
+                                fill="currentColor"
+                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                              />
+                            </svg>
+                            Verifying...
+                          </span>
+                        ) : (
+                          "I've Paid"
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* ── Step 4: Completed ─────────────────────────────────── */}
-            {activeOrder && activeOrder.status === "completed" && (
+            {/* ── Step 2: Processing / Sending USDT ────────────────────── */}
+            {activeDeposit &&
+              ["verifying", "payment_confirmed", "sending_usdt"].includes(activeDeposit.status) && (
+                <div className="p-6">
+                  <div className="text-center py-8">
+                    <div className="w-20 h-20 mx-auto mb-5 rounded-full bg-orange-500/10 flex items-center justify-center">
+                      <svg
+                        className="w-10 h-10 text-orange-500 animate-pulse"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
+                      </svg>
+                    </div>
+                    <h3 className="text-xl font-semibold text-dark dark:text-white mb-3">
+                      {activeDeposit.status === "verifying"
+                        ? "Verifying Payment..."
+                        : activeDeposit.status === "payment_confirmed"
+                        ? "Payment Confirmed!"
+                        : "Sending USDT to Your Wallet..."}
+                    </h3>
+                    <p className="text-muted max-w-sm mx-auto">
+                      {activeDeposit.status === "verifying" ? (
+                        "Checking your payment with GlobalPay..."
+                      ) : (
+                        <>
+                          Sending{" "}
+                          <strong className="text-dark dark:text-white">
+                            {activeDeposit.usdtAmount} USDT
+                          </strong>{" "}
+                          to your Solana wallet.
+                        </>
+                      )}
+                    </p>
+                    <div className="mt-6 p-3 bg-muted/30 dark:bg-white/5 rounded-xl inline-flex items-center gap-2 text-sm text-muted">
+                      <svg
+                        className="w-4 h-4 text-green-500"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                        />
+                      </svg>
+                      Your funds are safe. Status updates automatically.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+            {/* ── Completed ─────────────────────────────────────────────── */}
+            {activeDeposit && activeDeposit.status === "completed" && (
               <div className="p-6">
                 <div className="text-center py-8">
                   <div className="w-20 h-20 mx-auto mb-5 rounded-full bg-green-500/10 flex items-center justify-center">
@@ -621,15 +689,14 @@ export default function DepositPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                   </div>
-                  <h3 className="text-xl font-semibold text-dark dark:text-white mb-3">
-                    Deposit Successful!
-                  </h3>
+                  <h3 className="text-xl font-semibold text-dark dark:text-white mb-3">Deposit Successful!</h3>
                   <p className="text-muted">
-                    <strong className="text-dark dark:text-white">{activeOrder.usdtAmount} USDT</strong> has been sent to your Solana wallet.
+                    <strong className="text-dark dark:text-white">{activeDeposit.usdtAmount} USDT</strong> has been
+                    sent to your Solana wallet.
                   </p>
-                  {activeOrder.txHash && (
+                  {activeDeposit.txHash && (
                     <a
-                      href={`https://solscan.io/tx/${activeOrder.txHash}`}
+                      href={`https://solscan.io/tx/${activeDeposit.txHash}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-primary hover:text-primary/80 text-sm mt-3"
@@ -639,7 +706,12 @@ export default function DepositPage() {
                   )}
                   <div className="mt-6 flex justify-center gap-3">
                     <button
-                      onClick={() => setActiveOrder(null)}
+                      onClick={() => {
+                        setActiveDeposit(null);
+                        setPaymentUrl(null);
+                        setError("");
+                        setVerifyMessage("");
+                      }}
                       className="py-2.5 px-6 bg-primary hover:bg-primary/90 text-white font-medium rounded-xl transition-colors"
                     >
                       Deposit Again
@@ -654,10 +726,61 @@ export default function DepositPage() {
                 </div>
               </div>
             )}
+
+            {/* ── Delivery Failed ──────────────────────────────────────── */}
+            {activeDeposit && activeDeposit.status === "delivery_failed" && (
+              <div className="p-6">
+                <div className="text-center py-8">
+                  <div className="w-20 h-20 mx-auto mb-5 rounded-full bg-red-500/10 flex items-center justify-center">
+                    <svg
+                      className="w-10 h-10 text-red-500"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"
+                      />
+                    </svg>
+                  </div>
+                  <h3 className="text-xl font-semibold text-dark dark:text-white mb-3">
+                    Payment Received — USDT Delivery Pending
+                  </h3>
+                  <p className="text-muted max-w-md mx-auto">
+                    Your payment of{" "}
+                    <strong className="text-dark dark:text-white">
+                      {CURRENCY_SYMBOLS[activeDeposit.fiatCurrency]}
+                      {activeDeposit.fiatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </strong>{" "}
+                    was confirmed, but we encountered an issue sending USDT to your wallet. Our team has been notified
+                    and will resolve this shortly.
+                  </p>
+                  {activeDeposit.deliveryError && (
+                    <p className="text-xs text-red-400 mt-2 font-mono">{activeDeposit.deliveryError}</p>
+                  )}
+                  <div className="mt-6 flex justify-center gap-3">
+                    <button
+                      onClick={() => {
+                        setActiveDeposit(null);
+                        setError("");
+                        setVerifyMessage("");
+                      }}
+                      className="py-2.5 px-6 bg-muted/30 dark:bg-white/5 hover:bg-muted/40 dark:hover:bg-white/10 text-dark dark:text-white font-medium rounded-xl transition-colors"
+                    >
+                      Back to Deposit
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
-
-        <div className="col-span-12"><Footer /></div>
+        <div className="col-span-12">
+          <Footer />
+        </div>
       </div>
     </>
   );

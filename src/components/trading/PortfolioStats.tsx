@@ -12,6 +12,7 @@ import { useBitcoin } from "@/app/context/bitcoinContext";
 import { usePrices, getPrice, calculateDailyPnL } from "@/lib/wallet/usePrices";
 import { formatUSD } from "@/lib/wallet/amounts";
 import WalletModal from "./WalletModal";
+import Link from "next/link";
 
 const PortfolioStats = () => {
   const { user } = useAuth();
@@ -230,6 +231,12 @@ const PortfolioStats = () => {
               </Button>
             }
           />
+          <Link href="/transfer">
+            <Button variant="outline" className="border-border text-primary hover:bg-primary hover:text-white font-medium rounded-lg px-4 h-9 text-sm transition-all duration-200">
+              <Icon icon="solar:transfer-horizontal-bold" className="mr-1.5 h-3.5 w-3.5" />
+              Transfer
+            </Button>
+          </Link>
         </div>
       </div>
 
