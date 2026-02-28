@@ -11,6 +11,7 @@ export interface IWallets {
   solana?: IWalletData;
   ethereum?: IWalletData;
   bitcoin?: IWalletData;
+  tron?: IWalletData;
 }
 
 export interface IDashboardProfile extends Document {
@@ -85,6 +86,10 @@ const DashboardProfileSchema = new Schema<IDashboardProfile>(
         encryptedPrivateKey: { type: String, default: "" },
       },
       bitcoin: {
+        address: { type: String, default: "" },
+        encryptedPrivateKey: { type: String, default: "" },
+      },
+      tron: {
         address: { type: String, default: "" },
         encryptedPrivateKey: { type: String, default: "" },
       },

@@ -9,7 +9,7 @@ import { useWallet } from "@/app/context/walletContext";
 import { formatAmount, formatUSD } from "@/lib/wallet/amounts";
 import { usePrices, getPrice } from "@/lib/wallet/usePrices";
 import Footer from "@/components/dashboard/Footer";
-import { ReceiveModal, SendModal, AddTokenModal } from "@/components/wallet";
+import { ReceiveModal, SendModal, AddTokenModal, GenerateTronModal } from "@/components/wallet";
 
 // Asset type definition
 interface Asset {
@@ -38,7 +38,7 @@ const CHAIN_ICONS: Record<string, string> = {
 };
 
 const AssetsPage = () => {
-  const { addresses, walletsGenerated, getEncryptedKeys } = useWallet();
+  const { addresses, walletsGenerated, getEncryptedKeys, fetchWalletStatus } = useWallet();
   const { balance: solBalance, tokenBalances: solTokens, loading: solLoading, fetchBalance: fetchSolBalance, refreshCustomTokens: refreshSolCustom } = useSolana();
   const { balance: ethBalance, tokenBalances: ethTokens, loading: ethLoading, fetchBalance: fetchEthBalance, refreshCustomTokens: refreshEthCustom } = useEvm();
   const { balance: btcBalance, loading: btcLoading, fetchBalance: fetchBtcBalance } = useBitcoin();
@@ -48,7 +48,18 @@ const AssetsPage = () => {
   const [receiveModal, setReceiveModal] = useState<{ open: boolean; chain?: string; address?: string }>({ open: false });
   const [sendModal, setSendModal] = useState<{ open: boolean; asset?: Asset }>({ open: false });
   const [addTokenModal, setAddTokenModal] = useState(false);
+  const [generateTronModal, setGenerateTronModal] = useState(false);
   const [removingTokenId, setRemovingTokenId] = useState<string | null>(null);
+
+  // Handle Tron wallet generation success
+  const handleTronGenerated = useCallback(async (address: string) => {
+    // Refresh wallet status to get new Tron address
+    await fetchWalletStatus();
+    // Fetch Tron balance
+    if (address) {
+      fetchTrxBalance(address);
+    }
+  }, [fetchWalletStatus, fetchTrxBalance]);
 
   // Handle token added - refresh custom tokens lists
   const handleTokenAdded = useCallback(async () => {
@@ -359,7 +370,7 @@ const AssetsPage = () => {
               )}
 
               {/* Tron Address */}
-              {addresses?.tron && (
+              {addresses?.tron ? (
                 <div
                   onClick={() => setReceiveModal({ open: true, chain: "tron", address: addresses.tron })}
                   className="flex items-center gap-3 p-3 bg-muted/30 dark:bg-white/5 rounded-xl cursor-pointer hover:bg-muted/40 dark:hover:bg-white/10 transition-colors"
@@ -371,6 +382,24 @@ const AssetsPage = () => {
                   </div>
                   <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                </div>
+              ) : (
+                <div
+                  onClick={() => setGenerateTronModal(true)}
+                  className="flex items-center gap-3 p-3 bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-950/30 dark:to-orange-950/30 border-2 border-dashed border-red-200 dark:border-red-800 rounded-xl cursor-pointer hover:border-red-300 dark:hover:border-red-700 transition-colors group"
+                >
+                  <div className="w-8 h-8 rounded-full bg-red-100 dark:bg-red-900/50 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <svg className="w-4 h-4 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-red-700 dark:text-red-300">Generate Tron Wallet</p>
+                    <p className="text-xs text-red-600 dark:text-red-400">Click to create TRX wallet</p>
+                  </div>
+                  <svg className="w-4 h-4 text-red-500 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </div>
               )}
@@ -505,6 +534,13 @@ const AssetsPage = () => {
         isOpen={addTokenModal}
         onClose={() => setAddTokenModal(false)}
         onTokenAdded={handleTokenAdded}
+      />
+
+      {/* Generate Tron Modal */}
+      <GenerateTronModal
+        isOpen={generateTronModal}
+        onClose={() => setGenerateTronModal(false)}
+        onSuccess={handleTronGenerated}
       />
     </>
   );
