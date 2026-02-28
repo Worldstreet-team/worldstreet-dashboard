@@ -82,9 +82,15 @@ export default function SpotTradingPage() {
           />
         </div>
       </div>
+      <div className="block lg:hidden h-full overflow-hidden">
+          <TradingPanel 
+            selectedPair={selectedPair}
+            onTradeExecuted={handleTradeExecuted}
+          />
+        </div>
 
       {/* Bottom Tabs - Compact on mobile, larger on desktop */}
-      <div className="border-t border-border dark:border-darkborder h-[140px] md:h-[200px] lg:h-[250px]">
+      <div className="border-t border-border dark:border-darkborder h-[200px] md:h-[250px] lg:h-[300px]">
         <BottomTabs 
           refreshKey={refreshKey}
           selectedChartSymbol={selectedPair}
