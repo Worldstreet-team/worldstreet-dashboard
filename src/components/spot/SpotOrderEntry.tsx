@@ -17,6 +17,8 @@ interface QuoteResponse {
 interface SpotOrderEntryProps {
   selectedPair: string;
   onTradeExecuted?: () => void;
+  isExpanded?: boolean;
+  onToggleExpand?: () => void;
 }
 
 // Token addresses per chain
@@ -47,7 +49,7 @@ const getTokenConfig = (token: string, chain: 'Solana' | 'EVM') => {
   }
 };
 
-export default function SpotOrderEntry({ selectedPair, onTradeExecuted }: SpotOrderEntryProps) {
+export default function SpotOrderEntry({ selectedPair, onTradeExecuted, isExpanded = true, onToggleExpand }: SpotOrderEntryProps) {
   const { user } = useAuth();
   const [orderType, setOrderType] = useState<'limit' | 'market'>('limit');
   const [price, setPrice] = useState('');
@@ -220,160 +222,192 @@ export default function SpotOrderEntry({ selectedPair, onTradeExecuted }: SpotOr
 
   return (
     <div className="bg-white dark:bg-darkgray border-t border-border dark:border-darkborder">
-      {/* Tabs */}
-      <div className="flex border-b border-border dark:border-darkborder">
-        <button className="px-3 py-1.5 text-[10px] font-medium border-b-2 border-primary text-primary">
-          Spot
-        </button>
-        <button className="px-3 py-1.5 text-[10px] font-medium text-muted hover:text-dark dark:hover:text-white">
-          Cross
-        </button>
-        <button className="px-3 py-1.5 text-[10px] font-medium text-muted hover:text-dark dark:hover:text-white">
-          Isolated
-        </button>
-      </div>
-
-      {/* Order Type Tabs */}
-      <div className="flex border-b border-border dark:border-darkborder px-2 py-1">
-        <button
-          onClick={() => setOrderType('limit')}
-          className={`px-2 py-1 text-[10px] font-medium rounded transition-colors ${
-            orderType === 'limit'
-              ? 'bg-primary/10 text-primary'
-              : 'text-muted hover:text-dark dark:hover:text-white'
-          }`}
-        >
-          Limit
-        </button>
-        <button
-          onClick={() => setOrderType('market')}
-          className={`px-2 py-1 text-[10px] font-medium rounded transition-colors ${
-            orderType === 'market'
-              ? 'bg-primary/10 text-primary'
-              : 'text-muted hover:text-dark dark:hover:text-white'
-          }`}
-        >
-          Market
-        </button>
-      </div>
-
-      {/* Two-column layout: BUY | SELL */}
-      <div className="grid grid-cols-2 gap-2 p-2">
-        {/* BUY Panel */}
-        <div className="space-y-2">
-          <div className="text-[10px] text-muted mb-1">Available: 1000 USDT</div>
-          
-          {orderType === 'limit' && (
-            <input
-              type="number"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              placeholder="Price"
-              className="w-full px-2 py-1.5 bg-muted/20 dark:bg-white/5 border border-border dark:border-darkborder rounded text-xs text-dark dark:text-white focus:outline-none focus:ring-1 focus:ring-success"
-            />
+      {/* Collapsible Header */}
+      <div className="flex items-center justify-between px-2 py-1 border-b border-border dark:border-darkborder bg-muted/10 dark:bg-white/5">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-semibold text-dark dark:text-white">
+            Order Entry
+          </span>
+          {!isExpanded && (
+            <span className="text-[9px] text-muted">
+              {selectedPair.replace('-', '/')}
+            </span>
           )}
-          
-          <input
-            type="number"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="Amount"
-            className="w-full px-2 py-1.5 bg-muted/20 dark:bg-white/5 border border-border dark:border-darkborder rounded text-xs text-dark dark:text-white focus:outline-none focus:ring-1 focus:ring-success"
-          />
-          
-          {/* Percentage Slider */}
-          <div className="flex gap-1">
-            {[25, 50, 75, 100].map(percent => (
-              <button
-                key={percent}
-                onClick={() => handlePercentage(percent, 'buy')}
-                className="flex-1 py-1 text-[9px] bg-muted/20 dark:bg-white/5 hover:bg-success/10 text-muted hover:text-success rounded transition-colors"
-              >
-                {percent}%
-              </button>
-            ))}
-          </div>
-          
-          <input
-            type="number"
-            value={total}
-            onChange={(e) => setTotal(e.target.value)}
-            placeholder="Total"
-            className="w-full px-2 py-1.5 bg-muted/20 dark:bg-white/5 border border-border dark:border-darkborder rounded text-xs text-dark dark:text-white focus:outline-none focus:ring-1 focus:ring-success"
-          />
-          
-          <button
-            onClick={() => executeTrade('buy')}
-            disabled={executing || !amount}
-            className="w-full py-2 bg-success hover:bg-success/90 text-white text-xs font-semibold rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {executing ? 'Executing...' : `Buy ${tokenIn}`}
-          </button>
         </div>
-
-        {/* SELL Panel */}
-        <div className="space-y-2">
-          <div className="text-[10px] text-muted mb-1">Available: 0 {tokenIn}</div>
-          
-          {orderType === 'limit' && (
-            <input
-              type="number"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              placeholder="Price"
-              className="w-full px-2 py-1.5 bg-muted/20 dark:bg-white/5 border border-border dark:border-darkborder rounded text-xs text-dark dark:text-white focus:outline-none focus:ring-1 focus:ring-error"
+        {onToggleExpand && (
+          <button
+            onClick={onToggleExpand}
+            className="p-1 hover:bg-muted/20 dark:hover:bg-white/10 rounded transition-colors"
+            title={isExpanded ? 'Collapse order entry' : 'Expand order entry'}
+          >
+            <Icon 
+              icon={isExpanded ? 'ph:caret-down' : 'ph:caret-up'} 
+              width={14} 
+              className="text-muted"
             />
-          )}
-          
-          <input
-            type="number"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="Amount"
-            className="w-full px-2 py-1.5 bg-muted/20 dark:bg-white/5 border border-border dark:border-darkborder rounded text-xs text-dark dark:text-white focus:outline-none focus:ring-1 focus:ring-error"
-          />
-          
-          {/* Percentage Slider */}
-          <div className="flex gap-1">
-            {[25, 50, 75, 100].map(percent => (
-              <button
-                key={percent}
-                onClick={() => handlePercentage(percent, 'sell')}
-                className="flex-1 py-1 text-[9px] bg-muted/20 dark:bg-white/5 hover:bg-error/10 text-muted hover:text-error rounded transition-colors"
-              >
-                {percent}%
-              </button>
-            ))}
-          </div>
-          
-          <input
-            type="number"
-            value={total}
-            onChange={(e) => setTotal(e.target.value)}
-            placeholder="Total"
-            className="w-full px-2 py-1.5 bg-muted/20 dark:bg-white/5 border border-border dark:border-darkborder rounded text-xs text-dark dark:text-white focus:outline-none focus:ring-1 focus:ring-error"
-          />
-          
-          <button
-            onClick={() => executeTrade('sell')}
-            disabled={executing || !amount}
-            className="w-full py-2 bg-error hover:bg-error/90 text-white text-xs font-semibold rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {executing ? 'Executing...' : `Sell ${tokenIn}`}
           </button>
-        </div>
+        )}
       </div>
 
-      {/* Messages */}
-      {error && (
-        <div className="mx-2 mb-2 p-2 bg-error/10 border border-error/30 rounded text-[10px] text-error">
-          {error}
-        </div>
-      )}
-      {success && (
-        <div className="mx-2 mb-2 p-2 bg-success/10 border border-success/30 rounded text-[10px] text-success">
-          {success}
-        </div>
+      {/* Collapsible Content */}
+      {isExpanded && (
+        <>
+          {/* Tabs */}
+          <div className="flex border-b border-border dark:border-darkborder">
+            <button className="px-3 py-1.5 text-[10px] font-medium border-b-2 border-primary text-primary">
+              Spot
+            </button>
+            <button className="px-3 py-1.5 text-[10px] font-medium text-muted hover:text-dark dark:hover:text-white">
+              Cross
+            </button>
+            <button className="px-3 py-1.5 text-[10px] font-medium text-muted hover:text-dark dark:hover:text-white">
+              Isolated
+            </button>
+          </div>
+
+          {/* Order Type Tabs */}
+          <div className="flex border-b border-border dark:border-darkborder px-2 py-1">
+            <button
+              onClick={() => setOrderType('limit')}
+              className={`px-2 py-1 text-[10px] font-medium rounded transition-colors ${
+                orderType === 'limit'
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-muted hover:text-dark dark:hover:text-white'
+              }`}
+            >
+              Limit
+            </button>
+            <button
+              onClick={() => setOrderType('market')}
+              className={`px-2 py-1 text-[10px] font-medium rounded transition-colors ${
+                orderType === 'market'
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-muted hover:text-dark dark:hover:text-white'
+              }`}
+            >
+              Market
+            </button>
+          </div>
+
+          {/* Two-column layout: BUY | SELL */}
+          <div className="grid grid-cols-2 gap-2 p-2">
+            {/* BUY Panel */}
+            <div className="space-y-2">
+              <div className="text-[10px] text-muted mb-1">Available: 1000 USDT</div>
+              
+              {orderType === 'limit' && (
+                <input
+                  type="number"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  placeholder="Price"
+                  className="w-full px-2 py-1.5 bg-muted/20 dark:bg-white/5 border border-border dark:border-darkborder rounded text-xs text-dark dark:text-white focus:outline-none focus:ring-1 focus:ring-success"
+                />
+              )}
+              
+              <input
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="Amount"
+                className="w-full px-2 py-1.5 bg-muted/20 dark:bg-white/5 border border-border dark:border-darkborder rounded text-xs text-dark dark:text-white focus:outline-none focus:ring-1 focus:ring-success"
+              />
+              
+              {/* Percentage Slider */}
+              <div className="flex gap-1">
+                {[25, 50, 75, 100].map(percent => (
+                  <button
+                    key={percent}
+                    onClick={() => handlePercentage(percent, 'buy')}
+                    className="flex-1 py-1 text-[9px] bg-muted/20 dark:bg-white/5 hover:bg-success/10 text-muted hover:text-success rounded transition-colors"
+                  >
+                    {percent}%
+                  </button>
+                ))}
+              </div>
+              
+              <input
+                type="number"
+                value={total}
+                onChange={(e) => setTotal(e.target.value)}
+                placeholder="Total"
+                className="w-full px-2 py-1.5 bg-muted/20 dark:bg-white/5 border border-border dark:border-darkborder rounded text-xs text-dark dark:text-white focus:outline-none focus:ring-1 focus:ring-success"
+              />
+              
+              <button
+                onClick={() => executeTrade('buy')}
+                disabled={executing || !amount}
+                className="w-full py-2 bg-success hover:bg-success/90 text-white text-xs font-semibold rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {executing ? 'Executing...' : `Buy ${tokenIn}`}
+              </button>
+            </div>
+
+            {/* SELL Panel */}
+            <div className="space-y-2">
+              <div className="text-[10px] text-muted mb-1">Available: 0 {tokenIn}</div>
+              
+              {orderType === 'limit' && (
+                <input
+                  type="number"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  placeholder="Price"
+                  className="w-full px-2 py-1.5 bg-muted/20 dark:bg-white/5 border border-border dark:border-darkborder rounded text-xs text-dark dark:text-white focus:outline-none focus:ring-1 focus:ring-error"
+                />
+              )}
+              
+              <input
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="Amount"
+                className="w-full px-2 py-1.5 bg-muted/20 dark:bg-white/5 border border-border dark:border-darkborder rounded text-xs text-dark dark:text-white focus:outline-none focus:ring-1 focus:ring-error"
+              />
+              
+              {/* Percentage Slider */}
+              <div className="flex gap-1">
+                {[25, 50, 75, 100].map(percent => (
+                  <button
+                    key={percent}
+                    onClick={() => handlePercentage(percent, 'sell')}
+                    className="flex-1 py-1 text-[9px] bg-muted/20 dark:bg-white/5 hover:bg-error/10 text-muted hover:text-error rounded transition-colors"
+                  >
+                    {percent}%
+                  </button>
+                ))}
+              </div>
+              
+              <input
+                type="number"
+                value={total}
+                onChange={(e) => setTotal(e.target.value)}
+                placeholder="Total"
+                className="w-full px-2 py-1.5 bg-muted/20 dark:bg-white/5 border border-border dark:border-darkborder rounded text-xs text-dark dark:text-white focus:outline-none focus:ring-1 focus:ring-error"
+              />
+              
+              <button
+                onClick={() => executeTrade('sell')}
+                disabled={executing || !amount}
+                className="w-full py-2 bg-error hover:bg-error/90 text-white text-xs font-semibold rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {executing ? 'Executing...' : `Sell ${tokenIn}`}
+              </button>
+            </div>
+          </div>
+
+          {/* Messages */}
+          {error && (
+            <div className="mx-2 mb-2 p-2 bg-error/10 border border-error/30 rounded text-[10px] text-error">
+              {error}
+            </div>
+          )}
+          {success && (
+            <div className="mx-2 mb-2 p-2 bg-success/10 border border-success/30 rounded text-[10px] text-success">
+              {success}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

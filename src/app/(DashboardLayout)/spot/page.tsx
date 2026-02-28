@@ -17,6 +17,7 @@ export default function SpotTradingPage() {
   const [takeProfit, setTakeProfit] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
   const [showTPSLLines, setShowTPSLLines] = useState(true);
+  const [isOrderEntryExpanded, setIsOrderEntryExpanded] = useState(true);
   const [activePositionTPSL, setActivePositionTPSL] = useState<{
     symbol: string;
     takeProfit: string | null;
@@ -74,11 +75,15 @@ export default function SpotTradingPage() {
               />
             </div>
 
-            {/* Order Entry Panel */}
-            <div className="flex-shrink-0">
+            {/* Order Entry Panel - Collapsible */}
+            <div className={`flex-shrink-0 transition-all duration-300 ease-in-out ${
+              isOrderEntryExpanded ? 'h-auto' : 'h-[32px]'
+            }`}>
               <SpotOrderEntry 
                 selectedPair={selectedPair}
                 onTradeExecuted={handleTradeExecuted}
+                isExpanded={isOrderEntryExpanded}
+                onToggleExpand={() => setIsOrderEntryExpanded(!isOrderEntryExpanded)}
               />
             </div>
           </div>
