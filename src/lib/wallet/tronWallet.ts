@@ -5,49 +5,13 @@
  * Private keys are encrypted with the user's PIN before being sent to the server.
  */
 
+import TronWeb from "tronweb";
 import { encryptWithPIN } from "./encryption";
 
 // Tron RPC URL
 const TRON_RPC =
   process.env.NEXT_PUBLIC_TRON_RPC ||
-  "https://tron-mainnet.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITNT";
-
-// TronWeb types
-interface TronWeb {
-  createAccount: () => { privateKey: string; publicKey: string; address: { base58: string } };
-  address: {
-    fromPrivateKey: (privateKey: string) => string;
-  };
-}
-
-/**
- * Wait for TronWeb to be available and return the correct constructor
- */
-async function waitForTronWeb(maxAttempts = 20): Promise<any> {
-  for (let i = 0; i < maxAttempts; i++) {
-    if (typeof window !== "undefined") {
-      const win = window as any;
-      
-      // Check different possible locations for TronWeb
-      if (win.TronWeb) {
-        // If TronWeb is a constructor function
-        if (typeof win.TronWeb === 'function') {
-          return win.TronWeb;
-        }
-        // If TronWeb is an object with a default export
-        if (win.TronWeb.default && typeof win.TronWeb.default === 'function') {
-          return win.TronWeb.default;
-        }
-        // If TronWeb is already an instance, return its constructor
-        if (win.TronWeb.constructor) {
-          return win.TronWeb.constructor;
-        }
-      }
-    }
-    await new Promise(resolve => setTimeout(resolve, 100));
-  }
-  throw new Error("TronWeb library not loaded. Please refresh the page.");
-}
+  "https://api.trongrid.io";
 
 /**
  * Generate a new Tron wallet
@@ -60,23 +24,19 @@ export async function generateTronWallet(pin: string): Promise<{
   encryptedPrivateKey: string;
 }> {
   try {
-    // Wait for TronWeb to be available
-    const TronWebConstructor = await waitForTronWeb();
-    
-    console.log('[TronWallet] TronWeb type:', typeof TronWebConstructor);
-    console.log('[TronWallet] TronWeb:', TronWebConstructor);
+    console.log('[TronWallet] Creating TronWeb instance...');
     
     // Create TronWeb instance
-    const tronWeb = new TronWebConstructor({
+    const tronWeb = new TronWeb({
       fullHost: TRON_RPC,
     });
 
-    console.log('[TronWallet] TronWeb instance created:', tronWeb);
+    console.log('[TronWallet] TronWeb instance created');
 
     // Generate new account
     const account = tronWeb.createAccount();
     
-    console.log('[TronWallet] Account generated:', account);
+    console.log('[TronWallet] Account generated');
     
     // Extract private key (without 0x prefix if present)
     const privateKey = account.privateKey.startsWith("0x") 
@@ -118,16 +78,11 @@ export function isValidTronAddress(address: string): boolean {
       return false;
     }
 
-    // Check if TronWeb is available for validation
-    if (typeof window !== "undefined" && (window as any).TronWeb) {
-      const TronWebConstructor = (window as any).TronWeb;
-      return TronWebConstructor.isAddress(address);
-    }
-
-    // Basic validation if TronWeb not available
-    return /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(address);
+    // Use TronWeb's built-in validation
+    return TronWeb.isAddress(address);
   } catch {
-    return false;
+    // Fallback to basic validation
+    return /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(address);
   }
 }
 
@@ -139,10 +94,7 @@ export function isValidTronAddress(address: string): boolean {
  */
 export async function getTronAddressFromPrivateKey(privateKey: string): Promise<string> {
   try {
-    // Wait for TronWeb to be available
-    const TronWebConstructor = await waitForTronWeb();
-    
-    const tronWeb: TronWeb = new TronWebConstructor({
+    const tronWeb = new TronWeb({
       fullHost: TRON_RPC,
     });
 
