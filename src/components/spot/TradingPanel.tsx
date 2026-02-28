@@ -262,18 +262,18 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
   };
 
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-darkgray border-l border-border dark:border-darkborder">
+    <div className="h-full flex flex-col bg-white dark:bg-darkgray">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-border dark:border-darkborder">
+      <div className="px-3 md:px-4 py-2 md:py-3 border-b border-border dark:border-darkborder flex-shrink-0">
         <span className="text-sm md:text-base font-semibold text-dark dark:text-white">Spot</span>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+      <div className="flex-1 overflow-y-auto px-3 md:px-4 py-3 md:py-4 space-y-3 md:space-y-4">
         {/* Buy/Sell Tabs */}
         <div className="flex gap-2">
           <button
             onClick={() => setSide('buy')}
-            className={`flex-1 py-2.5 text-sm font-semibold rounded transition-colors ${
+            className={`flex-1 py-2 md:py-2.5 text-sm font-semibold rounded transition-colors ${
               side === 'buy'
                 ? 'bg-success text-white'
                 : 'bg-muted/20 dark:bg-white/5 text-success hover:bg-success/10'
@@ -283,7 +283,7 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
           </button>
           <button
             onClick={() => setSide('sell')}
-            className={`flex-1 py-2.5 text-sm font-semibold rounded transition-colors ${
+            className={`flex-1 py-2 md:py-2.5 text-sm font-semibold rounded transition-colors ${
               side === 'sell'
                 ? 'bg-error text-white'
                 : 'bg-muted/20 dark:bg-white/5 text-error hover:bg-error/10'
@@ -461,8 +461,8 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
         )}
 
         {/* Info */}
-        <div className="pt-3 border-t border-border dark:border-darkborder">
-          <div className="flex items-start gap-2 text-xs text-muted">
+        <div className="pt-2 md:pt-3 border-t border-border dark:border-darkborder">
+          <div className="flex items-start gap-2 text-[10px] md:text-xs text-muted">
             <Icon icon="ph:info" className="shrink-0 mt-0.5" width={12} />
             <p>
               Powered by 1inch. Fee: 0.3%
