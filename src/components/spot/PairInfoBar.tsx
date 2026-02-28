@@ -140,7 +140,7 @@ export default function PairInfoBar({ selectedPair, onSelectPair }: PairInfoBarP
           {showPairSelector && (
             <>
               <div 
-                className="fixed inset-0 z-[60]" 
+                className="fixed inset-0 z-[99999]" 
                 onClick={() => setShowPairSelector(false)}
               />
               <div className="absolute top-full left-0 mt-1 bg-white dark:bg-darkgray border border-border dark:border-darkborder rounded shadow-xl z-[70] min-w-[220px] max-h-[400px] overflow-y-auto">

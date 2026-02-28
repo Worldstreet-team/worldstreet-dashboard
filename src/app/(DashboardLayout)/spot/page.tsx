@@ -50,7 +50,7 @@ export default function SpotTradingPage() {
     : takeProfit;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-80px)]">
+    <div className="flex flex-col h-[calc(120vh-80px)]">
       {/* Pair Info Bar - Full Width */}
       <PairInfoBar 
         selectedPair={selectedPair}
