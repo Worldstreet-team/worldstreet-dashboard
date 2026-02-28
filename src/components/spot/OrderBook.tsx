@@ -89,7 +89,7 @@ export default function OrderBook({ selectedPair }: OrderBookProps) {
   const maxBidTotal = Math.max(...bids.map(b => b.total), 1);
 
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-darkgray border-r border-border dark:border-darkborder">
+    <div className="h-full flex flex-col bg-white dark:bg-darkgray border-r border-border dark:border-darkborder relative z-10">
       {/* Header */}
       <div className="px-3 py-2 border-b border-border dark:border-darkborder flex items-center justify-between">
         <span className="text-xs font-semibold text-dark dark:text-white">Order Book</span>
