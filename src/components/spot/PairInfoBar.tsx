@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Icon } from '@iconify/react';
 
 interface TickerData {
@@ -32,6 +33,8 @@ export default function PairInfoBar({ selectedPair, onSelectPair }: PairInfoBarP
   const [allTickers, setAllTickers] = useState<TickerData[]>([]);
   const [loading, setLoading] = useState(true);
   const [showPairSelector, setShowPairSelector] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   const tradingPairs = Object.keys(COINGECKO_IDS);
 
@@ -48,6 +51,16 @@ export default function PairInfoBar({ selectedPair, onSelectPair }: PairInfoBarP
       setTickerData(selected);
     }
   }, [selectedPair, allTickers]);
+
+  useEffect(() => {
+    if (showPairSelector && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + 4,
+        left: rect.left
+      });
+    }
+  }, [showPairSelector]);
 
   const fetchTickers = async () => {
     try {
@@ -117,15 +130,58 @@ export default function PairInfoBar({ selectedPair, onSelectPair }: PairInfoBarP
 
   const isPositive = tickerData.change24h >= 0;
 
+  // Render dropdown using Portal to escape stacking context
+  const dropdownPortal = showPairSelector && typeof window !== 'undefined' ? createPortal(
+    <>
+      {/* Backdrop */}
+      <div 
+        className="fixed inset-0 z-[9998]" 
+        onClick={() => setShowPairSelector(false)}
+      />
+      
+      {/* Dropdown Menu */}
+      <div 
+        className="fixed bg-white dark:bg-darkgray border border-border dark:border-darkborder rounded shadow-2xl z-[9999] min-w-[220px] max-h-[400px] overflow-y-auto"
+        style={{
+          top: `${dropdownPosition.top}px`,
+          left: `${dropdownPosition.left}px`
+        }}
+      >
+        {allTickers.map((ticker) => (
+          <button
+            key={ticker.symbol}
+            onClick={() => {
+              onSelectPair(ticker.symbol);
+              setShowPairSelector(false);
+            }}
+            className={`w-full px-4 py-3 text-left hover:bg-muted/20 dark:hover:bg-white/5 transition-colors flex items-center justify-between ${
+              ticker.symbol === selectedPair ? 'bg-primary/10' : ''
+            }`}
+          >
+            <span className="text-base font-medium text-dark dark:text-white">
+              {ticker.symbol.replace('-', '/')}
+            </span>
+            <span className={`text-sm font-semibold ${
+              ticker.change24h >= 0 ? 'text-success' : 'text-error'
+            }`}>
+              {ticker.change24h >= 0 ? '+' : ''}{ticker.change24h.toFixed(2)}%
+            </span>
+          </button>
+        ))}
+      </div>
+    </>,
+    document.body
+  ) : null;
+
   return (
-    <div className="bg-white dark:bg-darkgray border-b border-border dark:border-darkborder relative">
+    <div className="bg-white dark:bg-darkgray border-b border-border dark:border-darkborder">
       <div className="px-3 md:px-4 py-2 md:py-3 flex items-center gap-1 overflow-x-auto">
         {/* Pair Selector */}
         <div className="relative">
           <button
+            ref={buttonRef}
             onClick={() => setShowPairSelector(!showPairSelector)}
             className="flex items-center gap-1.5 px-3 py-2 hover:bg-muted/20 dark:hover:bg-white/5 rounded transition-colors"
-            id="pair-selector-button"
           >
             <span className="font-bold text-dark dark:text-white text-base md:text-sm">
               {selectedPair.replace('-', '/')}
@@ -137,51 +193,7 @@ export default function PairInfoBar({ selectedPair, onSelectPair }: PairInfoBarP
             />
           </button>
 
-          {/* Dropdown - Using fixed positioning to escape overflow */}
-          {showPairSelector && (
-            <>
-              {/* Backdrop */}
-              <div 
-                className="fixed inset-0 z-[9998]" 
-                onClick={() => setShowPairSelector(false)}
-              />
-              
-              {/* Dropdown Menu */}
-              <div 
-                className="fixed bg-white dark:bg-darkgray border border-border dark:border-darkborder rounded shadow-2xl z-[9999] min-w-[220px] max-h-[400px] overflow-y-auto"
-                style={{
-                  top: typeof window !== 'undefined' 
-                    ? `${document.getElementById('pair-selector-button')?.getBoundingClientRect().bottom || 0}px`
-                    : '0px',
-                  left: typeof window !== 'undefined'
-                    ? `${document.getElementById('pair-selector-button')?.getBoundingClientRect().left || 0}px`
-                    : '0px'
-                }}
-              >
-                {allTickers.map((ticker) => (
-                  <button
-                    key={ticker.symbol}
-                    onClick={() => {
-                      onSelectPair(ticker.symbol);
-                      setShowPairSelector(false);
-                    }}
-                    className={`w-full px-4 py-3 text-left hover:bg-muted/20 dark:hover:bg-white/5 transition-colors flex items-center justify-between ${
-                      ticker.symbol === selectedPair ? 'bg-primary/10' : ''
-                    }`}
-                  >
-                    <span className="text-base font-medium text-dark dark:text-white">
-                      {ticker.symbol.replace('-', '/')}
-                    </span>
-                    <span className={`text-sm font-semibold ${
-                      ticker.change24h >= 0 ? 'text-success' : 'text-error'
-                    }`}>
-                      {ticker.change24h >= 0 ? '+' : ''}{ticker.change24h.toFixed(2)}%
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
+          {dropdownPortal}
         </div>
 
         <div className="w-px h-5 bg-border dark:bg-darkborder mx-1" />

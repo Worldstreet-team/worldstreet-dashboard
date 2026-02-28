@@ -50,7 +50,7 @@ export default function SpotTradingPage() {
     : takeProfit;
 
   return (
-    <div className="flex flex-col h-[calc(120vh-80px)]">
+    <div className="flex flex-col h-[calc(100vh-64px)] md:h-[calc(100vh-80px)]">
       {/* Pair Info Bar - Full Width */}
       <PairInfoBar 
         selectedPair={selectedPair}
@@ -58,7 +58,7 @@ export default function SpotTradingPage() {
       />
 
       {/* Main Trading Grid - Responsive 3 Columns */}
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-[30%_70%] lg:grid-cols-[20%_55%_25%] overflow-hidden">
+      <div className="flex-1 grid grid-cols-1 md:grid-cols-[25%_75%] lg:grid-cols-[20%_55%_25%] overflow-hidden min-h-0">
         {/* Left: Order Book - Hidden on mobile, visible on tablet+ */}
         <div className="hidden md:block h-full overflow-hidden">
           <OrderBook selectedPair={selectedPair} />
@@ -83,8 +83,8 @@ export default function SpotTradingPage() {
         </div>
       </div>
 
-      {/* Bottom Tabs - Smaller on mobile for bigger chart */}
-      <div className="border-t border-border dark:border-darkborder h-[180px] md:h-auto">
+      {/* Bottom Tabs - Compact on mobile, larger on desktop */}
+      <div className="border-t border-border dark:border-darkborder h-[140px] md:h-[200px] lg:h-[250px]">
         <BottomTabs 
           refreshKey={refreshKey}
           selectedChartSymbol={selectedPair}
@@ -112,12 +112,12 @@ export default function SpotTradingPage() {
           style={{ maxHeight: '85vh' }}
         >
           {/* Handle Bar */}
-          <div className="flex items-center justify-center py-3 border-b border-border dark:border-darkborder">
-            <div className="w-12 h-1.5 bg-muted/50 rounded-full" />
+          <div className="flex items-center justify-center py-2.5 border-b border-border dark:border-darkborder">
+            <div className="w-10 h-1 bg-muted/50 rounded-full" />
           </div>
           
           {/* Trading Panel Content */}
-          <div className="overflow-y-auto" style={{ maxHeight: 'calc(85vh - 50px)' }}>
+          <div className="overflow-y-auto" style={{ maxHeight: 'calc(85vh - 45px)' }}>
             <TradingPanel 
               selectedPair={selectedPair}
               onTradeExecuted={handleTradeExecuted}
@@ -128,9 +128,9 @@ export default function SpotTradingPage() {
         {/* Floating Trade Button - Bigger and more visible */}
         <button
           onClick={() => setShowMobileTradingPanel(true)}
-          className="fixed bottom-6 right-6 w-16 h-16 bg-primary hover:bg-primary/90 text-white rounded-full shadow-2xl flex items-center justify-center z-30 transition-all active:scale-95"
+          className="fixed bottom-4 right-4 w-14 h-14 md:w-12 md:h-12 bg-primary hover:bg-primary/90 text-white rounded-full shadow-2xl flex items-center justify-center z-30 transition-all active:scale-95"
         >
-          <Icon icon="ph:chart-line-up" width={28} />
+          <Icon icon="ph:chart-line-up" width={24} className="md:w-5 md:h-5" />
         </button>
       </div>
     </div>

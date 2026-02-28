@@ -33,23 +33,23 @@ export default function BottomTabs({
   ];
 
   return (
-    <div className="bg-white dark:bg-darkgray border-t border-border dark:border-darkborder">
+    <div className="bg-white dark:bg-darkgray h-full flex flex-col">
       {/* Tab Headers */}
-      <div className="flex items-center border-b border-border dark:border-darkborder">
+      <div className="flex items-center border-b border-border dark:border-darkborder flex-shrink-0">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-2 text-xs font-medium transition-colors flex items-center gap-1.5 border-b-2 ${
+            className={`px-3 md:px-4 py-1.5 md:py-2 text-[10px] md:text-xs font-medium transition-colors flex items-center gap-1 border-b-2 ${
               activeTab === tab.id
                 ? 'border-primary text-primary'
                 : 'border-transparent text-muted hover:text-dark dark:hover:text-white'
             }`}
           >
-            <Icon icon={tab.icon} width={14} />
-            <span>{tab.label}</span>
+            <Icon icon={tab.icon} width={12} className="md:w-3.5 md:h-3.5" />
+            <span className="hidden sm:inline">{tab.label}</span>
             {tab.count !== undefined && tab.count > 0 && (
-              <span className="px-1.5 py-0.5 bg-primary/10 text-primary rounded text-[10px] font-semibold">
+              <span className="px-1 py-0.5 bg-primary/10 text-primary rounded text-[9px] font-semibold">
                 {tab.count}
               </span>
             )}
@@ -58,14 +58,14 @@ export default function BottomTabs({
       </div>
 
       {/* Tab Content */}
-      <div className="min-h-[150px] md:min-h-[300px] max-h-[180px] md:max-h-[400px] overflow-auto">
+      <div className="flex-1 overflow-auto">
         {activeTab === 'orders' && (
-          <div className="p-8 text-center">
-            <div className="w-16 h-16 rounded-full bg-muted/30 dark:bg-white/5 flex items-center justify-center mx-auto mb-3">
-              <Icon icon="ph:list-bullets" className="text-muted" width={32} />
+          <div className="p-4 md:p-8 text-center">
+            <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-muted/30 dark:bg-white/5 flex items-center justify-center mx-auto mb-2 md:mb-3">
+              <Icon icon="ph:list-bullets" className="text-muted" width={24} />
             </div>
-            <p className="text-muted text-sm">No open orders</p>
-            <p className="text-muted text-xs mt-1">Your active orders will appear here</p>
+            <p className="text-muted text-xs md:text-sm">No open orders</p>
+            <p className="text-muted text-[10px] md:text-xs mt-1">Your active orders will appear here</p>
           </div>
         )}
 
@@ -88,7 +88,7 @@ export default function BottomTabs({
         )}
 
         {activeTab === 'balances' && (
-          <div className="p-4">
+          <div className="p-2 md:p-4">
             <BalanceDisplay key={`balance-${refreshKey}`} />
           </div>
         )}
