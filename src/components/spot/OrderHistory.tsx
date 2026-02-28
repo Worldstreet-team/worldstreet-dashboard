@@ -171,6 +171,8 @@ export default function OrderHistory() {
   const getExplorerUrl = (txHash: string, chain: string): string => {
     if (chain.toLowerCase().includes('solana') || chain.toLowerCase() === 'sol') {
       return `https://solscan.io/tx/${txHash}`;
+    } else if (chain.toLowerCase().includes('tron') || chain.toLowerCase() === 'trx') {
+      return `https://tronscan.org/#/transaction/${txHash}`;
     } else {
       return `https://etherscan.io/tx/${txHash}`;
     }

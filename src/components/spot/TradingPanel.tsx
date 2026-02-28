@@ -33,20 +33,29 @@ const EVM_TOKENS: Record<string, { address: string, decimals: number }> = {
   'BTC': { address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', decimals: 8 }, // WBTC
 };
 
+const TRON_TOKENS: Record<string, { address: string, decimals: number }> = {
+  'TRX': { address: 'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb', decimals: 6 },
+  'USDT': { address: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t', decimals: 6 },
+  'USDC': { address: 'TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8', decimals: 6 },
+};
+
 // Determine which chain a token belongs to
-const getTokenChain = (token: string): 'Solana' | 'EVM' => {
+const getTokenChain = (token: string): 'Solana' | 'EVM' | 'Tron' => {
   if (token === 'SOL') return 'Solana';
   if (token === 'ETH' || token === 'BTC') return 'EVM';
-  // For stablecoins, default to Solana if available, otherwise EVM
-  return SOLANA_TOKENS[token] ? 'Solana' : 'EVM';
+  if (token === 'TRX') return 'Tron';
+  // For stablecoins, default to Solana
+  return 'Solana';
 };
 
 // Get token config for a specific chain
-const getTokenConfig = (token: string, chain: 'Solana' | 'EVM') => {
+const getTokenConfig = (token: string, chain: 'Solana' | 'EVM' | 'Tron') => {
   if (chain === 'Solana') {
     return SOLANA_TOKENS[token];
-  } else {
+  } else if (chain === 'EVM') {
     return EVM_TOKENS[token];
+  } else {
+    return TRON_TOKENS[token];
   }
 };
 
@@ -62,7 +71,7 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
   const [success, setSuccess] = useState<string | null>(null);
   
   // Chain selection for stablecoins
-  const [selectedChain, setSelectedChain] = useState<'Solana' | 'EVM'>('Solana');
+  const [selectedChain, setSelectedChain] = useState<'Solana' | 'EVM' | 'Tron'>('Solana');
 
   const [tokenIn, tokenOut] = selectedPair.split('-');
 
@@ -77,6 +86,8 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
         setSelectedChain('Solana');
       } else if (tokenIn === 'ETH' || tokenOut === 'ETH' || tokenIn === 'BTC' || tokenOut === 'BTC') {
         setSelectedChain('EVM');
+      } else if (tokenIn === 'TRX' || tokenOut === 'TRX') {
+        setSelectedChain('Tron');
       }
     }
   }, [selectedPair, tokenIn, tokenOut, needsChainSelection]);
@@ -103,7 +114,7 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
       const toToken = side === 'buy' ? tokenIn : tokenOut;
       
       // Use selected chain for stablecoin pairs, otherwise auto-detect
-      let chain: 'Solana' | 'EVM';
+      let chain: 'Solana' | 'EVM' | 'Tron';
       if (needsChainSelection) {
         chain = selectedChain;
       } else {
@@ -178,7 +189,7 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
       const toToken = side === 'buy' ? tokenIn : tokenOut;
       
       // Use selected chain for stablecoin pairs, otherwise auto-detect
-      let chain: 'Solana' | 'EVM';
+      let chain: 'Solana' | 'EVM' | 'Tron';
       if (needsChainSelection) {
         chain = selectedChain;
       } else {
@@ -299,10 +310,10 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
             <label className="block text-xs md:text-sm font-medium text-muted mb-2">
               Chain
             </label>
-            <div className="flex gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <button
                 onClick={() => setSelectedChain('Solana')}
-                className={`flex-1 py-2 px-3 text-xs md:text-sm font-medium rounded transition-colors flex items-center justify-center gap-1.5 ${
+                className={`py-2 px-3 text-xs md:text-sm font-medium rounded transition-colors flex items-center justify-center gap-1.5 ${
                   selectedChain === 'Solana'
                     ? 'bg-primary text-white'
                     : 'bg-muted/20 dark:bg-white/5 text-dark dark:text-white hover:bg-muted/30'
@@ -313,7 +324,7 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
               </button>
               <button
                 onClick={() => setSelectedChain('EVM')}
-                className={`flex-1 py-2 px-3 text-xs md:text-sm font-medium rounded transition-colors flex items-center justify-center gap-1.5 ${
+                className={`py-2 px-3 text-xs md:text-sm font-medium rounded transition-colors flex items-center justify-center gap-1.5 ${
                   selectedChain === 'EVM'
                     ? 'bg-primary text-white'
                     : 'bg-muted/20 dark:bg-white/5 text-dark dark:text-white hover:bg-muted/30'
@@ -321,6 +332,17 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
               >
                 <Icon icon="cryptocurrency:eth" width={14} />
                 ETH
+              </button>
+              <button
+                onClick={() => setSelectedChain('Tron')}
+                className={`py-2 px-3 text-xs md:text-sm font-medium rounded transition-colors flex items-center justify-center gap-1.5 ${
+                  selectedChain === 'Tron'
+                    ? 'bg-primary text-white'
+                    : 'bg-muted/20 dark:bg-white/5 text-dark dark:text-white hover:bg-muted/30'
+                }`}
+              >
+                <Icon icon="cryptocurrency:trx" width={14} />
+                TRX
               </button>
             </div>
           </div>

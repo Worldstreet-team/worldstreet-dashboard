@@ -35,17 +35,27 @@ const EVM_TOKENS: Record<string, { address: string, decimals: number }> = {
   'BTC': { address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', decimals: 8 },
 };
 
-const getTokenChain = (token: string): 'Solana' | 'EVM' => {
-  if (token === 'SOL') return 'Solana';
-  if (token === 'ETH' || token === 'BTC') return 'EVM';
-  return SOLANA_TOKENS[token] ? 'Solana' : 'EVM';
+const TRON_TOKENS: Record<string, { address: string, decimals: number }> = {
+  'TRX': { address: 'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb', decimals: 6 },
+  'USDT': { address: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t', decimals: 6 },
+  'USDC': { address: 'TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8', decimals: 6 },
 };
 
-const getTokenConfig = (token: string, chain: 'Solana' | 'EVM') => {
+const getTokenChain = (token: string): 'Solana' | 'EVM' | 'Tron' => {
+  if (token === 'SOL') return 'Solana';
+  if (token === 'ETH' || token === 'BTC') return 'EVM';
+  if (token === 'TRX') return 'Tron';
+  // For stablecoins, default to Solana (will be overridden by user selection)
+  return 'Solana';
+};
+
+const getTokenConfig = (token: string, chain: 'Solana' | 'EVM' | 'Tron') => {
   if (chain === 'Solana') {
     return SOLANA_TOKENS[token];
-  } else {
+  } else if (chain === 'EVM') {
     return EVM_TOKENS[token];
+  } else {
+    return TRON_TOKENS[token];
   }
 };
 
@@ -61,7 +71,7 @@ export default function SpotOrderEntry({ selectedPair, onTradeExecuted, isExpand
   const [executing, setExecuting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [selectedChain, setSelectedChain] = useState<'Solana' | 'EVM'>('Solana');
+  const [selectedChain, setSelectedChain] = useState<'Solana' | 'EVM' | 'Tron'>('Solana');
   
   // Balance states
   const [buyBalance, setBuyBalance] = useState<number>(0);
@@ -77,6 +87,8 @@ export default function SpotOrderEntry({ selectedPair, onTradeExecuted, isExpand
         setSelectedChain('Solana');
       } else if (tokenIn === 'ETH' || tokenOut === 'ETH' || tokenIn === 'BTC' || tokenOut === 'BTC') {
         setSelectedChain('EVM');
+      } else if (tokenIn === 'TRX' || tokenOut === 'TRX') {
+        setSelectedChain('Tron');
       }
     }
   }, [selectedPair, tokenIn, tokenOut, needsChainSelection]);
@@ -102,7 +114,7 @@ export default function SpotOrderEntry({ selectedPair, onTradeExecuted, isExpand
     setLoadingBalances(true);
     try {
       // Determine which chain to use
-      let chain: 'Solana' | 'EVM';
+      let chain: 'Solana' | 'EVM' | 'Tron';
       if (needsChainSelection) {
         chain = selectedChain;
       } else {
@@ -118,12 +130,15 @@ export default function SpotOrderEntry({ selectedPair, onTradeExecuted, isExpand
       const data = await response.json();
       const balances = Array.isArray(data) ? data : data.balances || [];
 
+      // Map chain to API chain format
+      const chainKey = chain === 'Solana' ? 'sol' : chain === 'EVM' ? 'evm' : 'tron';
+
       // Find balance for buy side (tokenOut - what we're spending)
       const buyToken = tokenOut;
       const buyTokenBalance = balances.find(
         (b: any) => 
           b.asset.toUpperCase() === buyToken.toUpperCase() && 
-          b.chain.toLowerCase() === (chain === 'Solana' ? 'sol' : 'evm')
+          b.chain.toLowerCase() === chainKey
       );
       setBuyBalance(buyTokenBalance ? parseFloat(buyTokenBalance.available_balance) : 0);
 
@@ -132,7 +147,7 @@ export default function SpotOrderEntry({ selectedPair, onTradeExecuted, isExpand
       const sellTokenBalance = balances.find(
         (b: any) => 
           b.asset.toUpperCase() === sellToken.toUpperCase() && 
-          b.chain.toLowerCase() === (chain === 'Solana' ? 'sol' : 'evm')
+          b.chain.toLowerCase() === chainKey
       );
       setSellBalance(sellTokenBalance ? parseFloat(sellTokenBalance.available_balance) : 0);
 
@@ -158,7 +173,7 @@ export default function SpotOrderEntry({ selectedPair, onTradeExecuted, isExpand
       const fromToken = side === 'buy' ? tokenOut : tokenIn;
       const toToken = side === 'buy' ? tokenIn : tokenOut;
       
-      let chain: 'Solana' | 'EVM';
+      let chain: 'Solana' | 'EVM' | 'Tron';
       if (needsChainSelection) {
         chain = selectedChain;
       } else {
@@ -213,7 +228,7 @@ export default function SpotOrderEntry({ selectedPair, onTradeExecuted, isExpand
       const fromToken = side === 'buy' ? tokenOut : tokenIn;
       const toToken = side === 'buy' ? tokenIn : tokenOut;
       
-      let chain: 'Solana' | 'EVM';
+      let chain: 'Solana' | 'EVM' | 'Tron';
       if (needsChainSelection) {
         chain = selectedChain;
       } else {
