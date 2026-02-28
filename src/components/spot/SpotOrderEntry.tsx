@@ -62,6 +62,11 @@ export default function SpotOrderEntry({ selectedPair, onTradeExecuted, isExpand
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [selectedChain, setSelectedChain] = useState<'Solana' | 'EVM'>('Solana');
+  
+  // Balance states
+  const [buyBalance, setBuyBalance] = useState<number>(0);
+  const [sellBalance, setSellBalance] = useState<number>(0);
+  const [loadingBalances, setLoadingBalances] = useState(false);
 
   const [tokenIn, tokenOut] = selectedPair.split('-');
   const needsChainSelection = (tokenIn === 'USDT' || tokenIn === 'USDC') && (tokenOut === 'USDT' || tokenOut === 'USDC');
@@ -81,6 +86,64 @@ export default function SpotOrderEntry({ selectedPair, onTradeExecuted, isExpand
     setError(null);
     setSuccess(null);
   }, [amount, slippage, selectedPair, selectedChain]);
+
+  // Fetch balances when pair or chain changes
+  useEffect(() => {
+    fetchBalances();
+  }, [selectedPair, selectedChain, user]);
+
+  const fetchBalances = async () => {
+    if (!user?.userId) {
+      setBuyBalance(0);
+      setSellBalance(0);
+      return;
+    }
+
+    setLoadingBalances(true);
+    try {
+      // Determine which chain to use
+      let chain: 'Solana' | 'EVM';
+      if (needsChainSelection) {
+        chain = selectedChain;
+      } else {
+        chain = getTokenChain(tokenIn);
+      }
+
+      // Fetch balances from API
+      const response = await fetch(`/api/users/${user.userId}/balances`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch balances');
+      }
+
+      const data = await response.json();
+      const balances = Array.isArray(data) ? data : data.balances || [];
+
+      // Find balance for buy side (tokenOut - what we're spending)
+      const buyToken = tokenOut;
+      const buyTokenBalance = balances.find(
+        (b: any) => 
+          b.asset.toUpperCase() === buyToken.toUpperCase() && 
+          b.chain.toLowerCase() === (chain === 'Solana' ? 'sol' : 'evm')
+      );
+      setBuyBalance(buyTokenBalance ? parseFloat(buyTokenBalance.available_balance) : 0);
+
+      // Find balance for sell side (tokenIn - what we're selling)
+      const sellToken = tokenIn;
+      const sellTokenBalance = balances.find(
+        (b: any) => 
+          b.asset.toUpperCase() === sellToken.toUpperCase() && 
+          b.chain.toLowerCase() === (chain === 'Solana' ? 'sol' : 'evm')
+      );
+      setSellBalance(sellTokenBalance ? parseFloat(sellTokenBalance.available_balance) : 0);
+
+    } catch (err) {
+      console.error('Error fetching balances:', err);
+      setBuyBalance(0);
+      setSellBalance(0);
+    } finally {
+      setLoadingBalances(false);
+    }
+  };
 
   const fetchQuote = async (side: 'buy' | 'sell') => {
     if (!amount || parseFloat(amount) <= 0) {
@@ -203,6 +266,9 @@ export default function SpotOrderEntry({ selectedPair, onTradeExecuted, isExpand
       setTotal('');
       setQuote(null);
       
+      // Refresh balances after trade
+      await fetchBalances();
+      
       if (onTradeExecuted) {
         onTradeExecuted();
       }
@@ -214,9 +280,8 @@ export default function SpotOrderEntry({ selectedPair, onTradeExecuted, isExpand
   };
 
   const handlePercentage = (percent: number, side: 'buy' | 'sell') => {
-    // Mock available balance - in production, fetch from API
-    const mockBalance = 1000;
-    const calculatedAmount = (mockBalance * percent) / 100;
+    const balance = side === 'buy' ? buyBalance : sellBalance;
+    const calculatedAmount = (balance * percent) / 100;
     setAmount(calculatedAmount.toFixed(6));
   };
 
@@ -293,7 +358,9 @@ export default function SpotOrderEntry({ selectedPair, onTradeExecuted, isExpand
           <div className="grid grid-cols-2 gap-2 p-2">
             {/* BUY Panel */}
             <div className="space-y-2">
-              <div className="text-[10px] text-muted mb-1">Available: 1000 USDT</div>
+              <div className="text-[10px] text-muted mb-1">
+                Available: {loadingBalances ? '...' : buyBalance.toFixed(6)} {tokenOut}
+              </div>
               
               {orderType === 'limit' && (
                 <input
@@ -345,7 +412,9 @@ export default function SpotOrderEntry({ selectedPair, onTradeExecuted, isExpand
 
             {/* SELL Panel */}
             <div className="space-y-2">
-              <div className="text-[10px] text-muted mb-1">Available: 0 {tokenIn}</div>
+              <div className="text-[10px] text-muted mb-1">
+                Available: {loadingBalances ? '...' : sellBalance.toFixed(6)} {tokenIn}
+              </div>
               
               {orderType === 'limit' && (
                 <input
