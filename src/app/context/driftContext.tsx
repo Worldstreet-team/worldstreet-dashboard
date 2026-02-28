@@ -173,7 +173,6 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         throw new Error(data.error || 'Failed to initialize account');
       }
       
-      // Invalidate caches and refresh
       statusCacheRef.current = null;
       summaryCacheRef.current = null;
       
@@ -191,7 +190,6 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     }
   }, [user?.userId, checkStatus, refreshSummary]);
 
-  // Auto-refresh control
   const startAutoRefresh = useCallback((intervalMs: number = 30000) => {
     stopAutoRefresh();
     autoRefreshIntervalRef.current = setInterval(() => {

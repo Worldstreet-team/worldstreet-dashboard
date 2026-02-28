@@ -9,3 +9,6 @@ export { default as BalanceDisplay } from './BalanceDisplay';
 export { default as PairInfoBar } from './PairInfoBar';
 export { default as OrderBook } from './OrderBook';
 export { default as BottomTabs } from './BottomTabs';
+export { default as MarketList } from './MarketList';
+export { default as MarketTrades } from './MarketTrades';
+export { default as SpotOrderEntry } from './SpotOrderEntry';

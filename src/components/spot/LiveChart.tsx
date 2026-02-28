@@ -141,24 +141,24 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
   return (
     <div className="flex flex-col w-full h-full bg-white dark:bg-black border-r border-border dark:border-darkborder overflow-hidden">
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between px-2 md:px-3 py-1.5 md:py-2 border-b border-border dark:border-darkborder gap-1.5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between px-2 py-1 border-b border-border dark:border-darkborder gap-1">
         {/* Left: Pair label */}
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs md:text-sm font-semibold text-dark dark:text-white">
+          <span className="text-[10px] font-semibold text-dark dark:text-white">
             {symbol.replace('-', '/')}
           </span>
-          <span className="text-[9px] md:text-[10px] text-muted">Candlestick</span>
+          <span className="text-[8px] text-muted">Candlestick</span>
           
           {/* TP/SL Indicators */}
           {(stopLoss || takeProfit) && (
-            <div className="flex items-center gap-1 text-[9px] md:text-[10px]">
+            <div className="flex items-center gap-1 text-[8px]">
               {stopLoss && (
-                <span className="px-1 py-0.5 bg-error/10 text-error font-semibold rounded text-[9px]">
+                <span className="px-1 py-0.5 bg-error/10 text-error font-semibold rounded text-[8px]">
                   SL: {parseFloat(stopLoss).toFixed(2)}
                 </span>
               )}
               {takeProfit && (
-                <span className="px-1 py-0.5 bg-success/10 text-success font-semibold rounded text-[9px]">
+                <span className="px-1 py-0.5 bg-success/10 text-success font-semibold rounded text-[8px]">
                   TP: {parseFloat(takeProfit).toFixed(2)}
                 </span>
               )}
@@ -167,7 +167,7 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
         </div>
 
         {/* Right: Timeframes + TP/SL button */}
-        <div className="flex items-center gap-1.5 flex-wrap">
+        <div className="flex items-center gap-1 flex-wrap">
           {/* Timeframe pills */}
           <div className="flex items-center gap-0.5">
             {TIMEFRAMES.map((tf) => (
@@ -175,7 +175,7 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
                 key={tf.value}
                 onClick={() => handleIntervalChange(tf.value)}
                 className={cn(
-                  'px-1.5 md:px-2 py-0.5 md:py-1 text-[9px] md:text-[10px] font-medium rounded transition-all duration-200',
+                  'px-1.5 py-0.5 text-[9px] font-medium rounded transition-all duration-200',
                   interval === tf.value
                     ? 'bg-primary text-white'
                     : 'text-muted hover:text-dark dark:hover:text-white hover:bg-muted/20 dark:hover:bg-white/5'
@@ -191,7 +191,7 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
             <button
               onClick={() => setShowLevelsForm(!showLevelsForm)}
               className={cn(
-                'px-2 md:px-2.5 py-0.5 md:py-1 text-[9px] md:text-[10px] font-medium rounded transition-colors',
+                'px-2 py-0.5 text-[9px] font-medium rounded transition-colors',
                 showLevelsForm
                   ? 'bg-primary text-white'
                   : 'bg-muted/20 dark:bg-white/5 text-dark dark:text-white hover:bg-muted/30 dark:hover:bg-white/10'
@@ -205,15 +205,15 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
 
       {/* Levels Form */}
       {showLevelsForm && onUpdateLevels && (
-        <div className="px-2 md:px-3 py-1.5 md:py-2 border-b border-border dark:border-darkborder bg-muted/20 dark:bg-white/5">
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5">
+        <div className="px-2 py-1.5 border-b border-border dark:border-darkborder bg-muted/20 dark:bg-white/5">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1">
             <input
               type="number"
               step="0.01"
               value={tempStopLoss}
               onChange={(e) => setTempStopLoss(e.target.value)}
               placeholder="Stop Loss"
-              className="flex-1 px-2 py-1.5 bg-white dark:bg-darkgray border border-border dark:border-darkborder rounded text-xs text-dark dark:text-white focus:outline-none focus:ring-1 focus:ring-error"
+              className="flex-1 px-2 py-1 bg-white dark:bg-darkgray border border-border dark:border-darkborder rounded text-[10px] text-dark dark:text-white focus:outline-none focus:ring-1 focus:ring-error"
             />
             <input
               type="number"
@@ -221,12 +221,12 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
               value={tempTakeProfit}
               onChange={(e) => setTempTakeProfit(e.target.value)}
               placeholder="Take Profit"
-              className="flex-1 px-2 py-1.5 bg-white dark:bg-darkgray border border-border dark:border-darkborder rounded text-xs text-dark dark:text-white focus:outline-none focus:ring-1 focus:ring-success"
+              className="flex-1 px-2 py-1 bg-white dark:bg-darkgray border border-border dark:border-darkborder rounded text-[10px] text-dark dark:text-white focus:outline-none focus:ring-1 focus:ring-success"
             />
-            <div className="flex gap-1.5">
+            <div className="flex gap-1">
               <button
                 onClick={handleUpdateLevels}
-                className="flex-1 sm:flex-none px-3 py-1.5 bg-primary hover:bg-primary/90 text-white rounded text-xs font-medium transition-colors"
+                className="flex-1 sm:flex-none px-2 py-1 bg-primary hover:bg-primary/90 text-white rounded text-[10px] font-medium transition-colors"
               >
                 Apply
               </button>
@@ -237,7 +237,7 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
                   onUpdateLevels('', '');
                   setShowLevelsForm(false);
                 }}
-                className="flex-1 sm:flex-none px-3 py-1.5 bg-error hover:bg-error/90 text-white rounded text-xs font-medium transition-colors"
+                className="flex-1 sm:flex-none px-2 py-1 bg-error hover:bg-error/90 text-white rounded text-[10px] font-medium transition-colors"
               >
                 Clear
               </button>
@@ -254,8 +254,8 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/60 dark:bg-black/60 backdrop-blur-[2px] z-10">
             <div className="flex flex-col items-center gap-2">
-              <div className="animate-spin rounded-full h-6 w-6 border-2 border-primary/20 border-t-primary" />
-              <span className="text-[10px] text-muted">Loading chart…</span>
+              <div className="animate-spin rounded-full h-5 w-5 border-2 border-primary/20 border-t-primary" />
+              <span className="text-[9px] text-muted">Loading chart…</span>
             </div>
           </div>
         )}
@@ -264,11 +264,11 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
         {error && !isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-black/80 z-10">
             <div className="flex flex-col items-center gap-2 text-center px-6">
-              <Icon icon="solar:chart-broken" className="h-7 w-7 text-muted" />
-              <p className="text-[10px] text-muted">{error}</p>
+              <Icon icon="solar:chart-broken" className="h-6 w-6 text-muted" />
+              <p className="text-[9px] text-muted">{error}</p>
               <button
                 onClick={() => loadData(symbol, interval)}
-                className="text-[10px] text-primary hover:underline cursor-pointer"
+                className="text-[9px] text-primary hover:underline cursor-pointer"
               >
                 Retry
               </button>

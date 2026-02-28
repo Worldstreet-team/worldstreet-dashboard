@@ -175,20 +175,20 @@ export default function PairInfoBar({ selectedPair, onSelectPair }: PairInfoBarP
 
   return (
     <div className="bg-white dark:bg-darkgray border-b border-border dark:border-darkborder">
-      <div className="px-3 md:px-4 py-2 md:py-3 flex items-center gap-1 overflow-x-auto">
+      <div className="px-2 py-1.5 flex items-center gap-1 overflow-x-auto">
         {/* Pair Selector */}
         <div className="relative">
           <button
             ref={buttonRef}
             onClick={() => setShowPairSelector(!showPairSelector)}
-            className="flex items-center gap-1.5 px-3 py-2 hover:bg-muted/20 dark:hover:bg-white/5 rounded transition-colors"
+            className="flex items-center gap-1 px-2 py-1 hover:bg-muted/20 dark:hover:bg-white/5 rounded transition-colors"
           >
-            <span className="font-bold text-dark dark:text-white text-base md:text-sm">
+            <span className="font-bold text-dark dark:text-white text-sm">
               {selectedPair.replace('-', '/')}
             </span>
             <Icon 
               icon={showPairSelector ? "ph:caret-up" : "ph:caret-down"} 
-              width={16} 
+              width={14} 
               className="text-muted" 
             />
           </button>
@@ -196,56 +196,56 @@ export default function PairInfoBar({ selectedPair, onSelectPair }: PairInfoBarP
           {dropdownPortal}
         </div>
 
-        <div className="w-px h-5 bg-border dark:bg-darkborder mx-1" />
+        <div className="w-px h-4 bg-border dark:bg-darkborder mx-0.5" />
 
         {/* Current Price */}
-        <div className="flex items-baseline gap-2">
-          <span className={`text-xl md:text-lg font-bold font-mono ${
+        <div className="flex items-baseline gap-1.5">
+          <span className={`text-base font-bold font-mono ${
             isPositive ? 'text-success' : 'text-error'
           }`}>
             ${formatPrice(tickerData.price)}
           </span>
-          <span className={`text-sm md:text-xs font-semibold ${
+          <span className={`text-[10px] font-semibold ${
             isPositive ? 'text-success' : 'text-error'
           }`}>
             {isPositive ? '+' : ''}{tickerData.change24h.toFixed(2)}%
           </span>
         </div>
 
-        <div className="w-px h-5 bg-border dark:border-darkborder mx-1 hidden sm:block" />
+        <div className="w-px h-4 bg-border dark:border-darkborder mx-0.5 hidden sm:block" />
 
-        {/* 24h High - Hidden on very small screens */}
+        {/* 24h High */}
         <div className="hidden sm:flex flex-col">
-          <span className="text-[11px] text-muted leading-none">24h High</span>
-          <span className="text-sm font-semibold text-dark dark:text-white font-mono">
+          <span className="text-[9px] text-muted leading-none">24h High</span>
+          <span className="text-[11px] font-semibold text-dark dark:text-white font-mono">
             ${formatPrice(tickerData.high24h)}
           </span>
         </div>
 
-        <div className="w-px h-5 bg-border dark:bg-darkborder mx-1 hidden sm:block" />
+        <div className="w-px h-4 bg-border dark:bg-darkborder mx-0.5 hidden sm:block" />
 
-        {/* 24h Low - Hidden on very small screens */}
+        {/* 24h Low */}
         <div className="hidden sm:flex flex-col">
-          <span className="text-[11px] text-muted leading-none">24h Low</span>
-          <span className="text-sm font-semibold text-dark dark:text-white font-mono">
+          <span className="text-[9px] text-muted leading-none">24h Low</span>
+          <span className="text-[11px] font-semibold text-dark dark:text-white font-mono">
             ${formatPrice(tickerData.low24h)}
           </span>
         </div>
 
-        <div className="w-px h-5 bg-border dark:bg-darkborder mx-1 hidden md:block" />
+        <div className="w-px h-4 bg-border dark:bg-darkborder mx-0.5 hidden md:block" />
 
-        {/* 24h Volume - Hidden on small screens */}
+        {/* 24h Volume */}
         <div className="hidden md:flex flex-col">
-          <span className="text-[11px] text-muted leading-none">24h Volume</span>
-          <span className="text-sm font-semibold text-dark dark:text-white font-mono">
+          <span className="text-[9px] text-muted leading-none">24h Volume</span>
+          <span className="text-[11px] font-semibold text-dark dark:text-white font-mono">
             {formatVolume(tickerData.volume24h)}
           </span>
         </div>
 
         {/* Live Indicator */}
-        <div className="ml-auto flex items-center gap-1.5 px-2">
-          <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
-          <span className="text-xs text-muted hidden sm:inline">Live</span>
+        <div className="ml-auto flex items-center gap-1 px-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+          <span className="text-[9px] text-muted hidden sm:inline">Live</span>
         </div>
       </div>
     </div>

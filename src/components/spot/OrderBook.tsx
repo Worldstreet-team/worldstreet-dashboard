@@ -91,15 +91,15 @@ export default function OrderBook({ selectedPair }: OrderBookProps) {
   return (
     <div className="h-full flex flex-col bg-white dark:bg-darkgray border-r border-border dark:border-darkborder relative z-10">
       {/* Header */}
-      <div className="px-3 py-2 border-b border-border dark:border-darkborder flex items-center justify-between">
-        <span className="text-xs font-semibold text-dark dark:text-white">Order Book</span>
-        <button className="p-1 hover:bg-muted/20 dark:hover:bg-white/5 rounded transition-colors">
-          <Icon icon="ph:gear" width={14} className="text-muted" />
+      <div className="px-2 py-1.5 border-b border-border dark:border-darkborder flex items-center justify-between">
+        <span className="text-[10px] font-semibold text-dark dark:text-white">Order Book</span>
+        <button className="p-0.5 hover:bg-muted/20 dark:hover:bg-white/5 rounded transition-colors">
+          <Icon icon="ph:gear" width={12} className="text-muted" />
         </button>
       </div>
 
       {/* Column Headers */}
-      <div className="px-3 py-1 border-b border-border dark:border-darkborder grid grid-cols-3 gap-2 text-[10px] text-muted font-medium">
+      <div className="px-2 py-0.5 border-b border-border dark:border-darkborder grid grid-cols-3 gap-1 text-[9px] text-muted font-medium">
         <div className="text-left">Price(USDT)</div>
         <div className="text-right">Amount</div>
         <div className="text-right">Total</div>
@@ -114,7 +114,7 @@ export default function OrderBook({ selectedPair }: OrderBookProps) {
             return (
               <div
                 key={`ask-${index}`}
-                className="relative px-3 py-0.5 hover:bg-error/5 cursor-pointer group"
+                className="relative px-2 py-0.5 hover:bg-error/5 cursor-pointer group"
               >
                 {/* Volume bar background */}
                 <div
@@ -123,10 +123,10 @@ export default function OrderBook({ selectedPair }: OrderBookProps) {
                 />
                 
                 {/* Content */}
-                <div className="relative grid grid-cols-3 gap-2 text-xs font-mono">
+                <div className="relative grid grid-cols-3 gap-1 text-[10px] font-mono">
                   <div className="text-error font-semibold">{formatPrice(ask.price)}</div>
                   <div className="text-right text-dark dark:text-white">{formatAmount(ask.amount)}</div>
-                  <div className="text-right text-muted">{ask.total.toFixed(2)}</div>
+                  <div className="text-right text-muted text-[9px]">{ask.total.toFixed(2)}</div>
                 </div>
               </div>
             );
@@ -134,22 +134,22 @@ export default function OrderBook({ selectedPair }: OrderBookProps) {
         </div>
 
         {/* Last Price */}
-        <div className={`px-3 py-2 border-y border-border dark:border-darkborder flex items-center justify-between ${
+        <div className={`px-2 py-1.5 border-y border-border dark:border-darkborder flex items-center justify-between ${
           priceChange >= 0 ? 'bg-success/5' : 'bg-error/5'
         }`}>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <Icon 
               icon={priceChange >= 0 ? "ph:arrow-up" : "ph:arrow-down"} 
-              width={14} 
+              width={12} 
               className={priceChange >= 0 ? 'text-success' : 'text-error'}
             />
-            <span className={`text-sm font-bold font-mono ${
+            <span className={`text-xs font-bold font-mono ${
               priceChange >= 0 ? 'text-success' : 'text-error'
             }`}>
               {formatPrice(lastPrice)}
             </span>
           </div>
-          <span className="text-xs text-muted">
+          <span className="text-[9px] text-muted">
             ≈ ${lastPrice.toFixed(2)}
           </span>
         </div>
@@ -161,7 +161,7 @@ export default function OrderBook({ selectedPair }: OrderBookProps) {
             return (
               <div
                 key={`bid-${index}`}
-                className="relative px-3 py-0.5 hover:bg-success/5 cursor-pointer group"
+                className="relative px-2 py-0.5 hover:bg-success/5 cursor-pointer group"
               >
                 {/* Volume bar background */}
                 <div
@@ -170,10 +170,10 @@ export default function OrderBook({ selectedPair }: OrderBookProps) {
                 />
                 
                 {/* Content */}
-                <div className="relative grid grid-cols-3 gap-2 text-xs font-mono">
+                <div className="relative grid grid-cols-3 gap-1 text-[10px] font-mono">
                   <div className="text-success font-semibold">{formatPrice(bid.price)}</div>
                   <div className="text-right text-dark dark:text-white">{formatAmount(bid.amount)}</div>
-                  <div className="text-right text-muted">{bid.total.toFixed(2)}</div>
+                  <div className="text-right text-muted text-[9px]">{bid.total.toFixed(2)}</div>
                 </div>
               </div>
             );
@@ -182,8 +182,8 @@ export default function OrderBook({ selectedPair }: OrderBookProps) {
       </div>
 
       {/* Footer Info */}
-      <div className="px-3 py-2 border-t border-border dark:border-darkborder">
-        <div className="flex items-center justify-between text-[10px]">
+      <div className="px-2 py-1 border-t border-border dark:border-darkborder">
+        <div className="flex items-center justify-between text-[9px]">
           <span className="text-muted">Spread:</span>
           <span className="text-dark dark:text-white font-mono">
             {asks.length > 0 && bids.length > 0 
