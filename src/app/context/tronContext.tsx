@@ -8,7 +8,6 @@ import React, {
   useCallback,
   ReactNode,
 } from "react";
-import TronWeb from "tronweb";
 import { decryptWithPIN } from "@/lib/wallet/encryption";
 
 /* ----------------------------- TYPES ----------------------------- */
@@ -110,7 +109,7 @@ const TRC20_ABI = [
 /* ----------------------------- PROVIDER ----------------------------- */
 
 export function TronProvider({ children }: { children: ReactNode }) {
-  const [tronWeb, setTronWeb] = useState<InstanceType<typeof TronWeb> | null>(null);
+  const [tronWeb, setTronWeb] = useState<any | null>(null);
   const [address, setAddress] = useState<string | null>(null);
   const [balance, setBalance] = useState(0);
   const [tokenBalances, setTokenBalances] = useState<TokenBalance[]>([]);
@@ -121,13 +120,24 @@ export function TronProvider({ children }: { children: ReactNode }) {
   /* ----------------------------- INIT ----------------------------- */
 
   useEffect(() => {
-    // Initialize TronWeb with fullHost as per documentation
-    const instance = new TronWeb({
-      fullHost: TRON_RPC,
-    });
+    // Dynamically import TronWeb only on client side
+    const initTronWeb = async () => {
+      try {
+        const TronWeb = (await import("tronweb")).default;
+        
+        // Initialize TronWeb with fullHost as per documentation
+        const instance = new TronWeb({
+          fullHost: TRON_RPC,
+        });
 
-    console.log('[TronContext] TronWeb instance created');
-    setTronWeb(instance);
+        console.log('[TronContext] TronWeb instance created');
+        setTronWeb(instance);
+      } catch (error) {
+        console.error('[TronContext] Failed to initialize TronWeb:', error);
+      }
+    };
+
+    initTronWeb();
   }, []);
 
   /* ----------------------- FETCH CUSTOM TOKENS ----------------------- */

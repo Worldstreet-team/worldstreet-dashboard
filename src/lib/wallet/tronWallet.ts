@@ -5,7 +5,6 @@
  * Private keys are encrypted with the user's PIN before being sent to the server.
  */
 
-import TronWeb from "tronweb";
 import { encryptWithPIN } from "./encryption";
 
 // Tron RPC URL
@@ -24,6 +23,11 @@ export async function generateTronWallet(pin: string): Promise<{
   encryptedPrivateKey: string;
 }> {
   try {
+    console.log('[TronWallet] Loading TronWeb...');
+    
+    // Dynamically import TronWeb to avoid SSR issues
+    const TronWeb = (await import("tronweb")).default;
+    
     console.log('[TronWallet] Creating TronWeb instance...');
     
     // Create TronWeb instance using fullHost as per documentation
@@ -67,7 +71,7 @@ export async function generateTronWallet(pin: string): Promise<{
  * @param address - Tron address to validate
  * @returns true if valid, false otherwise
  */
-export function isValidTronAddress(address: string): boolean {
+export async function isValidTronAddress(address: string): Promise<boolean> {
   try {
     // Tron addresses start with 'T' and are 34 characters long
     if (!address || typeof address !== "string") {
@@ -79,6 +83,7 @@ export function isValidTronAddress(address: string): boolean {
     }
 
     // Use TronWeb's built-in validation
+    const TronWeb = (await import("tronweb")).default;
     return TronWeb.isAddress(address);
   } catch {
     // Fallback to basic validation
@@ -94,6 +99,8 @@ export function isValidTronAddress(address: string): boolean {
  */
 export async function getTronAddressFromPrivateKey(privateKey: string): Promise<string> {
   try {
+    const TronWeb = (await import("tronweb")).default;
+    
     const tronWeb = new TronWeb({
       fullHost: TRON_RPC,
     });
