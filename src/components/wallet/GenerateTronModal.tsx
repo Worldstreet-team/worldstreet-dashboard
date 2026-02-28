@@ -197,7 +197,17 @@ export function GenerateTronModal({ isOpen, onClose, onSuccess }: GenerateTronMo
       
     } catch (err) {
       console.error("Tron wallet generation error:", err);
-      setError(err instanceof Error ? err.message : "Failed to generate Tron wallet");
+      const errorMessage = err instanceof Error ? err.message : "Failed to generate Tron wallet";
+      
+      // Provide helpful error messages
+      if (errorMessage.includes("TronWeb")) {
+        setError("TronWeb library not loaded. Please refresh the page and try again.");
+      } else if (errorMessage.includes("Invalid PIN")) {
+        setError("Invalid PIN. Please try again.");
+      } else {
+        setError(errorMessage);
+      }
+      
       setStep("error");
     }
   };

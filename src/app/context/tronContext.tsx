@@ -143,16 +143,26 @@ export function TronProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const initTronWeb = async () => {
       try {
-        // Check if TronWeb is available (from TronLink or CDN)
-        if (typeof window !== "undefined" && (window as any).TronWeb) {
-          const TronWebConstructor = (window as any).TronWeb;
-          const instance = new TronWebConstructor({
-            fullHost: TRON_RPC,
-          });
-          setTronWeb(instance);
-        } else {
-          console.warn("TronWeb not available. Please include TronWeb library.");
-        }
+        // Wait for TronWeb to be available (max 5 seconds)
+        let attempts = 0;
+        const maxAttempts = 50;
+        
+        const checkTronWeb = async (): Promise<any> => {
+          while (attempts < maxAttempts) {
+            if (typeof window !== "undefined" && (window as any).TronWeb) {
+              return (window as any).TronWeb;
+            }
+            await new Promise(resolve => setTimeout(resolve, 100));
+            attempts++;
+          }
+          throw new Error("TronWeb not loaded");
+        };
+
+        const TronWebConstructor = await checkTronWeb();
+        const instance = new TronWebConstructor({
+          fullHost: TRON_RPC,
+        });
+        setTronWeb(instance);
       } catch (error) {
         console.error("Error initializing TronWeb:", error);
       }

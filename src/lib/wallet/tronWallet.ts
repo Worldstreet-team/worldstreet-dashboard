@@ -21,6 +21,19 @@ interface TronWeb {
 }
 
 /**
+ * Wait for TronWeb to be available
+ */
+async function waitForTronWeb(maxAttempts = 20): Promise<any> {
+  for (let i = 0; i < maxAttempts; i++) {
+    if (typeof window !== "undefined" && (window as any).TronWeb) {
+      return (window as any).TronWeb;
+    }
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  throw new Error("TronWeb library not loaded. Please refresh the page.");
+}
+
+/**
  * Generate a new Tron wallet
  * 
  * @param pin - User's PIN for encrypting the private key
@@ -31,12 +44,10 @@ export async function generateTronWallet(pin: string): Promise<{
   encryptedPrivateKey: string;
 }> {
   try {
-    // Check if TronWeb is available
-    if (typeof window === "undefined" || !(window as any).TronWeb) {
-      throw new Error("TronWeb not available. Please include TronWeb library.");
-    }
-
-    const TronWebConstructor = (window as any).TronWeb;
+    // Wait for TronWeb to be available
+    const TronWebConstructor = await waitForTronWeb();
+    
+    // Create TronWeb instance
     const tronWeb: TronWeb = new TronWebConstructor({
       fullHost: TRON_RPC,
     });
@@ -101,13 +112,11 @@ export function isValidTronAddress(address: string): boolean {
  * @param privateKey - Private key (hex string)
  * @returns Tron address
  */
-export function getTronAddressFromPrivateKey(privateKey: string): string {
+export async function getTronAddressFromPrivateKey(privateKey: string): Promise<string> {
   try {
-    if (typeof window === "undefined" || !(window as any).TronWeb) {
-      throw new Error("TronWeb not available");
-    }
-
-    const TronWebConstructor = (window as any).TronWeb;
+    // Wait for TronWeb to be available
+    const TronWebConstructor = await waitForTronWeb();
+    
     const tronWeb: TronWeb = new TronWebConstructor({
       fullHost: TRON_RPC,
     });
@@ -145,3 +154,4 @@ export function trxToSun(trx: number): number {
 export function sunToTrx(sun: number): number {
   return sun / 1_000_000;
 }
+

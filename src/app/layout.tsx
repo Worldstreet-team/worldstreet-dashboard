@@ -32,7 +32,7 @@ export default function RootLayout({
       <head>
         <ThemeModeScript />
         {/* TronWeb library for Tron blockchain interactions */}
-        <script src="https://cdn.jsdelivr.net/npm/tronweb@latest/dist/TronWeb.js" async></script>
+        <script src="https://cdn.jsdelivr.net/npm/tronweb@latest/dist/TronWeb.js"></script>
       </head>
       <body className={`${font.className}`}>
         <ClerkProvider
