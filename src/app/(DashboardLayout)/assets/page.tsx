@@ -32,7 +32,7 @@ const CHAIN_ICONS: Record<string, string> = {
   solana: "https://cryptologos.cc/logos/solana-sol-logo.png",
   ethereum: "https://cryptologos.cc/logos/ethereum-eth-logo.png",
   bitcoin: "https://cryptologos.cc/logos/bitcoin-btc-logo.png",
-  tron: "https://cryptologos.cc/logos/tron-trx-logo.png",
+  tron: "https://logowik.com/content/uploads/images/tron-trx-icon3386.logowik.com.webp",
   USDT: "https://cryptologos.cc/logos/tether-usdt-logo.png",
   USDC: "https://cryptologos.cc/logos/usd-coin-usdc-logo.png",
 };

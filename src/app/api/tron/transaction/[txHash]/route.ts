@@ -31,7 +31,7 @@ export async function GET(
     // Initialize TronWeb (read-only)
     const TronWeb = (await import("tronweb")).default;
     const tronWeb = new TronWeb({
-      fullHost: process.env.NEXT_PUBLIC_TRON_RPC || "https://api.trongrid.io",
+      fullHost: process.env.NEXT_PUBLIC_TRON_RPC || "https://api.shasta.trongrid.io",
     });
 
     // Get transaction details

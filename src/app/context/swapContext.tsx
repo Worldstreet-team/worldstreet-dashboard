@@ -23,7 +23,7 @@ const SOL_RPC =
 const ETH_RPC =
   process.env.NEXT_PUBLIC_ETH_RPC || "https://cloudflare-eth.com";
 
-// Supported chains for swap (excluding Bitcoin - not supported by Li.Fi)
+// Supported chains for swap (Solana and Ethereum only)
 export const SWAP_CHAINS = {
   ethereum: {
     id: 1,
@@ -31,6 +31,7 @@ export const SWAP_CHAINS = {
     symbol: "ETH",
     logo: "https://static.debank.com/image/chain/logo_url/eth/265c6ad30399940c562599eb8a183296.png",
     type: "EVM",
+    lifiSupported: true,
   },
   solana: {
     id: 1151111081099710,
@@ -38,6 +39,7 @@ export const SWAP_CHAINS = {
     symbol: "SOL",
     logo: "https://static.debank.com/image/chain/logo_url/sol/1e6d4c14106579294f997c02b37be801.png",
     type: "SVM",
+    lifiSupported: true,
   },
   bitcoin: {
     id: 20000000000001,
@@ -45,6 +47,7 @@ export const SWAP_CHAINS = {
     symbol: "BTC",
     logo: "https://static.debank.com/image/coin/logo_url/btc/c543666657934440537e2315fa763c37.png",
     type: "UTXO",
+    lifiSupported: false,
   },
 } as const;
 

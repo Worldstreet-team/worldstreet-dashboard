@@ -10,7 +10,7 @@ import { encryptWithPIN } from "./encryption";
 // Tron RPC URL
 const TRON_RPC =
   process.env.NEXT_PUBLIC_TRON_RPC ||
-  "https://api.trongrid.io";
+  "https://api.shasta.trongrid.io";
 
 /**
  * Generate a new Tron wallet

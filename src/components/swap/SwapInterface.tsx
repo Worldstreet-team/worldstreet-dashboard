@@ -295,8 +295,10 @@ export function SwapInterface() {
               }}
               className="flex items-center gap-1.5 text-xs font-medium text-dark dark:text-white hover:text-primary transition-colors"
             >
-              <img src={SWAP_CHAINS[fromChain].logo} alt="" className="w-4 h-4" />
-              {SWAP_CHAINS[fromChain].name}
+              {SWAP_CHAINS[fromChain]?.logo && (
+                <img src={SWAP_CHAINS[fromChain].logo} alt="" className="w-4 h-4" />
+              )}
+              {SWAP_CHAINS[fromChain]?.name || fromChain}
               <Icon icon="ph:caret-down" width={12} />
             </button>
           </div>
@@ -361,8 +363,10 @@ export function SwapInterface() {
               }}
               className="flex items-center gap-1.5 text-xs font-medium text-dark dark:text-white hover:text-primary transition-colors"
             >
-              <img src={SWAP_CHAINS[toChain].logo} alt="" className="w-4 h-4" />
-              {SWAP_CHAINS[toChain].name}
+              {SWAP_CHAINS[toChain]?.logo && (
+                <img src={SWAP_CHAINS[toChain].logo} alt="" className="w-4 h-4" />
+              )}
+              {SWAP_CHAINS[toChain]?.name || toChain}
               <Icon icon="ph:caret-down" width={12} />
             </button>
           </div>

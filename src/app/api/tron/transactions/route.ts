@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
     const offset = parseInt(searchParams.get("offset") || "0");
 
     // Fetch transactions from TronGrid API
-    const trongridUrl = `https://api.trongrid.io/v1/accounts/${address}/transactions?limit=${limit}&offset=${offset}`;
+    const trongridUrl = `https://api.shasta.trongrid.io/v1/accounts/${address}/transactions?limit=${limit}&offset=${offset}`;
     
     const response = await fetch(trongridUrl);
     

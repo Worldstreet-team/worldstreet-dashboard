@@ -9,6 +9,7 @@ import { useWallet } from "@/app/context/walletContext";
 import { useSolana } from "@/app/context/solanaContext";
 import { useEvm } from "@/app/context/evmContext";
 import { useBitcoin } from "@/app/context/bitcoinContext";
+import { useTron } from "@/app/context/tronContext";
 import { usePrices, getPrice, calculateDailyPnL } from "@/lib/wallet/usePrices";
 import { formatUSD } from "@/lib/wallet/amounts";
 import WalletModal from "./WalletModal";
@@ -20,6 +21,7 @@ const PortfolioStats = () => {
   const { balance: solBalance, tokenBalances: solTokens } = useSolana();
   const { balance: ethBalance, tokenBalances: ethTokens } = useEvm();
   const { balance: btcBalance } = useBitcoin();
+  const { balance: trxBalance, tokenBalances: trxTokens } = useTron();
   const { prices, coins, loading: pricesLoading } = usePrices();
 
   // State for network selection and balances
@@ -103,6 +105,7 @@ const PortfolioStats = () => {
     total += solBalance * getPrice(prices, "SOL");
     total += ethBalance * getPrice(prices, "ETH");
     total += btcBalance * getPrice(prices, "BTC");
+    total += trxBalance * getPrice(prices, "TRX");
     
     // Solana tokens
     solTokens.forEach((token) => {
@@ -114,8 +117,13 @@ const PortfolioStats = () => {
       total += token.amount * getPrice(prices, token.symbol);
     });
     
+    // TRC20 tokens
+    trxTokens.forEach((token) => {
+      total += token.amount * getPrice(prices, token.symbol);
+    });
+    
     return total;
-  }, [walletsGenerated, solBalance, ethBalance, btcBalance, solTokens, ethTokens, prices]);
+  }, [walletsGenerated, solBalance, ethBalance, btcBalance, trxBalance, solTokens, ethTokens, trxTokens, prices]);
 
   // Calculate holdings map for P&L
   const holdings = useMemo(() => {
@@ -127,6 +135,7 @@ const PortfolioStats = () => {
     h["SOL"] = solBalance;
     h["ETH"] = ethBalance;
     h["BTC"] = btcBalance;
+    h["TRX"] = trxBalance;
     
     // Solana tokens
     solTokens.forEach((token) => {
@@ -138,8 +147,13 @@ const PortfolioStats = () => {
       h[token.symbol] = (h[token.symbol] || 0) + token.amount;
     });
     
+    // TRC20 tokens
+    trxTokens.forEach((token) => {
+      h[token.symbol] = (h[token.symbol] || 0) + token.amount;
+    });
+    
     return h;
-  }, [walletsGenerated, solBalance, ethBalance, btcBalance, solTokens, ethTokens]);
+  }, [walletsGenerated, solBalance, ethBalance, btcBalance, trxBalance, solTokens, ethTokens, trxTokens]);
 
   // Calculate 24h P&L
   const dailyPnL = useMemo(() => {
@@ -190,8 +204,8 @@ const PortfolioStats = () => {
     },
     {
       label: "Networks",
-      value: walletsGenerated ? "3" : "0",
-      change: walletsGenerated ? "SOL, ETH, BTC" : "Set up wallet",
+      value: walletsGenerated ? (addresses?.tron ? "4" : "3") : "0",
+      change: walletsGenerated ? (addresses?.tron ? "SOL, ETH, BTC, TRX" : "SOL, ETH, BTC") : "Set up wallet",
       changePercent: "",
       isPositive: true,
       icon: "solar:safe-circle-bold-duotone",

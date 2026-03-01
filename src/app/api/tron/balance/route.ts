@@ -3,58 +3,16 @@ import { connectDB } from "@/lib/mongodb";
 import DashboardProfile from "@/models/DashboardProfile";
 import { getAuthUser } from "@/lib/auth";
 
-// TRC20 ABI for balance queries
-const TRC20_ABI = [
-  {
-    constant: true,
-    inputs: [{ name: "who", type: "address" }],
-    name: "balanceOf",
-    outputs: [{ name: "", type: "uint256" }],
-    type: "function",
-  },
-  {
-    constant: true,
-    inputs: [],
-    name: "symbol",
-    outputs: [{ name: "", type: "string" }],
-    type: "function",
-  },
-  {
-    constant: true,
-    inputs: [],
-    name: "name",
-    outputs: [{ name: "", type: "string" }],
-    type: "function",
-  },
-  {
-    constant: true,
-    inputs: [],
-    name: "decimals",
-    outputs: [{ name: "", type: "uint8" }],
-    type: "function",
-  },
-];
-
-// Popular TRC20 tokens
-const POPULAR_TOKENS = [
-  {
-    symbol: "USDT",
-    name: "Tether USD",
-    address: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
-    decimals: 6,
-  },
-  {
-    symbol: "USDC",
-    name: "USD Coin",
-    address: "TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8",
-    decimals: 6,
-  },
-];
+// External balance API
+const EXTERNAL_BALANCE_API = 
+  process.env.TRON_BALANCE_API || 
+  "https://trading.watchup.site/api/tron/balance";
 
 /**
  * GET /api/tron/balance
  * 
- * Get TRX and TRC20 token balances for the authenticated user
+ * Get TRX balance for the authenticated user's Tron wallet
+ * This proxies the request to the external balance API
  */
 export async function GET(request: NextRequest) {
   try {
@@ -90,46 +48,31 @@ export async function GET(request: NextRequest) {
 
     const address = profile.wallets.tron.address;
 
-    // Initialize TronWeb (read-only, no private key needed)
-    const TronWeb = (await import("tronweb")).default;
-    const tronWeb = new TronWeb({
-      fullHost: process.env.NEXT_PUBLIC_TRON_RPC || "https://api.trongrid.io",
-    });
+    // Call external balance API
+    const response = await fetch(`${EXTERNAL_BALANCE_API}/${address}`);
 
-    // Get TRX balance
-    const trxBalance = await tronWeb.trx.getBalance(address);
-    const trx = trxBalance / 1_000_000; // Convert Sun to TRX
-
-    // Get TRC20 token balances
-    const tokens = [];
-
-    for (const token of POPULAR_TOKENS) {
-      try {
-        const contract = await tronWeb.contract(TRC20_ABI, token.address);
-        const balance = await contract.balanceOf(address).call();
-        const amount = Number(balance.toString()) / Math.pow(10, token.decimals);
-
-        tokens.push({
-          symbol: token.symbol,
-          name: token.name,
-          address: token.address,
-          balance: amount,
-          decimals: token.decimals,
-          usdValue: amount, // For stablecoins, balance ≈ USD value
-        });
-      } catch (error) {
-        console.error(`Error fetching ${token.symbol} balance:`, error);
-        // Continue with other tokens
-      }
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("[tron/balance] External API error:", errorText);
+      throw new Error("Failed to fetch balance from external service");
     }
 
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.message || "External API returned error");
+    }
+
+    // Return the balance data
     return NextResponse.json({
       success: true,
-      address,
+      address: data.address,
       balance: {
-        trx,
-        tokens,
+        trx: parseFloat(data.balance?.trx || "0"),
+        sun: data.balance?.sun || "0",
       },
+      network: data.network,
+      timestamp: data.timestamp,
     });
   } catch (error: any) {
     console.error("[GET /api/tron/balance] Error:", error);

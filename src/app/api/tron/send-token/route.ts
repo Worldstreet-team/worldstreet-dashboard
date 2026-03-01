@@ -136,51 +136,21 @@ export async function POST(request: NextRequest) {
     // Initialize TronWeb
     const TronWeb = (await import("tronweb")).default;
     const tronWeb = new TronWeb({
-      fullHost: process.env.NEXT_PUBLIC_TRON_RPC || "https://api.trongrid.io",
+      fullHost: process.env.NEXT_PUBLIC_TRON_RPC || "https://api.shasta.trongrid.io",
       privateKey: privateKey,
     });
 
     // Validate addresses
-    if (!TronWeb.isAddress(recipient)) {
+    if (!tronWeb.isAddress(recipient)) {
       return NextResponse.json(
         { success: false, message: "Invalid recipient address" },
         { status: 400 }
       );
     }
 
-    if (!TronWeb.isAddress(tokenAddress)) {
+    if (!tronWeb.isAddress(tokenAddress)) {
       return NextResponse.json(
         { success: false, message: "Invalid token address" },
-        { status: 400 }
-      );
-    }
-
-    // Get token contract
-    const contract = await tronWeb.contract(TRC20_ABI, tokenAddress);
-
-    // Check token balance
-    const balance = await contract.balanceOf(profile.wallets.tron.address).call();
-    const balanceAmount = Number(balance.toString()) / Math.pow(10, decimals);
-
-    if (balanceAmount < amount) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: `Insufficient token balance. Available: ${balanceAmount}`,
-        },
-        { status: 400 }
-      );
-    }
-
-    // Check TRX balance for fees
-    const trxBalance = await tronWeb.trx.getBalance(profile.wallets.tron.address);
-    if (trxBalance < 15_000_000) {
-      // Need ~15 TRX for fees
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Insufficient TRX for transaction fees (need ~15 TRX)",
-        },
         { status: 400 }
       );
     }
@@ -188,21 +158,46 @@ export async function POST(request: NextRequest) {
     // Calculate raw amount
     const rawAmount = Math.floor(amount * Math.pow(10, decimals));
 
-    // Get token symbol
+    // Get token symbol (optional, for response)
     let tokenSymbol = "TOKEN";
     try {
+      const contract = await tronWeb.contract(TRC20_ABI, tokenAddress);
       tokenSymbol = await contract.symbol().call();
     } catch {
       // Ignore if symbol() fails
     }
 
-    // Send token transfer
-    const txId = await contract.transfer(recipient, rawAmount).send({
-      feeLimit: 100_000_000, // 100 TRX max fee
-      callValue: 0,
-      shouldPollResponse: true,
-      privateKey: privateKey,
-    });
+    // Build transfer transaction
+    const tx = await tronWeb.transactionBuilder.triggerSmartContract(
+      tronWeb.address.toHex(tokenAddress),
+      "transfer(address,uint256)",
+      {
+        feeLimit: 100_000_000, // 100 TRX max fee
+        callValue: 0,
+      },
+      [
+        { type: "address", value: recipient },
+        { type: "uint256", value: rawAmount.toString() },
+      ],
+      tronWeb.address.toHex(profile.wallets.tron.address)
+    );
+
+    if (!tx.result || !tx.result.result) {
+      throw new Error("Failed to build transaction");
+    }
+
+    // Sign transaction
+    const signedTx = await tronWeb.trx.sign(tx.transaction, privateKey);
+
+    // Broadcast transaction
+    const receipt = await tronWeb.trx.sendRawTransaction(signedTx);
+
+    // Check if transaction was successful
+    if (!receipt.result) {
+      throw new Error(receipt.message || "Token transfer failed");
+    }
+
+    const txId = receipt.txid;
 
     // Return transaction details
     return NextResponse.json({
