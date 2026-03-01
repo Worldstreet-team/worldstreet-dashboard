@@ -31,7 +31,7 @@ export function SwapInterface() {
 
   // Form state
   const [fromChain, setFromChain] = useState<ChainKey>("solana");
-  const [toChain, setToChain] = useState<ChainKey>("polygon");
+  const [toChain, setToChain] = useState<ChainKey>("ethereum");
   const [fromToken, setFromToken] = useState<SwapToken | null>(null);
   const [toToken, setToToken] = useState<SwapToken | null>(null);
   const [fromAmount, setFromAmount] = useState("");
