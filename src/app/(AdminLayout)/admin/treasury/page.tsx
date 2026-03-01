@@ -104,7 +104,7 @@ export default function AdminTreasuryPage() {
             <div>
               <p className="text-xs text-muted uppercase tracking-wider mb-1">Solana Balance</p>
               <h3 className="text-2xl font-bold text-dark dark:text-white">
-                {activeTreasuryByNetwork.solana?.balance.toFixed(4) || "0.0000"} SOL
+                {(activeTreasuryByNetwork.solana?.balance ?? 0).toFixed(4)} SOL
               </h3>
             </div>
             <div className="w-10 h-10 rounded-lg bg-[#9945FF]/10 flex items-center justify-center">
@@ -112,7 +112,7 @@ export default function AdminTreasuryPage() {
             </div>
           </div>
           <p className="text-sm text-muted">
-            USDT: {activeTreasuryByNetwork.solana?.usdtBalance.toFixed(2) || "0.00"}
+            USDT: {(activeTreasuryByNetwork.solana?.usdtBalance ?? 0).toFixed(2)}
           </p>
         </div>
 
@@ -122,7 +122,7 @@ export default function AdminTreasuryPage() {
             <div>
               <p className="text-xs text-muted uppercase tracking-wider mb-1">Ethereum Balance</p>
               <h3 className="text-2xl font-bold text-dark dark:text-white">
-                {activeTreasuryByNetwork.ethereum?.balance.toFixed(6) || "0.000000"} ETH
+                {(activeTreasuryByNetwork.ethereum?.balance ?? 0).toFixed(6)} ETH
               </h3>
             </div>
             <div className="w-10 h-10 rounded-lg bg-[#627EEA]/10 flex items-center justify-center">
@@ -130,7 +130,7 @@ export default function AdminTreasuryPage() {
             </div>
           </div>
           <p className="text-sm text-muted">
-            USDT: {activeTreasuryByNetwork.ethereum?.usdtBalance.toFixed(2) || "0.00"}
+            USDT: {(activeTreasuryByNetwork.ethereum?.usdtBalance ?? 0).toFixed(2)}
           </p>
         </div>
       </div>
@@ -216,11 +216,11 @@ export default function AdminTreasuryPage() {
                     </td>
                     <td className="px-4 py-3 text-right font-medium text-dark dark:text-white">
                       {wallet.network === "solana"
-                        ? `${wallet.balance.toFixed(4)} SOL`
-                        : `${wallet.balance.toFixed(6)} ETH`}
+                        ? `${(wallet.balance ?? 0).toFixed(4)} SOL`
+                        : `${(wallet.balance ?? 0).toFixed(6)} ETH`}
                     </td>
                     <td className="px-4 py-3 text-right font-medium text-dark dark:text-white">
-                      ${wallet.usdtBalance.toFixed(2)}
+                      ${(wallet.usdtBalance ?? 0).toFixed(2)}
                     </td>
                     <td className="px-4 py-3">
                       {wallet.isActive ? (
