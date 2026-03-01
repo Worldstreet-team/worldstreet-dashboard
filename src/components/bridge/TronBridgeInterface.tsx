@@ -7,7 +7,7 @@ import { useEvm } from "@/app/context/evmContext";
 import { useSolana } from "@/app/context/solanaContext";
 import { useWallet } from "@/app/context/walletContext";
 
-// Symbiosis supported chains
+// Symbiosis supported chains (only chains we have wallets for)
 const BRIDGE_CHAINS = {
   tron: {
     id: 728126428,
@@ -21,35 +21,11 @@ const BRIDGE_CHAINS = {
     symbol: "ETH",
     logo: "https://cryptologos.cc/logos/ethereum-eth-logo.png",
   },
-  bsc: {
-    id: 56,
-    name: "BNB Chain",
-    symbol: "BNB",
-    logo: "https://cryptologos.cc/logos/bnb-bnb-logo.png",
-  },
-  polygon: {
-    id: 137,
-    name: "Polygon",
-    symbol: "MATIC",
-    logo: "https://cryptologos.cc/logos/polygon-matic-logo.png",
-  },
-  avalanche: {
-    id: 43114,
-    name: "Avalanche",
-    symbol: "AVAX",
-    logo: "https://cryptologos.cc/logos/avalanche-avax-logo.png",
-  },
-  arbitrum: {
-    id: 42161,
-    name: "Arbitrum",
-    symbol: "ETH",
-    logo: "https://cryptologos.cc/logos/arbitrum-arb-logo.png",
-  },
-  optimism: {
-    id: 10,
-    name: "Optimism",
-    symbol: "ETH",
-    logo: "https://cryptologos.cc/logos/optimism-ethereum-op-logo.png",
+  solana: {
+    id: 1151111081099710,
+    name: "Solana",
+    symbol: "SOL",
+    logo: "https://cryptologos.cc/logos/solana-sol-logo.png",
   },
 } as const;
 
@@ -117,10 +93,19 @@ export default function TronBridgeInterface() {
       }
       const found = trxTokens.find(t => t.address === fromToken.address);
       return found?.amount ?? 0;
+    } else if (fromChain === "ethereum") {
+      if (fromToken.symbol === "ETH") {
+        return ethBalance;
+      }
+      // Add EVM token balance check if needed
+      return 0;
+    } else if (fromChain === "solana") {
+      // Add Solana balance check if needed
+      return 0;
     }
     
     return 0;
-  }, [fromToken, fromChain, trxBalance, trxTokens]);
+  }, [fromToken, fromChain, trxBalance, trxTokens, ethBalance]);
 
   // Auto-select default tokens
   useEffect(() => {
@@ -129,6 +114,24 @@ export default function TronBridgeInterface() {
       setFromToken(usdt || tronTokens[0]);
     }
   }, [fromChain, fromToken, tronTokens]);
+
+  // Auto-select destination token
+  useEffect(() => {
+    if (!toToken) {
+      // Default to USDT on destination chain
+      setToToken({
+        address: toChain === "ethereum" 
+          ? "0xdAC17F958D2ee523a2206206994597C13D831ec7" // USDT on Ethereum
+          : toChain === "solana"
+          ? "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB" // USDT on Solana
+          : "",
+        symbol: "USDT",
+        name: "Tether USD",
+        decimals: toChain === "solana" ? 6 : 6,
+        chainId: BRIDGE_CHAINS[toChain]?.id || 1,
+      });
+    }
+  }, [toChain, toToken]);
 
   // Fetch quote from Symbiosis
   const fetchQuote = useCallback(async () => {
@@ -162,7 +165,7 @@ export default function TronBridgeInterface() {
             decimals: toToken.decimals,
           },
           from: tronAddress,
-          to: toChain === "tron" ? tronAddress : evmAddress,
+          to: toChain === "tron" ? tronAddress : toChain === "solana" ? solAddress : evmAddress,
           slippage: 300, // 3%
         }),
       });
@@ -262,9 +265,11 @@ export default function TronBridgeInterface() {
           <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border/50 dark:border-darkborder/50">
             <span className="text-xs text-muted">Network:</span>
             <div className="flex items-center gap-1.5">
-              <img src={BRIDGE_CHAINS[fromChain].logo} alt="" className="w-4 h-4" />
+              {BRIDGE_CHAINS[fromChain]?.logo && (
+                <img src={BRIDGE_CHAINS[fromChain].logo} alt="" className="w-4 h-4" />
+              )}
               <span className="text-xs font-medium text-dark dark:text-white">
-                {BRIDGE_CHAINS[fromChain].name}
+                {BRIDGE_CHAINS[fromChain]?.name || "Unknown"}
               </span>
             </div>
           </div>
@@ -305,18 +310,19 @@ export default function TronBridgeInterface() {
           {/* Chain selector */}
           <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border/50 dark:border-darkborder/50">
             <span className="text-xs text-muted">Network:</span>
-            <select
-              value={toChain}
-              onChange={(e) => setToChain(e.target.value as ChainKey)}
-              className="flex items-center gap-1.5 text-xs font-medium text-dark dark:text-white bg-transparent border-0 hover:text-primary transition-colors cursor-pointer focus:outline-none"
-            >
-              <option value="ethereum">Ethereum</option>
-              <option value="bsc">BNB Chain</option>
-              <option value="polygon">Polygon</option>
-              <option value="avalanche">Avalanche</option>
-              <option value="arbitrum">Arbitrum</option>
-              <option value="optimism">Optimism</option>
-            </select>
+            <div className="flex items-center gap-1.5">
+              {BRIDGE_CHAINS[toChain]?.logo && (
+                <img src={BRIDGE_CHAINS[toChain].logo} alt="" className="w-4 h-4" />
+              )}
+              <select
+                value={toChain}
+                onChange={(e) => setToChain(e.target.value as ChainKey)}
+                className="text-xs font-medium text-dark dark:text-white bg-transparent border-0 hover:text-primary transition-colors cursor-pointer focus:outline-none"
+              >
+                <option value="ethereum">Ethereum</option>
+                <option value="solana">Solana</option>
+              </select>
+            </div>
           </div>
         </div>
 
