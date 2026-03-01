@@ -81,6 +81,10 @@ export async function POST(request: NextRequest) {
           address: profile.wallets?.bitcoin?.address || "",
           encryptedPrivateKey: profile.wallets?.bitcoin?.encryptedPrivateKey || "",
         },
+        tron: {
+          address: profile.wallets?.tron?.address || "",
+          encryptedPrivateKey: profile.wallets?.tron?.encryptedPrivateKey || "",
+        },
       },
     });
   } catch (error) {

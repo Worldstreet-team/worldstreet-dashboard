@@ -4,11 +4,12 @@ import React, { useState, useMemo, useCallback } from "react";
 import { useSolana } from "@/app/context/solanaContext";
 import { useEvm } from "@/app/context/evmContext";
 import { useBitcoin } from "@/app/context/bitcoinContext";
+import { useTron } from "@/app/context/tronContext";
 import { useWallet } from "@/app/context/walletContext";
 import { formatAmount, formatUSD } from "@/lib/wallet/amounts";
 import { usePrices, getPrice } from "@/lib/wallet/usePrices";
 import Footer from "@/components/dashboard/Footer";
-import { ReceiveModal, SendModal, AddTokenModal } from "@/components/wallet";
+import { ReceiveModal, SendModal, AddTokenModal, GenerateTronModal } from "@/components/wallet";
 
 // Asset type definition
 interface Asset {
@@ -19,8 +20,8 @@ interface Asset {
   balanceRaw: string;
   decimals: number;
   usdValue: number;
-  chain: "solana" | "ethereum" | "bitcoin";
-  address?: string; // Token address for SPL/ERC20
+  chain: "solana" | "ethereum" | "bitcoin" | "tron";
+  address?: string; // Token address for SPL/ERC20/TRC20
   icon: string;
   isCustom?: boolean;
   customTokenId?: string;
@@ -31,29 +32,43 @@ const CHAIN_ICONS: Record<string, string> = {
   solana: "https://cryptologos.cc/logos/solana-sol-logo.png",
   ethereum: "https://cryptologos.cc/logos/ethereum-eth-logo.png",
   bitcoin: "https://cryptologos.cc/logos/bitcoin-btc-logo.png",
+  tron: "https://cryptologos.cc/logos/tron-trx-logo.png",
   USDT: "https://cryptologos.cc/logos/tether-usdt-logo.png",
   USDC: "https://cryptologos.cc/logos/usd-coin-usdc-logo.png",
 };
 
 const AssetsPage = () => {
-  const { addresses, walletsGenerated, getEncryptedKeys } = useWallet();
+  const { addresses, walletsGenerated, getEncryptedKeys, fetchWalletStatus } = useWallet();
   const { balance: solBalance, tokenBalances: solTokens, loading: solLoading, fetchBalance: fetchSolBalance, refreshCustomTokens: refreshSolCustom } = useSolana();
   const { balance: ethBalance, tokenBalances: ethTokens, loading: ethLoading, fetchBalance: fetchEthBalance, refreshCustomTokens: refreshEthCustom } = useEvm();
   const { balance: btcBalance, loading: btcLoading, fetchBalance: fetchBtcBalance } = useBitcoin();
+  const { balance: trxBalance, tokenBalances: trxTokens, loading: trxLoading, fetchBalance: fetchTrxBalance, refreshCustomTokens: refreshTrxCustom } = useTron();
   const { prices } = usePrices();
 
   const [receiveModal, setReceiveModal] = useState<{ open: boolean; chain?: string; address?: string }>({ open: false });
   const [sendModal, setSendModal] = useState<{ open: boolean; asset?: Asset }>({ open: false });
   const [addTokenModal, setAddTokenModal] = useState(false);
+  const [generateTronModal, setGenerateTronModal] = useState(false);
   const [removingTokenId, setRemovingTokenId] = useState<string | null>(null);
+
+  // Handle Tron wallet generation success
+  const handleTronGenerated = useCallback(async (address: string) => {
+    // Refresh wallet status to get new Tron address
+    await fetchWalletStatus();
+    // Fetch Tron balance
+    if (address) {
+      fetchTrxBalance(address);
+    }
+  }, [fetchWalletStatus, fetchTrxBalance]);
 
   // Handle token added - refresh custom tokens lists
   const handleTokenAdded = useCallback(async () => {
-    await Promise.all([refreshSolCustom(), refreshEthCustom()]);
+    await Promise.all([refreshSolCustom(), refreshEthCustom(), refreshTrxCustom()]);
     // Re-fetch balances
     if (addresses?.solana) fetchSolBalance(addresses.solana);
     if (addresses?.ethereum) fetchEthBalance(addresses.ethereum);
-  }, [refreshSolCustom, refreshEthCustom, addresses, fetchSolBalance, fetchEthBalance]);
+    if (addresses?.tron) fetchTrxBalance(addresses.tron);
+  }, [refreshSolCustom, refreshEthCustom, refreshTrxCustom, addresses, fetchSolBalance, fetchEthBalance, fetchTrxBalance]);
 
   // Handle remove custom token
   const handleRemoveToken = useCallback(async (tokenId: string) => {
@@ -157,21 +172,55 @@ const AssetsPage = () => {
       });
     }
 
+    // Tron native
+    if (addresses?.tron) {
+      list.push({
+        id: "trx-native",
+        symbol: "TRX",
+        name: "Tron",
+        balance: trxBalance,
+        balanceRaw: Math.floor(trxBalance * 1e6).toString(),
+        decimals: 6,
+        usdValue: trxBalance * getPrice(prices, "TRX"),
+        chain: "tron",
+        icon: CHAIN_ICONS.tron,
+      });
+    }
+
+    // TRC20 tokens
+    trxTokens.forEach((token) => {
+      list.push({
+        id: `trx-${token.address}`,
+        symbol: token.symbol,
+        name: token.name || token.symbol,
+        balance: token.amount,
+        balanceRaw: Math.floor(token.amount * Math.pow(10, token.decimals)).toString(),
+        decimals: token.decimals,
+        usdValue: token.amount * getPrice(prices, token.symbol),
+        chain: "tron",
+        address: token.address,
+        icon: CHAIN_ICONS[token.symbol] || CHAIN_ICONS.tron,
+        isCustom: token.isCustom,
+        customTokenId: token.customTokenId,
+      });
+    });
+
     return list;
-  }, [addresses, solBalance, solTokens, ethBalance, ethTokens, btcBalance, prices]);
+  }, [addresses, solBalance, solTokens, ethBalance, ethTokens, btcBalance, trxBalance, trxTokens, prices]);
 
   // Total portfolio value
   const totalValue = useMemo(() => {
     return assets.reduce((sum, asset) => sum + asset.usdValue, 0);
   }, [assets]);
 
-  const isLoading = solLoading || ethLoading || btcLoading;
+  const isLoading = solLoading || ethLoading || btcLoading || trxLoading;
 
   const handleRefresh = useCallback(() => {
     if (addresses?.solana) fetchSolBalance(addresses.solana);
     if (addresses?.ethereum) fetchEthBalance(addresses.ethereum);
     if (addresses?.bitcoin) fetchBtcBalance(addresses.bitcoin);
-  }, [addresses, fetchSolBalance, fetchEthBalance, fetchBtcBalance]);
+    if (addresses?.tron) fetchTrxBalance(addresses.tron);
+  }, [addresses, fetchSolBalance, fetchEthBalance, fetchBtcBalance, fetchTrxBalance]);
 
   const getChainAddress = (chain: string) => {
     switch (chain) {
@@ -181,6 +230,8 @@ const AssetsPage = () => {
         return addresses?.ethereum || "";
       case "bitcoin":
         return addresses?.bitcoin || "";
+      case "tron":
+        return addresses?.tron || "";
       default:
         return "";
     }
@@ -266,7 +317,7 @@ const AssetsPage = () => {
         <div className="col-span-12">
           <div className="bg-white dark:bg-black border border-border/50 dark:border-darkborder rounded-2xl p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-dark dark:text-white mb-4">Wallet Addresses</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Solana Address */}
               {addresses?.solana && (
                 <div
@@ -314,6 +365,41 @@ const AssetsPage = () => {
                   </div>
                   <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                </div>
+              )}
+
+              {/* Tron Address */}
+              {addresses?.tron ? (
+                <div
+                  onClick={() => setReceiveModal({ open: true, chain: "tron", address: addresses.tron })}
+                  className="flex items-center gap-3 p-3 bg-muted/30 dark:bg-white/5 rounded-xl cursor-pointer hover:bg-muted/40 dark:hover:bg-white/10 transition-colors"
+                >
+                  <img src={CHAIN_ICONS.tron} alt="TRX" className="w-8 h-8 rounded-full" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-dark dark:text-white">Tron</p>
+                    <p className="text-xs text-muted truncate">{addresses.tron}</p>
+                  </div>
+                  <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                </div>
+              ) : (
+                <div
+                  onClick={() => setGenerateTronModal(true)}
+                  className="flex items-center gap-3 p-3 bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-950/30 dark:to-orange-950/30 border-2 border-dashed border-red-200 dark:border-red-800 rounded-xl cursor-pointer hover:border-red-300 dark:hover:border-red-700 transition-colors group"
+                >
+                  <div className="w-8 h-8 rounded-full bg-red-100 dark:bg-red-900/50 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <svg className="w-4 h-4 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-red-700 dark:text-red-300">Generate Tron Wallet</p>
+                    <p className="text-xs text-red-600 dark:text-red-400">Click to create TRX wallet</p>
+                  </div>
+                  <svg className="w-4 h-4 text-red-500 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </div>
               )}
@@ -448,6 +534,13 @@ const AssetsPage = () => {
         isOpen={addTokenModal}
         onClose={() => setAddTokenModal(false)}
         onTokenAdded={handleTokenAdded}
+      />
+
+      {/* Generate Tron Modal */}
+      <GenerateTronModal
+        isOpen={generateTronModal}
+        onClose={() => setGenerateTronModal(false)}
+        onSuccess={handleTronGenerated}
       />
     </>
   );

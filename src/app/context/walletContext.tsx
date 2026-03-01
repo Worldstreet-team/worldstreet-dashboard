@@ -15,6 +15,7 @@ export interface WalletAddresses {
   solana: string;
   ethereum: string;
   bitcoin: string;
+  tron?: string; // Optional for backward compatibility
 }
 
 // Full wallet data with encrypted keys (only loaded when needed)
@@ -27,6 +28,7 @@ export interface WalletsWithKeys {
   solana: WalletWithKeys;
   ethereum: WalletWithKeys;
   bitcoin: WalletWithKeys;
+  tron?: WalletWithKeys; // Optional for backward compatibility
 }
 
 interface WalletContextType {
@@ -102,6 +104,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
             solana: data.wallets.solana?.address || "",
             ethereum: data.wallets.ethereum?.address || "",
             bitcoin: data.wallets.bitcoin?.address || "",
+            tron: data.wallets.tron?.address || "",
           });
         }
       }

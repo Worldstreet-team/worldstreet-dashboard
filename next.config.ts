@@ -37,6 +37,21 @@ const nextConfig: NextConfig = {
       type: "webassembly/async",
     });
 
+    // Fix for TronWeb - handle .cjs files correctly
+    config.module.rules.push({
+      test: /\.cjs$/,
+      type: "javascript/auto",
+    });
+
+    // Fallback for Node.js modules in browser
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      fs: false,
+      net: false,
+      tls: false,
+      crypto: false,
+    };
+
     return config;
   },
   experimental: {

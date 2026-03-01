@@ -43,17 +43,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate required wallets (Tron is optional for backward compatibility)
     if (!wallets || !wallets.solana || !wallets.ethereum || !wallets.bitcoin) {
       return NextResponse.json(
-        { success: false, message: "All wallet data is required" },
+        { success: false, message: "Solana, Ethereum, and Bitcoin wallet data is required" },
         { status: 400 }
       );
     }
 
     // Validate each wallet has address and encrypted key
-    for (const chain of ["solana", "ethereum", "bitcoin"] as const) {
-      const wallet = wallets[chain];
-      if (!wallet.address || !wallet.encryptedPrivateKey) {
+    const chains = ["solana", "ethereum", "bitcoin"] as const;
+    if (wallets.tron) {
+      chains.push("tron" as any);
+    }
+    
+    for (const chain of chains) {
+      const wallet = wallets[chain as keyof typeof wallets];
+      if (!wallet || !wallet.address || !wallet.encryptedPrivateKey) {
         return NextResponse.json(
           { success: false, message: `Invalid ${chain} wallet data` },
           { status: 400 }
@@ -79,28 +85,36 @@ export async function POST(request: NextRequest) {
     }
 
     // Update profile with wallet data
-    const profile = await DashboardProfile.findOneAndUpdate(
-      { authUserId: authUser.userId },
-      {
-        $set: {
-          wallets: {
-            solana: {
-              address: wallets.solana.address,
-              encryptedPrivateKey: wallets.solana.encryptedPrivateKey,
-            },
-            ethereum: {
-              address: wallets.ethereum.address,
-              encryptedPrivateKey: wallets.ethereum.encryptedPrivateKey,
-            },
-            bitcoin: {
-              address: wallets.bitcoin.address,
-              encryptedPrivateKey: wallets.bitcoin.encryptedPrivateKey,
-            },
-          },
-          walletPinHash: pinHash,
-          walletsGenerated: true,
+    const updateData: any = {
+      wallets: {
+        solana: {
+          address: wallets.solana.address,
+          encryptedPrivateKey: wallets.solana.encryptedPrivateKey,
+        },
+        ethereum: {
+          address: wallets.ethereum.address,
+          encryptedPrivateKey: wallets.ethereum.encryptedPrivateKey,
+        },
+        bitcoin: {
+          address: wallets.bitcoin.address,
+          encryptedPrivateKey: wallets.bitcoin.encryptedPrivateKey,
         },
       },
+      walletPinHash: pinHash,
+      walletsGenerated: true,
+    };
+
+    // Add Tron wallet if provided
+    if (wallets.tron) {
+      updateData.wallets.tron = {
+        address: wallets.tron.address,
+        encryptedPrivateKey: wallets.tron.encryptedPrivateKey,
+      };
+    }
+
+    const profile = await DashboardProfile.findOneAndUpdate(
+      { authUserId: authUser.userId },
+      { $set: updateData },
       { new: true, runValidators: true }
     );
 
@@ -112,14 +126,20 @@ export async function POST(request: NextRequest) {
     }
 
     // Return success with addresses only (not encrypted keys)
+    const responseWallets: any = {
+      solana: { address: wallets.solana.address },
+      ethereum: { address: wallets.ethereum.address },
+      bitcoin: { address: wallets.bitcoin.address },
+    };
+
+    if (wallets.tron) {
+      responseWallets.tron = { address: wallets.tron.address };
+    }
+
     return NextResponse.json({
       success: true,
       message: "Wallets created successfully",
-      wallets: {
-        solana: { address: wallets.solana.address },
-        ethereum: { address: wallets.ethereum.address },
-        bitcoin: { address: wallets.bitcoin.address },
-      },
+      wallets: responseWallets,
     });
   } catch (error) {
     console.error("[POST /api/wallet/setup] Error:", error);
@@ -175,6 +195,7 @@ export async function GET(request: NextRequest) {
         solana: { address: profile.wallets?.solana?.address || "" },
         ethereum: { address: profile.wallets?.ethereum?.address || "" },
         bitcoin: { address: profile.wallets?.bitcoin?.address || "" },
+        tron: { address: profile.wallets?.tron?.address || "" },
       },
     });
   } catch (error) {

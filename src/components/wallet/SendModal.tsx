@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { useSolana } from "@/app/context/solanaContext";
 import { useEvm } from "@/app/context/evmContext";
 import { useBitcoin } from "@/app/context/bitcoinContext";
+import { useTron } from "@/app/context/tronContext";
 import { useWallet } from "@/app/context/walletContext";
 import { formatAmount, formatUSD } from "@/lib/wallet/amounts";
 import { usePrices, getPrice } from "@/lib/wallet/usePrices";
@@ -16,7 +17,7 @@ interface Asset {
   balanceRaw: string;
   decimals: number;
   usdValue: number;
-  chain: "solana" | "ethereum" | "bitcoin";
+  chain: "solana" | "ethereum" | "bitcoin" | "tron";
   address?: string;
   icon: string;
 }
@@ -33,6 +34,7 @@ const CHAIN_ICONS: Record<string, string> = {
   solana: "https://cryptologos.cc/logos/solana-sol-logo.png",
   ethereum: "https://cryptologos.cc/logos/ethereum-eth-logo.png",
   bitcoin: "https://cryptologos.cc/logos/bitcoin-btc-logo.png",
+  tron: "https://cryptologos.cc/logos/tron-trx-logo.png",
 };
 
 const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
@@ -50,6 +52,7 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
   const { sendTransaction: sendSol, sendTokenTransaction: sendSolToken } = useSolana();
   const { sendTransaction: sendEth, sendTokenTransaction: sendEthToken } = useEvm();
   const { sendTransaction: sendBtc } = useBitcoin();
+  const { sendTransaction: sendTrx, sendTokenTransaction: sendTrxToken } = useTron();
 
   // Reset state when modal opens/closes
   useEffect(() => {
@@ -163,6 +166,18 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
       } else if (asset.chain === "bitcoin") {
         const encryptedKey = encryptedKeys.bitcoin.encryptedPrivateKey;
         hash = await sendBtc(encryptedKey, pinString, recipient, amountNum);
+      } else if (asset.chain === "tron") {
+        if (!encryptedKeys.tron) {
+          throw new Error("Tron wallet not found");
+        }
+        const encryptedKey = encryptedKeys.tron.encryptedPrivateKey;
+        if (asset.address) {
+          // TRC20 token
+          hash = await sendTrxToken(encryptedKey, pinString, recipient, amountNum, asset.address, asset.decimals);
+        } else {
+          // Native TRX
+          hash = await sendTrx(encryptedKey, pinString, recipient, amountNum);
+        }
       }
 
       setTxHash(hash);
@@ -178,7 +193,11 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
     if (asset) {
       // Leave a small buffer for gas on native tokens
       if (!asset.address) {
-        const buffer = asset.chain === "bitcoin" ? 0.0001 : asset.chain === "ethereum" ? 0.001 : 0.01;
+        const buffer = 
+          asset.chain === "bitcoin" ? 0.0001 : 
+          asset.chain === "ethereum" ? 0.001 : 
+          asset.chain === "tron" ? 1 : // Leave 1 TRX for fees
+          0.01;
         setAmount(Math.max(0, asset.balance - buffer).toString());
       } else {
         setAmount(asset.balance.toString());
@@ -195,6 +214,8 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
         return `https://etherscan.io/tx/${txHash}`;
       case "bitcoin":
         return `https://blockstream.info/tx/${txHash}`;
+      case "tron":
+        return `https://tronscan.org/#/transaction/${txHash}`;
       default:
         return "";
     }

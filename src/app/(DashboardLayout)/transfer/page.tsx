@@ -6,6 +6,7 @@ import Footer from "@/components/dashboard/Footer";
 import { useWallet } from "@/app/context/walletContext";
 import { useSolana } from "@/app/context/solanaContext";
 import { useEvm } from "@/app/context/evmContext";
+import { useTron } from "@/app/context/tronContext";
 import { useAuth } from "@/app/context/authContext";
 import CryptoJS from "crypto-js";
 
@@ -29,6 +30,7 @@ const ASSET_ICONS: Record<string, string> = {
   USDC: "https://cryptologos.cc/logos/usd-coin-usdc-logo.png",
   ETH: "https://cryptologos.cc/logos/ethereum-eth-logo.png",
   SOL: "https://cryptologos.cc/logos/solana-sol-logo.png",
+  TRX: "https://cryptologos.cc/logos/tron-trx-logo.png",
 };
 
 // Token addresses for finding balances
@@ -36,10 +38,12 @@ const TOKEN_ADDRESSES = {
   USDT: {
     solana: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB", // USDT on Solana
     ethereum: "0xdac17f958d2ee523a2206206994597c13d831ec7", // USDT on Ethereum
+    tron: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t", // USDT on Tron
   },
   USDC: {
     solana: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", // USDC on Solana
     ethereum: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", // USDC on Ethereum
+    tron: "TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8", // USDC on Tron
   },
 };
 
@@ -60,10 +64,17 @@ export default function TransferPage() {
     sendTransaction: sendEthTransaction,
     sendTokenTransaction: sendEthTokenTransaction,
   } = useEvm();
+  const { 
+    balance: trxBalance, 
+    tokenBalances: trxTokens, 
+    fetchBalance: fetchTrxBalance,
+    sendTransaction: sendTrxTransaction,
+    sendTokenTransaction: sendTrxTokenTransaction,
+  } = useTron();
 
   const [direction, setDirection] = useState<'main-to-spot' | 'spot-to-main' | 'spot-to-futures' | 'futures-to-spot' | 'main-to-futures' | 'futures-to-main'>('main-to-spot');
   const [selectedAsset, setSelectedAsset] = useState('USDT');
-  const [selectedChain, setSelectedChain] = useState<'sol' | 'evm'>('sol'); // Chain selection for stablecoins
+  const [selectedChain, setSelectedChain] = useState<'sol' | 'evm' | 'tron'>('sol'); // Chain selection for stablecoins
   const [amount, setAmount] = useState('');
   const [spotBalances, setSpotBalances] = useState<Balance[]>([]);
   const [spotWallets, setSpotWallets] = useState<SpotWallet[]>([]);
@@ -83,7 +94,7 @@ export default function TransferPage() {
   const [pinError, setPinError] = useState('');
 
   const userId = user?.userId || '';
-  const assets = ['USDT', 'USDC', 'ETH', 'SOL'];
+  const assets = ['USDT', 'USDC', 'ETH', 'SOL', 'TRX'];
 
   // Determine if chain selection is needed (stablecoins)
   const needsChainSelection = selectedAsset === 'USDT' || selectedAsset === 'USDC';
@@ -94,20 +105,23 @@ export default function TransferPage() {
       setSelectedChain('sol');
     } else if (selectedAsset === 'ETH') {
       setSelectedChain('evm');
+    } else if (selectedAsset === 'TRX') {
+      setSelectedChain('tron');
     }
     // For USDT/USDC, keep user selection or default to 'sol'
   }, [selectedAsset]);
 
   // Fetch on-chain balances when addresses are available
   useEffect(() => {
-    if (addresses?.solana && addresses?.ethereum) {
+    if (addresses?.solana && addresses?.ethereum && addresses?.tron) {
       setBalancesLoading(true);
       Promise.all([
         fetchSolBalance(addresses.solana),
         fetchEthBalance(addresses.ethereum),
+        fetchTrxBalance(addresses.tron),
       ]).finally(() => setBalancesLoading(false));
     }
-  }, [addresses, fetchSolBalance, fetchEthBalance]);
+  }, [addresses, fetchSolBalance, fetchEthBalance, fetchTrxBalance]);
 
   useEffect(() => {
     if (userId) {
@@ -374,17 +388,30 @@ export default function TransferPage() {
           recipientAddress,
           amountNum
         );
+      } else if (selectedAsset === 'TRX') {
+        // Send TRX using Tron context
+        if (!encryptedKeys.tron?.encryptedPrivateKey) {
+          setPinError('Tron wallet not available');
+          setLoading(false);
+          return;
+        }
+        txHash = await sendTrxTransaction(
+          encryptedKeys.tron.encryptedPrivateKey,
+          pinString,
+          recipientAddress,
+          amountNum
+        );
       } else if (selectedAsset === 'USDT' || selectedAsset === 'USDC') {
-        // For stablecoins, check which chain has balance
-        const solToken = solTokens.find(t => 
-          t.address.toLowerCase() === TOKEN_ADDRESSES[selectedAsset].solana.toLowerCase()
-        );
-        const ethToken = ethTokens.find(t => 
-          t.address.toLowerCase() === TOKEN_ADDRESSES[selectedAsset].ethereum.toLowerCase()
-        );
-
-        if (solToken && solToken.amount >= amountNum) {
-          // Use Solana
+        // For stablecoins, use selected chain
+        if (selectedChain === 'sol') {
+          const solToken = solTokens.find(t => 
+            t.address.toLowerCase() === TOKEN_ADDRESSES[selectedAsset].solana.toLowerCase()
+          );
+          if (!solToken || solToken.amount < amountNum) {
+            setPinError(`Insufficient ${selectedAsset} balance on Solana`);
+            setLoading(false);
+            return;
+          }
           if (!encryptedKeys.solana?.encryptedPrivateKey) {
             setPinError('Solana wallet not available');
             setLoading(false);
@@ -398,8 +425,15 @@ export default function TransferPage() {
             TOKEN_ADDRESSES[selectedAsset].solana,
             solToken.decimals
           );
-        } else if (ethToken && ethToken.amount >= amountNum) {
-          // Use Ethereum
+        } else if (selectedChain === 'evm') {
+          const ethToken = ethTokens.find(t => 
+            t.address.toLowerCase() === TOKEN_ADDRESSES[selectedAsset].ethereum.toLowerCase()
+          );
+          if (!ethToken || ethToken.amount < amountNum) {
+            setPinError(`Insufficient ${selectedAsset} balance on Ethereum`);
+            setLoading(false);
+            return;
+          }
           if (!encryptedKeys.ethereum?.encryptedPrivateKey) {
             setPinError('Ethereum wallet not available');
             setLoading(false);
@@ -412,6 +446,28 @@ export default function TransferPage() {
             amountNum,
             TOKEN_ADDRESSES[selectedAsset].ethereum,
             ethToken.decimals
+          );
+        } else if (selectedChain === 'tron') {
+          const trxToken = trxTokens.find(t => 
+            t.address.toLowerCase() === TOKEN_ADDRESSES[selectedAsset].tron.toLowerCase()
+          );
+          if (!trxToken || trxToken.amount < amountNum) {
+            setPinError(`Insufficient ${selectedAsset} balance on Tron`);
+            setLoading(false);
+            return;
+          }
+          if (!encryptedKeys.tron?.encryptedPrivateKey) {
+            setPinError('Tron wallet not available');
+            setLoading(false);
+            return;
+          }
+          txHash = await sendTrxTokenTransaction(
+            encryptedKeys.tron.encryptedPrivateKey,
+            pinString,
+            recipientAddress,
+            amountNum,
+            TOKEN_ADDRESSES[selectedAsset].tron,
+            trxToken.decimals
           );
         } else {
           setPinError(`Insufficient ${selectedAsset} balance`);
@@ -427,10 +483,11 @@ export default function TransferPage() {
       setPin(['', '', '', '', '', '']);
       
       // Refresh balances
-      if (addresses?.solana && addresses?.ethereum) {
+      if (addresses?.solana && addresses?.ethereum && addresses?.tron) {
         await Promise.all([
           fetchSolBalance(addresses.solana),
           fetchEthBalance(addresses.ethereum),
+          fetchTrxBalance(addresses.tron),
         ]);
       }
       await fetchSpotWallets();
@@ -455,12 +512,16 @@ export default function TransferPage() {
         destinationAddress = addresses?.solana || '';
       } else if (selectedAsset === 'ETH') {
         destinationAddress = addresses?.ethereum || '';
+      } else if (selectedAsset === 'TRX') {
+        destinationAddress = addresses?.tron || '';
       } else if (selectedAsset === 'USDT' || selectedAsset === 'USDC') {
         // For stablecoins, use the selected chain
         if (selectedChain === 'sol') {
           destinationAddress = addresses?.solana || '';
-        } else {
+        } else if (selectedChain === 'evm') {
           destinationAddress = addresses?.ethereum || '';
+        } else if (selectedChain === 'tron') {
+          destinationAddress = addresses?.tron || '';
         }
       }
 
@@ -506,10 +567,11 @@ export default function TransferPage() {
         setAmount('');
         
         // Refresh balances
-        if (addresses?.solana && addresses?.ethereum) {
+        if (addresses?.solana && addresses?.ethereum && addresses?.tron) {
           await Promise.all([
             fetchSolBalance(addresses.solana),
             fetchEthBalance(addresses.ethereum),
+            fetchTrxBalance(addresses.tron),
           ]);
         }
         await fetchSpotWallets();
@@ -615,14 +677,34 @@ export default function TransferPage() {
     setSuccess('');
   };
 
-  // Get main wallet balance from on-chain data (Solana/EVM contexts)
+  // Get main wallet balance from on-chain data (Solana/EVM/Tron contexts)
   const getMainBalance = (asset: string): number => {
     if (asset === 'SOL') {
       return solBalance;
     } else if (asset === 'ETH') {
       return ethBalance;
+    } else if (asset === 'TRX') {
+      return trxBalance;
     } else if (asset === 'USDT' || asset === 'USDC') {
-      // Check Solana tokens first
+      // Check selected chain first
+      if (selectedChain === 'sol') {
+        const solToken = solTokens.find(t => 
+          t.address.toLowerCase() === TOKEN_ADDRESSES[asset].solana.toLowerCase()
+        );
+        if (solToken) return solToken.amount;
+      } else if (selectedChain === 'evm') {
+        const ethToken = ethTokens.find(t => 
+          t.address.toLowerCase() === TOKEN_ADDRESSES[asset].ethereum.toLowerCase()
+        );
+        if (ethToken) return ethToken.amount;
+      } else if (selectedChain === 'tron') {
+        const trxToken = trxTokens.find(t => 
+          t.address.toLowerCase() === TOKEN_ADDRESSES[asset].tron.toLowerCase()
+        );
+        if (trxToken) return trxToken.amount;
+      }
+      
+      // Fallback: check all chains
       const solToken = solTokens.find(t => 
         t.address.toLowerCase() === TOKEN_ADDRESSES[asset].solana.toLowerCase()
       );
@@ -630,12 +712,18 @@ export default function TransferPage() {
         return solToken.amount;
       }
       
-      // Check Ethereum tokens
       const ethToken = ethTokens.find(t => 
         t.address.toLowerCase() === TOKEN_ADDRESSES[asset].ethereum.toLowerCase()
       );
-      if (ethToken) {
+      if (ethToken && ethToken.amount > 0) {
         return ethToken.amount;
+      }
+      
+      const trxToken = trxTokens.find(t => 
+        t.address.toLowerCase() === TOKEN_ADDRESSES[asset].tron.toLowerCase()
+      );
+      if (trxToken) {
+        return trxToken.amount;
       }
     }
     return 0;
@@ -871,10 +959,10 @@ export default function TransferPage() {
             {needsChainSelection && (
               <div className="mt-6 pt-4 border-t border-border/50 dark:border-darkborder">
                 <h4 className="font-medium text-dark dark:text-white mb-3">Select Chain</h4>
-                <div className="flex gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   <button
                     onClick={() => setSelectedChain('sol')}
-                    className={`flex-1 py-3 px-4 rounded-xl border-2 transition-all flex items-center justify-center gap-2 ${
+                    className={`py-3 px-4 rounded-xl border-2 transition-all flex items-center justify-center gap-2 ${
                       selectedChain === 'sol'
                         ? 'border-primary bg-primary/5 text-primary'
                         : 'border-border/50 dark:border-darkborder text-muted hover:border-primary/50'
@@ -885,7 +973,7 @@ export default function TransferPage() {
                   </button>
                   <button
                     onClick={() => setSelectedChain('evm')}
-                    className={`flex-1 py-3 px-4 rounded-xl border-2 transition-all flex items-center justify-center gap-2 ${
+                    className={`py-3 px-4 rounded-xl border-2 transition-all flex items-center justify-center gap-2 ${
                       selectedChain === 'evm'
                         ? 'border-primary bg-primary/5 text-primary'
                         : 'border-border/50 dark:border-darkborder text-muted hover:border-primary/50'
@@ -893,6 +981,17 @@ export default function TransferPage() {
                   >
                     <Icon icon="cryptocurrency:eth" width={20} />
                     <span className="font-medium">Ethereum</span>
+                  </button>
+                  <button
+                    onClick={() => setSelectedChain('tron')}
+                    className={`py-3 px-4 rounded-xl border-2 transition-all flex items-center justify-center gap-2 ${
+                      selectedChain === 'tron'
+                        ? 'border-primary bg-primary/5 text-primary'
+                        : 'border-border/50 dark:border-darkborder text-muted hover:border-primary/50'
+                    }`}
+                  >
+                    <Icon icon="cryptocurrency:trx" width={20} />
+                    <span className="font-medium">Tron</span>
                   </button>
                 </div>
                 <p className="text-xs text-muted mt-2">

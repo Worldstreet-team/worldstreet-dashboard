@@ -33,20 +33,29 @@ const EVM_TOKENS: Record<string, { address: string, decimals: number }> = {
   'BTC': { address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', decimals: 8 }, // WBTC
 };
 
+const TRON_TOKENS: Record<string, { address: string, decimals: number }> = {
+  'TRX': { address: 'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb', decimals: 6 },
+  'USDT': { address: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t', decimals: 6 },
+  'USDC': { address: 'TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8', decimals: 6 },
+};
+
 // Determine which chain a token belongs to
-const getTokenChain = (token: string): 'Solana' | 'EVM' => {
+const getTokenChain = (token: string): 'Solana' | 'EVM' | 'Tron' => {
   if (token === 'SOL') return 'Solana';
   if (token === 'ETH' || token === 'BTC') return 'EVM';
-  // For stablecoins, default to Solana if available, otherwise EVM
-  return SOLANA_TOKENS[token] ? 'Solana' : 'EVM';
+  if (token === 'TRX') return 'Tron';
+  // For stablecoins, default to Solana
+  return 'Solana';
 };
 
 // Get token config for a specific chain
-const getTokenConfig = (token: string, chain: 'Solana' | 'EVM') => {
+const getTokenConfig = (token: string, chain: 'Solana' | 'EVM' | 'Tron') => {
   if (chain === 'Solana') {
     return SOLANA_TOKENS[token];
-  } else {
+  } else if (chain === 'EVM') {
     return EVM_TOKENS[token];
+  } else {
+    return TRON_TOKENS[token];
   }
 };
 
@@ -62,7 +71,7 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
   const [success, setSuccess] = useState<string | null>(null);
   
   // Chain selection for stablecoins
-  const [selectedChain, setSelectedChain] = useState<'Solana' | 'EVM'>('Solana');
+  const [selectedChain, setSelectedChain] = useState<'Solana' | 'EVM' | 'Tron'>('Solana');
 
   const [tokenIn, tokenOut] = selectedPair.split('-');
 
@@ -77,6 +86,8 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
         setSelectedChain('Solana');
       } else if (tokenIn === 'ETH' || tokenOut === 'ETH' || tokenIn === 'BTC' || tokenOut === 'BTC') {
         setSelectedChain('EVM');
+      } else if (tokenIn === 'TRX' || tokenOut === 'TRX') {
+        setSelectedChain('Tron');
       }
     }
   }, [selectedPair, tokenIn, tokenOut, needsChainSelection]);
@@ -103,7 +114,7 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
       const toToken = side === 'buy' ? tokenIn : tokenOut;
       
       // Use selected chain for stablecoin pairs, otherwise auto-detect
-      let chain: 'Solana' | 'EVM';
+      let chain: 'Solana' | 'EVM' | 'Tron';
       if (needsChainSelection) {
         chain = selectedChain;
       } else {
@@ -178,7 +189,7 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
       const toToken = side === 'buy' ? tokenIn : tokenOut;
       
       // Use selected chain for stablecoin pairs, otherwise auto-detect
-      let chain: 'Solana' | 'EVM';
+      let chain: 'Solana' | 'EVM' | 'Tron';
       if (needsChainSelection) {
         chain = selectedChain;
       } else {
@@ -262,217 +273,223 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
   };
 
   return (
-    <div className="bg-white dark:bg-black rounded-2xl border border-border/50 dark:border-darkborder p-6 shadow-sm">
-      <div className="flex items-center gap-2 mb-4">
-        <Icon icon="ph:currency-circle-dollar" className="text-primary" width={20} />
-        <h3 className="font-semibold text-dark dark:text-white">Place Order</h3>
+    <div className="h-full flex flex-col bg-white dark:bg-darkgray">
+      {/* Header */}
+      <div className="px-3 md:px-4 py-2 md:py-3 border-b border-border dark:border-darkborder flex-shrink-0">
+        <span className="text-sm md:text-base font-semibold text-dark dark:text-white">Spot</span>
       </div>
 
-      {/* Buy/Sell Tabs */}
-      <div className="flex gap-2 mb-4">
-        <button
-          onClick={() => setSide('buy')}
-          className={`flex-1 py-2 font-semibold rounded-lg transition-colors ${
-            side === 'buy'
-              ? 'bg-success text-white'
-              : 'bg-success/10 text-success hover:bg-success/20'
-          }`}
-        >
-          Buy {tokenIn}
-        </button>
-        <button
-          onClick={() => setSide('sell')}
-          className={`flex-1 py-2 font-semibold rounded-lg transition-colors ${
-            side === 'sell'
-              ? 'bg-error text-white'
-              : 'bg-error/10 text-error hover:bg-error/20'
-          }`}
-        >
-          Sell {tokenIn}
-        </button>
-      </div>
-
-      {/* Chain Selection for Stablecoins */}
-      {needsChainSelection && (
-        <div className="mb-4">
-          <label className="block text-xs font-medium text-muted mb-2">
-            Select Chain
-          </label>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setSelectedChain('Solana')}
-              className={`flex-1 py-2 px-3 text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2 ${
-                selectedChain === 'Solana'
-                  ? 'bg-primary text-white'
-                  : 'bg-muted/30 dark:bg-white/5 text-dark dark:text-white hover:bg-muted/40 dark:hover:bg-white/10'
-              }`}
-            >
-              <Icon icon="cryptocurrency:sol" width={16} />
-              Solana
-            </button>
-            <button
-              onClick={() => setSelectedChain('EVM')}
-              className={`flex-1 py-2 px-3 text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2 ${
-                selectedChain === 'EVM'
-                  ? 'bg-primary text-white'
-                  : 'bg-muted/30 dark:bg-white/5 text-dark dark:text-white hover:bg-muted/40 dark:hover:bg-white/10'
-              }`}
-            >
-              <Icon icon="cryptocurrency:eth" width={16} />
-              Ethereum
-            </button>
-          </div>
-          <p className="text-xs text-muted mt-1">
-            Choose which blockchain to execute the trade on
-          </p>
-        </div>
-      )}
-
-      {/* Amount Input */}
-      <div className="mb-4">
-        <label className="block text-xs font-medium text-muted mb-2">
-          Amount ({side === 'buy' ? tokenOut : tokenIn}
-          {needsChainSelection && ` on ${selectedChain}`})
-        </label>
-        <input
-          type="number"
-          step="0.01"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          placeholder="0.00"
-          className="w-full px-3 py-2 bg-white dark:bg-darkgray border border-border/50 dark:border-darkborder rounded-lg text-sm text-dark dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
-        />
-      </div>
-
-      {/* Slippage */}
-      <div className="mb-4">
-        <label className="block text-xs font-medium text-muted mb-2">
-          Slippage Tolerance (%)
-        </label>
+      <div className="flex-1 overflow-y-auto px-3 md:px-4 py-3 md:py-4 space-y-3 md:space-y-4">
+        {/* Buy/Sell Tabs */}
         <div className="flex gap-2">
-          {['0.1', '0.5', '1.0'].map(val => (
-            <button
-              key={val}
-              onClick={() => setSlippage(val)}
-              className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                slippage === val
-                  ? 'bg-primary text-white'
-                  : 'bg-muted/30 dark:bg-white/5 text-dark dark:text-white hover:bg-muted/40 dark:hover:bg-white/10'
-              }`}
-            >
-              {val}%
-            </button>
-          ))}
+          <button
+            onClick={() => setSide('buy')}
+            className={`flex-1 py-2 md:py-2.5 text-sm font-semibold rounded transition-colors ${
+              side === 'buy'
+                ? 'bg-success text-white'
+                : 'bg-muted/20 dark:bg-white/5 text-success hover:bg-success/10'
+            }`}
+          >
+            Buy
+          </button>
+          <button
+            onClick={() => setSide('sell')}
+            className={`flex-1 py-2 md:py-2.5 text-sm font-semibold rounded transition-colors ${
+              side === 'sell'
+                ? 'bg-error text-white'
+                : 'bg-muted/20 dark:bg-white/5 text-error hover:bg-error/10'
+            }`}
+          >
+            Sell
+          </button>
+        </div>
+
+        {/* Chain Selection for Stablecoins */}
+        {needsChainSelection && (
+          <div>
+            <label className="block text-xs md:text-sm font-medium text-muted mb-2">
+              Chain
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                onClick={() => setSelectedChain('Solana')}
+                className={`py-2 px-3 text-xs md:text-sm font-medium rounded transition-colors flex items-center justify-center gap-1.5 ${
+                  selectedChain === 'Solana'
+                    ? 'bg-primary text-white'
+                    : 'bg-muted/20 dark:bg-white/5 text-dark dark:text-white hover:bg-muted/30'
+                }`}
+              >
+                <Icon icon="cryptocurrency:sol" width={14} />
+                SOL
+              </button>
+              <button
+                onClick={() => setSelectedChain('EVM')}
+                className={`py-2 px-3 text-xs md:text-sm font-medium rounded transition-colors flex items-center justify-center gap-1.5 ${
+                  selectedChain === 'EVM'
+                    ? 'bg-primary text-white'
+                    : 'bg-muted/20 dark:bg-white/5 text-dark dark:text-white hover:bg-muted/30'
+                }`}
+              >
+                <Icon icon="cryptocurrency:eth" width={14} />
+                ETH
+              </button>
+              <button
+                onClick={() => setSelectedChain('Tron')}
+                className={`py-2 px-3 text-xs md:text-sm font-medium rounded transition-colors flex items-center justify-center gap-1.5 ${
+                  selectedChain === 'Tron'
+                    ? 'bg-primary text-white'
+                    : 'bg-muted/20 dark:bg-white/5 text-dark dark:text-white hover:bg-muted/30'
+                }`}
+              >
+                <Icon icon="cryptocurrency:trx" width={14} />
+                TRX
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Amount Input */}
+        <div>
+          <label className="block text-xs md:text-sm font-medium text-muted mb-2">
+            Amount
+          </label>
           <input
             type="number"
-            step="0.1"
-            value={slippage}
-            onChange={(e) => setSlippage(e.target.value)}
-            className="w-20 px-2 py-1.5 bg-white dark:bg-darkgray border border-border/50 dark:border-darkborder rounded-lg text-xs text-dark dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+            step="0.01"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder="0.00"
+            className="w-full px-3 py-2.5 bg-muted/20 dark:bg-white/5 border border-border dark:border-darkborder rounded text-sm text-dark dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
           />
-        </div>
-      </div>
-
-      {/* Get Quote Button */}
-      <button
-        onClick={fetchQuote}
-        disabled={loadingQuote || !amount}
-        className="w-full py-2.5 bg-primary/10 text-primary hover:bg-primary/20 font-semibold rounded-lg transition-colors mb-4 disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {loadingQuote ? (
-          <span className="flex items-center justify-center gap-2">
-            <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            Getting Quote...
-          </span>
-        ) : (
-          'Get Quote'
-        )}
-      </button>
-
-      {/* Quote Display */}
-      {quote && (
-        <div className="mb-4 p-4 bg-muted/30 dark:bg-white/5 rounded-xl border border-border/50 dark:border-darkborder">
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted">You will receive:</span>
-              <span className="text-dark dark:text-white font-semibold font-mono">
-                {(parseFloat(quote.expectedOutput) / Math.pow(10, (quote as any)._toDecimals || 18)).toFixed(6)} {side === 'buy' ? tokenIn : tokenOut}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted">Price Impact:</span>
-              <span className={`font-semibold ${
-                parseFloat(quote.priceImpact.toString()) > 5 ? 'text-error' : parseFloat(quote.priceImpact.toString()) > 1 ? 'text-warning' : 'text-success'
-              }`}>
-                {parseFloat(quote.priceImpact.toString()).toFixed(2)}%
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted">Platform Fee (0.3%):</span>
-              <span className="text-dark dark:text-white font-mono text-xs">
-                {(parseFloat(quote.platformFee) / Math.pow(10, (quote as any)._fromDecimals || 18)).toFixed(6)}
-              </span>
-            </div>
-            {/* <div className="flex justify-between">
-              <span className="text-muted">Gas Estimate:</span>
-              <span className="text-dark dark:text-white font-mono text-xs">
-                ~${parseFloat(quote.gasEstimate).toFixed(2)}
-              </span>
-            </div> */}
+          <div className="text-xs text-muted mt-1.5">
+            {side === 'buy' ? tokenOut : tokenIn}
+            {needsChainSelection && ` (${selectedChain})`}
           </div>
+        </div>
 
-          {parseFloat(quote.priceImpact.toString()) > 5 && (
-            <div className="mt-3 p-2 bg-error/10 border border-error/30 rounded-lg flex items-start gap-2">
-              <Icon icon="ph:warning" className="text-error shrink-0 mt-0.5" width={16} />
-              <p className="text-xs text-error">
-                High price impact! Consider reducing your trade size.
-              </p>
-            </div>
+        {/* Slippage */}
+        <div>
+          <label className="block text-xs md:text-sm font-medium text-muted mb-2">
+            Slippage (%)
+          </label>
+          <div className="flex gap-2">
+            {['0.1', '0.5', '1.0'].map(val => (
+              <button
+                key={val}
+                onClick={() => setSlippage(val)}
+                className={`flex-1 py-2 text-xs md:text-sm font-medium rounded transition-colors ${
+                  slippage === val
+                    ? 'bg-primary text-white'
+                    : 'bg-muted/20 dark:bg-white/5 text-dark dark:text-white hover:bg-muted/30'
+                }`}
+              >
+                {val}%
+              </button>
+            ))}
+            <input
+              type="number"
+              step="0.1"
+              value={slippage}
+              onChange={(e) => setSlippage(e.target.value)}
+              className="w-20 px-2 py-2 bg-muted/20 dark:bg-white/5 border border-border dark:border-darkborder rounded text-xs md:text-sm text-dark dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+        </div>
+
+        {/* Get Quote Button */}
+        <button
+          onClick={fetchQuote}
+          disabled={loadingQuote || !amount}
+          className="w-full py-2.5 bg-muted/20 dark:bg-white/5 text-dark dark:text-white hover:bg-muted/30 dark:hover:bg-white/10 text-sm font-medium rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {loadingQuote ? (
+            <span className="flex items-center justify-center gap-2">
+              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              Loading...
+            </span>
+          ) : (
+            'Get Quote'
           )}
-        </div>
-      )}
+        </button>
 
-      {/* Execute Button */}
-      <button
-        onClick={executeTrade}
-        disabled={executing}
-        className={`w-full py-3 font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-          side === 'buy'
-            ? 'bg-success hover:bg-success/90 text-white'
-            : 'bg-error hover:bg-error/90 text-white'
-        }`}
-      >
-        {executing ? (
-          <span className="flex items-center justify-center gap-2">
-            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            Executing Trade...
-          </span>
-        ) : (
-          `${side === 'buy' ? 'Buy' : 'Sell'} ${tokenIn}`
+        {/* Quote Display */}
+        {quote && (
+          <div className="p-3 bg-muted/20 dark:bg-white/5 rounded border border-border dark:border-darkborder">
+            <div className="space-y-2 text-xs md:text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted">You receive:</span>
+                <span className="text-dark dark:text-white font-semibold font-mono">
+                  {(parseFloat(quote.expectedOutput) / Math.pow(10, (quote as any)._toDecimals || 18)).toFixed(6)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted">Impact:</span>
+                <span className={`font-semibold ${
+                  parseFloat(quote.priceImpact.toString()) > 5 ? 'text-error' : parseFloat(quote.priceImpact.toString()) > 1 ? 'text-warning' : 'text-success'
+                }`}>
+                  {parseFloat(quote.priceImpact.toString()).toFixed(2)}%
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted">Fee (0.3%):</span>
+                <span className="text-dark dark:text-white font-mono">
+                  {(parseFloat(quote.platformFee) / Math.pow(10, (quote as any)._fromDecimals || 18)).toFixed(6)}
+                </span>
+              </div>
+            </div>
+
+            {parseFloat(quote.priceImpact.toString()) > 5 && (
+              <div className="mt-3 p-2 bg-error/10 border border-error/30 rounded flex items-start gap-2">
+                <Icon icon="ph:warning" className="text-error shrink-0 mt-0.5" width={14} />
+                <p className="text-xs text-error">
+                  High price impact!
+                </p>
+              </div>
+            )}
+          </div>
         )}
-      </button>
 
-      {/* Error/Success Messages */}
-      {error && (
-        <div className="mt-4 p-3 bg-error/10 border border-error/30 rounded-lg">
-          <p className="text-sm text-error">{error}</p>
-        </div>
-      )}
+        {/* Execute Button */}
+        <button
+          onClick={executeTrade}
+          disabled={executing}
+          className={`w-full py-3 text-base font-semibold rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+            side === 'buy'
+              ? 'bg-success hover:bg-success/90 text-white'
+              : 'bg-error hover:bg-error/90 text-white'
+          }`}
+        >
+          {executing ? (
+            <span className="flex items-center justify-center gap-2">
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              Executing...
+            </span>
+          ) : (
+            `${side === 'buy' ? 'Buy' : 'Sell'} ${tokenIn}`
+          )}
+        </button>
 
-      {success && (
-        <div className="mt-4 p-3 bg-success/10 border border-success/30 rounded-lg">
-          <p className="text-sm text-success">{success}</p>
-        </div>
-      )}
+        {/* Error/Success Messages */}
+        {error && (
+          <div className="p-3 bg-error/10 border border-error/30 rounded">
+            <p className="text-xs md:text-sm text-error">{error}</p>
+          </div>
+        )}
 
-      {/* Info */}
-      <div className="mt-4 pt-4 border-t border-border/50 dark:border-darkborder">
-        <div className="flex items-start gap-2 text-xs text-muted">
-          <Icon icon="ph:info" className="shrink-0 mt-0.5" width={14} />
-          <p>
-            Trades are executed via 1inch DEX aggregator. Platform fee: 0.3%. 
-            Funds are locked during execution and automatically unlocked on failure.
-          </p>
+        {success && (
+          <div className="p-3 bg-success/10 border border-success/30 rounded">
+            <p className="text-xs md:text-sm text-success">{success}</p>
+          </div>
+        )}
+
+        {/* Info */}
+        <div className="pt-2 md:pt-3 border-t border-border dark:border-darkborder">
+          <div className="flex items-start gap-2 text-[10px] md:text-xs text-muted">
+            <Icon icon="ph:info" className="shrink-0 mt-0.5" width={12} />
+            <p>
+              Powered by 1inch. Fee: 0.3%
+            </p>
+          </div>
         </div>
       </div>
     </div>

@@ -26,6 +26,11 @@ const CHAIN_INFO: Record<string, { name: string; color: string; icon: string }> 
     color: "#F7931A",
     icon: "https://cryptologos.cc/logos/bitcoin-btc-logo.png",
   },
+  tron: {
+    name: "Tron",
+    color: "#FF0013",
+    icon: "https://cryptologos.cc/logos/tron-trx-logo.png",
+  },
 };
 
 const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, chain, address }) => {

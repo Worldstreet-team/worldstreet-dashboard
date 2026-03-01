@@ -5,6 +5,7 @@
  * - Solana (SOL + SPL tokens)
  * - Ethereum (ETH + ERC-20 tokens)
  * - Bitcoin (BTC via SegWit)
+ * - Tron (TRX + TRC-20 tokens)
  * 
  * ⚠️ CRITICAL WARNING ⚠️
  * This is a SELF-CUSTODIAL wallet system.

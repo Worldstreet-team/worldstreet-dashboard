@@ -14,6 +14,7 @@ import { WalletProvider } from "@/app/context/walletContext";
 import { SolanaProvider } from "@/app/context/solanaContext";
 import { EvmProvider } from "@/app/context/evmContext";
 import { BitcoinProvider } from "@/app/context/bitcoinContext";
+import { TronProvider } from "@/app/context/tronContext";
 import { SwapProvider } from "@/app/context/swapContext";
 import { DriftProvider } from "@/app/context/driftContext";
 
@@ -77,12 +78,13 @@ export default function Layout({
                 <SolanaProvider>
                   <EvmProvider>
                     <BitcoinProvider>
-                      <SwapProvider>
-                        <DriftProvider>
+                      <TronProvider>
+                        <SwapProvider>
+                          <DriftProvider>
 
-                          {/* Syncs wallet addresses to chain contexts */}
-                          <WalletAddressSync />
-                          <DashboardVividProvider>
+                            {/* Syncs wallet addresses to chain contexts */}
+                            <WalletAddressSync />
+                            <DashboardVividProvider>
                             <div className="flex w-full h-screen overflow-hidden">
                               <div className="page-wrapper flex w-full h-full">
                                 {/* Header/sidebar */}
@@ -124,10 +126,11 @@ export default function Layout({
 
                         </DriftProvider>
                       </SwapProvider>
-                    </BitcoinProvider>
-                  </EvmProvider>
-                </SolanaProvider>
-              </WalletProvider>
+                    </TronProvider>
+                  </BitcoinProvider>
+                </EvmProvider>
+              </SolanaProvider>
+            </WalletProvider>
             </AuthGate>
           </AuthProvider>
         </ProfileProvider>
