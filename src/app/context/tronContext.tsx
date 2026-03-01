@@ -270,6 +270,7 @@ export function TronProvider({ children }: { children: ReactNode }) {
         // Call backend API to sign and send transaction
         const response = await fetch("/api/tron/send", {
           method: "POST",
+          credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             pin,
