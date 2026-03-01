@@ -178,6 +178,28 @@ export default function DepositPage() {
     }
   }, [searchParams, loadDeposit]);
 
+  // ── Auto-resume: user returns to /deposit after GlobalPay payment ──────
+  //    (GlobalPay redirects to dashboard; user clicks banner or navigates here)
+
+  useEffect(() => {
+    const depositId = searchParams.get("depositId");
+    if (depositId || activeDeposit) return;
+
+    const resumePending = async () => {
+      try {
+        const res = await fetch("/api/deposit/pending");
+        const data = await res.json();
+        if (data.success && data.deposit) {
+          setActiveDeposit(data.deposit);
+          setPaymentUrl(data.deposit.checkoutUrl || null);
+        }
+      } catch {
+        // No pending deposit to resume
+      }
+    };
+    resumePending();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Status polling ─────────────────────────────────────────────────────
 
   useEffect(() => {

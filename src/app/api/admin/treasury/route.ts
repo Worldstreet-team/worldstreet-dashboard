@@ -110,15 +110,12 @@ export async function POST(req: NextRequest) {
       wallet = await generateEthTreasuryWallet();
     }
 
-    const treasuryDoc = new TreasuryWallet({
+    // Generate functions already create the DB document internally
+    const treasuryDoc = await TreasuryWallet.findOne({
+      address: wallet.address,
       network,
-      publicKey: wallet.address,
-      balance: 0,
-      usdtBalance: 0,
       isActive: true,
     });
-
-    await treasuryDoc.save();
 
     return NextResponse.json(
       { success: true, wallet: treasuryDoc },

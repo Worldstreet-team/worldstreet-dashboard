@@ -146,6 +146,7 @@ export async function generateSolanaTreasuryWallet(): Promise<{ address: string;
   const encrypted = encryptPrivateKey(privateKeyBase58);
 
   await TreasuryWallet.create({
+    address: keypair.publicKey.toBase58(),
     publicKey: keypair.publicKey.toBase58(),
     encryptedPrivateKey: encrypted.encryptedPrivateKey,
     iv: encrypted.iv,

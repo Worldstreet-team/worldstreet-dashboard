@@ -62,7 +62,6 @@ const TreasuryWalletSchema = new Schema<ITreasuryWallet>(
     },
     createdBy: {
       type: String,
-      required: true,
     },
   },
   {

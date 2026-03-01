@@ -115,12 +115,8 @@ export async function POST(request: NextRequest) {
     const merchantTxRef = `WS-DEP-${Date.now()}-${randomUUID().slice(0, 8).toUpperCase()}`;
 
     // 5. Call GlobalPay generate-payment-link
-    const origin =
-      request.headers.get("origin") ||
-      request.headers.get("referer")?.replace(/\/$/, "") ||
-      "";
-
-    const redirectUrl = `${origin}/deposit?depositId=__DEPOSIT_ID__`;
+    // Redirect is handled by GlobalPay merchant dashboard setting.
+    // After payment, user lands on the dashboard and sees a pending-deposit banner.
 
     const gpRes = await fetch(
       `${GLOBALPAY_BASE}/paymentgateway/generate-payment-link`,
@@ -134,7 +130,6 @@ export async function POST(request: NextRequest) {
         body: JSON.stringify({
           amount: fiatAmount,
           merchantTransactionReference: merchantTxRef,
-          redirectUrl, // temp placeholder — we'll patch after deposit creation
           customer: {
             firstName: authUser.firstName || "WorldStreet",
             lastName: authUser.lastName || "Customer",
