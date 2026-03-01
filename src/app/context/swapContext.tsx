@@ -271,9 +271,112 @@ export function SwapProvider({ children }: { children: ReactNode }) {
           ...prev,
           [chain]: filteredTokens.slice(0, 100), // Limit to top 100 tokens
         }));
+      } else if (chain === "tron") {
+        // Fallback: Add popular Tron tokens manually if Li.Fi doesn't return them
+        console.log("[Swap] Using fallback Tron tokens");
+        const fallbackTronTokens: SwapToken[] = [
+          {
+            chainId: 195,
+            address: "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb", // Native TRX (wrapped)
+            symbol: "TRX",
+            name: "Tron",
+            decimals: 6,
+            logoURI: "https://logowik.com/content/uploads/images/tron-trx-icon3386.logowik.com.webp",
+            priceUSD: "0.1",
+          },
+          {
+            chainId: 195,
+            address: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t", // USDT TRC20
+            symbol: "USDT",
+            name: "Tether USD",
+            decimals: 6,
+            logoURI: "https://cryptologos.cc/logos/tether-usdt-logo.png",
+            priceUSD: "1.0",
+          },
+          {
+            chainId: 195,
+            address: "TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8", // USDC TRC20
+            symbol: "USDC",
+            name: "USD Coin",
+            decimals: 6,
+            logoURI: "https://cryptologos.cc/logos/usd-coin-usdc-logo.png",
+            priceUSD: "1.0",
+          },
+          {
+            chainId: 195,
+            address: "TNUC9Qb1rRpS5CbWLmNMxXBjyFoydXjWFR", // WTRX (Wrapped TRX)
+            symbol: "WTRX",
+            name: "Wrapped TRX",
+            decimals: 6,
+            logoURI: "https://logowik.com/content/uploads/images/tron-trx-icon3386.logowik.com.webp",
+            priceUSD: "0.1",
+          },
+          {
+            chainId: 195,
+            address: "TLa2f6VPqDgRE67v1736s7bJ8Ray5wYjU7", // WBTC TRC20
+            symbol: "WBTC",
+            name: "Wrapped Bitcoin",
+            decimals: 8,
+            logoURI: "https://cryptologos.cc/logos/wrapped-bitcoin-wbtc-logo.png",
+            priceUSD: "40000",
+          },
+          {
+            chainId: 195,
+            address: "THb4CqiFdwNHsWsQCs4JhzwjMWys4aqCbF", // WETH TRC20
+            symbol: "WETH",
+            name: "Wrapped Ethereum",
+            decimals: 18,
+            logoURI: "https://cryptologos.cc/logos/ethereum-eth-logo.png",
+            priceUSD: "2000",
+          },
+        ];
+
+        setTokens((prev) => ({
+          ...prev,
+          [chain]: fallbackTronTokens,
+        }));
       }
     } catch (error) {
       console.error(`Failed to fetch tokens for ${chain}:`, error);
+      
+      // If Tron and fetch failed, use fallback
+      if (chain === "tron") {
+        console.log("[Swap] Using fallback Tron tokens due to fetch error");
+        const fallbackTronTokens: SwapToken[] = [
+          {
+            chainId: 195,
+            address: "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
+            symbol: "TRX",
+            name: "Tron",
+            decimals: 6,
+            logoURI: "https://logowik.com/content/uploads/images/tron-trx-icon3386.logowik.com.webp",
+            priceUSD: "0.1",
+          },
+          {
+            chainId: 195,
+            address: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
+            symbol: "USDT",
+            name: "Tether USD",
+            decimals: 6,
+            logoURI: "https://cryptologos.cc/logos/tether-usdt-logo.png",
+            priceUSD: "1.0",
+          },
+          {
+            chainId: 195,
+            address: "TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8",
+            symbol: "USDC",
+            name: "USD Coin",
+            decimals: 6,
+            logoURI: "https://cryptologos.cc/logos/usd-coin-usdc-logo.png",
+            priceUSD: "1.0",
+          },
+        ];
+
+        setTokens((prev) => ({
+          ...prev,
+          [chain]: fallbackTronTokens,
+        }));
+      }
     } finally {
       setTokensLoading(false);
     }
