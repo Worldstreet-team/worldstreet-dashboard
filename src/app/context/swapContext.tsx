@@ -23,7 +23,7 @@ const SOL_RPC =
 const ETH_RPC =
   process.env.NEXT_PUBLIC_ETH_RPC || "https://cloudflare-eth.com";
 
-// Supported chains for swap
+// Supported chains for swap (Solana and Ethereum only)
 export const SWAP_CHAINS = {
   ethereum: {
     id: 1,
@@ -39,54 +39,6 @@ export const SWAP_CHAINS = {
     symbol: "SOL",
     logo: "https://static.debank.com/image/chain/logo_url/sol/1e6d4c14106579294f997c02b37be801.png",
     type: "SVM",
-    lifiSupported: true,
-  },
-  polygon: {
-    id: 137,
-    name: "Polygon",
-    symbol: "MATIC",
-    logo: "https://static.debank.com/image/chain/logo_url/matic/d3d807aff1a13e9ba51a14ff153d6807.png",
-    type: "EVM",
-    lifiSupported: true,
-  },
-  bsc: {
-    id: 56,
-    name: "BNB Chain",
-    symbol: "BNB",
-    logo: "https://static.debank.com/image/chain/logo_url/bsc/bc73fa84b7fc5337905e527dadcb6355.png",
-    type: "EVM",
-    lifiSupported: true,
-  },
-  arbitrum: {
-    id: 42161,
-    name: "Arbitrum",
-    symbol: "ETH",
-    logo: "https://static.debank.com/image/chain/logo_url/arb/f6d1b236259654d531a1459b2bccaf64.png",
-    type: "EVM",
-    lifiSupported: true,
-  },
-  optimism: {
-    id: 10,
-    name: "Optimism",
-    symbol: "ETH",
-    logo: "https://static.debank.com/image/chain/logo_url/op/01ae734fe781c9c2ae6a4cc7e9244056.png",
-    type: "EVM",
-    lifiSupported: true,
-  },
-  base: {
-    id: 8453,
-    name: "Base",
-    symbol: "ETH",
-    logo: "https://static.debank.com/image/chain/logo_url/base/da7e0e6f4e7a4c8f8d7b8c9e0f1e2d3c.png",
-    type: "EVM",
-    lifiSupported: true,
-  },
-  tron: {
-    id: 728126428,
-    name: "Tron",
-    symbol: "TRX",
-    logo: "https://logowik.com/content/uploads/images/tron-trx-icon3386.logowik.com.webp",
-    type: "TVM",
     lifiSupported: true,
   },
   bitcoin: {
@@ -285,12 +237,6 @@ export function SwapProvider({ children }: { children: ReactNode }) {
   const [tokens, setTokens] = useState<Record<ChainKey, SwapToken[]>>({
     ethereum: [],
     solana: [],
-    polygon: [],
-    bsc: [],
-    arbitrum: [],
-    optimism: [],
-    base: [],
-    tron: [],
     bitcoin: [],
   });
   const [tokensLoading, setTokensLoading] = useState(false);
@@ -320,112 +266,9 @@ export function SwapProvider({ children }: { children: ReactNode }) {
           ...prev,
           [chain]: filteredTokens.slice(0, 100), // Limit to top 100 tokens
         }));
-      } else if (chain === "tron") {
-        // Fallback: Add popular Tron tokens manually if Li.Fi doesn't return them
-        console.log("[Swap] Using fallback Tron tokens");
-        const fallbackTronTokens: SwapToken[] = [
-          {
-            chainId: 728126428,
-            address: "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb", // Native TRX (wrapped)
-            symbol: "TRX",
-            name: "Tron",
-            decimals: 6,
-            logoURI: "https://logowik.com/content/uploads/images/tron-trx-icon3386.logowik.com.webp",
-            priceUSD: "0.1",
-          },
-          {
-            chainId: 728126428,
-            address: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t", // USDT TRC20
-            symbol: "USDT",
-            name: "Tether USD",
-            decimals: 6,
-            logoURI: "https://cryptologos.cc/logos/tether-usdt-logo.png",
-            priceUSD: "1.0",
-          },
-          {
-            chainId: 728126428,
-            address: "TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8", // USDC TRC20
-            symbol: "USDC",
-            name: "USD Coin",
-            decimals: 6,
-            logoURI: "https://cryptologos.cc/logos/usd-coin-usdc-logo.png",
-            priceUSD: "1.0",
-          },
-          {
-            chainId: 728126428,
-            address: "TNUC9Qb1rRpS5CbWLmNMxXBjyFoydXjWFR", // WTRX (Wrapped TRX)
-            symbol: "WTRX",
-            name: "Wrapped TRX",
-            decimals: 6,
-            logoURI: "https://logowik.com/content/uploads/images/tron-trx-icon3386.logowik.com.webp",
-            priceUSD: "0.1",
-          },
-          {
-            chainId: 728126428,
-            address: "TLa2f6VPqDgRE67v1736s7bJ8Ray5wYjU7", // WBTC TRC20
-            symbol: "WBTC",
-            name: "Wrapped Bitcoin",
-            decimals: 8,
-            logoURI: "https://cryptologos.cc/logos/wrapped-bitcoin-wbtc-logo.png",
-            priceUSD: "40000",
-          },
-          {
-            chainId: 728126428,
-            address: "THb4CqiFdwNHsWsQCs4JhzwjMWys4aqCbF", // WETH TRC20
-            symbol: "WETH",
-            name: "Wrapped Ethereum",
-            decimals: 18,
-            logoURI: "https://cryptologos.cc/logos/ethereum-eth-logo.png",
-            priceUSD: "2000",
-          },
-        ];
-
-        setTokens((prev) => ({
-          ...prev,
-          [chain]: fallbackTronTokens,
-        }));
       }
     } catch (error) {
       console.error(`Failed to fetch tokens for ${chain}:`, error);
-      
-      // If Tron and fetch failed, use fallback
-      if (chain === "tron") {
-        console.log("[Swap] Using fallback Tron tokens due to fetch error");
-        const fallbackTronTokens: SwapToken[] = [
-          {
-            chainId: 728126428,
-            address: "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb",
-            symbol: "TRX",
-            name: "Tron",
-            decimals: 6,
-            logoURI: "https://logowik.com/content/uploads/images/tron-trx-icon3386.logowik.com.webp",
-            priceUSD: "0.1",
-          },
-          {
-            chainId: 728126428,
-            address: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
-            symbol: "USDT",
-            name: "Tether USD",
-            decimals: 6,
-            logoURI: "https://cryptologos.cc/logos/tether-usdt-logo.png",
-            priceUSD: "1.0",
-          },
-          {
-            chainId: 728126428,
-            address: "TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8",
-            symbol: "USDC",
-            name: "USD Coin",
-            decimals: 6,
-            logoURI: "https://cryptologos.cc/logos/usd-coin-usdc-logo.png",
-            priceUSD: "1.0",
-          },
-        ];
-
-        setTokens((prev) => ({
-          ...prev,
-          [chain]: fallbackTronTokens,
-        }));
-      }
     } finally {
       setTokensLoading(false);
     }

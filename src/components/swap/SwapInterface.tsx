@@ -5,7 +5,6 @@ import { Icon } from "@iconify/react";
 import { useSwap, SwapToken, ChainKey, SWAP_CHAINS, formatSwapError } from "@/app/context/swapContext";
 import { useSolana } from "@/app/context/solanaContext";
 import { useEvm } from "@/app/context/evmContext";
-import { useTron } from "@/app/context/tronContext";
 import { useWallet } from "@/app/context/walletContext";
 import TokenSelectModal from "./TokenSelectModal";
 import SwapSettings from "./SwapSettings";
@@ -28,7 +27,6 @@ export function SwapInterface() {
 
   const { address: solAddress, balance: solBalance, tokenBalances: solTokens, fetchBalance: fetchSolBalance, refreshCustomTokens: refreshSolCustom } = useSolana();
   const { address: evmAddress, balance: ethBalance, tokenBalances: evmTokens, fetchBalance: fetchEvmBalance, refreshCustomTokens: refreshEvmCustom } = useEvm();
-  const { address: tronAddress, balance: trxBalance, tokenBalances: trxTokens, fetchBalance: fetchTrxBalance, refreshCustomTokens: refreshTrxCustom } = useTron();
   const { walletsGenerated } = useWallet();
 
   // Form state
@@ -47,8 +45,8 @@ export function SwapInterface() {
   const [error, setError] = useState<string | null>(null);
 
   // Get addresses based on chain
-  const fromAddress = fromChain === "solana" ? solAddress : fromChain === "tron" ? tronAddress : evmAddress;
-  const toAddress = toChain === "solana" ? solAddress : toChain === "tron" ? tronAddress : evmAddress;
+  const fromAddress = fromChain === "solana" ? solAddress : evmAddress;
+  const toAddress = toChain === "solana" ? solAddress : evmAddress;
 
   // Get balance for the selected from token
   const fromBalance = useMemo(() => {
@@ -71,21 +69,8 @@ export function SwapInterface() {
         t.address.toLowerCase() === fromToken.address.toLowerCase()
       );
       return found?.amount ?? 0;
-    } else if (fromChain === "tron") {
-      // Handle native TRX
-      const isTRX = 
-        fromToken.symbol === "TRX" ||
-        fromToken.address === "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb" ||
-        fromToken.address === "0x0000000000000000000000000000000000000000";
-      
-      if (isTRX) {
-        return trxBalance;
-      }
-      
-      const found = trxTokens.find(t => t.address.toLowerCase() === fromToken.address.toLowerCase());
-      return found?.amount ?? 0;
     } else {
-      // EVM chains (Ethereum, Polygon, BSC, Arbitrum, Optimism, Base)
+      // Ethereum chain
       const isETH = 
         fromToken.symbol === "ETH" ||
         fromToken.address === "0x0000000000000000000000000000000000000000";
@@ -97,7 +82,7 @@ export function SwapInterface() {
       const found = evmTokens.find(t => t.address.toLowerCase() === fromToken.address.toLowerCase());
       return found?.amount ?? 0;
     }
-  }, [fromToken, fromChain, solBalance, ethBalance, trxBalance, solTokens, evmTokens, trxTokens]);
+  }, [fromToken, fromChain, solBalance, ethBalance, solTokens, evmTokens]);
 
   // Load tokens when chains change
   useEffect(() => {
@@ -114,11 +99,9 @@ export function SwapInterface() {
     if (!fromToken && tokens[fromChain].length > 0) {
       // Try to select native token or USDT/USDC
       const native = tokens[fromChain].find(t => 
-        t.symbol === (fromChain === "solana" ? "SOL" : fromChain === "tron" ? "TRX" : "ETH") ||
+        t.symbol === (fromChain === "solana" ? "SOL" : "ETH") ||
         t.address === (fromChain === "solana" 
           ? "So11111111111111111111111111111111111111112"
-          : fromChain === "tron"
-          ? "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb"
           : "0x0000000000000000000000000000000000000000")
       );
       const usdt = tokens[fromChain].find(t => t.symbol === "USDT");
@@ -174,9 +157,6 @@ export function SwapInterface() {
         ? (fromToken?.symbol === "SOL" || 
            fromToken?.address === "So11111111111111111111111111111111111111112" ||
            fromToken?.address === "11111111111111111111111111111111")
-        : fromChain === "tron"
-        ? (fromToken?.symbol === "TRX" ||
-           fromToken?.address === "T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb")
         : (fromToken?.symbol === "ETH" ||
            fromToken?.address === "0x0000000000000000000000000000000000000000");
       
@@ -221,11 +201,9 @@ export function SwapInterface() {
   const handleSwapComplete = useCallback(() => {
     fetchSolBalance();
     fetchEvmBalance();
-    fetchTrxBalance();
     refreshSolCustom();
     refreshEvmCustom();
-    refreshTrxCustom();
-  }, [fetchSolBalance, fetchEvmBalance, fetchTrxBalance, refreshSolCustom, refreshEvmCustom, refreshTrxCustom]);
+  }, [fetchSolBalance, fetchEvmBalance, refreshSolCustom, refreshEvmCustom]);
 
   // Validation
   const canSwap = useMemo(() => {
@@ -309,23 +287,18 @@ export function SwapInterface() {
           {/* Chain selector */}
           <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border/50 dark:border-darkborder/50">
             <span className="text-xs text-muted">Network:</span>
-            <select
-              value={fromChain}
-              onChange={(e) => {
-                setFromChain(e.target.value as ChainKey);
+            <button
+              onClick={() => {
+                const newChain = fromChain === "solana" ? "ethereum" : "solana";
+                setFromChain(newChain);
                 setFromToken(null);
               }}
-              className="flex items-center gap-1.5 text-xs font-medium text-dark dark:text-white bg-transparent border-0 hover:text-primary transition-colors cursor-pointer focus:outline-none"
+              className="flex items-center gap-1.5 text-xs font-medium text-dark dark:text-white hover:text-primary transition-colors"
             >
-              <option value="solana">Solana</option>
-              <option value="ethereum">Ethereum</option>
-              <option value="polygon">Polygon</option>
-              <option value="bsc">BNB Chain</option>
-              <option value="arbitrum">Arbitrum</option>
-              <option value="optimism">Optimism</option>
-              <option value="base">Base</option>
-              <option value="tron">Tron</option>
-            </select>
+              <img src={SWAP_CHAINS[fromChain].logo} alt="" className="w-4 h-4" />
+              {SWAP_CHAINS[fromChain].name}
+              <Icon icon="ph:caret-down" width={12} />
+            </button>
           </div>
         </div>
 
@@ -380,23 +353,18 @@ export function SwapInterface() {
           {/* Chain selector */}
           <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border/50 dark:border-darkborder/50">
             <span className="text-xs text-muted">Network:</span>
-            <select
-              value={toChain}
-              onChange={(e) => {
-                setToChain(e.target.value as ChainKey);
+            <button
+              onClick={() => {
+                const newChain = toChain === "solana" ? "ethereum" : "solana";
+                setToChain(newChain);
                 setToToken(null);
               }}
-              className="flex items-center gap-1.5 text-xs font-medium text-dark dark:text-white bg-transparent border-0 hover:text-primary transition-colors cursor-pointer focus:outline-none"
+              className="flex items-center gap-1.5 text-xs font-medium text-dark dark:text-white hover:text-primary transition-colors"
             >
-              <option value="solana">Solana</option>
-              <option value="ethereum">Ethereum</option>
-              <option value="polygon">Polygon</option>
-              <option value="bsc">BNB Chain</option>
-              <option value="arbitrum">Arbitrum</option>
-              <option value="optimism">Optimism</option>
-              <option value="base">Base</option>
-              <option value="tron">Tron</option>
-            </select>
+              <img src={SWAP_CHAINS[toChain].logo} alt="" className="w-4 h-4" />
+              {SWAP_CHAINS[toChain].name}
+              <Icon icon="ph:caret-down" width={12} />
+            </button>
           </div>
         </div>
 
