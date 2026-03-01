@@ -2,7 +2,7 @@ import { currentUser } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Deposit from "@/models/Deposit";
-import { sendUsdtFromTreasury } from "@/lib/treasury";
+import { sendUsdtFromTreasury, sendEthUsdtFromTreasury } from "@/lib/treasury";
 
 const ADMIN_EMAILS = (process.env.P2P_ADMIN_EMAILS || "")
   .split(",")
@@ -188,11 +188,13 @@ export async function PATCH(req: NextRequest) {
         deposit.adminActions = [...(deposit.adminActions || []), adminAction];
         await deposit.save();
 
-        // Attempt USDT delivery
-        const result = await sendUsdtFromTreasury(
-          deposit.userSolanaAddress,
-          deposit.usdtAmount
-        );
+        // Attempt USDT delivery via correct chain
+        const destAddress = deposit.userWalletAddress || deposit.userSolanaAddress;
+        const isEthereum = deposit.network === "ethereum";
+
+        const result = isEthereum
+          ? await sendEthUsdtFromTreasury(destAddress, deposit.usdtAmount)
+          : await sendUsdtFromTreasury(destAddress, deposit.usdtAmount);
 
         if (result.success) {
           deposit.status = "completed";

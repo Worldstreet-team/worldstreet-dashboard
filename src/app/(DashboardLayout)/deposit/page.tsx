@@ -24,6 +24,7 @@ interface DepositRecord {
   status: string;
   txHash?: string;
   deliveryError?: string;
+  network?: "solana" | "ethereum";
   createdAt: string;
   completedAt?: string;
 }
@@ -118,6 +119,7 @@ export default function DepositPage() {
 
   // UI state
   const [fiatCurrency] = useState<FiatCurrency>("NGN");
+  const [network, setNetwork] = useState<"solana" | "ethereum">("solana");
   const [usdtAmount, setUsdtAmount] = useState(() => {
     const urlAmount = searchParams.get("amount");
     return urlAmount && !isNaN(parseFloat(urlAmount)) ? urlAmount : "";
@@ -234,7 +236,7 @@ export default function DepositPage() {
       const res = await fetch("/api/deposit/initiate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ usdtAmount: amountNum, fiatCurrency }),
+        body: JSON.stringify({ usdtAmount: amountNum, fiatCurrency, network }),
       });
 
       const data = await res.json();
@@ -391,7 +393,7 @@ export default function DepositPage() {
                   <div>
                     <p className="text-sm text-dark dark:text-white font-medium">How deposit works</p>
                     <p className="text-xs text-muted mt-1">
-                      Enter USDT amount → Pay via GlobalPay → USDT is sent to your Solana wallet automatically.
+                      Select network → Enter USDT amount → Pay via GlobalPay → USDT is sent to your {network === "solana" ? "Solana" : "Ethereum"} wallet automatically.
                     </p>
                   </div>
                 </div>
@@ -420,6 +422,65 @@ export default function DepositPage() {
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
                   </div>
                 )}
+
+                {/* Network Selection */}
+                <div>
+                  <label className="block text-sm text-muted mb-2">Receive USDT on</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setNetwork("solana")}
+                      className={`flex items-center gap-3 p-3.5 rounded-xl border-2 transition-all ${
+                        network === "solana"
+                          ? "border-primary bg-primary/5 dark:bg-primary/10"
+                          : "border-border/50 dark:border-darkborder hover:border-border dark:hover:border-white/20"
+                      }`}
+                    >
+                      <img
+                        src="https://cryptologos.cc/logos/solana-sol-logo.png"
+                        alt="Solana"
+                        className="w-7 h-7 rounded-full"
+                      />
+                      <div className="text-left">
+                        <p className={`text-sm font-semibold ${
+                          network === "solana" ? "text-primary" : "text-dark dark:text-white"
+                        }`}>Solana</p>
+                        <p className="text-[10px] text-muted">SPL USDT</p>
+                      </div>
+                      {network === "solana" && (
+                        <svg className="w-5 h-5 text-primary ml-auto" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNetwork("ethereum")}
+                      className={`flex items-center gap-3 p-3.5 rounded-xl border-2 transition-all ${
+                        network === "ethereum"
+                          ? "border-primary bg-primary/5 dark:bg-primary/10"
+                          : "border-border/50 dark:border-darkborder hover:border-border dark:hover:border-white/20"
+                      }`}
+                    >
+                      <img
+                        src="https://cryptologos.cc/logos/ethereum-eth-logo.png"
+                        alt="Ethereum"
+                        className="w-7 h-7 rounded-full"
+                      />
+                      <div className="text-left">
+                        <p className={`text-sm font-semibold ${
+                          network === "ethereum" ? "text-primary" : "text-dark dark:text-white"
+                        }`}>Ethereum</p>
+                        <p className="text-[10px] text-muted">ERC-20 USDT</p>
+                      </div>
+                      {network === "ethereum" && (
+                        <svg className="w-5 h-5 text-primary ml-auto" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                </div>
 
                 {/* USDT Amount */}
                 <div>
@@ -656,7 +717,7 @@ export default function DepositPage() {
                           <strong className="text-dark dark:text-white">
                             {activeDeposit.usdtAmount} USDT
                           </strong>{" "}
-                          to your Solana wallet.
+                          to your {activeDeposit.network === "ethereum" ? "Ethereum" : "Solana"} wallet.
                         </>
                       )}
                     </p>
@@ -692,16 +753,20 @@ export default function DepositPage() {
                   <h3 className="text-xl font-semibold text-dark dark:text-white mb-3">Deposit Successful!</h3>
                   <p className="text-muted">
                     <strong className="text-dark dark:text-white">{activeDeposit.usdtAmount} USDT</strong> has been
-                    sent to your Solana wallet.
+                    sent to your {activeDeposit.network === "ethereum" ? "Ethereum" : "Solana"} wallet.
                   </p>
                   {activeDeposit.txHash && (
                     <a
-                      href={`https://solscan.io/tx/${activeDeposit.txHash}`}
+                      href={
+                        activeDeposit.network === "ethereum"
+                          ? `https://etherscan.io/tx/${activeDeposit.txHash}`
+                          : `https://solscan.io/tx/${activeDeposit.txHash}`
+                      }
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-primary hover:text-primary/80 text-sm mt-3"
                     >
-                      View on Solscan →
+                      View on {activeDeposit.network === "ethereum" ? "Etherscan" : "Solscan"} →
                     </a>
                   )}
                   <div className="mt-6 flex justify-center gap-3">

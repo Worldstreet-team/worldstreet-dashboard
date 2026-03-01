@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Deposit from "@/models/Deposit";
 import { getAuthUser } from "@/lib/auth";
-import { sendUsdtFromTreasury } from "@/lib/treasury";
+import { sendUsdtFromTreasury, sendEthUsdtFromTreasury } from "@/lib/treasury";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -99,14 +99,16 @@ export async function POST(request: NextRequest) {
       deposit.status = "payment_confirmed";
       await deposit.save();
 
-      // 7. Attempt auto-send USDT
+      // 7. Attempt auto-send USDT via correct chain
       deposit.status = "sending_usdt";
       await deposit.save();
 
-      const result = await sendUsdtFromTreasury(
-        deposit.userSolanaAddress,
-        deposit.usdtAmount
-      );
+      const destAddress = deposit.userWalletAddress || deposit.userSolanaAddress;
+      const isEthereum = deposit.network === "ethereum";
+
+      const result = isEthereum
+        ? await sendEthUsdtFromTreasury(destAddress, deposit.usdtAmount)
+        : await sendUsdtFromTreasury(destAddress, deposit.usdtAmount);
 
       if (result.success && result.txHash) {
         deposit.status = "completed";
