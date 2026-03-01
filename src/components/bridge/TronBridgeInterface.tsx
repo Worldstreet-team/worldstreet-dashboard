@@ -4,7 +4,6 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { Icon } from "@iconify/react";
 import { useTron } from "@/app/context/tronContext";
 import { useEvm } from "@/app/context/evmContext";
-import { useSolana } from "@/app/context/solanaContext";
 import { useWallet } from "@/app/context/walletContext";
 import { decryptWithPIN } from "@/lib/wallet/encryption";
 import { 
@@ -15,7 +14,7 @@ import {
 } from "@/lib/bridge/symbiosisValidator";
 import PinConfirmModal from "../swap/PinConfirmModal";
 
-// Symbiosis supported chains (only chains we have wallets for)
+// Symbiosis supported chains (only Tron and Ethereum)
 const BRIDGE_CHAINS = {
   tron: {
     id: 728126428,
@@ -29,13 +28,9 @@ const BRIDGE_CHAINS = {
     symbol: "ETH",
     logo: "https://cryptologos.cc/logos/ethereum-eth-logo.png",
   },
-  solana: {
-    id: 1151111081099710,
-    name: "Solana",
-    symbol: "SOL",
-    logo: "https://cryptologos.cc/logos/solana-sol-logo.png",
-  },
 } as const;
+
+const MINIMUM_BRIDGE_FEE_USD = 7.5;
 
 type ChainKey = keyof typeof BRIDGE_CHAINS;
 
@@ -51,7 +46,6 @@ interface BridgeToken {
 export default function TronBridgeInterface() {
   const { address: tronAddress, balance: trxBalance, tokenBalances: trxTokens } = useTron();
   const { address: evmAddress, balance: ethBalance } = useEvm();
-  const { address: solAddress } = useSolana();
   const { walletsGenerated } = useWallet();
 
   const [fromChain, setFromChain] = useState<ChainKey>("tron");
@@ -73,7 +67,6 @@ export default function TronBridgeInterface() {
     const tokens: Record<ChainKey, BridgeToken[]> = {
       tron: [],
       ethereum: [],
-      solana: [],
     };
 
     // Tron tokens
@@ -128,34 +121,6 @@ export default function TronBridgeInterface() {
       },
     ];
 
-    // Solana tokens (add common ones)
-    tokens.solana = [
-      {
-        address: "So11111111111111111111111111111111111111112",
-        symbol: "SOL",
-        name: "Solana",
-        decimals: 9,
-        chainId: 1151111081099710,
-        logoURI: BRIDGE_CHAINS.solana.logo,
-      },
-      {
-        address: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
-        symbol: "USDT",
-        name: "Tether USD",
-        decimals: 6,
-        chainId: 1151111081099710,
-        logoURI: "https://cryptologos.cc/logos/tether-usdt-logo.png",
-      },
-      {
-        address: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-        symbol: "USDC",
-        name: "USD Coin",
-        decimals: 6,
-        chainId: 1151111081099710,
-        logoURI: "https://cryptologos.cc/logos/usd-coin-usdc-logo.png",
-      },
-    ];
-
     return tokens;
   }, [trxTokens]);
 
@@ -174,9 +139,6 @@ export default function TronBridgeInterface() {
         return ethBalance;
       }
       // Add EVM token balance check if needed
-      return 0;
-    } else if (fromChain === "solana") {
-      // Add Solana balance check if needed
       return 0;
     }
     
@@ -231,7 +193,7 @@ export default function TronBridgeInterface() {
             decimals: toToken.decimals,
           },
           from: tronAddress,
-          to: toChain === "tron" ? tronAddress : toChain === "solana" ? solAddress : evmAddress,
+          to: toChain === "tron" ? tronAddress : evmAddress,
           slippage: 300, // 3%
         }),
       });
@@ -442,39 +404,6 @@ export default function TronBridgeInterface() {
         console.log("[Bridge] Ethereum transaction sent:", txHash);
         
         alert(`Bridge transaction submitted!\nTX: ${txHash}\n\nFees: ${getFeeSummary(validatedQuote)}`);
-      } else if (fromChain === "solana") {
-        if (!data.wallets?.solana?.encryptedPrivateKey) {
-          throw new Error("Solana wallet not found");
-        }
-        privateKey = decryptWithPIN(data.wallets.solana.encryptedPrivateKey, pin);
-
-        // Execute Solana transaction
-        const { Connection, Keypair, VersionedTransaction } = await import("@solana/web3.js");
-        
-        const secretKey = new Uint8Array(Buffer.from(privateKey, "base64"));
-        const keypair = Keypair.fromSecretKey(secretKey);
-        
-        const connection = new Connection(
-          process.env.NEXT_PUBLIC_SOL_RPC || "https://api.mainnet-beta.solana.com",
-          "confirmed"
-        );
-
-        console.log("[Bridge] Executing Solana transaction");
-
-        // Deserialize and sign the transaction
-        const txData = Buffer.from(validatedQuote.tx.data, "base64");
-        const transaction = VersionedTransaction.deserialize(txData);
-        transaction.sign([keypair]);
-
-        const signature = await connection.sendTransaction(transaction, {
-          maxRetries: 5,
-          preflightCommitment: "confirmed",
-        });
-
-        txHash = signature;
-        console.log("[Bridge] Solana transaction sent:", txHash);
-        
-        alert(`Bridge transaction submitted!\nTX: ${txHash}\n\nFees: ${getFeeSummary(validatedQuote)}`);
       }
       
       // Reset form
@@ -558,7 +487,6 @@ export default function TronBridgeInterface() {
               >
                 <option value="tron">Tron</option>
                 <option value="ethereum">Ethereum</option>
-                <option value="solana">Solana</option>
               </select>
             </div>
           </div>
@@ -623,7 +551,6 @@ export default function TronBridgeInterface() {
               >
                 <option value="tron">Tron</option>
                 <option value="ethereum">Ethereum</option>
-                <option value="solana">Solana</option>
               </select>
             </div>
           </div>
@@ -646,6 +573,12 @@ export default function TronBridgeInterface() {
                 </span>
               </div>
             )}
+            <div className="flex items-center justify-between">
+              <span className="text-muted">Minimum Fee</span>
+              <span className="text-dark dark:text-white font-medium">
+                ${MINIMUM_BRIDGE_FEE_USD.toFixed(2)} USD
+              </span>
+            </div>
             {validatedQuote.priceImpact !== undefined && (
               <div className="flex items-center justify-between">
                 <span className="text-muted">Price Impact</span>
@@ -709,7 +642,7 @@ export default function TronBridgeInterface() {
 
         {/* Info */}
         <p className="text-xs text-muted text-center">
-          Cross-chain bridging powered by Symbiosis Protocol
+          Cross-chain bridging between Tron and Ethereum • Minimum fee: ${MINIMUM_BRIDGE_FEE_USD} USD
         </p>
       </div>
 
