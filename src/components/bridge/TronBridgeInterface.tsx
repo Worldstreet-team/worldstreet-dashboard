@@ -7,6 +7,12 @@ import { useEvm } from "@/app/context/evmContext";
 import { useSolana } from "@/app/context/solanaContext";
 import { useWallet } from "@/app/context/walletContext";
 import { decryptWithPIN } from "@/lib/wallet/encryption";
+import { 
+  validateSymbiosisQuote, 
+  formatValidationErrors,
+  isQuoteExecutable,
+  getFeeSummary 
+} from "@/lib/bridge/symbiosisValidator";
 import PinConfirmModal from "../swap/PinConfirmModal";
 
 // Symbiosis supported chains (only chains we have wallets for)
@@ -55,6 +61,7 @@ export default function TronBridgeInterface() {
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
   const [quote, setQuote] = useState<any>(null);
+  const [validatedQuote, setValidatedQuote] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [showPinModal, setShowPinModal] = useState(false);
   const [executing, setExecuting] = useState(false);
@@ -235,6 +242,31 @@ export default function TronBridgeInterface() {
       }
 
       const data = await response.json();
+      console.log("[Bridge] Raw Symbiosis response:", data);
+      
+      // Validate the quote before setting it
+      if (fromToken && toToken) {
+        const rawAmount = Math.floor(parseFloat(amount) * Math.pow(10, fromToken.decimals)).toString();
+        const validation = validateSymbiosisQuote(data, fromToken, toToken, rawAmount);
+        
+        console.log("[Bridge] Validation result:", validation);
+        
+        if (!validation.isValid) {
+          const errorMsg = formatValidationErrors(validation);
+          console.error("[Bridge] Quote validation failed:", errorMsg);
+          setError(validation.errors[0] || "Invalid quote data");
+          setQuote(null);
+          setValidatedQuote(null);
+          return;
+        }
+        
+        if (validation.warnings.length > 0) {
+          console.warn("[Bridge] Quote warnings:", validation.warnings);
+        }
+        
+        setValidatedQuote(validation);
+      }
+      
       setQuote(data);
     } catch (err: any) {
       console.error("Bridge quote error:", err);
@@ -281,9 +313,10 @@ export default function TronBridgeInterface() {
     if (parseFloat(amount) <= 0) return false;
     if (parseFloat(amount) > fromBalance) return false;
     if (loading || executing) return false;
-    if (!quote) return false;
+    if (!quote || !validatedQuote) return false;
+    if (!isQuoteExecutable(validatedQuote)) return false;
     return true;
-  }, [walletsGenerated, fromToken, toToken, amount, fromBalance, loading, executing, quote]);
+  }, [walletsGenerated, fromToken, toToken, amount, fromBalance, loading, executing, quote, validatedQuote]);
 
   // Execute bridge transaction
   const handleBridge = useCallback(async (pin: string) => {
@@ -294,18 +327,14 @@ export default function TronBridgeInterface() {
     setShowPinModal(false);
 
     try {
-      // Get the transaction data from the quote
-      const txData = quote.tx;
-      
-      if (!txData) {
-        throw new Error("No transaction data in quote");
-      }
+      console.log("[Bridge] Starting bridge execution");
+      console.log("[Bridge] Quote data:", quote);
+      console.log("[Bridge] Validated data:", validatedQuote);
 
-      // Execute the transaction using TronWeb
-      const TronWeb = (await import("tronweb")).default;
-      const tronWeb = new TronWeb({
-        fullHost: process.env.NEXT_PUBLIC_TRON_RPC || "https://api.shasta.trongrid.io",
-      });
+      // Use validated transaction data
+      if (!validatedQuote || !validatedQuote.tx) {
+        throw new Error("No validated transaction data available");
+      }
 
       // Get encrypted keys and decrypt
       const response = await fetch("/api/wallet/keys", {
@@ -320,34 +349,145 @@ export default function TronBridgeInterface() {
 
       const data = await response.json();
       
-      if (!data.success || !data.wallets?.tron?.encryptedPrivateKey) {
-        throw new Error("Tron wallet not found");
+      if (!data.success) {
+        throw new Error("Failed to retrieve wallet keys");
       }
 
-      // Decrypt the private key using the PIN
-      const privateKey = decryptWithPIN(data.wallets.tron.encryptedPrivateKey, pin);
+      // Determine which chain we're sending from and get the appropriate key
+      let privateKey: string;
+      let txHash: string;
+      
+      if (fromChain === "tron") {
+        if (!data.wallets?.tron?.encryptedPrivateKey) {
+          throw new Error("Tron wallet not found");
+        }
+        privateKey = decryptWithPIN(data.wallets.tron.encryptedPrivateKey, pin);
 
-      // Sign and send the transaction
-      const signedTx = await tronWeb.trx.sign(txData, privateKey);
-      const result = await tronWeb.trx.sendRawTransaction(signedTx);
+        // Execute Tron transaction
+        const TronWeb = (await import("tronweb")).default;
+        const tronWeb = new TronWeb({
+          fullHost: process.env.NEXT_PUBLIC_TRON_RPC || "https://api.shasta.trongrid.io",
+          privateKey: privateKey,
+        });
 
-      if (!result.result) {
-        throw new Error(result.message || "Transaction failed");
+        // Use validated transaction data
+        const txTo = validatedQuote.tx.to;
+        const txValue = validatedQuote.tx.value;
+        const txData = validatedQuote.tx.data;
+
+        console.log("[Bridge] Executing Tron transaction to:", txTo);
+
+        // For TRC20 tokens, we need to trigger the contract
+        if (fromToken.address) {
+          // TRC20 token transfer - use contract interaction
+          const contract = await tronWeb.contract().at(fromToken.address);
+          const rawAmount = Math.floor(parseFloat(amount) * Math.pow(10, fromToken.decimals));
+          
+          console.log("[Bridge] TRC20 transfer:", rawAmount, "to", txTo);
+          
+          const tx = await contract.transfer(txTo, rawAmount).send({
+            feeLimit: parseInt(validatedQuote.tx.feeLimit),
+          });
+
+          txHash = tx;
+          console.log("[Bridge] TRC20 transaction sent:", txHash);
+        } else {
+          // Native TRX transfer
+          const rawAmount = Math.floor(parseFloat(amount) * Math.pow(10, fromToken.decimals));
+          
+          console.log("[Bridge] Native TRX transfer:", rawAmount, "to", txTo);
+          
+          const tx = await tronWeb.transactionBuilder.sendTrx(
+            txTo,
+            rawAmount,
+            tronAddress
+          );
+          
+          const signedTx = await tronWeb.trx.sign(tx, privateKey);
+          const result = await tronWeb.trx.sendRawTransaction(signedTx);
+
+          if (!result.result) {
+            throw new Error(result.message || "Transaction failed");
+          }
+
+          txHash = result.txid;
+          console.log("[Bridge] Native TRX transaction sent:", txHash);
+        }
+
+        alert(`Bridge transaction submitted!\nTX: ${txHash}\n\nFees: ${getFeeSummary(validatedQuote)}`);
+      } else if (fromChain === "ethereum") {
+        if (!data.wallets?.ethereum?.encryptedPrivateKey) {
+          throw new Error("Ethereum wallet not found");
+        }
+        privateKey = decryptWithPIN(data.wallets.ethereum.encryptedPrivateKey, pin);
+
+        // Execute EVM transaction
+        const { ethers } = await import("ethers");
+        const provider = new ethers.JsonRpcProvider(
+          process.env.NEXT_PUBLIC_ETH_RPC || "https://cloudflare-eth.com"
+        );
+        const wallet = new ethers.Wallet(privateKey, provider);
+
+        console.log("[Bridge] Executing Ethereum transaction");
+
+        const tx = await wallet.sendTransaction({
+          to: validatedQuote.tx.to,
+          data: validatedQuote.tx.data || "0x",
+          value: BigInt(validatedQuote.tx.value || "0"),
+          gasLimit: BigInt(validatedQuote.tx.feeLimit || "500000"),
+        });
+
+        await tx.wait(1);
+        txHash = tx.hash;
+        console.log("[Bridge] Ethereum transaction sent:", txHash);
+        
+        alert(`Bridge transaction submitted!\nTX: ${txHash}\n\nFees: ${getFeeSummary(validatedQuote)}`);
+      } else if (fromChain === "solana") {
+        if (!data.wallets?.solana?.encryptedPrivateKey) {
+          throw new Error("Solana wallet not found");
+        }
+        privateKey = decryptWithPIN(data.wallets.solana.encryptedPrivateKey, pin);
+
+        // Execute Solana transaction
+        const { Connection, Keypair, VersionedTransaction } = await import("@solana/web3.js");
+        
+        const secretKey = new Uint8Array(Buffer.from(privateKey, "base64"));
+        const keypair = Keypair.fromSecretKey(secretKey);
+        
+        const connection = new Connection(
+          process.env.NEXT_PUBLIC_SOL_RPC || "https://api.mainnet-beta.solana.com",
+          "confirmed"
+        );
+
+        console.log("[Bridge] Executing Solana transaction");
+
+        // Deserialize and sign the transaction
+        const txData = Buffer.from(validatedQuote.tx.data, "base64");
+        const transaction = VersionedTransaction.deserialize(txData);
+        transaction.sign([keypair]);
+
+        const signature = await connection.sendTransaction(transaction, {
+          maxRetries: 5,
+          preflightCommitment: "confirmed",
+        });
+
+        txHash = signature;
+        console.log("[Bridge] Solana transaction sent:", txHash);
+        
+        alert(`Bridge transaction submitted!\nTX: ${txHash}\n\nFees: ${getFeeSummary(validatedQuote)}`);
       }
-
-      // Show success message
-      alert(`Bridge transaction submitted! TX: ${result.txid}`);
       
       // Reset form
       setAmount("");
       setQuote(null);
+      setValidatedQuote(null);
     } catch (err: any) {
-      console.error("Bridge execution error:", err);
+      console.error("[Bridge] Execution error:", err);
       setError(err.message || "Failed to execute bridge");
     } finally {
       setExecuting(false);
     }
-  }, [quote, fromToken, toToken]);
+  }, [quote, validatedQuote, fromToken, toToken, fromChain, amount, tronAddress]);
 
   return (
     <div className="bg-white dark:bg-black rounded-2xl border border-border dark:border-darkborder shadow-sm">
@@ -490,7 +630,7 @@ export default function TronBridgeInterface() {
         </div>
 
         {/* Quote details */}
-        {quote && !error && (
+        {quote && !error && validatedQuote && (
           <div className="bg-muted/30 dark:bg-white/5 rounded-xl p-3 space-y-2 text-sm">
             <div className="flex items-center justify-between">
               <span className="text-muted">Estimated Time</span>
@@ -498,12 +638,32 @@ export default function TronBridgeInterface() {
                 ~{Math.ceil((quote.estimatedTime || 300) / 60)} min
               </span>
             </div>
-            {quote.fee && (
+            {validatedQuote.aggregatedFees && validatedQuote.aggregatedFees.length > 0 && (
               <div className="flex items-center justify-between">
-                <span className="text-muted">Bridge Fee</span>
+                <span className="text-muted">Bridge Fees</span>
                 <span className="text-dark dark:text-white font-medium">
-                  {(parseFloat(quote.fee.amount) / Math.pow(10, quote.fee.decimals)).toFixed(4)} {quote.fee.symbol}
+                  {getFeeSummary(validatedQuote)}
                 </span>
+              </div>
+            )}
+            {validatedQuote.priceImpact !== undefined && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted">Price Impact</span>
+                <span className={`font-medium ${
+                  validatedQuote.priceImpact > 5 ? 'text-warning' : 
+                  validatedQuote.priceImpact > 15 ? 'text-error' : 
+                  'text-dark dark:text-white'
+                }`}>
+                  {validatedQuote.priceImpact.toFixed(2)}%
+                </span>
+              </div>
+            )}
+            {validatedQuote.warnings && validatedQuote.warnings.length > 0 && (
+              <div className="pt-2 border-t border-border/50 dark:border-darkborder/50">
+                <p className="text-xs text-warning mb-1">Warnings:</p>
+                {validatedQuote.warnings.slice(0, 2).map((warning: string, i: number) => (
+                  <p key={i} className="text-xs text-muted">• {warning}</p>
+                ))}
               </div>
             )}
           </div>
