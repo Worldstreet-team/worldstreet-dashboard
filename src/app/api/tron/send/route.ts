@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Validate recipient address
-    if (!TronWeb.isAddress(recipient)) {
+    if (!tronWeb.isAddress(recipient)) {
       return NextResponse.json(
         { success: false, message: "Invalid recipient address" },
         { status: 400 }
@@ -118,19 +118,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Send transaction
-    const tx = await tronWeb.trx.sendTransaction(
+    // Convert TRX to Sun
+    const amountSun = tronWeb.toSun(amount);
+
+    // Build transaction
+    const tx = await tronWeb.transactionBuilder.sendTrx(
       recipient,
-      Math.floor(amount * 1_000_000), // Convert TRX to Sun
-      privateKey
+      amountSun,
+      profile.wallets.tron.address
     );
 
-    // Get transaction hash
-    const txHash = tx.txid || tx.transaction?.txID;
+    // Sign transaction
+    const signedTx = await tronWeb.trx.sign(tx, privateKey);
 
-    if (!txHash) {
-      throw new Error("Transaction failed - no transaction hash returned");
+    // Broadcast transaction
+    const receipt = await tronWeb.trx.sendRawTransaction(signedTx);
+
+    // Check if transaction was successful
+    if (!receipt.result) {
+      throw new Error(receipt.message || "Transaction failed");
     }
+
+    const txHash = receipt.txid || receipt.transaction?.txID;
 
     // Return transaction details
     return NextResponse.json({

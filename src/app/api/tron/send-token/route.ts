@@ -141,14 +141,14 @@ export async function POST(request: NextRequest) {
     });
 
     // Validate addresses
-    if (!TronWeb.isAddress(recipient)) {
+    if (!tronWeb.isAddress(recipient)) {
       return NextResponse.json(
         { success: false, message: "Invalid recipient address" },
         { status: 400 }
       );
     }
 
-    if (!TronWeb.isAddress(tokenAddress)) {
+    if (!tronWeb.isAddress(tokenAddress)) {
       return NextResponse.json(
         { success: false, message: "Invalid token address" },
         { status: 400 }
@@ -196,13 +196,37 @@ export async function POST(request: NextRequest) {
       // Ignore if symbol() fails
     }
 
-    // Send token transfer
-    const txId = await contract.transfer(recipient, rawAmount).send({
-      feeLimit: 100_000_000, // 100 TRX max fee
-      callValue: 0,
-      shouldPollResponse: true,
-      privateKey: privateKey,
-    });
+    // Build transfer transaction
+    const tx = await tronWeb.transactionBuilder.triggerSmartContract(
+      tronWeb.address.toHex(tokenAddress),
+      "transfer(address,uint256)",
+      {
+        feeLimit: 100_000_000, // 100 TRX max fee
+        callValue: 0,
+      },
+      [
+        { type: "address", value: recipient },
+        { type: "uint256", value: rawAmount.toString() },
+      ],
+      tronWeb.address.toHex(profile.wallets.tron.address)
+    );
+
+    if (!tx.result || !tx.result.result) {
+      throw new Error("Failed to build transaction");
+    }
+
+    // Sign transaction
+    const signedTx = await tronWeb.trx.sign(tx.transaction, privateKey);
+
+    // Broadcast transaction
+    const receipt = await tronWeb.trx.sendRawTransaction(signedTx);
+
+    // Check if transaction was successful
+    if (!receipt.result) {
+      throw new Error(receipt.message || "Token transfer failed");
+    }
+
+    const txId = receipt.txid;
 
     // Return transaction details
     return NextResponse.json({
