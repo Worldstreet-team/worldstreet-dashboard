@@ -33,7 +33,7 @@ export function SwapInterface() {
 
   // Form state
   const [fromChain, setFromChain] = useState<ChainKey>("solana");
-  const [toChain, setToChain] = useState<ChainKey>("ethereum");
+  const [toChain, setToChain] = useState<ChainKey>("polygon");
   const [fromToken, setFromToken] = useState<SwapToken | null>(null);
   const [toToken, setToToken] = useState<SwapToken | null>(null);
   const [fromAmount, setFromAmount] = useState("");
@@ -85,7 +85,7 @@ export function SwapInterface() {
       const found = trxTokens.find(t => t.address.toLowerCase() === fromToken.address.toLowerCase());
       return found?.amount ?? 0;
     } else {
-      // Ethereum chain
+      // EVM chains (Ethereum, Polygon, BSC, Arbitrum, Optimism, Base)
       const isETH = 
         fromToken.symbol === "ETH" ||
         fromToken.address === "0x0000000000000000000000000000000000000000";
@@ -319,6 +319,11 @@ export function SwapInterface() {
             >
               <option value="solana">Solana</option>
               <option value="ethereum">Ethereum</option>
+              <option value="polygon">Polygon</option>
+              <option value="bsc">BNB Chain</option>
+              <option value="arbitrum">Arbitrum</option>
+              <option value="optimism">Optimism</option>
+              <option value="base">Base</option>
               <option value="tron">Tron</option>
             </select>
           </div>
@@ -385,6 +390,11 @@ export function SwapInterface() {
             >
               <option value="solana">Solana</option>
               <option value="ethereum">Ethereum</option>
+              <option value="polygon">Polygon</option>
+              <option value="bsc">BNB Chain</option>
+              <option value="arbitrum">Arbitrum</option>
+              <option value="optimism">Optimism</option>
+              <option value="base">Base</option>
               <option value="tron">Tron</option>
             </select>
           </div>
