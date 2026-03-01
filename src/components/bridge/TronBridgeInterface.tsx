@@ -6,6 +6,7 @@ import { useTron } from "@/app/context/tronContext";
 import { useEvm } from "@/app/context/evmContext";
 import { useSolana } from "@/app/context/solanaContext";
 import { useWallet } from "@/app/context/walletContext";
+import { decryptWithPIN } from "@/lib/wallet/encryption";
 import PinConfirmModal from "../swap/PinConfirmModal";
 
 // Symbiosis supported chains (only chains we have wallets for)
@@ -57,10 +58,19 @@ export default function TronBridgeInterface() {
   const [error, setError] = useState<string | null>(null);
   const [showPinModal, setShowPinModal] = useState(false);
   const [executing, setExecuting] = useState(false);
+  const [showFromTokenModal, setShowFromTokenModal] = useState(false);
+  const [showToTokenModal, setShowToTokenModal] = useState(false);
 
-  // Get available tokens for Tron
-  const tronTokens = useMemo<BridgeToken[]>(() => {
-    const tokens: BridgeToken[] = [
+  // Get available tokens for each chain
+  const availableTokens = useMemo<Record<ChainKey, BridgeToken[]>>(() => {
+    const tokens: Record<ChainKey, BridgeToken[]> = {
+      tron: [],
+      ethereum: [],
+      solana: [],
+    };
+
+    // Tron tokens
+    tokens.tron = [
       {
         address: "",
         symbol: "TRX",
@@ -73,7 +83,7 @@ export default function TronBridgeInterface() {
 
     // Add TRC20 tokens
     trxTokens.forEach((token) => {
-      tokens.push({
+      tokens.tron.push({
         address: token.address,
         symbol: token.symbol,
         name: token.name || token.symbol,
@@ -82,6 +92,62 @@ export default function TronBridgeInterface() {
         logoURI: token.logoURI,
       });
     });
+
+    // Ethereum tokens (add common ones)
+    tokens.ethereum = [
+      {
+        address: "",
+        symbol: "ETH",
+        name: "Ethereum",
+        decimals: 18,
+        chainId: 1,
+        logoURI: BRIDGE_CHAINS.ethereum.logo,
+      },
+      {
+        address: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+        symbol: "USDT",
+        name: "Tether USD",
+        decimals: 6,
+        chainId: 1,
+        logoURI: "https://cryptologos.cc/logos/tether-usdt-logo.png",
+      },
+      {
+        address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        symbol: "USDC",
+        name: "USD Coin",
+        decimals: 6,
+        chainId: 1,
+        logoURI: "https://cryptologos.cc/logos/usd-coin-usdc-logo.png",
+      },
+    ];
+
+    // Solana tokens (add common ones)
+    tokens.solana = [
+      {
+        address: "So11111111111111111111111111111111111111112",
+        symbol: "SOL",
+        name: "Solana",
+        decimals: 9,
+        chainId: 1151111081099710,
+        logoURI: BRIDGE_CHAINS.solana.logo,
+      },
+      {
+        address: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+        symbol: "USDT",
+        name: "Tether USD",
+        decimals: 6,
+        chainId: 1151111081099710,
+        logoURI: "https://cryptologos.cc/logos/tether-usdt-logo.png",
+      },
+      {
+        address: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        symbol: "USDC",
+        name: "USD Coin",
+        decimals: 6,
+        chainId: 1151111081099710,
+        logoURI: "https://cryptologos.cc/logos/usd-coin-usdc-logo.png",
+      },
+    ];
 
     return tokens;
   }, [trxTokens]);
@@ -112,29 +178,19 @@ export default function TronBridgeInterface() {
 
   // Auto-select default tokens
   useEffect(() => {
-    if (fromChain === "tron" && !fromToken && tronTokens.length > 0) {
-      const usdt = tronTokens.find(t => t.symbol === "USDT");
-      setFromToken(usdt || tronTokens[0]);
+    if (!fromToken && availableTokens[fromChain].length > 0) {
+      const usdt = availableTokens[fromChain].find(t => t.symbol === "USDT");
+      setFromToken(usdt || availableTokens[fromChain][0]);
     }
-  }, [fromChain, fromToken, tronTokens]);
+  }, [fromChain, fromToken, availableTokens]);
 
   // Auto-select destination token
   useEffect(() => {
-    if (!toToken) {
-      // Default to USDT on destination chain
-      setToToken({
-        address: toChain === "ethereum" 
-          ? "0xdAC17F958D2ee523a2206206994597C13D831ec7" // USDT on Ethereum
-          : toChain === "solana"
-          ? "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB" // USDT on Solana
-          : "",
-        symbol: "USDT",
-        name: "Tether USD",
-        decimals: toChain === "solana" ? 6 : 6,
-        chainId: BRIDGE_CHAINS[toChain]?.id || 1,
-      });
+    if (!toToken && availableTokens[toChain].length > 0) {
+      const usdt = availableTokens[toChain].find(t => t.symbol === "USDT");
+      setToToken(usdt || availableTokens[toChain][0]);
     }
-  }, [toChain, toToken]);
+  }, [toChain, toToken, availableTokens]);
 
   // Fetch quote from Symbiosis
   const fetchQuote = useCallback(async () => {
@@ -197,6 +253,19 @@ export default function TronBridgeInterface() {
     return () => clearTimeout(timer);
   }, [fetchQuote]);
 
+  // Swap chains and tokens
+  const handleSwapChains = () => {
+    const tempChain = fromChain;
+    const tempToken = fromToken;
+    
+    setFromChain(toChain);
+    setToChain(tempChain);
+    setFromToken(toToken);
+    setToToken(tempToken);
+    setAmount("");
+  };
+
+  // Set max amount
   const handleSetMax = () => {
     if (fromBalance > 0) {
       const maxAmount = fromToken?.symbol === "TRX" 
@@ -249,14 +318,17 @@ export default function TronBridgeInterface() {
         throw new Error("Failed to get wallet keys");
       }
 
-      const { tron: tronKeys } = await response.json();
+      const data = await response.json();
       
-      if (!tronKeys?.privateKey) {
-        throw new Error("Tron private key not found");
+      if (!data.success || !data.wallets?.tron?.encryptedPrivateKey) {
+        throw new Error("Tron wallet not found");
       }
 
+      // Decrypt the private key using the PIN
+      const privateKey = decryptWithPIN(data.wallets.tron.encryptedPrivateKey, pin);
+
       // Sign and send the transaction
-      const signedTx = await tronWeb.trx.sign(txData, tronKeys.privateKey);
+      const signedTx = await tronWeb.trx.sign(txData, privateKey);
       const result = await tronWeb.trx.sendRawTransaction(signedTx);
 
       if (!result.result) {
@@ -281,7 +353,7 @@ export default function TronBridgeInterface() {
     <div className="bg-white dark:bg-black rounded-2xl border border-border dark:border-darkborder shadow-sm">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-border dark:border-darkborder">
-        <h2 className="text-lg font-semibold text-dark dark:text-white">Bridge Tron Assets</h2>
+        <h2 className="text-lg font-semibold text-dark dark:text-white">Cross-Chain Bridge</h2>
         <div className="flex items-center gap-2 text-xs text-muted">
           <Icon icon="solar:shield-check-bold-duotone" width={16} />
           <span>Powered by Symbiosis</span>
@@ -317,33 +389,49 @@ export default function TronBridgeInterface() {
               className="flex-1 bg-transparent border-0 text-2xl font-semibold text-dark dark:text-white placeholder:text-muted focus:ring-0 p-0"
             />
             
-            <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-black rounded-xl">
+            <button
+              onClick={() => setShowFromTokenModal(true)}
+              className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-black rounded-xl hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
+            >
               {fromToken?.logoURI && (
                 <img src={fromToken.logoURI} alt={fromToken.symbol} className="w-6 h-6 rounded-full" />
               )}
               <span className="font-semibold text-dark dark:text-white">{fromToken?.symbol || "Select"}</span>
-            </div>
+              <Icon icon="ph:caret-down" className="text-muted" width={16} />
+            </button>
           </div>
 
-          {/* Chain display */}
+          {/* Chain selector */}
           <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border/50 dark:border-darkborder/50">
             <span className="text-xs text-muted">Network:</span>
             <div className="flex items-center gap-1.5">
               {BRIDGE_CHAINS[fromChain]?.logo && (
                 <img src={BRIDGE_CHAINS[fromChain].logo} alt="" className="w-4 h-4" />
               )}
-              <span className="text-xs font-medium text-dark dark:text-white">
-                {BRIDGE_CHAINS[fromChain]?.name || "Unknown"}
-              </span>
+              <select
+                value={fromChain}
+                onChange={(e) => {
+                  setFromChain(e.target.value as ChainKey);
+                  setFromToken(null);
+                }}
+                className="text-xs font-medium text-dark dark:text-white bg-transparent border-0 hover:text-primary transition-colors cursor-pointer focus:outline-none"
+              >
+                <option value="tron">Tron</option>
+                <option value="ethereum">Ethereum</option>
+                <option value="solana">Solana</option>
+              </select>
             </div>
           </div>
         </div>
 
         {/* Swap direction button */}
         <div className="flex justify-center -my-1">
-          <div className="w-9 h-9 bg-white dark:bg-black border-4 border-lightgray dark:border-darkborder rounded-xl flex items-center justify-center">
-            <Icon icon="ph:arrow-down" className="text-muted" width={18} />
-          </div>
+          <button
+            onClick={handleSwapChains}
+            className="w-9 h-9 bg-white dark:bg-black border-4 border-lightgray dark:border-darkborder rounded-xl flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
+          >
+            <Icon icon="ph:arrows-down-up" className="text-muted" width={18} />
+          </button>
         </div>
 
         {/* To section */}
@@ -366,9 +454,16 @@ export default function TronBridgeInterface() {
               )}
             </div>
             
-            <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-black rounded-xl">
-              <span className="font-semibold text-dark dark:text-white">{toToken?.symbol || "USDT"}</span>
-            </div>
+            <button
+              onClick={() => setShowToTokenModal(true)}
+              className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-black rounded-xl hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
+            >
+              {toToken?.logoURI && (
+                <img src={toToken.logoURI} alt={toToken.symbol} className="w-6 h-6 rounded-full" />
+              )}
+              <span className="font-semibold text-dark dark:text-white">{toToken?.symbol || "Select"}</span>
+              <Icon icon="ph:caret-down" className="text-muted" width={16} />
+            </button>
           </div>
 
           {/* Chain selector */}
@@ -380,9 +475,13 @@ export default function TronBridgeInterface() {
               )}
               <select
                 value={toChain}
-                onChange={(e) => setToChain(e.target.value as ChainKey)}
+                onChange={(e) => {
+                  setToChain(e.target.value as ChainKey);
+                  setToToken(null);
+                }}
                 className="text-xs font-medium text-dark dark:text-white bg-transparent border-0 hover:text-primary transition-colors cursor-pointer focus:outline-none"
               >
+                <option value="tron">Tron</option>
                 <option value="ethereum">Ethereum</option>
                 <option value="solana">Solana</option>
               </select>
@@ -462,6 +561,63 @@ export default function TronBridgeInterface() {
         title="Confirm Bridge"
         description={`Enter your PIN to bridge ${amount} ${fromToken?.symbol} to ${toChain}`}
       />
+
+      {/* Token Selection Modals */}
+      {showFromTokenModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowFromTokenModal(false)}>
+          <div className="bg-white dark:bg-black rounded-2xl p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-dark dark:text-white mb-4">Select Token</h3>
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {availableTokens[fromChain].map((token) => (
+                <button
+                  key={token.address}
+                  onClick={() => {
+                    setFromToken(token);
+                    setShowFromTokenModal(false);
+                  }}
+                  className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-lightgray dark:hover:bg-darkborder transition-colors"
+                >
+                  {token.logoURI && (
+                    <img src={token.logoURI} alt={token.symbol} className="w-8 h-8 rounded-full" />
+                  )}
+                  <div className="flex-1 text-left">
+                    <p className="font-medium text-dark dark:text-white">{token.symbol}</p>
+                    <p className="text-xs text-muted">{token.name}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showToTokenModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowToTokenModal(false)}>
+          <div className="bg-white dark:bg-black rounded-2xl p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-dark dark:text-white mb-4">Select Token</h3>
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {availableTokens[toChain].map((token) => (
+                <button
+                  key={token.address}
+                  onClick={() => {
+                    setToToken(token);
+                    setShowToTokenModal(false);
+                  }}
+                  className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-lightgray dark:hover:bg-darkborder transition-colors"
+                >
+                  {token.logoURI && (
+                    <img src={token.logoURI} alt={token.symbol} className="w-8 h-8 rounded-full" />
+                  )}
+                  <div className="flex-1 text-left">
+                    <p className="font-medium text-dark dark:text-white">{token.symbol}</p>
+                    <p className="text-xs text-muted">{token.name}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
