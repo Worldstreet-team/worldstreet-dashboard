@@ -212,7 +212,7 @@ export default function TronBridgeInterface() {
     try {
       const rawAmount = Math.floor(parseFloat(amount) * Math.pow(10, fromToken.decimals)).toString();
       
-      const response = await fetch("https://api-v2.symbiosis.finance/crosschain/v1/swap", {
+      const response = await fetch("https://api.symbiosis.finance/crosschain/v1/swap", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
