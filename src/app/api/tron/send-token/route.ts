@@ -155,42 +155,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get token contract
-    const contract = await tronWeb.contract(TRC20_ABI, tokenAddress);
-
-    // Check token balance
-    const balance = await contract.balanceOf(profile.wallets.tron.address).call();
-    const balanceAmount = Number(balance.toString()) / Math.pow(10, decimals);
-
-    if (balanceAmount < amount) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: `Insufficient token balance. Available: ${balanceAmount}`,
-        },
-        { status: 400 }
-      );
-    }
-
-    // Check TRX balance for fees
-    const trxBalance = await tronWeb.trx.getBalance(profile.wallets.tron.address);
-    if (trxBalance < 15_000_000) {
-      // Need ~15 TRX for fees
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Insufficient TRX for transaction fees (need ~15 TRX)",
-        },
-        { status: 400 }
-      );
-    }
-
     // Calculate raw amount
     const rawAmount = Math.floor(amount * Math.pow(10, decimals));
 
-    // Get token symbol
+    // Get token symbol (optional, for response)
     let tokenSymbol = "TOKEN";
     try {
+      const contract = await tronWeb.contract(TRC20_ABI, tokenAddress);
       tokenSymbol = await contract.symbol().call();
     } catch {
       // Ignore if symbol() fails

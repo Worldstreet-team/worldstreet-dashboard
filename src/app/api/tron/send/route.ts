@@ -105,24 +105,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check balance
-    const balance = await tronWeb.trx.getBalance(profile.wallets.tron.address);
-    const balanceTRX = balance / 1_000_000;
-
-    if (balanceTRX < amount) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: `Insufficient balance. Available: ${balanceTRX} TRX`,
-        },
-        { status: 400 }
-      );
-    }
-
     // Convert TRX to Sun
     const amountSun = tronWeb.toSun(amount);
 
-    // Build transaction
+    // Build transaction (will fail if insufficient balance)
     const tx = await tronWeb.transactionBuilder.sendTrx(
       recipient,
       amountSun,
