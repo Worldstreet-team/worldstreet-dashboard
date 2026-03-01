@@ -344,7 +344,7 @@ export default function DepositPage() {
             href="/assets"
             className="inline-flex items-center gap-2 py-2.5 px-5 bg-primary hover:bg-primary/90 text-white font-medium rounded-xl transition-colors"
           >
-            Go to Assets
+            Go to Assets.
           </a>
         </div>
       </div>

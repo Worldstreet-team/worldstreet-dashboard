@@ -14,6 +14,42 @@ const GLOBALPAY_API_KEY = process.env.NEXT_PUBLIC_GLOBALPAY_API_KEY || "";
 
 const MIN_USDT = 5;
 const MAX_USDT = 5000;
+const PLATFORM_MARKUP = 5; // 5% markup — same as /api/p2p/rates
+
+// ── Inline rate fetcher (avoids self-referencing HTTP call) ────────────────
+
+async function fetchBuyRate(
+  fiatCurrency: string
+): Promise<{ buyRate: number; marketRate: number } | null> {
+  try {
+    const geckoRes = await fetch(
+      "https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=usd,ngn,gbp",
+      { signal: AbortSignal.timeout(10_000) }
+    );
+
+    if (!geckoRes.ok) return null;
+
+    const geckoData = await geckoRes.json();
+    const tether = geckoData.tether || {};
+    const fiatMap: Record<string, number> = {
+      NGN: tether.ngn || 1580,
+      USD: tether.usd || 1,
+      GBP: tether.gbp || 0.79,
+    };
+
+    const marketRate = fiatMap[fiatCurrency];
+    if (!marketRate) return null;
+
+    const buyRate = marketRate * (1 + PLATFORM_MARKUP / 100);
+    return {
+      buyRate: Math.round(buyRate * 100) / 100,
+      marketRate: Math.round(marketRate * 100) / 100,
+    };
+  } catch (err) {
+    console.error("Rate fetch error in deposit/initiate:", err);
+    return null;
+  }
+}
 
 // ── POST /api/deposit/initiate ─────────────────────────────────────────────
 
@@ -58,12 +94,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Fetch current exchange rate from internal rates endpoint
-    const ratesRes = await fetch(
-      new URL("/api/p2p/rates", request.url).toString()
-    );
-    const ratesData = await ratesRes.json();
-    const rate = ratesData.rates?.[fiatCurrency];
+    // 4. Fetch current exchange rate directly from CoinGecko
+    const rate = await fetchBuyRate(fiatCurrency);
 
     if (!rate?.buyRate) {
       return NextResponse.json(
@@ -100,8 +132,8 @@ export async function POST(request: NextRequest) {
             firstName: authUser.firstName || "WorldStreet",
             lastName: authUser.lastName || "Customer",
             currency: fiatCurrency,
-            phoneNumber: "N/A",
-            address: "N/A",
+            phoneNumber: "08000000000",
+            address: "Lagos, Nigeria",
             emailAddress: authUser.email || "",
           },
         }),
