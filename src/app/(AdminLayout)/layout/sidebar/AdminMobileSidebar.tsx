@@ -1,0 +1,116 @@
+"use client";
+import React, { useContext } from "react";
+import AdminSidebarContent from "./AdminSidebarItems";
+import AdminNavItem from "./AdminNavItem";
+import { Icon } from "@iconify/react";
+import Image from "next/image";
+import Link from "next/link";
+import { useAuth } from "@/app/context/authContext";
+import { CustomizerContext } from "@/app/context/customizerContext";
+
+const AdminMobileSidebar = ({ handleClose }: { handleClose: () => void }) => {
+  const { logout } = useAuth();
+  const { setActiveMode, activeMode } = useContext(CustomizerContext);
+  const toggleMode = () => {
+    setActiveMode((prevMode: string) =>
+      prevMode === "light" ? "dark" : "light"
+    );
+  };
+
+  return (
+    <aside
+      className="bg-white dark:bg-black w-full h-full flex flex-col"
+      aria-label="Admin mobile sidebar navigation"
+    >
+      {/* Logo + Admin Badge */}
+      <div className="h-16 flex items-center px-6 border-b border-border dark:border-darkborder flex-shrink-0">
+        <Link
+          href="/admin"
+          className="flex items-center gap-2.5"
+          onClick={handleClose}
+        >
+          <Image
+            src="/worldstreet-logo/WorldStreet4x.png"
+            alt="WorldStreet"
+            width={28}
+            height={28}
+          />
+          <span className="text-base font-semibold text-dark dark:text-white tracking-tight">
+            WorldStreet
+          </span>
+          <span className="px-1.5 py-0.5 rounded bg-error/10 text-error text-[10px] font-bold uppercase tracking-wider">
+            Admin
+          </span>
+        </Link>
+      </div>
+
+      {/* Navigation - Scrollable */}
+      <div className="flex-1 overflow-y-auto">
+        <nav className="sidebar-nav px-4 py-3">
+          <ul className="sidebar-nav-group space-y-0.5">
+            {AdminSidebarContent.map((item, index) => (
+              <React.Fragment key={index}>
+                <li>
+                  <h5 className="text-muted dark:text-darklink font-semibold text-[10px] uppercase tracking-widest border-t border-border dark:border-darkborder caption px-3 pt-[18px] mt-4 mb-0.5">
+                    <span>{item.heading}</span>
+                  </h5>
+                </li>
+                {item.children?.map((child, idx) => (
+                  <li key={child.id || idx}>
+                    <AdminNavItem item={child} handleClose={handleClose} />
+                  </li>
+                ))}
+              </React.Fragment>
+            ))}
+          </ul>
+        </nav>
+
+        {/* Back to Dashboard */}
+        <div className="px-4 pb-4">
+          <Link
+            href="/"
+            onClick={handleClose}
+            className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-muted hover:text-primary hover:bg-primary/10 transition-colors duration-200 text-sm"
+          >
+            <Icon icon="ph:arrow-left-duotone" height={18} />
+            <span>Back to Dashboard</span>
+          </Link>
+        </div>
+      </div>
+
+      {/* Footer Actions */}
+      <div className="flex-shrink-0 border-t border-border dark:border-darkborder p-4 space-y-1">
+        {/* Theme Toggle */}
+        <button
+          onClick={toggleMode}
+          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-link dark:text-darklink hover:text-primary hover:bg-primary/10 transition-colors duration-200"
+        >
+          <Icon
+            icon={
+              activeMode === "light"
+                ? "tabler:moon"
+                : "solar:sun-bold-duotone"
+            }
+            className="h-5 w-5"
+          />
+          <span className="text-sm font-medium">
+            {activeMode === "light" ? "Dark Mode" : "Light Mode"}
+          </span>
+        </button>
+        {/* Logout */}
+        <button
+          onClick={() => {
+            handleClose();
+            logout();
+          }}
+          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-error hover:bg-error/10 transition-colors duration-200"
+        >
+          <Icon icon="ph:sign-out-duotone" className="h-5 w-5" />
+          <span className="text-sm font-medium">Sign Out</span>
+        </button>
+      </div>
+    </aside>
+  );
+};
+
+export default AdminMobileSidebar;

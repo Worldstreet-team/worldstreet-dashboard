@@ -2,18 +2,32 @@ import mongoose, { Schema, Document, Model } from "mongoose";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-export type DepositStatus =
+export type WithdrawalStatus =
   | "pending"
-  | "awaiting_verification"
-  | "verifying"
-  | "payment_confirmed"
-  | "sending_usdt"
+  | "usdt_sent"
+  | "tx_verified"
+  | "processing"
+  | "ngn_sent"
   | "completed"
-  | "payment_failed"
-  | "delivery_failed"
+  | "failed"
   | "cancelled";
 
-export interface IDeposit extends Document {
+export type WithdrawalChain = "solana" | "ethereum";
+
+export interface IWithdrawalBankDetails {
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+}
+
+export interface IWithdrawalAdminAction {
+  action: string;
+  adminEmail: string;
+  note?: string;
+  timestamp: Date;
+}
+
+export interface IWithdrawal extends Document {
   userId: string; // Clerk userId
   email: string;
 
@@ -23,28 +37,26 @@ export interface IDeposit extends Document {
   fiatCurrency: string;
   exchangeRate: number;
 
-  // GlobalPay references
-  merchantTransactionReference: string;
-  globalPayTransactionReference?: string;
-  checkoutUrl?: string;
+  // Chain & addresses
+  chain: WithdrawalChain;
+  userWalletAddress: string;
+  treasuryWalletAddress: string;
 
-  // User wallet
-  userSolanaAddress: string;
+  // On-chain transaction (user → treasury)
+  txHash?: string;
+  txVerified: boolean;
+  txVerifiedAt?: Date;
+
+  // Bank details for fiat payout
+  bankDetails: IWithdrawalBankDetails;
 
   // Status
-  status: DepositStatus;
+  status: WithdrawalStatus;
 
-  // On-chain delivery
-  txHash?: string;
-  deliveryError?: string;
-
-  // Admin audit trail
-  adminActions?: Array<{
-    action: string;
-    adminEmail: string;
-    note?: string;
-    timestamp: Date;
-  }>;
+  // Admin payout tracking
+  payoutReference?: string;
+  adminNote?: string;
+  adminActions: IWithdrawalAdminAction[];
 
   // Timestamps
   createdAt: Date;
@@ -54,7 +66,7 @@ export interface IDeposit extends Document {
 
 // ── Schema ─────────────────────────────────────────────────────────────────
 
-const DepositSchema = new Schema<IDeposit>(
+const WithdrawalSchema = new Schema<IWithdrawal>(
   {
     userId: {
       type: String,
@@ -66,6 +78,7 @@ const DepositSchema = new Schema<IDeposit>(
       required: true,
     },
 
+    // Amounts
     usdtAmount: {
       type: Number,
       required: true,
@@ -86,47 +99,64 @@ const DepositSchema = new Schema<IDeposit>(
       required: true,
     },
 
-    merchantTransactionReference: {
+    // Chain & addresses
+    chain: {
       type: String,
       required: true,
-      unique: true,
+      enum: ["solana", "ethereum"],
     },
-    globalPayTransactionReference: {
+    userWalletAddress: {
+      type: String,
+      required: true,
+    },
+    treasuryWalletAddress: {
+      type: String,
+      required: true,
+    },
+
+    // On-chain transaction
+    txHash: {
       type: String,
       sparse: true,
     },
-    checkoutUrl: {
-      type: String,
+    txVerified: {
+      type: Boolean,
+      default: false,
+    },
+    txVerifiedAt: {
+      type: Date,
     },
 
-    userSolanaAddress: {
-      type: String,
-      required: true,
+    // Bank details
+    bankDetails: {
+      bankName: { type: String, required: true },
+      accountNumber: { type: String, required: true },
+      accountName: { type: String, required: true },
     },
 
+    // Status
     status: {
       type: String,
       required: true,
       enum: [
         "pending",
-        "awaiting_verification",
-        "verifying",
-        "payment_confirmed",
-        "sending_usdt",
+        "usdt_sent",
+        "tx_verified",
+        "processing",
+        "ngn_sent",
         "completed",
-        "payment_failed",
-        "delivery_failed",
+        "failed",
         "cancelled",
       ],
       default: "pending",
       index: true,
     },
 
-    txHash: {
+    // Admin payout tracking
+    payoutReference: {
       type: String,
-      sparse: true,
     },
-    deliveryError: {
+    adminNote: {
       type: String,
     },
     adminActions: [
@@ -137,6 +167,7 @@ const DepositSchema = new Schema<IDeposit>(
         timestamp: { type: Date, default: Date.now },
       },
     ],
+
     completedAt: {
       type: Date,
     },
@@ -148,12 +179,13 @@ const DepositSchema = new Schema<IDeposit>(
 
 // ── Indexes ────────────────────────────────────────────────────────────────
 
-DepositSchema.index({ userId: 1, createdAt: -1 });
-// merchantTransactionReference index already created by `unique: true` on the field
+WithdrawalSchema.index({ userId: 1, createdAt: -1 });
+WithdrawalSchema.index({ status: 1, createdAt: -1 });
 
 // ── Export ──────────────────────────────────────────────────────────────────
 
-const Deposit: Model<IDeposit> =
-  mongoose.models.Deposit || mongoose.model<IDeposit>("Deposit", DepositSchema);
+const Withdrawal: Model<IWithdrawal> =
+  mongoose.models.Withdrawal ||
+  mongoose.model<IWithdrawal>("Withdrawal", WithdrawalSchema);
 
-export default Deposit;
+export default Withdrawal;

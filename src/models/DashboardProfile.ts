@@ -14,6 +14,13 @@ export interface IWallets {
   tron?: IWalletData;
 }
 
+export interface IBankDetail {
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+  isDefault?: boolean;
+}
+
 export interface IDashboardProfile extends Document {
   authUserId: string; // external auth service userId
   email: string;
@@ -22,6 +29,9 @@ export interface IDashboardProfile extends Document {
   displayName: string;
   avatarUrl: string;
   bio: string;
+
+  // Saved bank details for withdrawals (max 3)
+  savedBankDetails: IBankDetail[];
 
   // ═══════════════════════════════════════════════════════════════════════════
   // WALLET SYSTEM (Self-Custodial)
@@ -71,6 +81,23 @@ const DashboardProfileSchema = new Schema<IDashboardProfile>(
     displayName: { type: String, default: "" },
     avatarUrl: { type: String, default: "" },
     bio: { type: String, default: "", maxlength: 500 },
+
+    // Saved bank details for withdrawals (max 3)
+    savedBankDetails: {
+      type: [
+        {
+          bankName: { type: String, required: true },
+          accountNumber: { type: String, required: true },
+          accountName: { type: String, required: true },
+          isDefault: { type: Boolean, default: false },
+        },
+      ],
+      default: [],
+      validate: {
+        validator: (v: any[]) => v.length <= 3,
+        message: "Maximum 3 bank details allowed",
+      },
+    },
 
     // ═══════════════════════════════════════════════════════════════════════════
     // WALLET SYSTEM (Self-Custodial)

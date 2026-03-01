@@ -16,7 +16,7 @@ export interface ITreasuryWallet extends Document {
   authTag: string;
 
   /** Which network this treasury wallet is for */
-  network: "solana";
+  network: "solana" | "ethereum";
 
   /** Whether this wallet is the currently active treasury */
   isActive: boolean;
@@ -52,7 +52,7 @@ const TreasuryWalletSchema = new Schema<ITreasuryWallet>(
     network: {
       type: String,
       required: true,
-      enum: ["solana"],
+      enum: ["solana", "ethereum"],
       default: "solana",
     },
     isActive: {

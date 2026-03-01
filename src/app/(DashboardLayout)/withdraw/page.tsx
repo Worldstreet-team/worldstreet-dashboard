@@ -1,672 +1,600 @@
 "use client";
+import React, { useEffect, useState } from "react";
+import { Icon } from "@iconify/react";
+import Link from "next/link";
 
-import React, { useState, useEffect, useCallback } from "react";
-import { useSearchParams } from "next/navigation";
-import { useWallet } from "@/app/context/walletContext";
-import { useSolana } from "@/app/context/solanaContext";
-import Footer from "@/components/dashboard/Footer";
-import CryptoJS from "crypto-js";
-
-// ── Types ──────────────────────────────────────────────────────────────────
-
-interface Rate {
-  marketRate: number;
-  buyRate: number;
-  sellRate: number;
-  symbol: string;
-}
-
-interface BankDetails {
+interface BankDetail {
   bankName: string;
   accountNumber: string;
   accountName: string;
+  isDefault: boolean;
 }
 
-interface P2POrder {
+interface DashboardProfile {
+  savedBankDetails: BankDetail[];
+}
+
+interface WithdrawalStatus {
   _id: string;
-  orderType: "buy" | "sell";
-  usdtAmount: number;
-  fiatAmount: number;
-  fiatCurrency: string;
-  exchangeRate: number;
   status: string;
-  paymentReference?: string;
   txHash?: string;
-  userBankDetails?: BankDetails;
-  createdAt: string;
+  fiatAmount: number;
   completedAt?: string;
-  expiresAt: string;
 }
 
-type FiatCurrency = "NGN";
+const STEP_TITLES = [
+  "Select Chain & Amount",
+  "Bank Details",
+  "Confirm & Transfer",
+  "Status",
+];
 
-const CURRENCY_SYMBOLS: Record<string, string> = {
-  NGN: "₦",
-  USD: "$",
-  GBP: "£",
-};
-
-const PLATFORM_WALLET = "DYJ5erEEoJT6PDueRSkKARxXt4W4jcGLbcYeMmKHAxBo";
-const USDT_MINT = "Es9vMFrzaCERmKfrFhQ1dZRDgjXzhJMTo6mnstHbDvn";
-
-// ── Status badge ───────────────────────────────────────────────────────────
-
-function StatusBadge({ status }: { status: string }) {
-  const config: Record<string, { bg: string; text: string; label: string }> = {
-    pending: { bg: "bg-yellow-500/10", text: "text-yellow-500", label: "Pending" },
-    awaiting_payment: { bg: "bg-blue-500/10", text: "text-blue-500", label: "Awaiting Payment" },
-    payment_sent: { bg: "bg-orange-500/10", text: "text-orange-500", label: "Processing" },
-    completed: { bg: "bg-green-500/10", text: "text-green-500", label: "Completed" },
-    cancelled: { bg: "bg-red-500/10", text: "text-red-500", label: "Cancelled" },
-    expired: { bg: "bg-gray-500/10", text: "text-gray-500", label: "Expired" },
-  };
-  const c = config[status] || config.pending;
-  return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${c.bg} ${c.text}`}>
-      {c.label}
-    </span>
-  );
-}
-
-// ── Steps indicator ────────────────────────────────────────────────────────
-
-function WithdrawSteps({ currentStep }: { currentStep: number }) {
-  const steps = [
-    { label: "Enter Amount", icon: "1" },
-    { label: "Bank Details", icon: "2" },
-    { label: "Send USDT", icon: "3" },
-    { label: "Receive Fiat", icon: "4" },
-  ];
-
-  return (
-    <div className="flex items-center justify-between mb-8">
-      {steps.map((step, i) => (
-        <React.Fragment key={i}>
-          <div className="flex flex-col items-center gap-1.5">
-            <div
-              className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${
-                i < currentStep
-                  ? "bg-green-500 text-white"
-                  : i === currentStep
-                  ? "bg-primary text-white"
-                  : "bg-muted/30 dark:bg-white/10 text-muted"
-              }`}
-            >
-              {i < currentStep ? (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                </svg>
-              ) : (
-                step.icon
-              )}
-            </div>
-            <span className={`text-[10px] sm:text-xs font-medium whitespace-nowrap ${
-              i <= currentStep ? "text-dark dark:text-white" : "text-muted"
-            }`}>
-              {step.label}
-            </span>
-          </div>
-          {i < steps.length - 1 && (
-            <div className={`flex-1 h-0.5 mx-1 sm:mx-2 rounded-full ${
-              i < currentStep ? "bg-green-500" : "bg-muted/30 dark:bg-white/10"
-            }`} />
-          )}
-        </React.Fragment>
-      ))}
-    </div>
-  );
-}
-
-// ── Main component ─────────────────────────────────────────────────────────
+const STEP_DESCRIPTIONS = [
+  "Choose which blockchain and how much USDT to withdraw",
+  "Select or enter your receiving bank account",
+  "Verify PIN and transfer USDT to treasury wallet",
+  "Monitor your withdrawal status",
+];
 
 export default function WithdrawPage() {
-  const { walletsGenerated, getEncryptedKeys } = useWallet();
-  const { sendTokenTransaction } = useSolana();
-  const searchParams = useSearchParams();
-
-  // UI state
-  const [fiatCurrency] = useState<FiatCurrency>("NGN");
-  const [usdtAmount, setUsdtAmount] = useState(() => {
-    // Pre-fill from URL query param if present
-    const urlAmount = searchParams.get("amount");
-    return urlAmount && !isNaN(parseFloat(urlAmount)) ? urlAmount : "";
-  });
-  const [rates, setRates] = useState<Record<string, Rate>>({});
-  const [ratesLoading, setRatesLoading] = useState(true);
-
-  // Bank details
-  const [bankName, setBankName] = useState("");
-  const [accountNumber, setAccountNumber] = useState("");
-  const [accountName, setAccountName] = useState("");
-
-  // Active order state
-  const [activeOrder, setActiveOrder] = useState<P2POrder | null>(null);
-
-  // PIN modal
-  const [showPinModal, setShowPinModal] = useState(false);
-  const [pin, setPin] = useState(["", "", "", "", "", ""]);
-  const [pinError, setPinError] = useState("");
-  const [sending, setSending] = useState(false);
-
-  // General
-  const [error, setError] = useState("");
+  const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [profile, setProfile] = useState<DashboardProfile | null>(null);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
-  // ── Fetch rates ────────────────────────────────────────────────────────
+  // Step 1: Chain + Amount
+  const [chain, setChain] = useState<"solana" | "ethereum">("solana");
+  const [usdtAmount, setUsdtAmount] = useState("");
 
-  const fetchRates = useCallback(async () => {
-    try {
-      const res = await fetch("/api/p2p/rates");
-      const data = await res.json();
-      if (data.rates) setRates(data.rates);
-    } catch {
-      console.error("Failed to fetch rates");
-    } finally {
-      setRatesLoading(false);
-    }
-  }, []);
+  // Step 2: Bank Details
+  const [selectedBank, setSelectedBank] = useState("");
+  const [newBank, setNewBank] = useState(false);
+  const [bankForm, setBankForm] = useState({
+    bankName: "",
+    accountNumber: "",
+    accountName: "",
+  });
 
+  // Step 3: PIN + Transfer
+  const [pin, setPin] = useState("");
+  const [pinVisible, setPinVisible] = useState(false);
+  const [transferring, setTransferring] = useState(false);
+  const [txHash, setTxHash] = useState("");
+  const [exchangeRate, setExchangeRate] = useState(0);
+
+  // Step 4: Status polling
+  const [withdrawalId, setWithdrawalId] = useState("");
+  const [withdrawalStatus, setWithdrawalStatus] = useState<WithdrawalStatus | null>(null);
+  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
+
+  // Fetch user profile
   useEffect(() => {
-    fetchRates();
-    const interval = setInterval(fetchRates, 120_000);
-    return () => clearInterval(interval);
-  }, [fetchRates]);
-
-  // ── Fetch active order ─────────────────────────────────────────────────
-
-  const fetchActiveOrder = useCallback(async () => {
-    try {
-      const res = await fetch("/api/p2p/orders");
-      const data = await res.json();
-      if (data.success && data.orders) {
-        const active = data.orders.find(
-          (o: P2POrder) =>
-            o.orderType === "sell" &&
-            ["pending", "awaiting_payment", "payment_sent"].includes(o.status)
-        );
-        if (active) setActiveOrder(active);
+    const fetchProfile = async () => {
+      try {
+        const res = await fetch("/api/profile");
+        if (res.ok) {
+          const data = await res.json();
+          setProfile(data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch profile:", err);
       }
-    } catch {
-      console.error("Failed to fetch orders");
-    }
+    };
+    fetchProfile();
   }, []);
 
-  useEffect(() => {
-    if (walletsGenerated) {
-      fetchActiveOrder();
-      const interval = setInterval(fetchActiveOrder, 15_000);
-      return () => clearInterval(interval);
-    }
-  }, [walletsGenerated, fetchActiveOrder]);
-
-  // ── Calculations ───────────────────────────────────────────────────────
-
-  const currentRate = rates[fiatCurrency];
-  const sellRate = currentRate?.sellRate;
-  const amountNum = parseFloat(usdtAmount) || 0;
-  const fiatAmount = amountNum * (sellRate || 0);
-  const isValidAmount = amountNum >= 5 && amountNum <= 5000;
-  const hasBankDetails = bankName.trim() && accountNumber.trim() && accountName.trim();
-
-  // ── Get current step ───────────────────────────────────────────────────
-
-  const getStep = () => {
-    if (!activeOrder) {
-      if (!usdtAmount) return 0;
-      if (!hasBankDetails) return 1;
-      return 2;
-    }
-    if (activeOrder.status === "payment_sent") return 3;
-    if (activeOrder.status === "completed") return 3;
-    return 2;
-  };
-
-  // ── Initiate withdrawal ────────────────────────────────────────────────
-
-  const handleWithdraw = () => {
-    if (!isValidAmount || !sellRate || !hasBankDetails) return;
+  const handleInitiateWithdrawal = async () => {
     setError("");
-    setShowPinModal(true);
+    setSuccess("");
+    if (!usdtAmount || !chain) {
+      setError("Please select chain and amount");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch("/api/withdraw/initiate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ usdtAmount: parseFloat(usdtAmount), chain }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setExchangeRate(data.exchangeRate);
+        setStep(2);
+      } else {
+        setError(data.error || "Failed to initiate withdrawal");
+      }
+    } catch (err) {
+      setError("Failed to initiate withdrawal");
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // ── Confirm: send USDT & create order ──────────────────────────────────
-
-  const handleConfirmSend = async () => {
-    const pinString = pin.join("");
-    if (pinString.length !== 6) return;
-
-    setSending(true);
-    setPinError("");
-
-    try {
-      // Get encrypted keys
-      const pinHash = CryptoJS.SHA256(pinString).toString();
-      const encryptedKeys = await getEncryptedKeys(pinHash);
-      if (!encryptedKeys) {
-        setPinError("Invalid PIN");
-        setSending(false);
+  const handleConfirmBankDetails = () => {
+    setError("");
+    if (newBank) {
+      if (!bankForm.bankName || !bankForm.accountNumber || !bankForm.accountName) {
+        setError("Please fill in all bank details");
         return;
       }
+    } else if (!selectedBank) {
+      setError("Please select a bank account");
+      return;
+    }
+    setStep(3);
+  };
 
-      // Send USDT to platform wallet
-      const txHash = await sendTokenTransaction(
-        encryptedKeys.solana.encryptedPrivateKey,
-        pinString,
-        PLATFORM_WALLET,
-        amountNum,
-        USDT_MINT,
-        6
-      );
+  const handleTransferUsdt = async () => {
+    setError("");
+    setSuccess("");
+    if (!pin) {
+      setError("Please enter your PIN");
+      return;
+    }
 
-      // Create the sell order with bank details
-      const res = await fetch("/api/p2p/orders", {
+    setTransferring(true);
+    try {
+      const res = await fetch("/api/withdraw/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          orderType: "sell",
-          usdtAmount: amountNum,
-          fiatCurrency,
-          exchangeRate: sellRate,
-          bankDetails: { bankName, accountNumber, accountName },
+          txHash,
+          pin,
+          usdtAmount: parseFloat(usdtAmount),
+          chain,
+          bankDetails: newBank ? bankForm : null,
         }),
       });
 
       const data = await res.json();
-      if (!data.success) {
-        setPinError(data.message || "Failed to create withdrawal order");
-        setSending(false);
-        return;
-      }
+      if (res.ok) {
+        setWithdrawalId(data.withdrawalId);
+        setSuccess("USDT transferred successfully! Verifying on blockchain...");
+        
+        // Start polling status
+        const pollInterval = setInterval(async () => {
+          try {
+            const statusRes = await fetch(`/api/withdraw/status/${data.withdrawalId}`);
+            if (statusRes.ok) {
+              const statusData = await statusRes.json();
+              setWithdrawalStatus(statusData);
+              
+              // Stop polling if completed
+              if (["completed", "failed", "cancelled"].includes(statusData.status)) {
+                clearInterval(pollInterval);
+              }
+            }
+          } catch (err) {
+            console.error("Failed to fetch withdrawal status:", err);
+          }
+        }, 5000);
 
-      // Update order with txHash
-      await fetch(`/api/p2p/orders/${data.order._id}`, {
+        setPollingInterval(pollInterval);
+        setStep(4);
+      } else {
+        setError(data.error || "Transfer failed");
+      }
+    } catch (err) {
+      setError("Transfer failed. Please check and try again.");
+      console.error(err);
+    } finally {
+      setTransferring(false);
+    }
+  };
+
+  const handleCancelWithdrawal = async () => {
+    if (!withdrawalId) return;
+    if (!confirm("Are you sure? You cannot cancel after NGN payment begins.")) return;
+
+    try {
+      const res = await fetch(`/api/withdraw/status/${withdrawalId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "confirm_usdt_sent", txHash }),
+        body: JSON.stringify({ action: "cancel" }),
       });
 
-      setActiveOrder({ ...data.order, txHash, status: "payment_sent" });
-      setShowPinModal(false);
-      setPin(["", "", "", "", "", ""]);
-      setUsdtAmount("");
-      setBankName("");
-      setAccountNumber("");
-      setAccountName("");
+      if (res.ok) {
+        setError("");
+        setSuccess("Withdrawal cancelled");
+        setTimeout(() => setStep(1), 2000);
+      } else {
+        setError("Cannot cancel at this stage");
+      }
     } catch (err) {
-      setPinError(err instanceof Error ? err.message : "Transaction failed");
-    } finally {
-      setSending(false);
+      setError("Failed to cancel");
+      console.error(err);
     }
   };
 
-  // ── PIN handlers ───────────────────────────────────────────────────────
-
-  const pinRefs = React.useRef<(HTMLInputElement | null)[]>([]);
-
-  const handlePinChange = (index: number, value: string) => {
-    if (!/^\d*$/.test(value)) return;
-    const newPin = [...pin];
-    newPin[index] = value.slice(-1);
-    setPin(newPin);
-    if (value && index < 5) pinRefs.current[index + 1]?.focus();
-  };
-
-  const handlePinKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === "Backspace" && !pin[index] && index > 0) {
-      pinRefs.current[index - 1]?.focus();
-    }
-  };
-
-  // ── No wallet state ────────────────────────────────────────────────────
-
-  if (!walletsGenerated) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-20 h-20 rounded-full bg-muted/30 dark:bg-white/5 flex items-center justify-center mx-auto mb-4">
-            <svg className="w-10 h-10 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 11-6 0H5.25A2.25 2.25 0 003 12m18 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 9m18 0V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v3" />
-            </svg>
-          </div>
-          <h2 className="text-xl font-semibold text-dark dark:text-white mb-2">Wallet Required</h2>
-          <p className="text-muted mb-4">Set up your wallet on the Assets page to withdraw funds.</p>
-          <a
-            href="/assets"
-            className="inline-flex items-center gap-2 py-2.5 px-5 bg-primary hover:bg-primary/90 text-white font-medium rounded-xl transition-colors"
-          >
-            Go to Assets
-          </a>
-        </div>
-      </div>
-    );
-  }
-
-  // ────────────────────────────────────────────────────────────────────────
-  // Render
-  // ────────────────────────────────────────────────────────────────────────
+  const fiatAmount = exchangeRate > 0 ? (parseFloat(usdtAmount || "0") * exchangeRate * 0.95) : 0;
 
   return (
-    <>
-      <div className="grid grid-cols-12 gap-5 lg:gap-6">
-        <div className="col-span-12 lg:col-span-8 lg:col-start-3">
-          {/* Header */}
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold text-dark dark:text-white">Withdraw</h1>
-            <p className="text-muted mt-1">Cash out USDT to your bank account</p>
-          </div>
+    <div className="min-h-screen bg-herobg dark:bg-gradient-to-b dark:from-dark dark:to-darkgray py-8 px-4">
+      <div className="max-w-2xl mx-auto">
+        {/* Breadcrumb */}
+        <div className="mb-8">
+          <Link
+            href="/dashboard"
+            className="text-sm text-primary hover:underline flex items-center gap-2"
+          >
+            <Icon icon="tabler:chevron-left" height={16} />
+            Back to Dashboard
+          </Link>
+        </div>
 
-          {/* Steps */}
-          <WithdrawSteps currentStep={getStep()} />
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-dark dark:text-white mb-2">
+            Withdraw USDT
+          </h1>
+          <p className="text-muted">
+            Convert your USDT to Nigerian Naira and receive it in your bank account
+          </p>
+        </div>
 
-          {/* Main Card */}
-          <div className="bg-white dark:bg-black border border-border/50 dark:border-darkborder rounded-2xl shadow-sm overflow-hidden">
-
-            {/* ── Form: enter amount + bank details ────────────────── */}
-            {!activeOrder && (
-              <div className="p-6 space-y-5">
-                {/* Info banner */}
-                <div className="flex items-start gap-3 p-4 bg-blue-500/5 border border-blue-500/10 rounded-xl">
-                  <svg className="w-5 h-5 text-blue-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <div>
-                    <p className="text-sm text-dark dark:text-white font-medium">How withdrawal works</p>
-                    <p className="text-xs text-muted mt-1">
-                      Enter amount → Add bank details → Send USDT from wallet → Receive NGN in your bank.
-                    </p>
+        {/* Stepper */}
+        <div className="mb-8 bg-white dark:bg-dark rounded-xl border border-border dark:border-darkborder p-6">
+          <div className="flex items-center justify-between">
+            {[1, 2, 3, 4].map((s) => (
+              <React.Fragment key={s}>
+                <div className="flex flex-col items-center flex-1">
+                  <div
+                    className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm mb-2 transition-colors ${
+                      s < step
+                        ? "bg-success text-white"
+                        : s === step
+                          ? "bg-primary text-white"
+                          : "bg-muted/20 text-muted"
+                    }`}
+                  >
+                    {s < step ? <Icon icon="tabler:check" height={18} /> : s}
                   </div>
+                  <p className={`text-xs font-medium ${s === step ? "text-primary dark:text-primary" : "text-muted"}`}>
+                    {STEP_TITLES[s - 1]}
+                  </p>
+                  <p className={`text-[10px] ${s === step ? "text-primary/70 dark:text-primary/70" : "text-muted"}`}>
+                    {STEP_DESCRIPTIONS[s - 1]}
+                  </p>
                 </div>
-
-                {/* Rate display */}
-                {currentRate && (
-                  <div className="bg-muted/30 dark:bg-white/5 rounded-xl p-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted">Exchange Rate</span>
-                      <span className="text-dark dark:text-white font-semibold">
-                        1 USDT = {currentRate.symbol}
-                        {currentRate.sellRate.toLocaleString(undefined, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted mt-1">
-                      Market rate: {currentRate.symbol}{currentRate.marketRate.toLocaleString()} • 5% spread
-                    </p>
-                  </div>
+                {s < 4 && (
+                  <div className={`h-0.5 flex-1 mx-4 ${s < step ? "bg-success" : "bg-muted/20"}`} />
                 )}
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
 
-                {ratesLoading && (
-                  <div className="flex items-center justify-center py-4">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
-                  </div>
+        {/* Error/Success Messages */}
+        {error && (
+          <div className="mb-6 p-4 rounded-xl bg-error/10 border border-error text-error text-sm flex items-center gap-3">
+            <Icon icon="tabler:alert-circle" height={18} className="flex-shrink-0" />
+            {error}
+          </div>
+        )}
+        {success && (
+          <div className="mb-6 p-4 rounded-xl bg-success/10 border border-success text-success text-sm flex items-center gap-3">
+            <Icon icon="tabler:check-circle" height={18} className="flex-shrink-0" />
+            {success}
+          </div>
+        )}
+
+        {/* Step Content */}
+        <div className="bg-white dark:bg-dark rounded-xl border border-border dark:border-darkborder p-6">
+          {step === 1 && (
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-semibold text-dark dark:text-white mb-3">
+                  Select Blockchain
+                </label>
+                <div className="grid grid-cols-2 gap-4">
+                  {[
+                    { id: "solana", name: "Solana", icon: "mdi:ethereum", color: "text-[#9945FF]" },
+                    { id: "ethereum", name: "Ethereum", icon: "mdi:ethereum", color: "text-[#627EEA]" },
+                  ].map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => setChain(c.id as "solana" | "ethereum")}
+                      className={`p-4 rounded-lg border-2 transition-all ${
+                        chain === c.id
+                          ? "border-primary bg-primary/10"
+                          : "border-border dark:border-darkborder bg-herobg dark:bg-darkgray hover:border-primary"
+                      }`}
+                    >
+                      <Icon icon={c.icon} height={24} className={`${c.color} mx-auto mb-2`} />
+                      <p className="font-semibold text-dark dark:text-white">{c.name}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-dark dark:text-white mb-2">
+                  USDT Amount
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={usdtAmount}
+                    onChange={(e) => setUsdtAmount(e.target.value)}
+                    placeholder="Enter amount..."
+                    className="w-full px-4 py-3 rounded-lg border border-border dark:border-darkborder bg-herobg dark:bg-darkgray text-dark dark:text-white placeholder-muted"
+                  />
+                  <span className="absolute right-4 top-3.5 text-muted font-medium">USDT</span>
+                </div>
+                {usdtAmount && exchangeRate > 0 && (
+                  <p className="mt-2 text-sm text-muted">
+                    ≈ ₦{fiatAmount.toLocaleString()} NGN (at ₦{exchangeRate.toFixed(2)}/USDT with 5% withdrawal fee)
+                  </p>
                 )}
+              </div>
 
-                {/* USDT Amount */}
-                <div>
-                  <label className="block text-sm text-muted mb-2">Amount to withdraw</label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      value={usdtAmount}
-                      onChange={(e) => setUsdtAmount(e.target.value)}
-                      placeholder="Enter USDT amount"
-                      step="any"
-                      min={5}
-                      max={5000}
-                      className="w-full px-4 py-3.5 pr-20 bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-darkborder rounded-xl text-dark dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/50 text-lg"
-                    />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-muted text-sm font-medium">
-                      USDT
-                    </span>
-                  </div>
-                  <div className="flex justify-between mt-1.5">
-                    <p className="text-xs text-muted">Min: 5 USDT • Max: 5,000 USDT</p>
-                    <div className="flex gap-1.5">
-                      {[10, 50, 100, 500].map((v) => (
+              <button
+                onClick={handleInitiateWithdrawal}
+                disabled={loading}
+                className="w-full px-6 py-3 rounded-lg bg-primary text-white font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {loading && <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/20 border-t-white" />}
+                Continue to Bank Details
+              </button>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="space-y-6">
+              {!newBank && profile?.savedBankDetails.length ? (
+                <>
+                  <div>
+                    <label className="block text-sm font-semibold text-dark dark:text-white mb-3">
+                      Select Bank Account
+                    </label>
+                    <div className="space-y-2">
+                      {profile.savedBankDetails.map((bank) => (
                         <button
-                          key={v}
-                          onClick={() => setUsdtAmount(v.toString())}
-                          className="px-2 py-0.5 text-xs bg-muted/30 dark:bg-white/5 text-muted hover:text-dark dark:hover:text-white rounded-md transition-colors"
+                          key={`${bank.bankName}-${bank.accountNumber}`}
+                          onClick={() =>
+                            setSelectedBank(`${bank.bankName}-${bank.accountNumber}`)
+                          }
+                          className={`w-full p-4 rounded-lg border-2 text-left transition-all ${
+                            selectedBank === `${bank.bankName}-${bank.accountNumber}`
+                              ? "border-primary bg-primary/10"
+                              : "border-border dark:border-darkborder hover:border-primary"
+                          }`}
                         >
-                          {v}
+                          <p className="font-semibold text-dark dark:text-white">{bank.bankName}</p>
+                          <p className="text-sm text-muted">{bank.accountNumber}</p>
+                          <p className="text-xs text-muted mt-1">{bank.accountName}</p>
                         </button>
                       ))}
                     </div>
                   </div>
-                </div>
+                  <button
+                    onClick={() => setNewBank(true)}
+                    className="text-primary text-sm hover:underline"
+                  >
+                    + Add New Bank Account
+                  </button>
+                </>
+              ) : null}
 
-                {/* Fiat equivalent */}
-                {amountNum > 0 && sellRate && (
-                  <div className="bg-red-500/5 border border-red-500/10 rounded-xl p-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted">You will receive</span>
-                      <span className="text-2xl font-bold text-dark dark:text-white">
-                        {CURRENCY_SYMBOLS[fiatCurrency]}
-                        {fiatAmount.toLocaleString(undefined, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
-                      </span>
-                    </div>
+              {newBank && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs text-muted mb-2">Bank Name</label>
+                    <input
+                      type="text"
+                      value={bankForm.bankName}
+                      onChange={(e) => setBankForm({ ...bankForm, bankName: e.target.value })}
+                      className="w-full px-4 py-2 rounded-lg border border-border dark:border-darkborder bg-herobg dark:bg-darkgray text-dark dark:text-white"
+                    />
                   </div>
-                )}
-
-                {/* Bank Details */}
-                <div className="space-y-3">
-                  <h3 className="text-sm font-semibold text-dark dark:text-white flex items-center gap-2">
-                    <svg className="w-4 h-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                    </svg>
-                    Your Bank Details
-                  </h3>
-                  <input
-                    type="text"
-                    value={bankName}
-                    onChange={(e) => setBankName(e.target.value)}
-                    placeholder="Bank Name (e.g. Access Bank)"
-                    className="w-full px-4 py-3 bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-darkborder rounded-xl text-dark dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
-                  <input
-                    type="text"
-                    value={accountNumber}
-                    onChange={(e) => setAccountNumber(e.target.value)}
-                    placeholder="Account Number"
-                    className="w-full px-4 py-3 bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-darkborder rounded-xl text-dark dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
-                  <input
-                    type="text"
-                    value={accountName}
-                    onChange={(e) => setAccountName(e.target.value)}
-                    placeholder="Account Name"
-                    className="w-full px-4 py-3 bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-darkborder rounded-xl text-dark dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
-                </div>
-
-                {/* Error */}
-                {error && (
-                  <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                    <p className="text-sm text-red-500">{error}</p>
+                  <div>
+                    <label className="block text-xs text-muted mb-2">Account Number</label>
+                    <input
+                      type="text"
+                      value={bankForm.accountNumber}
+                      onChange={(e) => setBankForm({ ...bankForm, accountNumber: e.target.value })}
+                      className="w-full px-4 py-2 rounded-lg border border-border dark:border-darkborder bg-herobg dark:bg-darkgray text-dark dark:text-white"
+                    />
                   </div>
-                )}
-
-                {/* Withdraw button */}
-                <button
-                  onClick={handleWithdraw}
-                  disabled={!isValidAmount || !sellRate || loading || !hasBankDetails}
-                  className="w-full py-3.5 px-4 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? "Processing..." : `Withdraw ${amountNum > 0 ? amountNum + " " : ""}USDT`}
-                </button>
-
-                {/* Summary */}
-                {isValidAmount && sellRate && hasBankDetails && (
-                  <div className="text-xs text-muted text-center">
-                    {amountNum} USDT will be deducted from your Solana wallet •{" "}
-                    {CURRENCY_SYMBOLS[fiatCurrency]}{fiatAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} to your bank
+                  <div>
+                    <label className="block text-xs text-muted mb-2">Account Name</label>
+                    <input
+                      type="text"
+                      value={bankForm.accountName}
+                      onChange={(e) => setBankForm({ ...bankForm, accountName: e.target.value })}
+                      className="w-full px-4 py-2 rounded-lg border border-border dark:border-darkborder bg-herobg dark:bg-darkgray text-dark dark:text-white"
+                    />
                   </div>
-                )}
-              </div>
-            )}
-
-            {/* ── Active order: Processing ─────────────────────────── */}
-            {activeOrder && activeOrder.status === "payment_sent" && (
-              <div className="p-6">
-                <div className="text-center py-8">
-                  <div className="w-20 h-20 mx-auto mb-5 rounded-full bg-orange-500/10 flex items-center justify-center">
-                    <svg className="w-10 h-10 text-orange-500 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <h3 className="text-xl font-semibold text-dark dark:text-white mb-3">
-                    Processing Withdrawal
-                  </h3>
-                  <p className="text-muted max-w-sm mx-auto">
-                    Your <strong className="text-dark dark:text-white">{activeOrder.usdtAmount} USDT</strong> has been received.
-                    We&apos;re sending <strong className="text-dark dark:text-white">{CURRENCY_SYMBOLS[activeOrder.fiatCurrency]}{activeOrder.fiatAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</strong> to your bank.
-                  </p>
-                  <p className="text-sm text-muted mt-4">This usually takes 5–30 minutes.</p>
-
-                  {/* Order details */}
-                  <div className="mt-6 bg-muted/30 dark:bg-white/5 rounded-xl p-4 text-left space-y-2 max-w-sm mx-auto">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted">Bank</span>
-                      <span className="text-dark dark:text-white">{activeOrder.userBankDetails?.bankName}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted">Account</span>
-                      <span className="text-dark dark:text-white font-mono">{activeOrder.userBankDetails?.accountNumber}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted">Name</span>
-                      <span className="text-dark dark:text-white">{activeOrder.userBankDetails?.accountName}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted">Status</span>
-                      <StatusBadge status={activeOrder.status} />
-                    </div>
-                  </div>
-
-                  {activeOrder.txHash && (
-                    <a
-                      href={`https://solscan.io/tx/${activeOrder.txHash}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-primary hover:text-primary/80 text-sm mt-4"
-                    >
-                      View USDT Transaction →
-                    </a>
-                  )}
-
-                  <div className="mt-4 p-3 bg-muted/30 dark:bg-white/5 rounded-xl inline-flex items-center gap-2 text-sm text-muted">
-                    <svg className="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                    </svg>
-                    Status updates automatically.
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ── Completed ────────────────────────────────────────── */}
-            {activeOrder && activeOrder.status === "completed" && (
-              <div className="p-6">
-                <div className="text-center py-8">
-                  <div className="w-20 h-20 mx-auto mb-5 rounded-full bg-green-500/10 flex items-center justify-center">
-                    <svg className="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                  <h3 className="text-xl font-semibold text-dark dark:text-white mb-3">
-                    Withdrawal Successful!
-                  </h3>
-                  <p className="text-muted">
-                    <strong className="text-dark dark:text-white">
-                      {CURRENCY_SYMBOLS[activeOrder.fiatCurrency]}{activeOrder.fiatAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                    </strong> has been sent to your bank account.
-                  </p>
-                  <div className="mt-6 flex justify-center gap-3">
+                  {newBank && profile?.savedBankDetails.length ? (
                     <button
-                      onClick={() => setActiveOrder(null)}
-                      className="py-2.5 px-6 bg-primary hover:bg-primary/90 text-white font-medium rounded-xl transition-colors"
+                      onClick={() => setNewBank(false)}
+                      className="text-primary text-sm hover:underline"
                     >
-                      Withdraw Again
+                      ← Back to Saved Accounts
                     </button>
-                    <a
-                      href="/assets"
-                      className="py-2.5 px-6 bg-muted/30 dark:bg-white/5 hover:bg-muted/40 dark:hover:bg-white/10 text-dark dark:text-white font-medium rounded-xl transition-colors"
-                    >
-                      View Assets
-                    </a>
-                  </div>
+                  ) : null}
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setStep(1)}
+                  className="flex-1 px-6 py-3 rounded-lg border border-border dark:border-darkborder text-dark dark:text-white font-semibold hover:bg-herobg dark:hover:bg-darkgray transition-colors"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={handleConfirmBankDetails}
+                  className="flex-1 px-6 py-3 rounded-lg bg-primary text-white font-semibold hover:bg-primary/90 transition-colors"
+                >
+                  Continue to Confirm
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="space-y-6">
+              <div className="p-4 rounded-lg bg-info/10 border border-info">
+                <h3 className="font-semibold text-info mb-2">Next Step</h3>
+                <ol className="text-sm text-info space-y-1 list-decimal list-inside">
+                  <li>Send exactly {usdtAmount} USDT to the treasury wallet below</li>
+                  <li>Enter the transaction hash and PIN below</li>
+                  <li>We'll verify the transaction on-chain</li>
+                  <li>Your NGN will be transferred to your bank account</li>
+                </ol>
+              </div>
+
+              <div className="p-4 rounded-lg bg-herobg/50 dark:bg-darkgray/50 border border-border dark:border-darkborder">
+                <p className="text-xs text-muted mb-2">Treasury {chain === "solana" ? "Solana" : "Ethereum"} Address</p>
+                <code className="text-xs text-dark dark:text-white break-all block font-mono bg-white dark:bg-dark p-3 rounded border border-border dark:border-darkborder">
+                  treasuryAddressHere...
+                </code>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-dark dark:text-white mb-2">
+                  Transaction Hash
+                </label>
+                <input
+                  type="text"
+                  value={txHash}
+                  onChange={(e) => setTxHash(e.target.value)}
+                  placeholder="Paste transaction hash here..."
+                  className="w-full px-4 py-3 rounded-lg border border-border dark:border-darkborder bg-herobg dark:bg-darkgray text-dark dark:text-white placeholder-muted font-mono text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-dark dark:text-white mb-2">
+                  PIN
+                </label>
+                <div className="relative">
+                  <input
+                    type={pinVisible ? "text" : "password"}
+                    value={pin}
+                    onChange={(e) => setPin(e.target.value)}
+                    placeholder="Enter your PIN..."
+                    className="w-full px-4 py-3 rounded-lg border border-border dark:border-darkborder bg-herobg dark:bg-darkgray text-dark dark:text-white placeholder-muted"
+                  />
+                  <button
+                    onClick={() => setPinVisible(!pinVisible)}
+                    className="absolute right-4 top-3.5 text-muted hover:text-dark dark:hover:text-white transition-colors"
+                  >
+                    <Icon icon={pinVisible ? "tabler:eye-off" : "tabler:eye"} height={18} />
+                  </button>
                 </div>
               </div>
-            )}
-          </div>
-        </div>
 
-        <div className="col-span-12"><Footer /></div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setStep(2)}
+                  className="flex-1 px-6 py-3 rounded-lg border border-border dark:border-darkborder text-dark dark:text-white font-semibold hover:bg-herobg dark:hover:bg-darkgray transition-colors"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={handleTransferUsdt}
+                  disabled={transferring}
+                  className="flex-1 px-6 py-3 rounded-lg bg-success text-white font-semibold hover:bg-success/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {transferring && (
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/20 border-t-white" />
+                  )}
+                  Complete Withdrawal
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 4 && withdrawalStatus && (
+            <div className="space-y-6">
+              <div className="text-center">
+                {withdrawalStatus.status === "completed" ? (
+                  <>
+                    <Icon
+                      icon="tabler:circle-check"
+                      height={48}
+                      className="text-success mx-auto mb-4"
+                    />
+                    <h2 className="text-2xl font-bold text-dark dark:text-white mb-2">
+                      Withdrawal Completed!
+                    </h2>
+                    <p className="text-muted mb-4">
+                      ₦{withdrawalStatus.fiatAmount.toLocaleString()} NGN has been sent to your bank account.
+                    </p>
+                    <p className="text-xs text-muted">
+                      {withdrawalStatus.completedAt &&
+                        new Date(withdrawalStatus.completedAt).toLocaleString()}
+                    </p>
+                  </>
+                ) : withdrawalStatus.status === "failed" || withdrawalStatus.status === "cancelled" ? (
+                  <>
+                    <Icon icon="tabler:circle-x" height={48} className="text-error mx-auto mb-4" />
+                    <h2 className="text-2xl font-bold text-dark dark:text-white mb-2">
+                      {withdrawalStatus.status === "failed" ? "Withdrawal Failed" : "Withdrawal Cancelled"}
+                    </h2>
+                    <p className="text-muted mb-4">
+                      Please contact support if you have any questions. Your USDT has been returned.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <Icon
+                      icon="tabler:loader-2"
+                      height={48}
+                      className="text-primary mx-auto mb-4 animate-spin"
+                    />
+                    <h2 className="text-2xl font-bold text-dark dark:text-white mb-2">
+                      Processing Your Withdrawal
+                    </h2>
+                    <p className="text-muted mb-4">
+                      Status: <span className="font-semibold capitalize">{withdrawalStatus.status.replace(/_/g, " ")}</span>
+                    </p>
+                    <p className="text-xs text-muted mb-4">
+                      This usually takes 1-2 hours. We'll notify you when your NGN arrives.
+                    </p>
+                    {withdrawalStatus.txHash && (
+                      <a
+                        href={
+                          chain === "solana"
+                            ? `https://solscan.io/tx/${withdrawalStatus.txHash}`
+                            : `https://etherscan.io/tx/${withdrawalStatus.txHash}`
+                        }
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary text-xs hover:underline inline-block"
+                      >
+                        View Transaction on {chain === "solana" ? "Solscan" : "Etherscan"}
+                      </a>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {!["completed", "failed", "cancelled"].includes(withdrawalStatus.status) && (
+                <button
+                  onClick={handleCancelWithdrawal}
+                  className="w-full px-6 py-3 rounded-lg border border-error text-error font-semibold hover:bg-error/10 transition-colors"
+                >
+                  Cancel Withdrawal
+                </button>
+              )}
+
+              <Link
+                href="/dashboard"
+                className="block text-center px-6 py-3 rounded-lg bg-primary text-white font-semibold hover:bg-primary/90 transition-colors"
+              >
+                Back to Dashboard
+              </Link>
+            </div>
+          )}
+        </div>
       </div>
-
-      {/* ── PIN Modal ───────────────────────────────────────────────────── */}
-      {showPinModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !sending && setShowPinModal(false)} />
-          <div className="relative bg-white dark:bg-black border border-border/50 dark:border-darkborder rounded-2xl w-full max-w-md mx-4 p-6 shadow-lg">
-            <h3 className="text-lg font-semibold text-dark dark:text-white mb-2 text-center">
-              Confirm Withdrawal
-            </h3>
-            <p className="text-sm text-muted text-center mb-1">
-              Sending <span className="font-semibold text-dark dark:text-white">{amountNum} USDT</span> from your wallet
-            </p>
-            <p className="text-sm text-muted text-center mb-1">
-              You&apos;ll receive <span className="font-semibold text-dark dark:text-white">
-                {CURRENCY_SYMBOLS[fiatCurrency]}{fiatAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-              </span> to your bank
-            </p>
-            <p className="text-xs text-muted text-center mb-6">
-              Enter your 6-digit PIN to authorize.
-            </p>
-
-            <div className="flex justify-center gap-3 mb-4">
-              {pin.map((digit, i) => (
-                <input
-                  key={i}
-                  ref={(el) => { pinRefs.current[i] = el; }}
-                  type="password"
-                  inputMode="numeric"
-                  maxLength={1}
-                  value={digit}
-                  onChange={(e) => handlePinChange(i, e.target.value)}
-                  onKeyDown={(e) => handlePinKeyDown(i, e)}
-                  className="w-12 h-14 text-center text-xl font-bold bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-darkborder rounded-xl text-dark dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50"
-                />
-              ))}
-            </div>
-
-            {pinError && (
-              <p className="text-sm text-red-500 text-center mb-4">{pinError}</p>
-            )}
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => { setShowPinModal(false); setPin(["", "", "", "", "", ""]); setPinError(""); }}
-                disabled={sending}
-                className="flex-1 py-3 px-4 bg-muted/30 dark:bg-white/5 text-dark dark:text-white font-medium rounded-xl transition-colors disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmSend}
-                disabled={pin.some((d) => !d) || sending}
-                className="flex-1 py-3 px-4 bg-red-500 hover:bg-red-600 text-white font-medium rounded-xl transition-colors disabled:opacity-50"
-              >
-                {sending ? "Sending..." : "Confirm & Send"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
+    </div>
   );
 }

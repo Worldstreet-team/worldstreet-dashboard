@@ -1,9 +1,10 @@
 /**
- * Treasury Utility — Encryption, Solana balance, SPL USDT transfers
+ * Treasury Utility — Encryption, Solana/Ethereum balance, SPL/ERC-20 USDT transfers
  *
  * Requires env vars:
  *   TREASURY_ENCRYPTION_KEY — 32-byte hex string for AES-256-GCM
  *   NEXT_PUBLIC_SOL_RPC     — Solana RPC endpoint
+ *   NEXT_PUBLIC_ETH_RPC     — Ethereum RPC endpoint
  */
 
 import crypto from "crypto";
@@ -20,6 +21,7 @@ import {
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 import bs58 from "bs58";
+import { ethers } from "ethers";
 import { connectDB } from "@/lib/mongodb";
 import TreasuryWallet from "@/models/TreasuryWallet";
 
@@ -28,9 +30,23 @@ import TreasuryWallet from "@/models/TreasuryWallet";
 const SOLANA_RPC =
   process.env.NEXT_PUBLIC_SOL_RPC || "https://api.mainnet-beta.solana.com";
 
+const ETH_RPC =
+  process.env.NEXT_PUBLIC_ETH_RPC || "https://cloudflare-eth.com";
+
 /** Solana mainnet USDT mint */
 const USDT_MINT = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
 const USDT_DECIMALS = 6;
+
+/** Ethereum mainnet USDT contract */
+const ETH_USDT_CONTRACT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
+const ETH_USDT_DECIMALS = 6;
+
+/** Minimal ERC-20 ABI for balanceOf + transfer */
+const ERC20_ABI = [
+  "function balanceOf(address owner) view returns (uint256)",
+  "function transfer(address to, uint256 amount) returns (bool)",
+  "function decimals() view returns (uint8)",
+];
 
 // ── Encryption helpers ─────────────────────────────────────────────────────
 
@@ -109,6 +125,39 @@ export async function getActiveTreasuryKeypair(): Promise<Keypair | null> {
     console.error("Failed to decrypt treasury key:", err);
     return null;
   }
+}
+
+/**
+ * Generate a new Solana treasury wallet.
+ * Encrypts the private key and stores it in MongoDB.
+ */
+export async function generateSolanaTreasuryWallet(): Promise<{ address: string; publicKey: string }> {
+  await connectDB();
+
+  // Deactivate existing SOL wallets
+  await TreasuryWallet.updateMany(
+    { network: "solana", isActive: true },
+    { isActive: false }
+  );
+
+  const keypair = Keypair.generate();
+  const privateKeyBase58 = bs58.encode(keypair.secretKey);
+
+  const encrypted = encryptPrivateKey(privateKeyBase58);
+
+  await TreasuryWallet.create({
+    publicKey: keypair.publicKey.toBase58(),
+    encryptedPrivateKey: encrypted.encryptedPrivateKey,
+    iv: encrypted.iv,
+    authTag: encrypted.authTag,
+    network: "solana",
+    isActive: true,
+  });
+
+  return {
+    address: keypair.publicKey.toBase58(),
+    publicKey: keypair.publicKey.toBase58(),
+  };
 }
 
 // ── Solana balance helpers ─────────────────────────────────────────────────
@@ -206,5 +255,198 @@ export async function sendUsdtFromTreasury(
     const message = err instanceof Error ? err.message : String(err);
     console.error("Treasury USDT transfer failed:", message);
     return { success: false, error: message };
+  }
+}
+
+// ── Ethereum Treasury helpers ──────────────────────────────────────────────
+
+/**
+ * Load the active Ethereum treasury wallet from MongoDB.
+ * Returns an ethers.Wallet instance connected to the ETH RPC, or null.
+ */
+export async function getActiveEthTreasuryWallet(): Promise<ethers.Wallet | null> {
+  await connectDB();
+  const wallet = await TreasuryWallet.findOne({
+    isActive: true,
+    network: "ethereum",
+  }).lean();
+
+  if (!wallet) return null;
+
+  try {
+    const privateKey = decryptPrivateKey(
+      wallet.encryptedPrivateKey,
+      wallet.iv,
+      wallet.authTag
+    );
+    const provider = new ethers.JsonRpcProvider(ETH_RPC);
+    return new ethers.Wallet(privateKey, provider);
+  } catch (err) {
+    console.error("Failed to decrypt ETH treasury key:", err);
+    return null;
+  }
+}
+
+/**
+ * Get native ETH balance for an address.
+ */
+export async function getEthBalance(address: string): Promise<number> {
+  const provider = new ethers.JsonRpcProvider(ETH_RPC);
+  const balance = await provider.getBalance(address);
+  return parseFloat(ethers.formatEther(balance));
+}
+
+/**
+ * Get ERC-20 USDT balance for an address on Ethereum.
+ */
+export async function getEthUsdtBalance(address: string): Promise<number> {
+  const provider = new ethers.JsonRpcProvider(ETH_RPC);
+  const contract = new ethers.Contract(ETH_USDT_CONTRACT, ERC20_ABI, provider);
+  const balance = await contract.balanceOf(address);
+  return parseFloat(ethers.formatUnits(balance, ETH_USDT_DECIMALS));
+}
+
+/**
+ * Generate a new Ethereum treasury wallet.
+ * Encrypts the private key and stores it in MongoDB.
+ */
+export async function generateEthTreasuryWallet(
+  createdBy?: string
+): Promise<{ address: string; privateKey: string }> {
+  await connectDB();
+
+  // Deactivate existing ETH wallets
+  await TreasuryWallet.updateMany(
+    { network: "ethereum", isActive: true },
+    { isActive: false }
+  );
+
+  const wallet = ethers.Wallet.createRandom();
+  const privateKey = wallet.privateKey;
+
+  const encrypted = encryptPrivateKey(privateKey);
+
+  await TreasuryWallet.create({
+    address: wallet.address,
+    encryptedPrivateKey: encrypted.encryptedPrivateKey,
+    iv: encrypted.iv,
+    authTag: encrypted.authTag,
+    network: "ethereum",
+    isActive: true,
+    createdBy,
+  });
+
+  return {
+    address: wallet.address,
+    privateKey,
+  };
+}
+
+/**
+ * Verify an on-chain Solana transaction by txHash.
+ * Checks if the transaction is confirmed and if USDT was sent to the expected treasury.
+ */
+export async function verifySolanaTransaction(
+  txHash: string,
+  expectedTreasuryAddress: string,
+  expectedAmount: number
+): Promise<{ verified: boolean; error?: string }> {
+  try {
+    const connection = new Connection(SOLANA_RPC, "confirmed");
+    const tx = await connection.getParsedTransaction(txHash, {
+      maxSupportedTransactionVersion: 0,
+    });
+
+    if (!tx) {
+      return { verified: false, error: "Transaction not found" };
+    }
+
+    if (tx.meta?.err) {
+      return { verified: false, error: "Transaction failed on-chain" };
+    }
+
+    // Check post-token balances for treasury address
+    const postBalances = tx.meta?.postTokenBalances || [];
+    const preBalances = tx.meta?.preTokenBalances || [];
+
+    for (const post of postBalances) {
+      if (
+        post.mint === USDT_MINT &&
+        post.owner === expectedTreasuryAddress
+      ) {
+        const pre = preBalances.find(
+          (b) => b.accountIndex === post.accountIndex
+        );
+        const preAmount = pre?.uiTokenAmount?.uiAmount || 0;
+        const postAmount = post.uiTokenAmount?.uiAmount || 0;
+        const received = postAmount - preAmount;
+
+        // Allow 0.1 USDT tolerance for rounding
+        if (received >= expectedAmount - 0.1) {
+          return { verified: true };
+        }
+      }
+    }
+
+    return { verified: false, error: "Could not verify USDT transfer to treasury" };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { verified: false, error: message };
+  }
+}
+
+/**
+ * Verify an on-chain Ethereum ERC-20 USDT transaction by txHash.
+ */
+export async function verifyEthereumTransaction(
+  txHash: string,
+  expectedTreasuryAddress: string,
+  expectedAmount: number
+): Promise<{ verified: boolean; error?: string }> {
+  try {
+    const provider = new ethers.JsonRpcProvider(ETH_RPC);
+    const receipt = await provider.getTransactionReceipt(txHash);
+
+    if (!receipt) {
+      return { verified: false, error: "Transaction not found" };
+    }
+
+    if (receipt.status === 0) {
+      return { verified: false, error: "Transaction failed on-chain" };
+    }
+
+    // Parse ERC-20 Transfer events
+    const iface = new ethers.Interface([
+      "event Transfer(address indexed from, address indexed to, uint256 value)",
+    ]);
+
+    for (const log of receipt.logs) {
+      if (log.address.toLowerCase() !== ETH_USDT_CONTRACT.toLowerCase()) continue;
+
+      try {
+        const parsed = iface.parseLog({ topics: log.topics as string[], data: log.data });
+        if (!parsed || parsed.name !== "Transfer") continue;
+
+        const to = parsed.args.to.toLowerCase();
+        const value = parseFloat(
+          ethers.formatUnits(parsed.args.value, ETH_USDT_DECIMALS)
+        );
+
+        if (
+          to === expectedTreasuryAddress.toLowerCase() &&
+          value >= expectedAmount - 0.1
+        ) {
+          return { verified: true };
+        }
+      } catch {
+        // Skip logs that don't match Transfer event
+        continue;
+      }
+    }
+
+    return { verified: false, error: "Could not verify USDT transfer to treasury" };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { verified: false, error: message };
   }
 }

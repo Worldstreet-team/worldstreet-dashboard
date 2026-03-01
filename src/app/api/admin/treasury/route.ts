@@ -1,150 +1,131 @@
-import { NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
+import { NextRequest, NextResponse } from "next/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import TreasuryWallet from "@/models/TreasuryWallet";
-import { getAuthUser } from "@/lib/auth";
-import { Keypair } from "@solana/web3.js";
-import bs58 from "bs58";
+import { connectDB } from "@/lib/mongodb";
 import {
-  encryptPrivateKey,
+  generateSolanaTreasuryWallet,
+  generateEthTreasuryWallet,
   getSolBalance,
   getUsdtBalance,
+  getEthBalance,
+  getEthUsdtBalance,
 } from "@/lib/treasury";
 
-// ── Admin emails ───────────────────────────────────────────────────────────
+const ADMIN_EMAILS = (process.env.P2P_ADMIN_EMAILS || "").split(",").filter(Boolean);
 
-const ADMIN_EMAILS = (process.env.P2P_ADMIN_EMAILS || "")
-  .split(",")
-  .map((e) => e.trim().toLowerCase());
-
-async function getAdminUser() {
-  const user = await getAuthUser();
-  if (!user) return null;
-  if (!ADMIN_EMAILS.includes(user.email.toLowerCase())) return null;
-  return user;
-}
-
-// ── GET /api/admin/treasury — Get active treasury info + balances ───────────
 
 export async function GET() {
   try {
-    const admin = await getAdminUser();
-    if (!admin) {
-      return NextResponse.json(
-        { success: false, message: "Forbidden" },
-        { status: 403 }
-      );
+    const user = await currentUser();
+    if (!user || !ADMIN_EMAILS.includes(user.emailAddresses[0]?.emailAddress)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     await connectDB();
 
-    const wallet = await TreasuryWallet.findOne({
-      isActive: true,
-      network: "solana",
-    }).lean();
+    // Get all treasuries, sorted by createdAt descending
+    const treasuries = await TreasuryWallet.find({}).sort({ createdAt: -1 }).exec();
 
-    if (!wallet) {
-      return NextResponse.json({
-        success: true,
-        wallet: null,
-        message: "No treasury wallet configured",
-      });
+    // Calculate balances for each
+    const balances: Array<{
+      network: string;
+      balance: number;
+      usdtBalance: number;
+      isActive: boolean;
+    }> = [];
+
+    for (const treasury of treasuries) {
+      try {
+        let balance = 0;
+        let usdtBalance = 0;
+
+        if (treasury.network === "solana") {
+          balance = await getSolBalance(treasury.publicKey);
+          usdtBalance = await getUsdtBalance(treasury.publicKey);
+        } else if (treasury.network === "ethereum") {
+          balance = await getEthBalance(treasury.publicKey);
+          usdtBalance = await getEthUsdtBalance(treasury.publicKey);
+        }
+
+        // Update balance in DB
+        await TreasuryWallet.findByIdAndUpdate(treasury._id, { balance, usdtBalance });
+
+        balances.push({
+          network: treasury.network,
+          balance,
+          usdtBalance,
+          isActive: treasury.isActive,
+        });
+      } catch (err) {
+        console.error(`Failed to fetch balance for ${treasury.network}:`, err);
+        balances.push({
+          network: treasury.network,
+          balance: 0,
+          usdtBalance: 0,
+          isActive: treasury.isActive,
+        });
+      }
     }
 
-    // Fetch live balances
-    const [solBalance, usdtBalance] = await Promise.all([
-      getSolBalance(wallet.address).catch(() => 0),
-      getUsdtBalance(wallet.address).catch(() => 0),
-    ]);
-
     return NextResponse.json({
-      success: true,
-      wallet: {
-        address: wallet.address,
-        network: wallet.network,
-        isActive: wallet.isActive,
-        createdBy: wallet.createdBy,
-        createdAt: wallet.createdAt,
-        solBalance,
-        usdtBalance,
-      },
+      treasuries,
+      balances,
     });
-  } catch (error) {
-    console.error("GET /api/admin/treasury error:", error);
-    return NextResponse.json(
-      { success: false, message: "Internal server error" },
-      { status: 500 }
-    );
+  } catch (err) {
+    console.error("Treasury GET error:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
-// ── POST /api/admin/treasury — Generate a new treasury wallet ──────────────
-
-export async function POST() {
+export async function POST(req: NextRequest) {
   try {
-    const admin = await getAdminUser();
-    if (!admin) {
-      return NextResponse.json(
-        { success: false, message: "Forbidden" },
-        { status: 403 }
-      );
+    const user = await currentUser();
+    if (!user || !ADMIN_EMAILS.includes(user.emailAddresses[0]?.emailAddress)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Check encryption key is configured
-    const encKey = process.env.TREASURY_ENCRYPTION_KEY;
-    if (!encKey || encKey.length !== 64) {
+    const { network } = await req.json();
+    if (!["solana", "ethereum"].includes(network)) {
       return NextResponse.json(
-        {
-          success: false,
-          message:
-            "TREASURY_ENCRYPTION_KEY is not configured. Add a 64-char hex string to your environment variables.",
-        },
-        { status: 500 }
+        { error: "Invalid network. Must be 'solana' or 'ethereum'" },
+        { status: 400 }
       );
     }
 
     await connectDB();
 
-    // Generate new Solana keypair
-    const keypair = Keypair.generate();
-    const publicAddress = keypair.publicKey.toBase58();
-    const privateKeyBase58 = bs58.encode(keypair.secretKey);
+    // Check if wallet already exists for this network
+    const existing = await TreasuryWallet.findOne({ network, isActive: true });
+    if (existing) {
+      return NextResponse.json(
+        { error: `Active ${network} treasury wallet already exists` },
+        { status: 400 }
+      );
+    }
 
-    // Encrypt the private key
-    const encrypted = encryptPrivateKey(privateKeyBase58);
+    let wallet;
+    if (network === "solana") {
+      wallet = await generateSolanaTreasuryWallet();
+    } else {
+      wallet = await generateEthTreasuryWallet();
+    }
 
-    // Deactivate any existing treasury wallets
-    await TreasuryWallet.updateMany(
-      { isActive: true, network: "solana" },
-      { $set: { isActive: false } }
-    );
-
-    // Save new wallet
-    await TreasuryWallet.create({
-      address: publicAddress,
-      encryptedPrivateKey: encrypted.encryptedPrivateKey,
-      iv: encrypted.iv,
-      authTag: encrypted.authTag,
-      network: "solana",
+    const treasuryDoc = new TreasuryWallet({
+      network,
+      publicKey: wallet.address,
+      balance: 0,
+      usdtBalance: 0,
       isActive: true,
-      createdBy: admin.email,
     });
 
-    // Return the private key ONCE so admin can back it up
-    return NextResponse.json({
-      success: true,
-      wallet: {
-        address: publicAddress,
-        privateKey: privateKeyBase58,
-        network: "solana",
-      },
-      message:
-        "Treasury wallet generated. SAVE THE PRIVATE KEY NOW — it will not be shown again.",
-    });
-  } catch (error) {
-    console.error("POST /api/admin/treasury error:", error);
+    await treasuryDoc.save();
+
     return NextResponse.json(
-      { success: false, message: "Internal server error" },
-      { status: 500 }
+      { success: true, wallet: treasuryDoc },
+      { status: 201 }
     );
+  } catch (err) {
+    console.error("Treasury POST error:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

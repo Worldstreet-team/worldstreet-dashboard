@@ -31,6 +31,9 @@ const isProtectedApi = createRouteMatcher([
   "/api/trades(.*)",
   "/api/swap(.*)",
   "/api/p2p(.*)",
+  "/api/admin(.*)",
+  "/api/deposit(.*)",
+  "/api/withdraw(.*)",
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
