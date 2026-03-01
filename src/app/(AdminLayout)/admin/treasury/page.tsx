@@ -5,7 +5,7 @@ import { Icon } from "@iconify/react";
 interface TreasuryWallet {
   _id: string;
   network: "solana" | "ethereum";
-  publicKey: string;
+  address: string;
   balance: number;
   usdtBalance: number;
   isActive: boolean;
@@ -211,7 +211,7 @@ export default function AdminTreasuryPage() {
                     </td>
                     <td className="px-4 py-3">
                       <code className="text-xs text-muted font-mono break-all max-w-xs block">
-                        {wallet.publicKey}
+                        {wallet.address}
                       </code>
                     </td>
                     <td className="px-4 py-3 text-right font-medium text-dark dark:text-white">

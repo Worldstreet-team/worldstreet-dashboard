@@ -40,11 +40,11 @@ export async function GET() {
         let usdtBalance = 0;
 
         if (treasury.network === "solana") {
-          balance = await getSolBalance(treasury.publicKey);
-          usdtBalance = await getUsdtBalance(treasury.publicKey);
+          balance = await getSolBalance(treasury.address);
+          usdtBalance = await getUsdtBalance(treasury.address);
         } else if (treasury.network === "ethereum") {
-          balance = await getEthBalance(treasury.publicKey);
-          usdtBalance = await getEthUsdtBalance(treasury.publicKey);
+          balance = await getEthBalance(treasury.address);
+          usdtBalance = await getEthUsdtBalance(treasury.address);
         }
 
         // Update balance in DB
