@@ -12,7 +12,6 @@ import { useBitcoin } from "@/app/context/bitcoinContext";
 import { useTron } from "@/app/context/tronContext";
 import { usePrices, getPrice, calculateDailyPnL } from "@/lib/wallet/usePrices";
 import { formatUSD } from "@/lib/wallet/amounts";
-import WalletModal from "./WalletModal";
 import Link from "next/link";
 
 const PortfolioStats = () => {
@@ -227,24 +226,18 @@ const PortfolioStats = () => {
           </p>
         </div>
         <div className="flex gap-2.5">
-          <WalletModal
-            defaultTab="deposit"
-            trigger={
-              <Button className="bg-success hover:bg-success/90 text-white font-medium rounded-lg px-4 h-9 text-sm shadow-sm transition-all duration-200 hover:shadow-md">
-                <Icon icon="solar:arrow-down-bold" className="mr-1.5 h-3.5 w-3.5" />
-                Deposit
-              </Button>
-            }
-          />
-          <WalletModal
-            defaultTab="withdraw"
-            trigger={
-              <Button variant="outline" className="border-border text-warning hover:bg-warning hover:text-white font-medium rounded-lg px-4 h-9 text-sm transition-all duration-200">
-                <Icon icon="solar:arrow-up-bold" className="mr-1.5 h-3.5 w-3.5" />
-                Withdraw
-              </Button>
-            }
-          />
+          <Link href="/deposit">
+            <Button className="bg-success hover:bg-success/90 text-white font-medium rounded-lg px-4 h-9 text-sm shadow-sm transition-all duration-200 hover:shadow-md">
+              <Icon icon="solar:arrow-down-bold" className="mr-1.5 h-3.5 w-3.5" />
+              Deposit
+            </Button>
+          </Link>
+          <Link href="/withdraw">
+            <Button variant="outline" className="border-border text-warning hover:bg-warning hover:text-white font-medium rounded-lg px-4 h-9 text-sm transition-all duration-200">
+              <Icon icon="solar:arrow-up-bold" className="mr-1.5 h-3.5 w-3.5" />
+              Withdraw
+            </Button>
+          </Link>
           <Link href="/transfer">
             <Button variant="outline" className="border-border text-primary hover:bg-primary hover:text-white font-medium rounded-lg px-4 h-9 text-sm transition-all duration-200">
               <Icon icon="solar:transfer-horizontal-bold" className="mr-1.5 h-3.5 w-3.5" />
