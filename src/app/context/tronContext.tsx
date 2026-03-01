@@ -68,6 +68,10 @@ const TRON_RPC =
   process.env.NEXT_PUBLIC_TRON_RPC ||
   "https://api.trongrid.io";
 
+const TRON_BALANCE_API = 
+  process.env.NEXT_PUBLIC_TRON_BALANCE_API ||
+  "https://trading.watchup.site/api/tron/balance";
+
 const TRON_TOKENS = [
   {
     symbol: "USDT",
@@ -161,17 +165,34 @@ export function TronProvider({ children }: { children: ReactNode }) {
 
   const fetchBalance = useCallback(
     async (addr?: string) => {
-      if (!tronWeb) return;
-
       const target = addr || address;
       if (!target) return;
 
       try {
-        const trxBalance = await tronWeb.trx.getBalance(target);
-        setBalance(trxBalance / 1_000_000);
+        // Call external balance API
+        const response = await fetch(`${TRON_BALANCE_API}/${target}`);
+        
+        if (!response.ok) {
+          console.error("Failed to fetch Tron balance:", response.statusText);
+          return;
+        }
+
+        const data = await response.json();
+
+        if (!data.success) {
+          console.error("Tron balance API error:", data.message);
+          return;
+        }
+
+        // Set TRX balance from API response
+        const trxBalance = parseFloat(data.balance?.trx || "0");
+        setBalance(trxBalance);
+
+        // For now, we'll still fetch token balances using TronWeb
+        // since the external API only returns TRX balance
+        if (!tronWeb) return;
 
         const results: TokenBalance[] = [];
-
         const allTokens = [...TRON_TOKENS];
 
         customTokens.forEach((ct) => {
