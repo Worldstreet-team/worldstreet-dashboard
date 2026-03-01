@@ -4,17 +4,12 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { Icon } from "@iconify/react";
 import { useTron } from "@/app/context/tronContext";
 import { useEvm } from "@/app/context/evmContext";
+import { useSolana } from "@/app/context/solanaContext";
 import { useWallet } from "@/app/context/walletContext";
 import { decryptWithPIN } from "@/lib/wallet/encryption";
-import { 
-  validateSymbiosisQuote, 
-  formatValidationErrors,
-  isQuoteExecutable,
-  getFeeSummary 
-} from "@/lib/bridge/symbiosisValidator";
 import PinConfirmModal from "../swap/PinConfirmModal";
 
-// Symbiosis supported chains (only Tron and Ethereum)
+// Swing supported chains (Tron, Ethereum, and Solana)
 const BRIDGE_CHAINS = {
   tron: {
     id: 728126428,
@@ -27,6 +22,12 @@ const BRIDGE_CHAINS = {
     name: "Ethereum",
     symbol: "ETH",
     logo: "https://cryptologos.cc/logos/ethereum-eth-logo.png",
+  },
+  solana: {
+    id: 1151111081099710,
+    name: "Solana",
+    symbol: "SOL",
+    logo: "https://cryptologos.cc/logos/solana-sol-logo.png",
   },
 } as const;
 
@@ -46,6 +47,7 @@ interface BridgeToken {
 export default function TronBridgeInterface() {
   const { address: tronAddress, balance: trxBalance, tokenBalances: trxTokens } = useTron();
   const { address: evmAddress, balance: ethBalance } = useEvm();
+  const { address: solAddress, balance: solBalance, tokenBalances: solTokens } = useSolana();
   const { walletsGenerated } = useWallet();
 
   const [fromChain, setFromChain] = useState<ChainKey>("tron");
@@ -67,6 +69,7 @@ export default function TronBridgeInterface() {
     const tokens: Record<ChainKey, BridgeToken[]> = {
       tron: [],
       ethereum: [],
+      solana: [],
     };
 
     // Tron tokens
@@ -121,6 +124,34 @@ export default function TronBridgeInterface() {
       },
     ];
 
+    // Solana tokens (add common ones)
+    tokens.solana = [
+      {
+        address: "So11111111111111111111111111111111111111112",
+        symbol: "SOL",
+        name: "Solana",
+        decimals: 9,
+        chainId: 1151111081099710,
+        logoURI: BRIDGE_CHAINS.solana.logo,
+      },
+      {
+        address: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+        symbol: "USDT",
+        name: "Tether USD",
+        decimals: 6,
+        chainId: 1151111081099710,
+        logoURI: "https://cryptologos.cc/logos/tether-usdt-logo.png",
+      },
+      {
+        address: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        symbol: "USDC",
+        name: "USD Coin",
+        decimals: 6,
+        chainId: 1151111081099710,
+        logoURI: "https://cryptologos.cc/logos/usd-coin-usdc-logo.png",
+      },
+    ];
+
     return tokens;
   }, [trxTokens]);
 
@@ -140,10 +171,19 @@ export default function TronBridgeInterface() {
       }
       // Add EVM token balance check if needed
       return 0;
+    } else if (fromChain === "solana") {
+      if (fromToken.symbol === "SOL") {
+        return solBalance;
+      }
+      const found = solTokens.find(t => 
+        t.mint.toLowerCase() === fromToken.address.toLowerCase() ||
+        t.address.toLowerCase() === fromToken.address.toLowerCase()
+      );
+      return found?.amount ?? 0;
     }
     
     return 0;
-  }, [fromToken, fromChain, trxBalance, trxTokens, ethBalance]);
+  }, [fromToken, fromChain, trxBalance, trxTokens, ethBalance, solBalance, solTokens]);
 
   // Auto-select default tokens
   useEffect(() => {
@@ -161,10 +201,11 @@ export default function TronBridgeInterface() {
     }
   }, [toChain, toToken, availableTokens]);
 
-  // Fetch quote from Symbiosis
+  // Fetch quote from Swing API
   const fetchQuote = useCallback(async () => {
     if (!fromToken || !toToken || !amount || parseFloat(amount) <= 0) {
       setQuote(null);
+      setValidatedQuote(null);
       return;
     }
 
@@ -174,27 +215,30 @@ export default function TronBridgeInterface() {
     try {
       const rawAmount = Math.floor(parseFloat(amount) * Math.pow(10, fromToken.decimals)).toString();
       
-      const response = await fetch("https://api.symbiosis.finance/crosschain/v1/swap", {
+      // Determine the correct addresses based on chain
+      const fromUserAddress = fromChain === "tron" ? tronAddress : fromChain === "solana" ? solAddress : evmAddress;
+      const toUserAddress = toChain === "tron" ? tronAddress : toChain === "solana" ? solAddress : evmAddress;
+      
+      // Map chain names to Swing API slugs
+      const fromChainSlug = fromChain === "tron" ? "tron" : fromChain === "solana" ? "solana" : "ethereum";
+      const toChainSlug = toChain === "tron" ? "tron" : toChain === "solana" ? "solana" : "ethereum";
+      
+      const response = await fetch("https://swap.prod.swing.xyz/v0/transfer/quote", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          tokenAmountIn: {
-            address: fromToken.address,
-            amount: rawAmount,
-            chainId: fromToken.chainId,
-            decimals: fromToken.decimals,
-          },
-          tokenOut: {
-            chainId: BRIDGE_CHAINS[toChain].id,
-            address: toToken.address,
-            symbol: toToken.symbol,
-            decimals: toToken.decimals,
-          },
-          from: tronAddress,
-          to: toChain === "tron" ? tronAddress : evmAddress,
-          slippage: 300, // 3%
+          fromChain: fromChainSlug,
+          tokenSymbol: fromToken.symbol,
+          fromTokenAddress: fromToken.address || "0x0000000000000000000000000000000000000000",
+          fromUserAddress,
+          toChain: toChainSlug,
+          toTokenSymbol: toToken.symbol,
+          toTokenAddress: toToken.address || "0x0000000000000000000000000000000000000000",
+          toUserAddress,
+          tokenAmount: rawAmount,
+          projectId: "world-street-gold",
         }),
       });
 
@@ -204,31 +248,46 @@ export default function TronBridgeInterface() {
       }
 
       const data = await response.json();
-      console.log("[Bridge] Raw Symbiosis response:", data);
+      console.log("[Bridge] Raw Swing API response:", data);
       
-      // Validate the quote before setting it
-      if (fromToken && toToken) {
-        const rawAmount = Math.floor(parseFloat(amount) * Math.pow(10, fromToken.decimals)).toString();
-        const validation = validateSymbiosisQuote(data, fromToken, toToken, rawAmount);
-        
-        console.log("[Bridge] Validation result:", validation);
-        
-        if (!validation.isValid) {
-          const errorMsg = formatValidationErrors(validation);
-          console.error("[Bridge] Quote validation failed:", errorMsg);
-          setError(validation.errors[0] || "Invalid quote data");
-          setQuote(null);
-          setValidatedQuote(null);
-          return;
-        }
-        
-        if (validation.warnings.length > 0) {
-          console.warn("[Bridge] Quote warnings:", validation.warnings);
-        }
-        
-        setValidatedQuote(validation);
+      // Validate the quote
+      if (!data.routes || data.routes.length === 0) {
+        setError("No routes available for this swap");
+        setQuote(null);
+        setValidatedQuote(null);
+        return;
       }
+
+      // Use the first route (best route)
+      const bestRoute = data.routes[0];
       
+      // Create a validated quote object
+      const validation = {
+        isValid: true,
+        errors: [],
+        warnings: [],
+        fromToken,
+        toToken,
+        amountIn: rawAmount,
+        amountOut: bestRoute.quote.amount,
+        amountOutMin: bestRoute.quote.amount, // Swing doesn't provide min amount
+        route: bestRoute,
+        aggregatedFees: bestRoute.quote.fees?.map((fee: any) => ({
+          symbol: fee.tokenSymbol,
+          amount: fee.amount,
+          amountHuman: (parseFloat(fee.amount) / Math.pow(10, fee.decimals || 18)).toFixed(6),
+          usdValue: fee.amountUSD,
+        })) || [],
+        totalFeeUsd: bestRoute.quote.fees?.reduce((sum: number, fee: any) => 
+          sum + parseFloat(fee.amountUSD || "0"), 0
+        ).toFixed(2),
+        estimatedTime: bestRoute.duration,
+        gasUSD: bestRoute.gasUSD,
+      };
+      
+      console.log("[Bridge] Validation result:", validation);
+      
+      setValidatedQuote(validation);
       setQuote(data);
     } catch (err: any) {
       console.error("Bridge quote error:", err);
@@ -236,7 +295,7 @@ export default function TronBridgeInterface() {
     } finally {
       setLoading(false);
     }
-  }, [fromToken, toToken, amount, tronAddress, evmAddress, toChain]);
+  }, [fromToken, toToken, amount, tronAddress, evmAddress, fromChain, toChain]);
 
   // Debounced quote fetch
   useEffect(() => {
@@ -276,13 +335,23 @@ export default function TronBridgeInterface() {
     if (parseFloat(amount) > fromBalance) return false;
     if (loading || executing) return false;
     if (!quote || !validatedQuote) return false;
-    if (!isQuoteExecutable(validatedQuote)) return false;
+    if (!validatedQuote.isValid) return false;
     return true;
   }, [walletsGenerated, fromToken, toToken, amount, fromBalance, loading, executing, quote, validatedQuote]);
 
+  // Helper function to get fee summary
+  const getFeeSummary = useCallback(() => {
+    if (!validatedQuote || !validatedQuote.aggregatedFees || validatedQuote.aggregatedFees.length === 0) {
+      return "No fees";
+    }
+    return validatedQuote.aggregatedFees
+      .map((fee: any) => `${fee.amountHuman} ${fee.symbol}`)
+      .join(" + ");
+  }, [validatedQuote]);
+
   // Execute bridge transaction
   const handleBridge = useCallback(async (pin: string) => {
-    if (!quote || !fromToken || !toToken) return;
+    if (!quote || !fromToken || !toToken || !validatedQuote) return;
 
     setExecuting(true);
     setError(null);
@@ -293,9 +362,11 @@ export default function TronBridgeInterface() {
       console.log("[Bridge] Quote data:", quote);
       console.log("[Bridge] Validated data:", validatedQuote);
 
-      // Use validated transaction data
-      if (!validatedQuote || !validatedQuote.tx) {
-        throw new Error("No validated transaction data available");
+      // Get the best route
+      const bestRoute = validatedQuote.route;
+      
+      if (!bestRoute) {
+        throw new Error("No route available");
       }
 
       // Get encrypted keys and decrypt
@@ -315,15 +386,47 @@ export default function TronBridgeInterface() {
         throw new Error("Failed to retrieve wallet keys");
       }
 
-      // Determine which chain we're sending from and get the appropriate key
-      let privateKey: string;
+      // Get transaction data from Swing API
+      const fromUserAddress = fromChain === "tron" ? tronAddress : fromChain === "solana" ? solAddress : evmAddress;
+      const toUserAddress = toChain === "tron" ? tronAddress : toChain === "solana" ? solAddress : evmAddress;
+      const fromChainSlug = fromChain === "tron" ? "tron" : fromChain === "solana" ? "solana" : "ethereum";
+      const toChainSlug = toChain === "tron" ? "tron" : toChain === "solana" ? "solana" : "ethereum";
+      
+      const txResponse = await fetch("https://swap.prod.swing.xyz/v0/transfer/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          fromChain: fromChainSlug,
+          tokenSymbol: fromToken.symbol,
+          fromTokenAddress: fromToken.address || "0x0000000000000000000000000000000000000000",
+          fromUserAddress,
+          toChain: toChainSlug,
+          toTokenSymbol: toToken.symbol,
+          toTokenAddress: toToken.address || "0x0000000000000000000000000000000000000000",
+          toUserAddress,
+          tokenAmount: validatedQuote.amountIn,
+          route: bestRoute.route,
+          projectId: "world-street-gold",
+        }),
+      });
+
+      if (!txResponse.ok) {
+        const errorData = await txResponse.json();
+        throw new Error(errorData.message || "Failed to get transaction data");
+      }
+
+      const txData = await txResponse.json();
+      console.log("[Bridge] Transaction data:", txData);
+
       let txHash: string;
       
       if (fromChain === "tron") {
         if (!data.wallets?.tron?.encryptedPrivateKey) {
           throw new Error("Tron wallet not found");
         }
-        privateKey = decryptWithPIN(data.wallets.tron.encryptedPrivateKey, pin);
+        const privateKey = decryptWithPIN(data.wallets.tron.encryptedPrivateKey, pin);
 
         // Execute Tron transaction
         const TronWeb = (await import("tronweb")).default;
@@ -332,56 +435,22 @@ export default function TronBridgeInterface() {
           privateKey: privateKey,
         });
 
-        // Use validated transaction data
-        const txTo = validatedQuote.tx.to;
-        const txValue = validatedQuote.tx.value;
-        const txData = validatedQuote.tx.data;
+        console.log("[Bridge] Executing Tron transaction");
 
-        console.log("[Bridge] Executing Tron transaction to:", txTo);
+        // Send the transaction using Swing's transaction data
+        const tx = await tronWeb.trx.sendRawTransaction(txData.tx);
 
-        // For TRC20 tokens, we need to trigger the contract
-        if (fromToken.address) {
-          // TRC20 token transfer - use contract interaction
-          const contract = await tronWeb.contract().at(fromToken.address);
-          const rawAmount = Math.floor(parseFloat(amount) * Math.pow(10, fromToken.decimals));
-          
-          console.log("[Bridge] TRC20 transfer:", rawAmount, "to", txTo);
-          
-          const tx = await contract.transfer(txTo, rawAmount).send({
-            feeLimit: parseInt(validatedQuote.tx.feeLimit),
-          });
-
-          txHash = tx;
-          console.log("[Bridge] TRC20 transaction sent:", txHash);
-        } else {
-          // Native TRX transfer
-          const rawAmount = Math.floor(parseFloat(amount) * Math.pow(10, fromToken.decimals));
-          
-          console.log("[Bridge] Native TRX transfer:", rawAmount, "to", txTo);
-          
-          const tx = await tronWeb.transactionBuilder.sendTrx(
-            txTo,
-            rawAmount,
-            tronAddress
-          );
-          
-          const signedTx = await tronWeb.trx.sign(tx, privateKey);
-          const result = await tronWeb.trx.sendRawTransaction(signedTx);
-
-          if (!result.result) {
-            throw new Error(result.message || "Transaction failed");
-          }
-
-          txHash = result.txid;
-          console.log("[Bridge] Native TRX transaction sent:", txHash);
+        if (!tx.result) {
+          throw new Error(tx.message || "Transaction failed");
         }
 
-        alert(`Bridge transaction submitted!\nTX: ${txHash}\n\nFees: ${getFeeSummary(validatedQuote)}`);
+        txHash = tx.txid;
+        console.log("[Bridge] Tron transaction sent:", txHash);
       } else if (fromChain === "ethereum") {
         if (!data.wallets?.ethereum?.encryptedPrivateKey) {
           throw new Error("Ethereum wallet not found");
         }
-        privateKey = decryptWithPIN(data.wallets.ethereum.encryptedPrivateKey, pin);
+        const privateKey = decryptWithPIN(data.wallets.ethereum.encryptedPrivateKey, pin);
 
         // Execute EVM transaction
         const { ethers } = await import("ethers");
@@ -393,18 +462,51 @@ export default function TronBridgeInterface() {
         console.log("[Bridge] Executing Ethereum transaction");
 
         const tx = await wallet.sendTransaction({
-          to: validatedQuote.tx.to,
-          data: validatedQuote.tx.data || "0x",
-          value: BigInt(validatedQuote.tx.value || "0"),
-          gasLimit: BigInt(validatedQuote.tx.feeLimit || "500000"),
+          to: txData.tx.to,
+          data: txData.tx.data || "0x",
+          value: BigInt(txData.tx.value || "0"),
+          gasLimit: BigInt(txData.tx.gasLimit || "500000"),
         });
 
         await tx.wait(1);
         txHash = tx.hash;
         console.log("[Bridge] Ethereum transaction sent:", txHash);
+      } else if (fromChain === "solana") {
+        if (!data.wallets?.solana?.encryptedPrivateKey) {
+          throw new Error("Solana wallet not found");
+        }
+        const privateKey = decryptWithPIN(data.wallets.solana.encryptedPrivateKey, pin);
+
+        // Execute Solana transaction
+        const { Connection, Keypair, VersionedTransaction } = await import("@solana/web3.js");
         
-        alert(`Bridge transaction submitted!\nTX: ${txHash}\n\nFees: ${getFeeSummary(validatedQuote)}`);
+        const secretKey = new Uint8Array(Buffer.from(privateKey, "base64"));
+        const keypair = Keypair.fromSecretKey(secretKey);
+        
+        const connection = new Connection(
+          process.env.NEXT_PUBLIC_SOL_RPC || "https://api.mainnet-beta.solana.com",
+          "confirmed"
+        );
+
+        console.log("[Bridge] Executing Solana transaction");
+
+        // Deserialize and sign the transaction from Swing
+        const txBuffer = Buffer.from(txData.tx, "base64");
+        const transaction = VersionedTransaction.deserialize(txBuffer);
+        transaction.sign([keypair]);
+
+        const signature = await connection.sendTransaction(transaction, {
+          maxRetries: 5,
+          preflightCommitment: "confirmed",
+        });
+
+        txHash = signature;
+        console.log("[Bridge] Solana transaction sent:", txHash);
+      } else {
+        throw new Error("Unsupported chain");
       }
+
+      alert(`Bridge transaction submitted!\nTX: ${txHash}\n\nFees: ${getFeeSummary()}`);
       
       // Reset form
       setAmount("");
@@ -416,7 +518,7 @@ export default function TronBridgeInterface() {
     } finally {
       setExecuting(false);
     }
-  }, [quote, validatedQuote, fromToken, toToken, fromChain, amount, tronAddress]);
+  }, [quote, validatedQuote, fromToken, toToken, fromChain, toChain, amount, tronAddress, evmAddress, solAddress, getFeeSummary]);
 
   return (
     <div className="bg-white dark:bg-black rounded-2xl border border-border dark:border-darkborder shadow-sm">
@@ -425,7 +527,7 @@ export default function TronBridgeInterface() {
         <h2 className="text-lg font-semibold text-dark dark:text-white">Cross-Chain Bridge</h2>
         <div className="flex items-center gap-2 text-xs text-muted">
           <Icon icon="solar:shield-check-bold-duotone" width={16} />
-          <span>Powered by Symbiosis</span>
+          <span>Powered by Swing</span>
         </div>
       </div>
 
@@ -487,6 +589,7 @@ export default function TronBridgeInterface() {
               >
                 <option value="tron">Tron</option>
                 <option value="ethereum">Ethereum</option>
+                <option value="solana">Solana</option>
               </select>
             </div>
           </div>
@@ -512,8 +615,8 @@ export default function TronBridgeInterface() {
             <div className="flex-1 text-2xl font-semibold text-dark dark:text-white">
               {loading ? (
                 <Icon icon="ph:spinner" className="animate-spin text-muted" width={24} />
-              ) : quote?.tokenAmountOut ? (
-                (parseFloat(quote.tokenAmountOut.amount) / Math.pow(10, quote.tokenAmountOut.decimals)).toLocaleString(undefined, {
+              ) : validatedQuote?.amountOut ? (
+                (parseFloat(validatedQuote.amountOut) / Math.pow(10, toToken?.decimals || 18)).toLocaleString(undefined, {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 6,
                 })
@@ -551,6 +654,7 @@ export default function TronBridgeInterface() {
               >
                 <option value="tron">Tron</option>
                 <option value="ethereum">Ethereum</option>
+                <option value="solana">Solana</option>
               </select>
             </div>
           </div>
@@ -562,14 +666,22 @@ export default function TronBridgeInterface() {
             <div className="flex items-center justify-between">
               <span className="text-muted">Estimated Time</span>
               <span className="text-dark dark:text-white font-medium">
-                ~{Math.ceil((quote.estimatedTime || 300) / 60)} min
+                ~{Math.ceil((validatedQuote.estimatedTime || 300) / 60)} min
               </span>
             </div>
             {validatedQuote.aggregatedFees && validatedQuote.aggregatedFees.length > 0 && (
               <div className="flex items-center justify-between">
                 <span className="text-muted">Bridge Fees</span>
                 <span className="text-dark dark:text-white font-medium">
-                  {getFeeSummary(validatedQuote)}
+                  {getFeeSummary()}
+                </span>
+              </div>
+            )}
+            {validatedQuote.totalFeeUsd && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted">Total Fee (USD)</span>
+                <span className="text-dark dark:text-white font-medium">
+                  ${validatedQuote.totalFeeUsd}
                 </span>
               </div>
             )}
@@ -579,24 +691,20 @@ export default function TronBridgeInterface() {
                 ${MINIMUM_BRIDGE_FEE_USD.toFixed(2)} USD
               </span>
             </div>
-            {validatedQuote.priceImpact !== undefined && (
+            {validatedQuote.gasUSD && (
               <div className="flex items-center justify-between">
-                <span className="text-muted">Price Impact</span>
-                <span className={`font-medium ${
-                  validatedQuote.priceImpact > 5 ? 'text-warning' : 
-                  validatedQuote.priceImpact > 15 ? 'text-error' : 
-                  'text-dark dark:text-white'
-                }`}>
-                  {validatedQuote.priceImpact.toFixed(2)}%
+                <span className="text-muted">Est. Gas Cost</span>
+                <span className="text-dark dark:text-white font-medium">
+                  ${parseFloat(validatedQuote.gasUSD).toFixed(4)}
                 </span>
               </div>
             )}
-            {validatedQuote.warnings && validatedQuote.warnings.length > 0 && (
-              <div className="pt-2 border-t border-border/50 dark:border-darkborder/50">
-                <p className="text-xs text-warning mb-1">Warnings:</p>
-                {validatedQuote.warnings.slice(0, 2).map((warning: string, i: number) => (
-                  <p key={i} className="text-xs text-muted">• {warning}</p>
-                ))}
+            {validatedQuote.route?.quote?.integration && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted">Bridge</span>
+                <span className="text-dark dark:text-white font-medium capitalize">
+                  {validatedQuote.route.quote.integration}
+                </span>
               </div>
             )}
           </div>
@@ -642,7 +750,7 @@ export default function TronBridgeInterface() {
 
         {/* Info */}
         <p className="text-xs text-muted text-center">
-          Cross-chain bridging between Tron and Ethereum • Minimum fee: ${MINIMUM_BRIDGE_FEE_USD} USD
+          Cross-chain bridging between Tron, Ethereum, and Solana powered by Swing • Minimum fee: ${MINIMUM_BRIDGE_FEE_USD} USD
         </p>
       </div>
 
