@@ -12,7 +12,7 @@ const GLOBALPAY_BASE =
 
 const GLOBALPAY_API_KEY = process.env.NEXT_PUBLIC_GLOBALPAY_API_KEY || "";
 
-const MIN_USDT = 5;
+const MIN_USDT = 1;
 const MAX_USDT = 5000;
 const PLATFORM_MARKUP = 5; // 5% markup — same as /api/p2p/rates
 

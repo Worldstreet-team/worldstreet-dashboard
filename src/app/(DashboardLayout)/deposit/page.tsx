@@ -210,7 +210,7 @@ export default function DepositPage() {
   const buyRate = currentRate?.buyRate;
   const amountNum = parseFloat(usdtAmount) || 0;
   const fiatAmount = amountNum * (buyRate || 0);
-  const isValidAmount = amountNum >= 5 && amountNum <= 5000;
+  const isValidAmount = amountNum >= 1 && amountNum <= 5000;
 
   // ── Determine current step ─────────────────────────────────────────────
 

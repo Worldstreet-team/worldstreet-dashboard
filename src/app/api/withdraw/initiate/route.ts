@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (usdtAmount < 5 || usdtAmount > 5000) {
+    if (usdtAmount < 1 || usdtAmount > 5000) {
       return NextResponse.json(
         { error: "Amount must be between 5 and 5000 USDT" },
         { status: 400 }

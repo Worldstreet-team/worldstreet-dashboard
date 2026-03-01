@@ -7,7 +7,7 @@ import { getAuthUser } from "@/lib/auth";
 // ── Constants ──────────────────────────────────────────────────────────────
 
 const ORDER_EXPIRY_MINUTES = 30;
-const MIN_USDT = 5;
+const MIN_USDT = 1;
 const MAX_USDT = 5000;
 const PLATFORM_MARKUP = 5; // 5%
 

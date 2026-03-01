@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 import { useSolana } from "@/app/context/solanaContext";
 
 // Minimum deposit/withdrawal amount
-const MIN_AMOUNT = 5;
+const MIN_AMOUNT = 1;
 
 // Payment methods
 const paymentMethods = [
