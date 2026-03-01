@@ -6,6 +6,7 @@ import { useTron } from "@/app/context/tronContext";
 import { useEvm } from "@/app/context/evmContext";
 import { useSolana } from "@/app/context/solanaContext";
 import { useWallet } from "@/app/context/walletContext";
+import PinConfirmModal from "../swap/PinConfirmModal";
 
 // Symbiosis supported chains (only chains we have wallets for)
 const BRIDGE_CHAINS = {
@@ -54,6 +55,8 @@ export default function TronBridgeInterface() {
   const [loading, setLoading] = useState(false);
   const [quote, setQuote] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [executing, setExecuting] = useState(false);
 
   // Get available tokens for Tron
   const tronTokens = useMemo<BridgeToken[]>(() => {
@@ -208,10 +211,71 @@ export default function TronBridgeInterface() {
     if (!fromToken || !toToken || !amount) return false;
     if (parseFloat(amount) <= 0) return false;
     if (parseFloat(amount) > fromBalance) return false;
-    if (loading) return false;
+    if (loading || executing) return false;
     if (!quote) return false;
     return true;
-  }, [walletsGenerated, fromToken, toToken, amount, fromBalance, loading, quote]);
+  }, [walletsGenerated, fromToken, toToken, amount, fromBalance, loading, executing, quote]);
+
+  // Execute bridge transaction
+  const handleBridge = useCallback(async (pin: string) => {
+    if (!quote || !fromToken || !toToken) return;
+
+    setExecuting(true);
+    setError(null);
+    setShowPinModal(false);
+
+    try {
+      // Get the transaction data from the quote
+      const txData = quote.tx;
+      
+      if (!txData) {
+        throw new Error("No transaction data in quote");
+      }
+
+      // Execute the transaction using TronWeb
+      const TronWeb = (await import("tronweb")).default;
+      const tronWeb = new TronWeb({
+        fullHost: process.env.NEXT_PUBLIC_TRON_RPC || "https://api.shasta.trongrid.io",
+      });
+
+      // Get encrypted keys and decrypt
+      const response = await fetch("/api/wallet/keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to get wallet keys");
+      }
+
+      const { tron: tronKeys } = await response.json();
+      
+      if (!tronKeys?.privateKey) {
+        throw new Error("Tron private key not found");
+      }
+
+      // Sign and send the transaction
+      const signedTx = await tronWeb.trx.sign(txData, tronKeys.privateKey);
+      const result = await tronWeb.trx.sendRawTransaction(signedTx);
+
+      if (!result.result) {
+        throw new Error(result.message || "Transaction failed");
+      }
+
+      // Show success message
+      alert(`Bridge transaction submitted! TX: ${result.txid}`);
+      
+      // Reset form
+      setAmount("");
+      setQuote(null);
+    } catch (err: any) {
+      console.error("Bridge execution error:", err);
+      setError(err.message || "Failed to execute bridge");
+    } finally {
+      setExecuting(false);
+    }
+  }, [quote, fromToken, toToken]);
 
   return (
     <div className="bg-white dark:bg-black rounded-2xl border border-border dark:border-darkborder shadow-sm">
@@ -356,6 +420,7 @@ export default function TronBridgeInterface() {
 
         {/* Bridge button */}
         <button
+          onClick={() => setShowPinModal(true)}
           disabled={!canBridge}
           className={`w-full py-4 rounded-xl font-semibold text-lg transition-all ${
             canBridge
@@ -363,7 +428,12 @@ export default function TronBridgeInterface() {
               : "bg-lightgray dark:bg-darkborder text-muted cursor-not-allowed"
           }`}
         >
-          {!walletsGenerated
+          {executing ? (
+            <span className="flex items-center justify-center gap-2">
+              <Icon icon="ph:spinner" className="animate-spin" width={20} />
+              Processing...
+            </span>
+          ) : !walletsGenerated
             ? "Set up wallet first"
             : !fromToken || !toToken
             ? "Select tokens"
@@ -383,6 +453,15 @@ export default function TronBridgeInterface() {
           Cross-chain bridging powered by Symbiosis Protocol
         </p>
       </div>
+
+      {/* PIN Confirmation Modal */}
+      <PinConfirmModal
+        isOpen={showPinModal}
+        onClose={() => setShowPinModal(false)}
+        onSuccess={handleBridge}
+        title="Confirm Bridge"
+        description={`Enter your PIN to bridge ${amount} ${fromToken?.symbol} to ${toChain}`}
+      />
     </div>
   );
 }
