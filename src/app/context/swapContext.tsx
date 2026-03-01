@@ -23,7 +23,7 @@ const SOL_RPC =
 const ETH_RPC =
   process.env.NEXT_PUBLIC_ETH_RPC || "https://cloudflare-eth.com";
 
-// Supported chains for swap (excluding Bitcoin - not supported by Li.Fi)
+// Supported chains for swap
 export const SWAP_CHAINS = {
   ethereum: {
     id: 1,
@@ -38,6 +38,13 @@ export const SWAP_CHAINS = {
     symbol: "SOL",
     logo: "https://static.debank.com/image/chain/logo_url/sol/1e6d4c14106579294f997c02b37be801.png",
     type: "SVM",
+  },
+  tron: {
+    id: 195,
+    name: "Tron",
+    symbol: "TRX",
+    logo: "https://logowik.com/content/uploads/images/tron-trx-icon3386.logowik.com.webp",
+    type: "TVM",
   },
   bitcoin: {
     id: 20000000000001,
@@ -234,6 +241,7 @@ export function SwapProvider({ children }: { children: ReactNode }) {
   const [tokens, setTokens] = useState<Record<ChainKey, SwapToken[]>>({
     ethereum: [],
     solana: [],
+    tron: [],
     bitcoin: [],
   });
   const [tokensLoading, setTokensLoading] = useState(false);
