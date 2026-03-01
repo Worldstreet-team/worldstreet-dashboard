@@ -90,10 +90,12 @@ export async function POST(request: NextRequest) {
       pin
     );
 
+    console.log("Private Key: ", privateKey)
+
     // Initialize TronWeb
     const TronWeb = (await import("tronweb")).default;
     const tronWeb = new TronWeb({
-      fullHost: process.env.NEXT_PUBLIC_TRON_RPC || "https://api.shasta.trongrid.io",
+      fullHost: "https://api.shasta.trongrid.io",
       privateKey: privateKey,
     });
 
