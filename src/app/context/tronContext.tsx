@@ -279,8 +279,9 @@ export function TronProvider({ children }: { children: ReactNode }) {
         });
 
         const data = await response.json();
-
+        console.log("Response find: ", response)
         if (!response.ok || !data.success) {
+          console.log("DAta errors: ", data)
           throw new Error(data.message || "Transaction failed");
         }
 
@@ -314,15 +315,14 @@ export function TronProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       try {
         // Call backend API to sign and send token transaction
-        const response = await fetch("/api/tron/send-token", {
+        const response = await fetch("/api/tron/send", {
           method: "POST",
+          credentials: "include", // IMPORTANT
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             pin,
             recipient,
             amount,
-            tokenAddress,
-            decimals,
           }),
         });
 
