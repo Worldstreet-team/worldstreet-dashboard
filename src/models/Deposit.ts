@@ -29,7 +29,9 @@ export interface IDeposit extends Document {
   checkoutUrl?: string;
 
   // User wallet
-  userSolanaAddress: string;
+  network: "solana" | "ethereum";
+  userWalletAddress: string;
+  userSolanaAddress?: string; // legacy
 
   // Status
   status: DepositStatus;
@@ -99,9 +101,17 @@ const DepositSchema = new Schema<IDeposit>(
       type: String,
     },
 
+    network: {
+      type: String,
+      enum: ["solana", "ethereum"],
+      default: "solana",
+      index: true,
+    },
+    userWalletAddress: {
+      type: String,
+    },
     userSolanaAddress: {
       type: String,
-      required: true,
     },
 
     status: {

@@ -258,6 +258,40 @@ export async function sendUsdtFromTreasury(
   }
 }
 
+/**
+ * Send ERC-20 USDT from the Ethereum treasury wallet to a destination address.
+ * @param destinationAddress - The user's Ethereum address
+ * @param usdtAmount - Human-readable USDT amount (e.g. 50.25)
+ */
+export async function sendEthUsdtFromTreasury(
+  destinationAddress: string,
+  usdtAmount: number
+): Promise<TransferResult> {
+  try {
+    const wallet = await getActiveEthTreasuryWallet();
+    if (!wallet) {
+      return {
+        success: false,
+        error: "Ethereum treasury wallet not configured or decryption failed",
+      };
+    }
+
+    const contract = new ethers.Contract(ETH_USDT_CONTRACT, ERC20_ABI, wallet);
+
+    // Convert human amount to raw (6 decimals for USDT)
+    const rawAmount = ethers.parseUnits(usdtAmount.toString(), ETH_USDT_DECIMALS);
+
+    const tx = await contract.transfer(destinationAddress, rawAmount);
+    const receipt = await tx.wait();
+
+    return { success: true, txHash: receipt.hash };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("ETH Treasury USDT transfer failed:", message);
+    return { success: false, error: message };
+  }
+}
+
 // ── Ethereum Treasury helpers ──────────────────────────────────────────────
 
 /**

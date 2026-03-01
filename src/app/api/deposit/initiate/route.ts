@@ -66,7 +66,14 @@ export async function POST(request: NextRequest) {
 
     // 2. Parse body
     const body = await request.json();
-    const { usdtAmount, fiatCurrency = "NGN" } = body;
+    const { usdtAmount, fiatCurrency = "NGN", network = "solana" } = body;
+
+    if (!["solana", "ethereum"].includes(network)) {
+      return NextResponse.json(
+        { success: false, message: "Invalid network. Choose solana or ethereum." },
+        { status: 400 }
+      );
+    }
 
     const amount = parseFloat(usdtAmount);
     if (!amount || amount < MIN_USDT || amount > MAX_USDT) {
@@ -81,15 +88,15 @@ export async function POST(request: NextRequest) {
 
     await connectDB();
 
-    // 3. Get user's Solana address
+    // 3. Get user's wallet address for the selected network
     const profile = await DashboardProfile.findOne({
       authUserId: authUser.userId,
     }).lean();
 
-    const solanaAddress = profile?.wallets?.solana?.address;
-    if (!solanaAddress) {
+    const walletAddress = profile?.wallets?.[network]?.address;
+    if (!walletAddress) {
       return NextResponse.json(
-        { success: false, message: "Wallet not set up. Go to Assets first." },
+        { success: false, message: `${network === "solana" ? "Solana" : "Ethereum"} wallet not set up. Go to Assets first.` },
         { status: 400 }
       );
     }
@@ -166,7 +173,9 @@ export async function POST(request: NextRequest) {
       merchantTransactionReference: merchantTxRef,
       globalPayTransactionReference: gpData.data.transactionReference || "",
       checkoutUrl: gpData.data.checkoutUrl,
-      userSolanaAddress: solanaAddress,
+      network,
+      userWalletAddress: walletAddress,
+      userSolanaAddress: network === "solana" ? walletAddress : undefined,
       status: "pending",
     });
 
@@ -185,6 +194,7 @@ export async function POST(request: NextRequest) {
         fiatAmount: deposit.fiatAmount,
         fiatCurrency: deposit.fiatCurrency,
         exchangeRate: deposit.exchangeRate,
+        network: deposit.network,
         merchantTransactionReference: deposit.merchantTransactionReference,
         status: deposit.status,
         createdAt: deposit.createdAt,
