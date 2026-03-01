@@ -162,7 +162,7 @@ export default function DepositPage() {
       const data = await res.json();
       if (data.success && data.deposit) {
         setActiveDeposit(data.deposit);
-        setPaymentUrl(data.paymentLink || data.paymentUrl || data.checkoutUrl || null);
+        setPaymentUrl(data.deposit.checkoutUrl || null);
       }
     } catch {
       console.error("Failed to load deposit");
@@ -244,7 +244,7 @@ export default function DepositPage() {
       }
 
       setActiveDeposit(data.deposit);
-      setPaymentUrl(data.paymentLink || data.paymentUrl || data.checkoutUrl || null);
+      setPaymentUrl(data.checkoutUrl || null);
       setUsdtAmount("");
     } catch {
       setError("Something went wrong. Please try again.");
