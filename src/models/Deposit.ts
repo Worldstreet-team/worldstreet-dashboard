@@ -133,7 +133,7 @@ const DepositSchema = new Schema<IDeposit>(
 // ── Indexes ────────────────────────────────────────────────────────────────
 
 DepositSchema.index({ userId: 1, createdAt: -1 });
-DepositSchema.index({ merchantTransactionReference: 1 });
+// merchantTransactionReference index already created by `unique: true` on the field
 
 // ── Export ──────────────────────────────────────────────────────────────────
 
