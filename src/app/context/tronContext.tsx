@@ -58,6 +58,13 @@ interface TronContextType {
     tokenAddress: string,
     decimals: number
   ) => Promise<string>;
+  verifyTransaction: (txHash: string) => Promise<{
+    success: boolean;
+    confirmed: boolean;
+    confirmations?: number;
+    status?: string;
+    explorerUrl?: string;
+  }>;
 }
 
 const TronContext = createContext<TronContextType | undefined>(undefined);
@@ -66,7 +73,7 @@ const TronContext = createContext<TronContextType | undefined>(undefined);
 
 const TRON_RPC =
   process.env.NEXT_PUBLIC_TRON_RPC ||
-  "https://api.trongrid.io";
+  "https://api.shasta.trongrid.io";
 
 const TRON_TOKENS = [
   {
@@ -341,6 +348,65 @@ export function TronProvider({ children }: { children: ReactNode }) {
     [address, fetchBalance]
   );
 
+  /* ----------------------------- VERIFY TRANSACTION ----------------------------- */
+
+  const verifyTransaction = useCallback(
+    async (txHash: string) => {
+      try {
+        if (!tronWeb) {
+          throw new Error("TronWeb not initialized");
+        }
+
+        // Get transaction info
+        const tx = await tronWeb.trx.getTransaction(txHash);
+        
+        if (!tx || !tx.txID) {
+          return {
+            success: false,
+            confirmed: false,
+            status: "not_found",
+          };
+        }
+
+        // Get transaction info (includes confirmation status)
+        const txInfo = await tronWeb.trx.getTransactionInfo(txHash);
+
+        // Check if transaction is confirmed
+        const isConfirmed = txInfo.receipt?.result === "SUCCESS";
+        const blockNumber = txInfo.blockNumber || 0;
+
+        // Get current block to calculate confirmations
+        let confirmations = 0;
+        if (blockNumber > 0) {
+          try {
+            const currentBlock = await tronWeb.trx.getCurrentBlock();
+            confirmations = currentBlock.block_header.raw_data.number - blockNumber;
+          } catch {
+            confirmations = 0;
+          }
+        }
+
+        const explorerUrl = `https://shasta.tronscan.org/#/transaction/${txHash}`;
+
+        return {
+          success: true,
+          confirmed: isConfirmed,
+          confirmations,
+          status: isConfirmed ? "confirmed" : "pending",
+          explorerUrl,
+        };
+      } catch (error) {
+        console.error("Transaction verification error:", error);
+        return {
+          success: false,
+          confirmed: false,
+          status: "error",
+        };
+      }
+    },
+    [tronWeb]
+  );
+
   return (
     <TronContext.Provider
       value={{
@@ -355,6 +421,7 @@ export function TronProvider({ children }: { children: ReactNode }) {
         refreshCustomTokens,
         sendTransaction,
         sendTokenTransaction,
+        verifyTransaction,
       }}
     >
       {children}
