@@ -71,7 +71,7 @@ const DepositSchema = new Schema<IDeposit>(
     usdtAmount: {
       type: Number,
       required: true,
-      min: 5,
+      min: 1,
       max: 5000,
     },
     fiatAmount: {

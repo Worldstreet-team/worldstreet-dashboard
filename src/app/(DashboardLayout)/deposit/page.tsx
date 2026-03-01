@@ -492,7 +492,7 @@ export default function DepositPage() {
                       onChange={(e) => setUsdtAmount(e.target.value)}
                       placeholder="Enter USDT amount"
                       step="any"
-                      min={5}
+                      min={1}
                       max={5000}
                       className="w-full px-4 py-3.5 pr-20 bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-darkborder rounded-xl text-dark dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/50 text-lg"
                     />
@@ -501,7 +501,7 @@ export default function DepositPage() {
                     </span>
                   </div>
                   <div className="flex justify-between mt-1.5">
-                    <p className="text-xs text-muted">Min: 5 USDT • Max: 5,000 USDT</p>
+                    <p className="text-xs text-muted">Min: 1 USDT • Max: 5,000 USDT</p>
                     <div className="flex gap-1.5">
                       {[10, 50, 100, 500].map((v) => (
                         <button
