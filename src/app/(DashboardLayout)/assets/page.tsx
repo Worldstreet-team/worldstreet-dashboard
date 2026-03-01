@@ -51,6 +51,13 @@ const AssetsPage = () => {
   const [generateTronModal, setGenerateTronModal] = useState(false);
   const [removingTokenId, setRemovingTokenId] = useState<string | null>(null);
 
+    const handleRefresh = useCallback(() => {
+    if (addresses?.solana) fetchSolBalance(addresses.solana);
+    if (addresses?.ethereum) fetchEthBalance(addresses.ethereum);
+    if (addresses?.bitcoin) fetchBtcBalance(addresses.bitcoin);
+    if (addresses?.tron) fetchTrxBalance(addresses.tron);
+  }, [addresses, fetchSolBalance, fetchEthBalance, fetchBtcBalance, fetchTrxBalance]);
+
   // Handle Tron wallet generation success
   const handleTronGenerated = useCallback(async (address: string) => {
     // Refresh wallet status to get new Tron address
@@ -59,7 +66,9 @@ const AssetsPage = () => {
     if (address) {
       fetchTrxBalance(address);
     }
-  }, [fetchWalletStatus, fetchTrxBalance]);
+    // Refresh all balances to ensure everything is up to date
+    handleRefresh();
+  }, [fetchWalletStatus, fetchTrxBalance, handleRefresh]);
 
   // Handle token added - refresh custom tokens lists
   const handleTokenAdded = useCallback(async () => {
@@ -215,12 +224,7 @@ const AssetsPage = () => {
 
   const isLoading = solLoading || ethLoading || btcLoading || trxLoading;
 
-  const handleRefresh = useCallback(() => {
-    if (addresses?.solana) fetchSolBalance(addresses.solana);
-    if (addresses?.ethereum) fetchEthBalance(addresses.ethereum);
-    if (addresses?.bitcoin) fetchBtcBalance(addresses.bitcoin);
-    if (addresses?.tron) fetchTrxBalance(addresses.tron);
-  }, [addresses, fetchSolBalance, fetchEthBalance, fetchBtcBalance, fetchTrxBalance]);
+
 
   const getChainAddress = (chain: string) => {
     switch (chain) {

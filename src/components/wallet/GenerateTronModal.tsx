@@ -162,21 +162,14 @@ export function GenerateTronModal({ isOpen, onClose, onSuccess }: GenerateTronMo
     setError(null);
 
     try {
-      // Generate Tron wallet
-      const wallet = await generateTronWallet(pinValue);
-      setGeneratedAddress(wallet.address);
-
-      // Send to API
+      // First, try to get user ID from the auth context
+      // We'll call the spot wallets endpoint which handles wallet generation
       const response = await fetch("/api/wallet/add-tron", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           pin: pinValue,
-          tronWallet: {
-            address: wallet.address,
-            encryptedPrivateKey: wallet.encryptedPrivateKey,
-          },
         }),
       });
 
@@ -186,12 +179,16 @@ export function GenerateTronModal({ isOpen, onClose, onSuccess }: GenerateTronMo
         throw new Error(data.message || "Failed to add Tron wallet");
       }
 
+      // Extract address from response
+      const address = data.wallet?.tron?.address || data.address;
+      setGeneratedAddress(address);
+
       setProgress(100);
       await new Promise(resolve => setTimeout(resolve, 500));
       setStep("success");
       
       setTimeout(() => {
-        onSuccess(wallet.address);
+        onSuccess(address);
         onClose();
       }, 2000);
       

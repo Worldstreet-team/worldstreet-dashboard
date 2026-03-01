@@ -8,7 +8,6 @@ import React, {
   useCallback,
   ReactNode,
 } from "react";
-import { decryptWithPIN } from "@/lib/wallet/encryption";
 
 /* ----------------------------- TYPES ----------------------------- */
 
@@ -243,29 +242,39 @@ export function TronProvider({ children }: { children: ReactNode }) {
       recipient: string,
       amount: number
     ): Promise<string> => {
-      if (!tronWeb) throw new Error("TronWeb not ready");
-
       setLoading(true);
       try {
-        const privateKey = decryptWithPIN(encryptedKey, pin);
-        const fromAddress = tronWeb.address.fromPrivateKey(privateKey);
+        // Call backend API to sign and send transaction
+        const response = await fetch("/api/tron/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            pin,
+            recipient,
+            amount,
+          }),
+        });
 
-        const tx = await tronWeb.trx.sendTransaction(
-          recipient,
-          amount * 1_000_000,
-          privateKey
-        );
+        const data = await response.json();
 
-        const txId = tx.txid;
+        if (!response.ok || !data.success) {
+          throw new Error(data.message || "Transaction failed");
+        }
+
+        const txId = data.txHash;
         setLastTx(txId);
 
-        await fetchBalance(fromAddress);
+        // Refresh balance after transaction
+        if (address) {
+          await fetchBalance(address);
+        }
+
         return txId;
       } finally {
         setLoading(false);
       }
     },
-    [tronWeb, fetchBalance]
+    [address, fetchBalance]
   );
 
   /* ----------------------------- SEND TOKEN ----------------------------- */
@@ -279,38 +288,41 @@ export function TronProvider({ children }: { children: ReactNode }) {
       tokenAddress: string,
       decimals: number
     ): Promise<string> => {
-      if (!tronWeb) throw new Error("TronWeb not ready");
-
       setLoading(true);
       try {
-        const privateKey = decryptWithPIN(encryptedKey, pin);
-        const fromAddress = tronWeb.address.fromPrivateKey(privateKey);
+        // Call backend API to sign and send token transaction
+        const response = await fetch("/api/tron/send-token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            pin,
+            recipient,
+            amount,
+            tokenAddress,
+            decimals,
+          }),
+        });
 
-        const contract = await tronWeb.contract(
-          TRC20_ABI,
-          tokenAddress
-        );
+        const data = await response.json();
 
-        const rawAmount = Math.floor(
-          amount * Math.pow(10, decimals)
-        );
+        if (!response.ok || !data.success) {
+          throw new Error(data.message || "Token transfer failed");
+        }
 
-        const txId = await contract
-          .transfer(recipient, rawAmount)
-          .send({
-            feeLimit: 100_000_000,
-            privateKey,
-          });
-
+        const txId = data.txHash;
         setLastTx(txId);
 
-        await fetchBalance(fromAddress);
+        // Refresh balance after transaction
+        if (address) {
+          await fetchBalance(address);
+        }
+
         return txId;
       } finally {
         setLoading(false);
       }
     },
-    [tronWeb, fetchBalance]
+    [address, fetchBalance]
   );
 
   return (
