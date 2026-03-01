@@ -2,16 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import DashboardProfile from "@/models/DashboardProfile";
 import { getAuthUser } from "@/lib/auth";
-import { verifyPIN } from "@/lib/wallet/encryption";
+import { verifyPIN, encryptWithPIN } from "@/lib/wallet/encryption";
+
+// External wallet generation service
+const WALLET_SERVICE_URL = process.env.WALLET_SERVICE_URL || "https://trading.watchup.site/api/generate-wallet";
 
 /**
  * POST /api/wallet/add-tron
  * 
  * Add Tron wallet to existing user account.
- * This endpoint generates the Tron wallet on the backend for security.
+ * This endpoint calls the external wallet generation service,
+ * then encrypts and stores the wallet.
  * 
  * Body: {
- *   pin: string (for verification)
+ *   pin: string (for verification and encryption)
  * }
  */
 export async function POST(request: NextRequest) {
@@ -78,36 +82,70 @@ export async function POST(request: NextRequest) {
           wallet: {
             tron: { address: profile.wallets.tron.address },
           },
+          address: profile.wallets.tron.address,
         },
         { status: 200 }
       );
     }
 
-    // Generate Tron wallet on backend
-    const { generateTronWallet } = await import("@/lib/wallet/tronWallet");
-    const tronWallet = await generateTronWallet(pin);
+    // Call external wallet generation service
+    console.log("[add-tron] Calling external wallet service for TRC wallet generation");
+    
+    const walletResponse = await fetch(WALLET_SERVICE_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        chain: "trc",
+      }),
+    });
+
+    if (!walletResponse.ok) {
+      const errorText = await walletResponse.text();
+      console.error("[add-tron] Wallet service error:", errorText);
+      throw new Error("Failed to generate wallet from external service");
+    }
+
+    const walletData = await walletResponse.json();
+
+    // Validate response
+    if (!walletData.success || !walletData.address || !walletData.privateKey) {
+      console.error("[add-tron] Invalid wallet service response:", walletData);
+      throw new Error("Invalid response from wallet generation service");
+    }
+
+    console.log("[add-tron] Wallet generated successfully:", walletData.address);
+
+    // Encrypt the private key with user's PIN
+    const encryptedPrivateKey = encryptWithPIN(walletData.privateKey, pin);
 
     // Add Tron wallet to profile
     profile.wallets = profile.wallets || {};
     profile.wallets.tron = {
-      address: tronWallet.address,
-      encryptedPrivateKey: tronWallet.encryptedPrivateKey,
+      address: walletData.address,
+      encryptedPrivateKey: encryptedPrivateKey,
     };
 
     await profile.save();
+
+    console.log("[add-tron] Tron wallet saved to database");
 
     return NextResponse.json({
       success: true,
       message: "Tron wallet added successfully",
       wallet: {
-        tron: { address: tronWallet.address },
+        tron: { address: walletData.address },
       },
-      address: tronWallet.address, // For backward compatibility
+      address: walletData.address, // For backward compatibility
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("[POST /api/wallet/add-tron] Error:", error);
     return NextResponse.json(
-      { success: false, message: "Internal server error" },
+      { 
+        success: false, 
+        message: error.message || "Internal server error" 
+      },
       { status: 500 }
     );
   }
