@@ -6,11 +6,7 @@
  */
 
 import { encryptWithPIN } from "./encryption";
-
-// Tron RPC URL
-const TRON_RPC =
-  process.env.NEXT_PUBLIC_TRON_RPC ||
-  "https://api.trongrid.io";
+import { getTronWeb } from "@/services/tron/tronweb.service";
 
 /**
  * Generate a new Tron wallet
@@ -23,19 +19,12 @@ export async function generateTronWallet(pin: string): Promise<{
   encryptedPrivateKey: string;
 }> {
   try {
-    console.log('[TronWallet] Loading TronWeb...');
+    console.log('[TronWallet] Getting TronWeb instance...');
     
-    // Dynamically import TronWeb to avoid SSR issues
-    const TronWeb = (await import("tronweb")).default;
-    
-    console.log('[TronWallet] Creating TronWeb instance...');
-    
-    // Create TronWeb instance using fullHost as per documentation
-    const tronWeb = new TronWeb({
-      fullHost: TRON_RPC,
-    });
+    // Use singleton TronWeb instance
+    const tronWeb = await getTronWeb();
 
-    console.log('[TronWallet] TronWeb instance created');
+    console.log('[TronWallet] Generating account...');
 
     // Generate new account
     const account = tronWeb.createAccount();
@@ -99,11 +88,7 @@ export async function isValidTronAddress(address: string): Promise<boolean> {
  */
 export async function getTronAddressFromPrivateKey(privateKey: string): Promise<string> {
   try {
-    const TronWeb = (await import("tronweb")).default;
-    
-    const tronWeb = new TronWeb({
-      fullHost: TRON_RPC,
-    });
+    const tronWeb = await getTronWeb();
 
     // Remove 0x prefix if present
     const cleanPrivateKey = privateKey.startsWith("0x") 

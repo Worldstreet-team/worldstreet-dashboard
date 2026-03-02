@@ -115,7 +115,6 @@ const TRC20_ABI = [
 /* ----------------------------- PROVIDER ----------------------------- */
 
 export function TronProvider({ children }: { children: ReactNode }) {
-  const [tronWeb, setTronWeb] = useState<any | null>(null);
   const [address, setAddress] = useState<string | null>(null);
   const [balance, setBalance] = useState(0);
   const [tokenBalances, setTokenBalances] = useState<TokenBalance[]>([]);
@@ -125,26 +124,7 @@ export function TronProvider({ children }: { children: ReactNode }) {
 
   /* ----------------------------- INIT ----------------------------- */
 
-  useEffect(() => {
-    // Dynamically import TronWeb only on client side
-    const initTronWeb = async () => {
-      try {
-        const TronWeb = (await import("tronweb")).default;
-        
-        // Initialize TronWeb with fullHost as per documentation
-        const instance = new TronWeb({
-          fullHost: TRON_RPC,
-        });
-
-        console.log('[TronContext] TronWeb instance created');
-        setTronWeb(instance);
-      } catch (error) {
-        console.error('[TronContext] Failed to initialize TronWeb:', error);
-      }
-    };
-
-    initTronWeb();
-  }, []);
+  // No need to initialize TronWeb here - we'll use the singleton service
 
   /* ----------------------- FETCH CUSTOM TOKENS ----------------------- */
 
@@ -191,8 +171,9 @@ export function TronProvider({ children }: { children: ReactNode }) {
         const trxBalance = data.balance?.trx || 0;
         setBalance(trxBalance);
 
-        // Fetch token balances using TronWeb
-        if (!tronWeb) return;
+        // Fetch token balances using TronWeb singleton
+        const { getTronWeb } = await import("@/services/tron/tronweb.service");
+        const tronWeb = await getTronWeb();
 
         const results: TokenBalance[] = [];
         const allTokens = [...TRON_TOKENS];
@@ -238,7 +219,7 @@ export function TronProvider({ children }: { children: ReactNode }) {
         console.error("Balance fetch error:", err);
       }
     },
-    [tronWeb, address, customTokens]
+    [address, customTokens]
   );
 
   useEffect(() => {
@@ -354,9 +335,9 @@ export function TronProvider({ children }: { children: ReactNode }) {
   const verifyTransaction = useCallback(
     async (txHash: string) => {
       try {
-        if (!tronWeb) {
-          throw new Error("TronWeb not initialized");
-        }
+        // Use TronWeb singleton
+        const { getTronWeb } = await import("@/services/tron/tronweb.service");
+        const tronWeb = await getTronWeb();
 
         // Get transaction info
         const tx = await tronWeb.trx.getTransaction(txHash);
@@ -387,7 +368,7 @@ export function TronProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        const explorerUrl = `https://shasta.tronscan.org/#/transaction/${txHash}`;
+        const explorerUrl = `https://tronscan.org/#/transaction/${txHash}`;
 
         return {
           success: true,
@@ -405,7 +386,7 @@ export function TronProvider({ children }: { children: ReactNode }) {
         };
       }
     },
-    [tronWeb]
+    []
   );
 
   return (
