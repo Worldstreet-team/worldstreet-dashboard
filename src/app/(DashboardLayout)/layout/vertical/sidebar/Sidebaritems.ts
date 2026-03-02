@@ -156,6 +156,13 @@ const SidebarContent: MenuItem[] = [
         badge: true,
         badgeType: "outlined",
       },
+      {
+        name: "Tron Chain Swap",
+        icon: 'cryptocurrency:trx',
+        id: uniqueId(),
+        url: "/tron-swap",
+        subtitle: "Swap TRX ⇄ USDT",
+      },
     ],
   },
 
