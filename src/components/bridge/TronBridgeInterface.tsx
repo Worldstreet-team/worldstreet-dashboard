@@ -290,51 +290,101 @@ export default function TronBridgeInterface() {
         
         txHash = receipt.txid || receipt.transaction?.txID;
         console.log("[Bridge] Transaction broadcast:", txHash);
+      } else if (txData.tx.from && txData.tx.to && txData.tx.data) {
+        // EVM-style transaction from Swing - build Tron smart contract call
+        console.log("[Bridge] Building Tron transaction from EVM-style data");
+        console.log("[Bridge] Contract:", txData.tx.to);
+        console.log("[Bridge] Data:", txData.tx.data);
+        console.log("[Bridge] Value:", txData.tx.value);
         
-        // Wait for confirmation and check if it reverted
-        console.log("[Bridge] Waiting for transaction confirmation...");
-        let attempts = 0;
-        const maxAttempts = 30; // 30 seconds
-        let confirmed = false;
-        
-        while (attempts < maxAttempts && !confirmed) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          try {
-            const txInfo = await tronWeb.trx.getTransactionInfo(txHash);
-            console.log("[Bridge] Transaction info:", txInfo);
-            
-            if (txInfo && Object.keys(txInfo).length > 0) {
-              // Transaction is confirmed
-              if (txInfo.receipt?.result === "SUCCESS") {
-                confirmed = true;
-                console.log("[Bridge] Transaction confirmed successfully");
-                break;
-              } else if (txInfo.receipt?.result === "REVERT") {
-                throw new Error(`Transaction reverted: ${txInfo.resMessage || "Unknown reason"}`);
-              } else if (txInfo.result === "FAILED") {
-                throw new Error(`Transaction failed: ${txInfo.resMessage || "Unknown reason"}`);
-              }
-            }
-          } catch (err: any) {
-            if (err.message.includes("reverted") || err.message.includes("failed")) {
-              throw err;
-            }
-            // Transaction not yet confirmed, continue waiting
+        // Parse the value (convert hex to decimal if needed)
+        let callValue = 0;
+        if (txData.tx.value) {
+          if (typeof txData.tx.value === 'string' && txData.tx.value.startsWith('0x')) {
+            callValue = parseInt(txData.tx.value, 16);
+          } else {
+            callValue = parseInt(txData.tx.value);
           }
-          
-          attempts++;
         }
         
-        if (!confirmed) {
-          // Transaction is pending but not confirmed yet
-          console.log("[Bridge] Transaction pending confirmation");
-          alert(`Bridge transaction submitted!\nTX: ${txHash}\n\nTransaction is pending confirmation. Please check TronScan for status.\n\nhttps://tronscan.org/#/transaction/${txHash}`);
-        } else {
-          alert(`Bridge transaction confirmed!\nTX: ${txHash}\n\nFees: ${getFeeSummary()}\n\nYou will receive ETH on Ethereum network.\n\nView on TronScan: https://tronscan.org/#/transaction/${txHash}`);
+        console.log("[Bridge] Call value (sun):", callValue);
+        
+        // Build the transaction using triggerSmartContract
+        const parameter = txData.tx.data.startsWith('0x') ? txData.tx.data.slice(2) : txData.tx.data;
+        
+        const txObject = await tronWeb.transactionBuilder.triggerSmartContract(
+          txData.tx.to,
+          parameter,
+          {
+            feeLimit: 150_000_000, // 150 TRX max fee
+            callValue: callValue,
+          },
+          [],
+          tronAddress
+        );
+
+        if (!txObject.result || !txObject.result.result) {
+          console.error("[Bridge] Failed to build transaction:", txObject);
+          throw new Error(txObject.result?.message || "Failed to build transaction");
         }
+
+        console.log("[Bridge] Transaction built successfully");
+        const signedTx = await tronWeb.trx.sign(txObject.transaction, privateKey);
+        console.log("[Bridge] Transaction signed, broadcasting...");
+        
+        const receipt = await tronWeb.trx.sendRawTransaction(signedTx);
+        
+        if (!receipt.result) {
+          throw new Error(receipt.message || "Transaction broadcast failed");
+        }
+        
+        txHash = receipt.txid || receipt.transaction?.txID;
+        console.log("[Bridge] Transaction broadcast:", txHash);
       } else {
-        throw new Error("Unsupported transaction format from Swing API. Expected Tron transaction object.");
+        throw new Error("Unsupported transaction format from Swing API");
+      }
+      
+      // Wait for confirmation and check if it reverted
+      console.log("[Bridge] Waiting for transaction confirmation...");
+      let attempts = 0;
+      const maxAttempts = 30; // 30 seconds
+      let confirmed = false;
+      
+      while (attempts < maxAttempts && !confirmed) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        try {
+          const txInfo = await tronWeb.trx.getTransactionInfo(txHash);
+          console.log("[Bridge] Transaction info:", txInfo);
+          
+          if (txInfo && Object.keys(txInfo).length > 0) {
+            // Transaction is confirmed
+            if (txInfo.receipt?.result === "SUCCESS") {
+              confirmed = true;
+              console.log("[Bridge] Transaction confirmed successfully");
+              break;
+            } else if (txInfo.receipt?.result === "REVERT") {
+              throw new Error(`Transaction reverted: ${txInfo.resMessage || "Unknown reason"}`);
+            } else if (txInfo.result === "FAILED") {
+              throw new Error(`Transaction failed: ${txInfo.resMessage || "Unknown reason"}`);
+            }
+          }
+        } catch (err: any) {
+          if (err.message.includes("reverted") || err.message.includes("failed")) {
+            throw err;
+          }
+          // Transaction not yet confirmed, continue waiting
+        }
+        
+        attempts++;
+      }
+      
+      if (!confirmed) {
+        // Transaction is pending but not confirmed yet
+        console.log("[Bridge] Transaction pending confirmation");
+        alert(`Bridge transaction submitted!\nTX: ${txHash}\n\nTransaction is pending confirmation. Please check TronScan for status.\n\nhttps://tronscan.org/#/transaction/${txHash}`);
+      } else {
+        alert(`Bridge transaction confirmed!\nTX: ${txHash}\n\nFees: ${getFeeSummary()}\n\nYou will receive ETH on Ethereum network.\n\nView on TronScan: https://tronscan.org/#/transaction/${txHash}`);
       }
       
       // Reset form
