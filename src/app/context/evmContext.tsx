@@ -6,12 +6,15 @@ import React, {
   useState,
   useEffect,
   useCallback,
+  useMemo,
+  useRef,
   ReactNode,
 } from "react";
 import { ethers } from "ethers";
 import { convertRawToDisplay, convertDisplayToRaw } from "@/lib/wallet/amounts";
 import { decryptWithPIN } from "@/lib/wallet/encryption";
 import { ETHEREUM_TOKENS, TokenInfo } from "@/lib/wallet/tokenLists";
+import { batchFetchTokenBalances, isMulticallAvailable } from "@/lib/evm/multicall";
 
 // ERC20 ABI (minimal)
 const ERC20_ABI = [
@@ -78,6 +81,17 @@ const ETH_RPC =
   process.env.NEXT_PUBLIC_ETH_RPC ||
   "https://cloudflare-eth.com";
 
+// Singleton provider instance - created once and reused
+let providerInstance: ethers.JsonRpcProvider | null = null;
+
+function getProvider(): ethers.JsonRpcProvider {
+  if (!providerInstance) {
+    providerInstance = new ethers.JsonRpcProvider(ETH_RPC);
+    console.log("[EvmContext] Provider instance created");
+  }
+  return providerInstance;
+}
+
 export function EvmProvider({ children }: { children: ReactNode }) {
   const [address, setAddress] = useState<string | null>(null);
   const [balance, setBalance] = useState(0);
@@ -86,9 +100,16 @@ export function EvmProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [lastTx, setLastTx] = useState<string | null>(null);
 
-  const provider = new ethers.JsonRpcProvider(ETH_RPC);
+  // Use singleton provider
+  const provider = useMemo(() => getProvider(), []);
+
+  // Refs to track state and prevent unnecessary refetches
+  const isFetchingRef = useRef(false);
+  const blockListenerAttachedRef = useRef(false);
+  const lastFetchedBlockRef = useRef<number>(0);
 
   // Fetch user's custom tokens from API
+  // Memoized with useCallback to maintain stable reference
   const refreshCustomTokens = useCallback(async () => {
     try {
       const response = await fetch("/api/tokens/custom");
@@ -101,17 +122,23 @@ export function EvmProvider({ children }: { children: ReactNode }) {
         setCustomTokens(ethTokens);
       }
     } catch (error) {
-      console.error("Error fetching custom tokens:", error);
+      console.error("[EvmContext] Error fetching custom tokens:", error);
     }
   }, []);
 
+  /**
+   * Fetch balances using Multicall for efficiency
+   * Stable reference via useCallback with proper dependencies
+   */
   const fetchBalance = useCallback(
     async (addr?: string) => {
       const targetAddr = addr || address;
-      if (!targetAddr) return;
+      if (!targetAddr || isFetchingRef.current) return;
+
+      isFetchingRef.current = true;
 
       try {
-        // 1. Native ETH Balance
+        // 1. Fetch native ETH balance
         const balanceWei = await provider.getBalance(targetAddr);
         const balanceEth = convertRawToDisplay(balanceWei, 18);
         setBalance(parseFloat(balanceEth));
@@ -133,38 +160,49 @@ export function EvmProvider({ children }: { children: ReactNode }) {
           }
         });
 
-        // 3. Fetch balances - prioritize popular/custom tokens first
+        // 3. Filter to priority tokens (popular + custom)
         const popularTokens = allTokens.filter(t => t.isPopular);
         const customTokenAddrs = customTokens.map(ct => ct.address.toLowerCase());
-        const userCustomTokens = allTokens.filter(t => customTokenAddrs.includes(t.address.toLowerCase()));
+        const userCustomTokens = allTokens.filter(t => 
+          customTokenAddrs.includes(t.address.toLowerCase()) && !t.isPopular
+        );
         
-        // Only fetch popular and custom tokens to reduce RPC calls
-        const priorityTokens = [...popularTokens, ...userCustomTokens.filter(t => !t.isPopular)];
-        const BATCH_SIZE = 3; // Reduced batch size for public RPC
-        const results: TokenBalance[] = [];
-        let rpcFailed = false;
+        const priorityTokens = [...popularTokens, ...userCustomTokens];
 
-        // Helper to fetch a batch of tokens with delay between batches
-        const fetchBatch = async (batch: TokenInfo[]) => {
-          return Promise.all(
-            batch.map(async (token) => {
-              try {
-                // Normalize address to proper checksum format
-                const normalizedAddress = ethers.getAddress(token.address.toLowerCase());
-                const contract = new ethers.Contract(
-                  normalizedAddress,
-                  ERC20_ABI,
-                  provider
-                );
-                const bal = await contract.balanceOf(targetAddr);
-                const amount = parseFloat(convertRawToDisplay(bal, token.decimals));
-                
-                // Check if this is a custom token
-                const customToken = customTokens.find(
-                  (ct) => ct.address.toLowerCase() === token.address.toLowerCase()
-                );
+        if (priorityTokens.length === 0) {
+          setTokenBalances([]);
+          return;
+        }
 
-                return {
+        // 4. Check if Multicall3 is available
+        const multicallAvailable = await isMulticallAvailable(provider);
+
+        if (multicallAvailable) {
+          // Use Multicall3 for batched balance fetching (single RPC call)
+          console.log(`[EvmContext] Fetching ${priorityTokens.length} token balances via Multicall3`);
+          
+          const calls = priorityTokens.map(token => ({
+            tokenAddress: token.address,
+            walletAddress: targetAddr,
+          }));
+
+          const balances = await batchFetchTokenBalances(provider, calls);
+
+          // Process results
+          const results: TokenBalance[] = [];
+          balances.forEach((balance, index) => {
+            const token = priorityTokens[index];
+            
+            if (balance !== null) {
+              const amount = parseFloat(convertRawToDisplay(balance, token.decimals));
+              
+              const customToken = customTokens.find(
+                (ct) => ct.address.toLowerCase() === token.address.toLowerCase()
+              );
+
+              // Show custom/popular tokens always, others only with balance
+              if (customToken || token.isPopular || amount > 0) {
+                results.push({
                   address: token.address,
                   symbol: token.symbol,
                   name: token.name,
@@ -174,43 +212,57 @@ export function EvmProvider({ children }: { children: ReactNode }) {
                   isCustom: !!customToken,
                   customTokenId: customToken?._id,
                   isPopular: token.isPopular,
-                };
-              } catch (e: unknown) {
-                // Check if RPC is completely failing (403, network error)
-                const errorMessage = e instanceof Error ? e.message : String(e);
-                if (errorMessage.includes("403") || errorMessage.includes("forbidden") || errorMessage.includes("network")) {
-                  rpcFailed = true;
-                }
-                return null;
-              }
-            })
-          );
-        };
-
-        // Fetch priority tokens only (popular + custom) with delays between batches
-        for (let i = 0; i < priorityTokens.length && !rpcFailed; i += BATCH_SIZE) {
-          const batch = priorityTokens.slice(i, i + BATCH_SIZE);
-          const batchResults = await fetchBatch(batch);
-
-          // Filter out failed fetches and zero balances (except custom/popular tokens)
-          batchResults.forEach((result) => {
-            if (result) {
-              // Always show custom tokens and popular tokens, only show others with balance
-              if (result.isCustom || result.isPopular || result.amount > 0) {
-                results.push(result);
+                });
               }
             }
           });
 
-          // Add 500ms delay between batches to avoid rate limiting
-          if (i + BATCH_SIZE < priorityTokens.length && !rpcFailed) {
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
-        }
+          setTokenBalances(results);
+        } else {
+          // Fallback: individual calls (less efficient but works without Multicall3)
+          console.log(`[EvmContext] Multicall3 not available, using individual calls`);
+          
+          const results: TokenBalance[] = [];
+          
+          for (const token of priorityTokens) {
+            try {
+              const normalizedAddress = ethers.getAddress(token.address.toLowerCase());
+              const contract = new ethers.Contract(
+                normalizedAddress,
+                ERC20_ABI,
+                provider
+              );
+              const bal = await contract.balanceOf(targetAddr);
+              const amount = parseFloat(convertRawToDisplay(bal, token.decimals));
+              
+              const customToken = customTokens.find(
+                (ct) => ct.address.toLowerCase() === token.address.toLowerCase()
+              );
 
-        setTokenBalances(results);
+              if (customToken || token.isPopular || amount > 0) {
+                results.push({
+                  address: token.address,
+                  symbol: token.symbol,
+                  name: token.name,
+                  decimals: token.decimals,
+                  logoURI: token.logoURI,
+                  amount,
+                  isCustom: !!customToken,
+                  customTokenId: customToken?._id,
+                  isPopular: token.isPopular,
+                });
+              }
+            } catch (error) {
+              console.error(`[EvmContext] Failed to fetch balance for ${token.symbol}:`, error);
+            }
+          }
+
+          setTokenBalances(results);
+        }
       } catch (error) {
-        console.error("EVM fetchBalance error:", error);
+        console.error("[EvmContext] fetchBalance error:", error);
+      } finally {
+        isFetchingRef.current = false;
       }
     },
     [address, provider, customTokens]
@@ -221,14 +273,38 @@ export function EvmProvider({ children }: { children: ReactNode }) {
     refreshCustomTokens();
   }, [refreshCustomTokens]);
 
+  /**
+   * Set up block listener for real-time balance updates
+   * Replaces polling with event-driven updates
+   */
   useEffect(() => {
-    if (address) {
-      fetchBalance(address);
-      // Increased polling interval to 5 minutes (300 seconds) to avoid rate limiting
-      const interval = setInterval(() => fetchBalance(address), 300000);
-      return () => clearInterval(interval);
-    }
-  }, [address, fetchBalance]);
+    if (!address || blockListenerAttachedRef.current) return;
+
+    console.log("[EvmContext] Attaching block listener for address:", address);
+    blockListenerAttachedRef.current = true;
+
+    const handleNewBlock = async (blockNumber: number) => {
+      // Throttle: only fetch if we haven't fetched in the last 2 blocks (~24 seconds)
+      if (blockNumber - lastFetchedBlockRef.current >= 2) {
+        console.log(`[EvmContext] New block ${blockNumber}, refreshing balances`);
+        lastFetchedBlockRef.current = blockNumber;
+        await fetchBalance(address);
+      }
+    };
+
+    // Attach block listener
+    provider.on("block", handleNewBlock);
+
+    // Initial fetch
+    fetchBalance(address);
+
+    // Cleanup
+    return () => {
+      console.log("[EvmContext] Removing block listener");
+      provider.off("block", handleNewBlock);
+      blockListenerAttachedRef.current = false;
+    };
+  }, [address, provider, fetchBalance]);
 
   const sendTransaction = useCallback(
     async (

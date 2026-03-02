@@ -73,7 +73,7 @@ const TronContext = createContext<TronContextType | undefined>(undefined);
 
 const TRON_RPC =
   process.env.NEXT_PUBLIC_TRON_RPC ||
-  "https://tron-mainnet.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITN";
+  "https://api.trongrid.io";
 
 const TRON_TOKENS = [
   {

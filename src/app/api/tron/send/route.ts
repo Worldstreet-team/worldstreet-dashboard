@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
     // Initialize TronWeb
     const TronWeb = (await import("tronweb")).default;
     const tronWeb = new TronWeb({
-      fullHost: "https://tron-mainnet.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITN",
+      fullHost: process.env.NEXT_PUBLIC_TRON_RPC || "https://api.trongrid.io",
       privateKey: privateKey,
     });
 
