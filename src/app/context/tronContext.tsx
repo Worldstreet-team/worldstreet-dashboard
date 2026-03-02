@@ -167,53 +167,62 @@ export function TronProvider({ children }: { children: ReactNode }) {
           return;
         }
 
+        console.log('[TronContext] Balance data received:', data);
+
         // Set TRX balance from API response
         const trxBalance = data.balance?.trx || 0;
         setBalance(trxBalance);
 
-        // Fetch token balances using TronWeb singleton
-        const { getTronWeb } = await import("@/services/tron/tronweb.service");
-        const tronWeb = await getTronWeb();
+        // Parse tokens from API response
+        const apiTokens = data.balance?.tokens || [];
+        console.log('[TronContext] API tokens:', apiTokens);
 
         const results: TokenBalance[] = [];
-        const allTokens = [...TRON_TOKENS];
 
-        customTokens.forEach((ct) => {
-          if (
-            !allTokens.find(
-              (t) => t.address.toLowerCase() === ct.address.toLowerCase()
-            )
-          ) {
-            allTokens.push({ ...ct, isPopular: false });
-          }
+        // Add tokens from API response
+        apiTokens.forEach((token: any) => {
+          results.push({
+            address: token.contractAddress,
+            symbol: token.symbol,
+            name: token.name,
+            decimals: token.decimals,
+            amount: token.balance,
+            isPopular: token.symbol === 'USDT' || token.symbol === 'USDC',
+          });
         });
 
-        for (const token of allTokens) {
+        // Also check for custom tokens not in API response
+        for (const customToken of customTokens) {
+          // Skip if already in results from API
+          if (results.find(r => r.address.toLowerCase() === customToken.address.toLowerCase())) {
+            continue;
+          }
+
           try {
-            const contract = await tronWeb.contract(
-              TRC20_ABI,
-              token.address
-            );
-
+            // Fetch balance for custom token using TronWeb
+            const { getTronWeb } = await import("@/services/tron/tronweb.service");
+            const tronWeb = await getTronWeb();
+            const contract = await tronWeb.contract(TRC20_ABI, customToken.address);
             const raw = await contract.balanceOf(target).call();
-            const amount =
-              Number(raw.toString()) / Math.pow(10, token.decimals);
+            const amount = Number(raw.toString()) / Math.pow(10, customToken.decimals);
 
-            if (amount > 0 || token.isPopular) {
+            if (amount > 0) {
               results.push({
-                address: token.address,
-                symbol: token.symbol,
-                name: token.name,
-                decimals: token.decimals,
+                address: customToken.address,
+                symbol: customToken.symbol,
+                name: customToken.name,
+                decimals: customToken.decimals,
                 amount,
-                isPopular: token.isPopular,
+                isCustom: true,
+                customTokenId: customToken._id,
               });
             }
-          } catch {
-            continue;
+          } catch (err) {
+            console.error(`Error fetching custom token ${customToken.symbol}:`, err);
           }
         }
 
+        console.log('[TronContext] Final token balances:', results);
         setTokenBalances(results);
       } catch (err) {
         console.error("Balance fetch error:", err);
