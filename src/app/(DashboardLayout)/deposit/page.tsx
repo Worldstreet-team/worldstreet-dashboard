@@ -178,26 +178,61 @@ export default function DepositPage() {
     }
   }, [searchParams, loadDeposit]);
 
-  // ── Auto-resume: user returns to /deposit after GlobalPay payment ──────
-  //    (GlobalPay redirects to dashboard; user clicks banner or navigates here)
+  // ── Auto-resume: user returns to /deposit after GlobalPay redirect ─────
+  //    GlobalPay redirects to https://dashboard.worldstreetgold.com/deposit
+  //    We detect a pending deposit and auto-verify it immediately.
+
+  const autoVerifyTriggered = useRef(false);
 
   useEffect(() => {
     const depositId = searchParams.get("depositId");
     if (depositId || activeDeposit) return;
 
-    const resumePending = async () => {
+    const resumeAndVerify = async () => {
       try {
         const res = await fetch("/api/deposit/pending");
         const data = await res.json();
         if (data.success && data.deposit) {
           setActiveDeposit(data.deposit);
           setPaymentUrl(data.deposit.checkoutUrl || null);
+
+          // Auto-trigger verification if the deposit is in a verifiable state
+          // (user just came back from GlobalPay)
+          if (
+            !autoVerifyTriggered.current &&
+            ["pending", "awaiting_verification"].includes(data.deposit.status)
+          ) {
+            autoVerifyTriggered.current = true;
+            setVerifying(true);
+            setVerifyMessage("");
+
+            try {
+              const verifyRes = await fetch("/api/deposit/verify", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ depositId: data.deposit._id }),
+              });
+              const verifyData = await verifyRes.json();
+              if (verifyData.deposit) {
+                setActiveDeposit(verifyData.deposit);
+              }
+              if (!verifyData.success) {
+                setVerifyMessage(
+                  verifyData.message || "Verifying payment — you can retry shortly."
+                );
+              }
+            } catch {
+              setVerifyMessage("Auto-verification pending. Click 'I\\'ve Paid' to retry.");
+            } finally {
+              setVerifying(false);
+            }
+          }
         }
       } catch {
         // No pending deposit to resume
       }
     };
-    resumePending();
+    resumeAndVerify();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Status polling ─────────────────────────────────────────────────────
@@ -643,6 +678,17 @@ export default function DepositPage() {
                     {verifyMessage && (
                       <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
                         <p className="text-sm text-yellow-600 dark:text-yellow-400">{verifyMessage}</p>
+                        <p className="text-xs text-yellow-600/70 dark:text-yellow-400/70 mt-1">
+                          If you&apos;ve completed payment, wait 30 seconds and click &quot;I&apos;ve Paid&quot; again.
+                        </p>
+                      </div>
+                    )}
+
+                    {activeDeposit.status === "awaiting_verification" && !verifyMessage && (
+                      <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                        <p className="text-sm text-blue-500">
+                          Waiting for payment confirmation. Click &quot;I&apos;ve Paid&quot; after completing your payment.
+                        </p>
                       </div>
                     )}
 

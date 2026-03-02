@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
 
     if (!depositId) {
       return NextResponse.json(
-        { success: false, message: "depositId is required" },
+        { success: false, message: "Deposit ID is required. Please try again." },
         { status: 400 }
       );
     }
@@ -64,12 +64,35 @@ export async function POST(request: NextRequest) {
     await deposit.save();
 
     // 5. Requery GlobalPay
-    const transRef =
-      deposit.globalPayTransactionReference ||
-      deposit.merchantTransactionReference;
+    //    GlobalPay's requery needs THEIR transaction reference, not our merchant ref.
+    const transRef = deposit.globalPayTransactionReference;
+    const merchantRef = deposit.merchantTransactionReference;
+
+    if (!transRef) {
+      // Cannot requery without a GlobalPay reference — fall back to merchant ref
+      console.warn(
+        `Deposit ${deposit._id}: missing globalPayTransactionReference, trying merchantRef: ${merchantRef}`
+      );
+    }
+
+    const refToQuery = transRef || merchantRef;
+
+    if (!refToQuery) {
+      deposit.status = "payment_failed";
+      await deposit.save();
+      return NextResponse.json({
+        success: false,
+        deposit: deposit.toObject(),
+        message: "No transaction reference available. Please contact support.",
+      });
+    }
+
+    console.log(
+      `Verifying deposit ${deposit._id} — querying GlobalPay with ref: ${refToQuery}`
+    );
 
     const gpRes = await fetch(
-      `${GLOBALPAY_BASE}/paymentgateway/query-single-transaction/${transRef}`,
+      `${GLOBALPAY_BASE}/paymentgateway/query-single-transaction/${refToQuery}`,
       {
         method: "POST",
         headers: {
@@ -81,14 +104,27 @@ export async function POST(request: NextRequest) {
     );
 
     const gpData = await gpRes.json();
+    console.log(
+      `GlobalPay requery response for ${refToQuery}:`,
+      JSON.stringify(gpData).slice(0, 500)
+    );
 
     if (!gpData.isSuccessful) {
-      deposit.status = "payment_failed";
+      // If queried with merchant ref and it failed, note that in logs
+      if (!transRef && merchantRef) {
+        console.warn(
+          `GlobalPay requery failed (used merchantRef). GP error: ${gpData.successMessage || gpData.message || "unknown"}`
+        );
+      }
+
+      deposit.status = "awaiting_verification";
       await deposit.save();
       return NextResponse.json({
         success: false,
         deposit: deposit.toObject(),
-        message: "Could not verify payment with GlobalPay. Try again shortly.",
+        message:
+          gpData.successMessage ||
+          "Payment has not been confirmed by GlobalPay yet. Please wait a moment and try again.",
       });
     }
 

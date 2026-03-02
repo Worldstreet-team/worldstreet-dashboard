@@ -36,7 +36,17 @@ const isProtectedApi = createRouteMatcher([
   "/api/withdraw(.*)",
 ]);
 
+// Webhook routes that should NOT require auth (called by external services)
+const isWebhookRoute = createRouteMatcher([
+  "/api/deposit/webhook",
+]);
+
 export default clerkMiddleware(async (auth, req) => {
+  // Skip auth for webhook routes (called by external services)
+  if (isWebhookRoute(req)) {
+    return NextResponse.next();
+  }
+
   if (isProtectedRoute(req)) {
     try {
       await auth.protect();
