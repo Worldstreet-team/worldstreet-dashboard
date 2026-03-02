@@ -96,8 +96,6 @@ export default function SpotTradingPage() {
 
       {/* DESKTOP/TABLET LAYOUT - Original */}
       <div className="hidden md:flex flex-col h-[calc(140vh-64px)] md:h-[calc(120vh-80px)] bg-white dark:bg-darkgray">
-      {/* DESKTOP/TABLET LAYOUT - Original */}
-      <div className="hidden md:flex flex-col h-[calc(140vh-64px)] md:h-[calc(120vh-80px)] bg-white dark:bg-darkgray">
         {/* Pair Info Bar - Full Width */}
         <PairInfoBar 
           selectedPair={selectedPair}
