@@ -271,9 +271,9 @@ export async function validateSwapBalance(
         };
       }
     } else {
-      const usdtContract = await tronWeb.contract(TRC20_ABI, USDT_CONTRACT_ADDRESS);
-      const balanceResult = await usdtContract.methods.balanceOf(address).call();
-      const usdtBalance = Number(balanceResult.toString()) / 1_000_000;
+      // Use the balance API to get USDT balance
+      const { getTrc20Balance } = await import("@/lib/wallet/tronWallet");
+      const usdtBalance = await getTrc20Balance(address, USDT_CONTRACT_ADDRESS);
       
       if (usdtBalance < amount) {
         return {
