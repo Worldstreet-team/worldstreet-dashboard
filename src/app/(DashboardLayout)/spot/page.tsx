@@ -19,6 +19,7 @@ export default function SpotTradingPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [showTPSLLines, setShowTPSLLines] = useState(true);
   const [isOrderEntryExpanded, setIsOrderEntryExpanded] = useState(true);
+  const [mobileActiveTab, setMobileActiveTab] = useState<'chart' | 'orderbook' | 'trades'>('chart');
   const [activePositionTPSL, setActivePositionTPSL] = useState<{
     symbol: string;
     takeProfit: string | null;
@@ -87,31 +88,68 @@ export default function SpotTradingPage() {
 
         {/* Chart Tabs */}
         <div className="flex-shrink-0 flex items-center gap-6 px-4 border-b border-border dark:border-darkborder bg-white dark:bg-darkgray">
-          <button className="pb-2 text-sm font-medium text-dark dark:text-white border-b-2 border-warning">
+          <button 
+            onClick={() => setMobileActiveTab('chart')}
+            className={`pb-2 text-sm font-medium ${
+              mobileActiveTab === 'chart' 
+                ? 'text-dark dark:text-white border-b-2 border-warning' 
+                : 'text-muted'
+            }`}
+          >
             Chart
           </button>
-          <button className="pb-2 text-sm font-medium text-muted">
+          <button 
+            onClick={() => setMobileActiveTab('orderbook')}
+            className={`pb-2 text-sm font-medium ${
+              mobileActiveTab === 'orderbook' 
+                ? 'text-dark dark:text-white border-b-2 border-warning' 
+                : 'text-muted'
+            }`}
+          >
             Order Book
           </button>
-          <button className="pb-2 text-sm font-medium text-muted">
+          <button 
+            onClick={() => setMobileActiveTab('trades')}
+            className={`pb-2 text-sm font-medium ${
+              mobileActiveTab === 'trades' 
+                ? 'text-dark dark:text-white border-b-2 border-warning' 
+                : 'text-muted'
+            }`}
+          >
             Trades
           </button>
         </div>
 
         {/* Scrollable Content Area */}
-        <div className="flex-1 overflow-y-auto pb-[72px]">
+        <div className="flex-1 overflow-y-auto">
           {/* Chart Area - 65% of viewport height */}
-          <div className="h-[65vh] bg-white dark:bg-darkgray">
-            <LiveChart 
-              symbol={selectedPair}
-              stopLoss={chartStopLoss}
-              takeProfit={chartTakeProfit}
-              onUpdateLevels={handleUpdateLevels}
-            />
-          </div>
+          {mobileActiveTab === 'chart' && (
+            <div className="h-[65vh] bg-white dark:bg-darkgray">
+              <LiveChart 
+                symbol={selectedPair}
+                stopLoss={chartStopLoss}
+                takeProfit={chartTakeProfit}
+                onUpdateLevels={handleUpdateLevels}
+              />
+            </div>
+          )}
+
+          {/* Order Book */}
+          {mobileActiveTab === 'orderbook' && (
+            <div className="h-[65vh] bg-white dark:bg-darkgray overflow-auto">
+              <OrderBook selectedPair={selectedPair} />
+            </div>
+          )}
+
+          {/* Market Trades */}
+          {mobileActiveTab === 'trades' && (
+            <div className="h-[65vh] bg-white dark:bg-darkgray overflow-auto">
+              <MarketTrades selectedPair={selectedPair} />
+            </div>
+          )}
 
           {/* Bottom Tabs - Open Orders / Holdings */}
-          <div className="border-t border-border dark:border-darkborder bg-white dark:bg-darkgray">
+          <div className="border-t border-border dark:border-darkborder bg-white dark:bg-darkgray pb-20">
             <BottomTabs 
               refreshKey={refreshKey}
               selectedChartSymbol={selectedPair}
