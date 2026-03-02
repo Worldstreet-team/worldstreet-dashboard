@@ -50,6 +50,9 @@ export async function getQuoteTrxToUsdt(
     // Get contract instance
     const contract = await tronWeb.contract(POOL_ABI, JUSTSWAP_POOL_ADDRESS);
 
+    // Set a dummy address for read-only calls (required by TronWeb)
+    tronWeb.setAddress(JUSTSWAP_POOL_ADDRESS);
+
     // Call getTrxToTokenInputPrice - explicitly use .call() for read-only
     const result = await contract.methods.getTrxToTokenInputPrice(trxSold).call();
     const outputAmount = Number(result.toString()) / 1_000_000; // USDT has 6 decimals
@@ -88,6 +91,9 @@ export async function getQuoteUsdtToTrx(
 
     // Get contract instance
     const contract = await tronWeb.contract(POOL_ABI, JUSTSWAP_POOL_ADDRESS);
+
+    // Set a dummy address for read-only calls (required by TronWeb)
+    tronWeb.setAddress(JUSTSWAP_POOL_ADDRESS);
 
     // Call getTokenToTrxInputPrice - explicitly use .call() for read-only
     const result = await contract.methods.getTokenToTrxInputPrice(tokensSold).call();
