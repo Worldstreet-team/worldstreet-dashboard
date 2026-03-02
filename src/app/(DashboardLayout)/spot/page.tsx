@@ -50,63 +50,63 @@ export default function SpotTradingPage() {
   return (
     <>
       {/* MOBILE LAYOUT - Binance Style (Full Screen Chart) */}
-      <div className="md:hidden flex flex-col h-screen bg-[#0B0E11] overflow-hidden">
+      <div className="md:hidden fixed inset-0 flex flex-col bg-white dark:bg-darkgray overflow-hidden">
         {/* Pair Header with Price Info */}
-        <div className="flex-shrink-0 px-4 py-3 bg-[#0B0E11]">
+        <div className="flex-shrink-0 px-4 py-3 bg-white dark:bg-darkgray border-b border-border dark:border-darkborder">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
-              <span className="text-lg font-bold text-white">{selectedPair.replace('-', '/')}</span>
-              <Icon icon="ph:caret-down" width={16} className="text-gray-400" />
+              <span className="text-lg font-bold text-dark dark:text-white">{selectedPair.replace('-', '/')}</span>
+              <Icon icon="ph:caret-down" width={16} className="text-muted" />
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-400">Bitcoin Price</span>
-              <Icon icon="ph:arrow-up-right" width={12} className="text-gray-400" />
+              <span className="text-xs text-muted">Bitcoin Price</span>
+              <Icon icon="ph:arrow-up-right" width={12} className="text-muted" />
             </div>
           </div>
           
           <div className="flex items-baseline gap-3">
-            <span className="text-2xl font-bold text-[#0ECB81]">69,201.46</span>
-            <span className="text-sm text-[#0ECB81]">$69,201.46</span>
-            <span className="text-sm text-[#0ECB81]">+3.34%</span>
+            <span className="text-2xl font-bold text-success">69,201.46</span>
+            <span className="text-sm text-success">$69,201.46</span>
+            <span className="text-sm text-success">+3.34%</span>
           </div>
           
           <div className="flex items-center gap-4 mt-2 text-xs">
-            <span className="text-[#F6465D]">POW</span>
-            <span className="text-gray-400">Payments</span>
-            <span className="text-gray-400">Vol</span>
-            <span className="text-gray-400">Hot</span>
-            <span className="text-gray-400">P</span>
-            <Icon icon="ph:caret-right" width={12} className="text-gray-400" />
+            <span className="text-error">POW</span>
+            <span className="text-muted">Payments</span>
+            <span className="text-muted">Vol</span>
+            <span className="text-muted">Hot</span>
+            <span className="text-muted">P</span>
+            <Icon icon="ph:caret-right" width={12} className="text-muted" />
           </div>
           
           <div className="flex items-center gap-2 mt-2">
-            <span className="text-xs text-gray-400">Networks</span>
-            <span className="text-xs text-white">BTC (5)</span>
+            <span className="text-xs text-muted">Networks</span>
+            <span className="text-xs text-dark dark:text-white">BTC (5)</span>
           </div>
         </div>
 
         {/* Chart Tabs */}
-        <div className="flex-shrink-0 flex items-center gap-6 px-4 border-b border-gray-800">
-          <button className="pb-2 text-sm font-medium text-white border-b-2 border-[#FCD535]">
+        <div className="flex-shrink-0 flex items-center gap-6 px-4 border-b border-border dark:border-darkborder bg-white dark:bg-darkgray">
+          <button className="pb-2 text-sm font-medium text-dark dark:text-white border-b-2 border-warning">
             Chart
           </button>
-          <button className="pb-2 text-sm font-medium text-gray-400">
+          <button className="pb-2 text-sm font-medium text-muted">
             Order Book
           </button>
-          <button className="pb-2 text-sm font-medium text-gray-400">
+          <button className="pb-2 text-sm font-medium text-muted">
             Trades
           </button>
-          <button className="pb-2 text-sm font-medium text-gray-400">
+          <button className="pb-2 text-sm font-medium text-muted">
             Info
           </button>
-          <button className="pb-2 text-sm font-medium text-gray-400 flex items-center gap-1">
+          <button className="pb-2 text-sm font-medium text-muted flex items-center gap-1">
             Trading Data
-            <span className="text-[10px] px-1 bg-gradient-to-r from-blue-500 to-purple-500 rounded">AI</span>
+            <span className="text-[10px] px-1 bg-gradient-to-r from-blue-500 to-purple-500 rounded text-white">AI</span>
           </button>
         </div>
 
         {/* Chart Area - Takes remaining space */}
-        <div className="flex-1 overflow-hidden bg-[#0B0E11]">
+        <div className="flex-1 overflow-hidden bg-white dark:bg-darkgray">
           <LiveChart 
             symbol={selectedPair}
             stopLoss={chartStopLoss}
@@ -116,7 +116,7 @@ export default function SpotTradingPage() {
         </div>
 
         {/* Bottom Tabs - Open Orders / Holdings */}
-        <div className="flex-shrink-0 border-t border-gray-800 bg-[#0B0E11]">
+        <div className="flex-shrink-0 border-t border-border dark:border-darkborder bg-white dark:bg-darkgray max-h-[30vh]">
           <BottomTabs 
             refreshKey={refreshKey}
             selectedChartSymbol={selectedPair}
@@ -127,18 +127,18 @@ export default function SpotTradingPage() {
         </div>
 
         {/* Buy/Sell Buttons - Fixed at bottom */}
-        <div className="flex-shrink-0 flex gap-3 p-4 bg-[#0B0E11] border-t border-gray-800">
-          <button className="flex-1 py-3 bg-[#0ECB81] hover:bg-[#0ECB81]/90 text-white font-semibold rounded-lg transition-colors">
+        <div className="flex-shrink-0 flex gap-3 p-4 bg-white dark:bg-darkgray border-t border-border dark:border-darkborder">
+          <button className="flex-1 py-3 bg-success hover:bg-success/90 text-white font-semibold rounded-lg transition-colors">
             Buy
           </button>
-          <button className="flex-1 py-3 bg-[#F6465D] hover:bg-[#F6465D]/90 text-white font-semibold rounded-lg transition-colors">
+          <button className="flex-1 py-3 bg-error hover:bg-error/90 text-white font-semibold rounded-lg transition-colors">
             Sell
           </button>
         </div>
       </div>
 
       {/* DESKTOP/TABLET LAYOUT - Original */}
-      <div className="hidden md:flex flex-col h-[calc(140vh-64px)] md:h-[calc(120vh-80px)] bg-white dark:bg-darkgray">
+      <div className="hidden md:flex flex-col h-[calc(100vh-80px)] bg-white dark:bg-darkgray">
         {/* Pair Info Bar - Full Width */}
         <PairInfoBar 
           selectedPair={selectedPair}
@@ -248,3 +248,4 @@ export default function SpotTradingPage() {
     </>
   );
 }
+
