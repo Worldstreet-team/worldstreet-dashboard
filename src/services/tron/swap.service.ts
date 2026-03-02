@@ -125,8 +125,11 @@ export async function executeTrxToUsdtSwap(
 
     console.log("[SwapService] Swap transaction sent:", tx);
 
+    // Extract transaction ID (handle different return formats)
+    const txId = typeof tx === 'string' ? tx : (tx.txid || tx.transaction?.txID || tx);
+
     return {
-      txHash: tx,
+      txHash: String(txId),
       success: true,
       message: "Swap executed successfully",
     };
@@ -216,8 +219,11 @@ export async function executeUsdtToTrxSwap(
 
     console.log("[SwapService] Swap transaction sent:", tx);
 
+    // Extract transaction ID (handle different return formats)
+    const txId = typeof tx === 'string' ? tx : (tx.txid || tx.transaction?.txID || tx);
+
     return {
-      txHash: tx,
+      txHash: String(txId),
       success: true,
       message: "Swap executed successfully",
     };
