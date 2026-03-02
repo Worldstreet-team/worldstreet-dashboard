@@ -16,6 +16,8 @@ interface QuoteResponse {
 
 interface TradingPanelProps {
   selectedPair: string;
+  side?: 'buy' | 'sell';
+  onClose?: () => void;
   onTradeExecuted?: () => void;
 }
 
@@ -59,9 +61,9 @@ const getTokenConfig = (token: string, chain: 'Solana' | 'EVM' | 'Tron') => {
   }
 };
 
-export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingPanelProps) {
+export default function TradingPanel({ selectedPair, side: initialSide = 'buy', onClose, onTradeExecuted }: TradingPanelProps) {
   const { user } = useAuth();
-  const [side, setSide] = useState<'buy' | 'sell'>('buy');
+  const [side, setSide] = useState<'buy' | 'sell'>(initialSide);
   const [amount, setAmount] = useState('');
   const [slippage, setSlippage] = useState('0.5');
   const [quote, setQuote] = useState<QuoteResponse | null>(null);
@@ -273,13 +275,35 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
   };
 
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-darkgray">
-      {/* Header */}
-      <div className="px-3 md:px-4 py-2 md:py-3 border-b border-border dark:border-darkborder flex-shrink-0">
-        <span className="text-sm md:text-base font-semibold text-dark dark:text-white">Spot</span>
-      </div>
+    <>
+      {/* Modal Overlay */}
+      {onClose && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40"
+          onClick={onClose}
+        />
+      )}
+      
+      {/* Modal Content */}
+      <div className={`${
+        onClose 
+          ? 'fixed bottom-0 left-0 right-0 md:left-auto md:right-4 md:bottom-4 md:w-96 z-50 rounded-t-2xl md:rounded-2xl shadow-2xl' 
+          : 'h-full'
+      } flex flex-col bg-white dark:bg-darkgray`}>
+        {/* Header */}
+        <div className="px-3 md:px-4 py-2 md:py-3 border-b border-border dark:border-darkborder flex-shrink-0 flex items-center justify-between">
+          <span className="text-sm md:text-base font-semibold text-dark dark:text-white">Spot</span>
+          {onClose && (
+            <button 
+              onClick={onClose}
+              className="p-1 hover:bg-muted/20 rounded transition-colors"
+            >
+              <Icon icon="ph:x" width={20} className="text-muted" />
+            </button>
+          )}
+        </div>
 
-      <div className="flex-1 overflow-y-auto px-3 md:px-4 py-3 md:py-4 space-y-3 md:space-y-4">
+        <div className="flex-1 overflow-y-auto px-3 md:px-4 py-3 md:py-4 space-y-3 md:space-y-4">
         {/* Buy/Sell Tabs */}
         <div className="flex gap-2">
           <button
@@ -491,7 +515,8 @@ export default function TradingPanel({ selectedPair, onTradeExecuted }: TradingP
             </p>
           </div>
         </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

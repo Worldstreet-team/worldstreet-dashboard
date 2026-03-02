@@ -8,9 +8,12 @@ import {
   BottomTabs,
   MarketList,
   MarketTrades,
-  SpotOrderEntry
+  SpotOrderEntry,
+  TradingPanel
 } from "@/components/spot";
 import { Icon } from "@iconify/react";
+
+const AVAILABLE_PAIRS = ['BTC-USDT', 'ETH-USDT', 'SOL-USDT'];
 
 export default function SpotTradingPage() {
   const [selectedPair, setSelectedPair] = useState('BTC-USDT');
@@ -20,6 +23,9 @@ export default function SpotTradingPage() {
   const [showTPSLLines, setShowTPSLLines] = useState(true);
   const [isOrderEntryExpanded, setIsOrderEntryExpanded] = useState(true);
   const [mobileActiveTab, setMobileActiveTab] = useState<'chart' | 'orderbook' | 'trades'>('chart');
+  const [showPairDropdown, setShowPairDropdown] = useState(false);
+  const [showTradingPanel, setShowTradingPanel] = useState(false);
+  const [tradingPanelSide, setTradingPanelSide] = useState<'buy' | 'sell'>('buy');
   const [activePositionTPSL, setActivePositionTPSL] = useState<{
     symbol: string;
     takeProfit: string | null;
@@ -33,12 +39,23 @@ export default function SpotTradingPage() {
 
   const handleTradeExecuted = useCallback(() => {
     setRefreshKey(prev => prev + 1);
+    setShowTradingPanel(false);
   }, []);
 
   const handlePositionTPSLUpdate = useCallback((symbol: string, tp: string | null, sl: string | null) => {
     const normalizedSymbol = symbol.replace('/', '-');
     setActivePositionTPSL({ symbol: normalizedSymbol, takeProfit: tp, stopLoss: sl });
   }, []);
+
+  const handleOpenTradingPanel = (side: 'buy' | 'sell') => {
+    setTradingPanelSide(side);
+    setShowTradingPanel(true);
+  };
+
+  const handleSelectPair = (pair: string) => {
+    setSelectedPair(pair);
+    setShowPairDropdown(false);
+  };
 
   const chartStopLoss = showTPSLLines && activePositionTPSL?.symbol === selectedPair 
     ? activePositionTPSL.stopLoss || stopLoss 
@@ -55,9 +72,31 @@ export default function SpotTradingPage() {
         {/* Pair Header with Price Info */}
         <div className="flex-shrink-0 px-4 py-3 bg-white dark:bg-darkgray border-b border-border dark:border-darkborder">
           <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <span className="text-lg font-bold text-dark dark:text-white">{selectedPair.replace('-', '/')}</span>
-              <Icon icon="ph:caret-down" width={16} className="text-muted" />
+            <div className="relative">
+              <button 
+                onClick={() => setShowPairDropdown(!showPairDropdown)}
+                className="flex items-center gap-2 hover:bg-muted/10 px-2 py-1 rounded"
+              >
+                <span className="text-lg font-bold text-dark dark:text-white">{selectedPair.replace('-', '/')}</span>
+                <Icon icon="ph:caret-down" width={16} className="text-muted" />
+              </button>
+              
+              {/* Pair Dropdown */}
+              {showPairDropdown && (
+                <div className="absolute top-full left-0 mt-1 bg-white dark:bg-darkgray border border-border dark:border-darkborder rounded-lg shadow-lg z-20 min-w-[150px]">
+                  {AVAILABLE_PAIRS.map((pair) => (
+                    <button
+                      key={pair}
+                      onClick={() => handleSelectPair(pair)}
+                      className={`w-full text-left px-4 py-2 hover:bg-muted/10 ${
+                        selectedPair === pair ? 'bg-muted/20 text-primary' : 'text-dark dark:text-white'
+                      }`}
+                    >
+                      {pair.replace('-', '/')}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted">Bitcoin Price</span>
@@ -162,13 +201,29 @@ export default function SpotTradingPage() {
 
         {/* Buy/Sell Buttons - Fixed at bottom (outside scroll) */}
         <div className="fixed bottom-0 left-0 right-0 flex gap-3 p-4 bg-white dark:bg-darkgray border-t border-border dark:border-darkborder z-10">
-          <button className="flex-1 py-3 bg-success hover:bg-success/90 text-white font-semibold rounded-lg transition-colors">
+          <button 
+            onClick={() => handleOpenTradingPanel('buy')}
+            className="flex-1 py-3 bg-success hover:bg-success/90 text-white font-semibold rounded-lg transition-colors"
+          >
             Buy
           </button>
-          <button className="flex-1 py-3 bg-error hover:bg-error/90 text-white font-semibold rounded-lg transition-colors">
+          <button 
+            onClick={() => handleOpenTradingPanel('sell')}
+            className="flex-1 py-3 bg-error hover:bg-error/90 text-white font-semibold rounded-lg transition-colors"
+          >
             Sell
           </button>
         </div>
+
+        {/* Trading Panel Modal */}
+        {showTradingPanel && (
+          <TradingPanel
+            selectedPair={selectedPair}
+            side={tradingPanelSide}
+            onClose={() => setShowTradingPanel(false)}
+            onTradeExecuted={handleTradeExecuted}
+          />
+        )}
       </div>
 
       {/* DESKTOP/TABLET LAYOUT - Original */}
