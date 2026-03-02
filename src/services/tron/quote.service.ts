@@ -108,6 +108,9 @@ export async function getQuoteTrxToUsdt(
     // Get TronWeb instance
     const tronWeb = await getTronWeb();
 
+    // Set a default address for read-only calls (required by TronWeb)
+    tronWeb.setAddress(SUNSWAP_POOL_ADDRESS);
+
     // Convert TRX to Sun (6 decimals)
     const trxSold = Math.floor(trxAmount * 1_000_000);
 
@@ -169,6 +172,9 @@ export async function getQuoteUsdtToTrx(
   try {
     // Get TronWeb instance
     const tronWeb = await getTronWeb();
+
+    // Set a default address for read-only calls (required by TronWeb)
+    tronWeb.setAddress(SUNSWAP_POOL_ADDRESS);
 
     // Convert USDT to base units (6 decimals)
     const tokensSold = Math.floor(usdtAmount * 1_000_000);

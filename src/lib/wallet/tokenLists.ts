@@ -37,7 +37,7 @@ export const ETHEREUM_TOKENS: TokenInfo[] = [
   {
     symbol: "DAI",
     name: "Dai Stablecoin",
-    address: "0x6b175474e89094c44da98b954eedebc56b466c530",
+    address: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
     decimals: 18,
     logoURI: "https://assets.coingecko.com/coins/images/9956/small/dai-multi-collateral-mcd.png",
     coingeckoId: "dai",
