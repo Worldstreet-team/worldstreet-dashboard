@@ -1,13 +1,13 @@
 /**
  * Tron Swap Execution Service
  * 
- * Handles swap execution for TRX <-> USDT on JustSwap
+ * Handles swap execution for TRX <-> USDT on SunSwap
  */
 
-const JUSTSWAP_POOL_ADDRESS = "TPavNqt8xhoBp4NNBSdEx3FBP24NBfVRxU";
+const SUNSWAP_POOL_ADDRESS = "TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE";
 const USDT_CONTRACT_ADDRESS = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"; // Mainnet USDT
 
-// JustSwap Pool ABI
+// Complete SunSwap Pool ABI
 const POOL_ABI = [
   {
     constant: false,
@@ -30,7 +30,26 @@ const POOL_ABI = [
     ],
     name: "tokenToTrxSwapInput",
     outputs: [{ name: "", type: "uint256" }],
+    payable: false,
     stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    constant: true,
+    inputs: [{ name: "trx_sold", type: "uint256" }],
+    name: "getTrxToTokenInputPrice",
+    outputs: [{ name: "", type: "uint256" }],
+    payable: false,
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    constant: true,
+    inputs: [{ name: "tokens_sold", type: "uint256" }],
+    name: "getTokenToTrxInputPrice",
+    outputs: [{ name: "", type: "uint256" }],
+    payable: false,
+    stateMutability: "view",
     type: "function",
   },
 ];
@@ -88,7 +107,7 @@ export async function executeTrxToUsdtSwap(
     const deadline = Math.floor(Date.now() / 1000) + 600;
 
     // Get contract instance
-    const contract = await tronWeb.contract(POOL_ABI, JUSTSWAP_POOL_ADDRESS);
+    const contract = await tronWeb.contract(POOL_ABI, SUNSWAP_POOL_ADDRESS);
 
     console.log("[SwapService] Executing TRX->USDT swap:", {
       trxAmount,
@@ -153,7 +172,7 @@ export async function executeUsdtToTrxSwap(
 
     // Step 1: Check allowance
     const usdtContract = await tronWeb.contract(TRC20_ABI, USDT_CONTRACT_ADDRESS);
-    const allowanceResult = await usdtContract.methods.allowance(userAddress, JUSTSWAP_POOL_ADDRESS).call();
+    const allowanceResult = await usdtContract.methods.allowance(userAddress, SUNSWAP_POOL_ADDRESS).call();
     const currentAllowance = Number(allowanceResult.toString());
 
     console.log("[SwapService] Current USDT allowance:", currentAllowance);
@@ -163,7 +182,7 @@ export async function executeUsdtToTrxSwap(
       console.log("[SwapService] Approving USDT...");
       
       const approveTx = await usdtContract.methods.approve(
-        JUSTSWAP_POOL_ADDRESS,
+        SUNSWAP_POOL_ADDRESS,
         tokensSold
       ).send({
         feeLimit: 50_000_000, // 50 TRX fee limit
@@ -177,7 +196,7 @@ export async function executeUsdtToTrxSwap(
     }
 
     // Step 3: Execute swap
-    const poolContract = await tronWeb.contract(POOL_ABI, JUSTSWAP_POOL_ADDRESS);
+    const poolContract = await tronWeb.contract(POOL_ABI, SUNSWAP_POOL_ADDRESS);
 
     console.log("[SwapService] Executing USDT->TRX swap:", {
       usdtAmount,

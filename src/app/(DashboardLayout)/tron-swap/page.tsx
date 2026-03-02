@@ -77,18 +77,12 @@ const TronSwapPage = () => {
       setQuoteError("");
 
       try {
-        // Dynamically import TronWeb
-        const TronWeb = (await import("tronweb")).default;
-        const tronWeb = new TronWeb({
-          fullHost: process.env.NEXT_PUBLIC_TRON_RPC || "https://api.trongrid.io",
-        });
-
         let quoteResult: QuoteResult;
 
         if (fromToken === "TRX") {
-          quoteResult = await getQuoteTrxToUsdt(tronWeb, numAmount, slippage);
+          quoteResult = await getQuoteTrxToUsdt(numAmount, slippage);
         } else {
-          quoteResult = await getQuoteUsdtToTrx(tronWeb, numAmount, slippage);
+          quoteResult = await getQuoteUsdtToTrx(numAmount, slippage);
         }
 
         setQuote(quoteResult);

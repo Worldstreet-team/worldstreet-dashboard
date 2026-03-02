@@ -1,18 +1,23 @@
 /**
  * Tron Swap Quote Service
  * 
- * Provides quote functionality for TRX <-> USDT swaps using JustSwap pool
+ * Provides quote functionality for TRX <-> USDT swaps using SunSwap pool
  */
 
-const JUSTSWAP_POOL_ADDRESS = "TPavNqt8xhoBp4NNBSdEx3FBP24NBfVRxU";
+import { getTronWeb } from "./tronweb.service";
 
-// JustSwap Pool ABI - only the methods we need
+// IMPORTANT: This is the SunSwap TRX/USDT pool address
+// Verified mainnet pool: TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE
+const SUNSWAP_POOL_ADDRESS = "TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE";
+
+// Complete JustSwap/SunSwap Pool ABI
 const POOL_ABI = [
   {
     constant: true,
     inputs: [{ name: "trx_sold", type: "uint256" }],
     name: "getTrxToTokenInputPrice",
     outputs: [{ name: "", type: "uint256" }],
+    payable: false,
     stateMutability: "view",
     type: "function",
   },
@@ -21,6 +26,34 @@ const POOL_ABI = [
     inputs: [{ name: "tokens_sold", type: "uint256" }],
     name: "getTokenToTrxInputPrice",
     outputs: [{ name: "", type: "uint256" }],
+    payable: false,
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    constant: true,
+    inputs: [{ name: "tokens_bought", type: "uint256" }],
+    name: "getTrxToTokenOutputPrice",
+    outputs: [{ name: "", type: "uint256" }],
+    payable: false,
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    constant: true,
+    inputs: [{ name: "trx_bought", type: "uint256" }],
+    name: "getTokenToTrxOutputPrice",
+    outputs: [{ name: "", type: "uint256" }],
+    payable: false,
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    constant: true,
+    inputs: [],
+    name: "tokenAddress",
+    outputs: [{ name: "", type: "address" }],
+    payable: false,
     stateMutability: "view",
     type: "function",
   },
@@ -36,49 +69,75 @@ export interface QuoteResult {
 }
 
 /**
+ * Parse TronWeb BigNumber result
+ * TronWeb returns results in different formats depending on version
+ */
+function parseTronWebBigNumber(result: any): bigint {
+  // Handle different TronWeb return formats
+  if (typeof result === 'bigint') {
+    return result;
+  }
+  
+  if (typeof result === 'number') {
+    return BigInt(result);
+  }
+  
+  if (result._hex) {
+    return BigInt(result._hex);
+  }
+  
+  if (result.toString) {
+    const str = result.toString();
+    // Remove any non-numeric characters except for the number itself
+    const cleaned = str.replace(/[^0-9]/g, '');
+    return BigInt(cleaned || '0');
+  }
+  
+  // Fallback
+  return BigInt(String(result));
+}
+
+/**
  * Get quote for TRX -> USDT swap
  */
 export async function getQuoteTrxToUsdt(
-  tronWeb: any,
   trxAmount: number,
   slippage: number = 1
 ): Promise<QuoteResult> {
   try {
+    // Get TronWeb instance
+    const tronWeb = await getTronWeb();
+
     // Convert TRX to Sun (6 decimals)
     const trxSold = Math.floor(trxAmount * 1_000_000);
 
     console.log("[QuoteService] Input TRX:", trxAmount, "Sun:", trxSold);
 
     // Get contract instance
-    const contract = await tronWeb.contract(POOL_ABI, JUSTSWAP_POOL_ADDRESS);
+    const contract = await tronWeb.contract(POOL_ABI, SUNSWAP_POOL_ADDRESS);
 
-    // Set a dummy address for read-only calls (required by TronWeb)
-    tronWeb.setAddress(JUSTSWAP_POOL_ADDRESS);
-
-    // Call getTrxToTokenInputPrice - explicitly use .call() for read-only
-    const result = await contract.methods.getTrxToTokenInputPrice(trxSold).call();
+    // Call getTrxToTokenInputPrice (read-only, no private key needed)
+    const result = await contract.getTrxToTokenInputPrice(trxSold).call();
     
     console.log("[QuoteService] Raw result:", result);
     console.log("[QuoteService] Result type:", typeof result);
-    console.log("[QuoteService] Result toString:", result.toString());
-
-    // Handle BigInt or regular number
-    let outputInBaseUnits: bigint;
-    if (typeof result === 'bigint') {
-      outputInBaseUnits = result;
-    } else if (result._hex) {
-      // TronWeb sometimes returns objects with _hex property
-      outputInBaseUnits = BigInt(result._hex);
-    } else {
-      outputInBaseUnits = BigInt(result.toString());
-    }
-
-    console.log("[QuoteService] Output in base units:", outputInBaseUnits.toString());
+    
+    // Parse the result
+    const outputInBaseUnits = parseTronWebBigNumber(result);
+    
+    console.log("[QuoteService] Parsed BigInt:", outputInBaseUnits.toString());
 
     // Convert from base units (6 decimals for USDT)
     const outputAmount = Number(outputInBaseUnits) / 1_000_000;
 
     console.log("[QuoteService] Output USDT:", outputAmount);
+
+    // Sanity check - if the output is absurdly large, something is wrong
+    if (outputAmount > trxAmount * 1000) {
+      console.error("[QuoteService] Sanity check failed - output too large");
+      console.error("[QuoteService] This might indicate wrong pool address or ABI");
+      throw new Error("Invalid quote received - output amount unrealistic");
+    }
 
     // Calculate minimum output with slippage
     const minimumOutput = outputAmount * (1 - slippage / 100);
@@ -92,7 +151,7 @@ export async function getQuoteTrxToUsdt(
       minimumOutput,
       slippage,
       priceImpact,
-      poolAddress: JUSTSWAP_POOL_ADDRESS,
+      poolAddress: SUNSWAP_POOL_ADDRESS,
     };
   } catch (error) {
     console.error("[QuoteService] TRX->USDT quote error:", error);
@@ -104,46 +163,42 @@ export async function getQuoteTrxToUsdt(
  * Get quote for USDT -> TRX swap
  */
 export async function getQuoteUsdtToTrx(
-  tronWeb: any,
   usdtAmount: number,
   slippage: number = 1
 ): Promise<QuoteResult> {
   try {
+    // Get TronWeb instance
+    const tronWeb = await getTronWeb();
+
     // Convert USDT to base units (6 decimals)
     const tokensSold = Math.floor(usdtAmount * 1_000_000);
 
     console.log("[QuoteService] Input USDT:", usdtAmount, "Base units:", tokensSold);
 
     // Get contract instance
-    const contract = await tronWeb.contract(POOL_ABI, JUSTSWAP_POOL_ADDRESS);
+    const contract = await tronWeb.contract(POOL_ABI, SUNSWAP_POOL_ADDRESS);
 
-    // Set a dummy address for read-only calls (required by TronWeb)
-    tronWeb.setAddress(JUSTSWAP_POOL_ADDRESS);
-
-    // Call getTokenToTrxInputPrice - explicitly use .call() for read-only
-    const result = await contract.methods.getTokenToTrxInputPrice(tokensSold).call();
+    // Call getTokenToTrxInputPrice (read-only, no private key needed)
+    const result = await contract.getTokenToTrxInputPrice(tokensSold).call();
     
     console.log("[QuoteService] Raw result:", result);
     console.log("[QuoteService] Result type:", typeof result);
-    console.log("[QuoteService] Result toString:", result.toString());
-
-    // Handle BigInt or regular number
-    let outputInBaseUnits: bigint;
-    if (typeof result === 'bigint') {
-      outputInBaseUnits = result;
-    } else if (result._hex) {
-      // TronWeb sometimes returns objects with _hex property
-      outputInBaseUnits = BigInt(result._hex);
-    } else {
-      outputInBaseUnits = BigInt(result.toString());
-    }
-
-    console.log("[QuoteService] Output in base units:", outputInBaseUnits.toString());
+    
+    // Parse the result
+    const outputInBaseUnits = parseTronWebBigNumber(result);
+    
+    console.log("[QuoteService] Parsed BigInt:", outputInBaseUnits.toString());
 
     // Convert from base units (6 decimals for TRX)
     const outputAmount = Number(outputInBaseUnits) / 1_000_000;
 
     console.log("[QuoteService] Output TRX:", outputAmount);
+
+    // Sanity check
+    if (outputAmount > usdtAmount * 1000) {
+      console.error("[QuoteService] Sanity check failed - output too large");
+      throw new Error("Invalid quote received - output amount unrealistic");
+    }
 
     // Calculate minimum output with slippage
     const minimumOutput = outputAmount * (1 - slippage / 100);
@@ -157,7 +212,7 @@ export async function getQuoteUsdtToTrx(
       minimumOutput,
       slippage,
       priceImpact,
-      poolAddress: JUSTSWAP_POOL_ADDRESS,
+      poolAddress: SUNSWAP_POOL_ADDRESS,
     };
   } catch (error) {
     console.error("[QuoteService] USDT->TRX quote error:", error);
