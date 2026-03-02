@@ -1,15 +1,16 @@
 /**
  * Tron Wallet Generation Utilities
  * 
- * This module provides functions to generate Tron wallets client-side.
+ * This module provides functions to generate Tron wallets using external API.
  * Private keys are encrypted with the user's PIN before being sent to the server.
  */
 
 import { encryptWithPIN } from "./encryption";
-import { getTronWeb } from "@/services/tron/tronweb.service";
+
+const EXTERNAL_API_BASE_URL = "https://trading.watchup.site";
 
 /**
- * Generate a new Tron wallet
+ * Generate a new Tron wallet using external API
  * 
  * @param pin - User's PIN for encrypting the private key
  * @returns Object containing address and encrypted private key
@@ -19,27 +20,40 @@ export async function generateTronWallet(pin: string): Promise<{
   encryptedPrivateKey: string;
 }> {
   try {
-    console.log('[TronWallet] Getting TronWeb instance...');
+    console.log('[TronWallet] Calling external API to generate Tron wallet...');
     
-    // Use singleton TronWeb instance
-    const tronWeb = await getTronWeb();
+    // Call external API to generate Tron wallet
+    const response = await fetch(`${EXTERNAL_API_BASE_URL}/api/generate-wallet`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        chain: 'trc'
+      })
+    });
 
-    console.log('[TronWallet] Generating account...');
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `API request failed with status ${response.status}`);
+    }
 
-    // Generate new account
-    const account = tronWeb.createAccount();
+    const data = await response.json();
     
-    console.log('[TronWallet] Account generated');
-    
+    if (!data.success) {
+      throw new Error(data.error || 'Wallet generation failed');
+    }
+
+    console.log('[TronWallet] Wallet generated successfully');
+    console.log('[TronWallet] Address:', data.address);
+
     // Extract private key (without 0x prefix if present)
-    const privateKey = account.privateKey.startsWith("0x") 
-      ? account.privateKey.slice(2) 
-      : account.privateKey;
+    const privateKey = data.privateKey.startsWith("0x") 
+      ? data.privateKey.slice(2) 
+      : data.privateKey;
     
     // Get address
-    const address = account.address.base58;
-
-    console.log('[TronWallet] Address:', address);
+    const address = data.address;
 
     // Encrypt private key with PIN
     const encryptedPrivateKey = encryptWithPIN(privateKey, pin);
@@ -50,7 +64,7 @@ export async function generateTronWallet(pin: string): Promise<{
     };
   } catch (error) {
     console.error("Error generating Tron wallet:", error);
-    throw new Error("Failed to generate Tron wallet");
+    throw new Error(`Failed to generate Tron wallet: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 
@@ -60,7 +74,7 @@ export async function generateTronWallet(pin: string): Promise<{
  * @param address - Tron address to validate
  * @returns true if valid, false otherwise
  */
-export async function isValidTronAddress(address: string): Promise<boolean> {
+export function isValidTronAddress(address: string): boolean {
   try {
     // Tron addresses start with 'T' and are 34 characters long
     if (!address || typeof address !== "string") {
@@ -71,34 +85,10 @@ export async function isValidTronAddress(address: string): Promise<boolean> {
       return false;
     }
 
-    // Use TronWeb's built-in validation
-    const TronWeb = (await import("tronweb")).default;
-    return TronWeb.isAddress(address);
-  } catch {
-    // Fallback to basic validation
+    // Basic validation using regex
     return /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(address);
-  }
-}
-
-/**
- * Get Tron address from private key
- * 
- * @param privateKey - Private key (hex string)
- * @returns Tron address
- */
-export async function getTronAddressFromPrivateKey(privateKey: string): Promise<string> {
-  try {
-    const tronWeb = await getTronWeb();
-
-    // Remove 0x prefix if present
-    const cleanPrivateKey = privateKey.startsWith("0x") 
-      ? privateKey.slice(2) 
-      : privateKey;
-
-    return tronWeb.address.fromPrivateKey(cleanPrivateKey);
-  } catch (error) {
-    console.error("Error getting Tron address from private key:", error);
-    throw error;
+  } catch {
+    return false;
   }
 }
 
