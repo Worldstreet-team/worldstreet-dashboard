@@ -26,7 +26,7 @@ console.log('TronWeb.constructor:', window.TronWeb.constructor);
 // Method 1: Direct instantiation
 try {
   const tronWeb1 = new window.TronWeb({
-    fullHost: 'https://tron-mainnet.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITNT'
+    fullHost: 'https://api.trongrid.ioT'
   });
   console.log('Method 1 SUCCESS:', tronWeb1);
 } catch (e) {
@@ -36,7 +36,7 @@ try {
 // Method 2: Using default export
 try {
   const tronWeb2 = new window.TronWeb.default({
-    fullHost: 'https://tron-mainnet.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITNT'
+    fullHost: 'https://api.trongrid.ioT'
   });
   console.log('Method 2 SUCCESS:', tronWeb2);
 } catch (e) {
@@ -48,7 +48,7 @@ try {
 ```javascript
 // After successful instantiation
 const tronWeb = new window.TronWeb({
-  fullHost: 'https://tron-mainnet.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITNT'
+  fullHost: 'https://api.trongrid.ioT'
 });
 
 try {
@@ -167,7 +167,7 @@ If you want to test TronWeb independently:
         
         // Create instance
         const tronWeb = new window.TronWeb({
-          fullHost: 'https://tron-mainnet.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITNT'
+          fullHost: 'https://api.trongrid.ioT'
         });
         output.textContent += 'TronWeb instance created ✓\n';
         

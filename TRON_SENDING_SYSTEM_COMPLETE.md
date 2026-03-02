@@ -250,7 +250,7 @@ if (result.confirmed) {
 # .env.local
 
 # Shasta Testnet RPC
-NEXT_PUBLIC_TRON_RPC=https://tron-mainnet.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITN
+NEXT_PUBLIC_TRON_RPC=https://api.trongrid.io
 
 # Wallet generation service
 WALLET_SERVICE_URL=https://trading.watchup.site/api/generate-wallet

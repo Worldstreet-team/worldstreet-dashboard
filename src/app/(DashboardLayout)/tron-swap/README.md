@@ -156,7 +156,7 @@ User-friendly error messages for:
 Uses environment variable for RPC:
 
 ```env
-NEXT_PUBLIC_TRON_RPC=https://tron-mainnet.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITN  # Testnet
+NEXT_PUBLIC_TRON_RPC=https://api.trongrid.io  # Testnet
 # or
 NEXT_PUBLIC_TRON_RPC=https://api.trongrid.io  # Mainnet
 ```
