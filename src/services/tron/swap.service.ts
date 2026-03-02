@@ -18,6 +18,7 @@ const POOL_ABI = [
     name: "trxToTokenSwapInput",
     outputs: [{ name: "", type: "uint256" }],
     payable: true,
+    stateMutability: "payable",
     type: "function",
   },
   {
@@ -29,6 +30,7 @@ const POOL_ABI = [
     ],
     name: "tokenToTrxSwapInput",
     outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "nonpayable",
     type: "function",
   },
 ];
@@ -43,6 +45,7 @@ const TRC20_ABI = [
     ],
     name: "allowance",
     outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
     type: "function",
   },
   {
@@ -53,6 +56,7 @@ const TRC20_ABI = [
     ],
     name: "approve",
     outputs: [{ name: "", type: "bool" }],
+    stateMutability: "nonpayable",
     type: "function",
   },
 ];
@@ -94,7 +98,7 @@ export async function executeTrxToUsdtSwap(
     });
 
     // Execute swap
-    const tx = await contract.trxToTokenSwapInput(minTokens, deadline).send({
+    const tx = await contract.methods.trxToTokenSwapInput(minTokens, deadline).send({
       callValue: trxSun,
       feeLimit: 100_000_000, // 100 TRX fee limit
       shouldPollResponse: true,
@@ -149,8 +153,8 @@ export async function executeUsdtToTrxSwap(
 
     // Step 1: Check allowance
     const usdtContract = await tronWeb.contract(TRC20_ABI, USDT_CONTRACT_ADDRESS);
-    const allowance = await usdtContract.allowance(userAddress, JUSTSWAP_POOL_ADDRESS).call();
-    const currentAllowance = Number(allowance.toString());
+    const allowanceResult = await usdtContract.methods.allowance(userAddress, JUSTSWAP_POOL_ADDRESS).call();
+    const currentAllowance = Number(allowanceResult.toString());
 
     console.log("[SwapService] Current USDT allowance:", currentAllowance);
 
@@ -158,7 +162,7 @@ export async function executeUsdtToTrxSwap(
     if (currentAllowance < tokensSold) {
       console.log("[SwapService] Approving USDT...");
       
-      const approveTx = await usdtContract.approve(
+      const approveTx = await usdtContract.methods.approve(
         JUSTSWAP_POOL_ADDRESS,
         tokensSold
       ).send({
@@ -182,7 +186,7 @@ export async function executeUsdtToTrxSwap(
       deadline,
     });
 
-    const tx = await poolContract.tokenToTrxSwapInput(
+    const tx = await poolContract.methods.tokenToTrxSwapInput(
       tokensSold,
       minTrx,
       deadline
@@ -243,8 +247,8 @@ export async function validateSwapBalance(
       }
     } else {
       const usdtContract = await tronWeb.contract(TRC20_ABI, USDT_CONTRACT_ADDRESS);
-      const balance = await usdtContract.balanceOf(address).call();
-      const usdtBalance = Number(balance.toString()) / 1_000_000;
+      const balanceResult = await usdtContract.methods.balanceOf(address).call();
+      const usdtBalance = Number(balanceResult.toString()) / 1_000_000;
       
       if (usdtBalance < amount) {
         return {

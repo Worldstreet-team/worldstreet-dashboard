@@ -13,6 +13,7 @@ const POOL_ABI = [
     inputs: [{ name: "trx_sold", type: "uint256" }],
     name: "getTrxToTokenInputPrice",
     outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
     type: "function",
   },
   {
@@ -20,6 +21,7 @@ const POOL_ABI = [
     inputs: [{ name: "tokens_sold", type: "uint256" }],
     name: "getTokenToTrxInputPrice",
     outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
     type: "function",
   },
 ];
@@ -48,9 +50,9 @@ export async function getQuoteTrxToUsdt(
     // Get contract instance
     const contract = await tronWeb.contract(POOL_ABI, JUSTSWAP_POOL_ADDRESS);
 
-    // Call getTrxToTokenInputPrice
-    const outputRaw = await contract.getTrxToTokenInputPrice(trxSold).call();
-    const outputAmount = Number(outputRaw.toString()) / 1_000_000; // USDT has 6 decimals
+    // Call getTrxToTokenInputPrice - explicitly use .call() for read-only
+    const result = await contract.methods.getTrxToTokenInputPrice(trxSold).call();
+    const outputAmount = Number(result.toString()) / 1_000_000; // USDT has 6 decimals
 
     // Calculate minimum output with slippage
     const minimumOutput = outputAmount * (1 - slippage / 100);
@@ -87,9 +89,9 @@ export async function getQuoteUsdtToTrx(
     // Get contract instance
     const contract = await tronWeb.contract(POOL_ABI, JUSTSWAP_POOL_ADDRESS);
 
-    // Call getTokenToTrxInputPrice
-    const outputRaw = await contract.getTokenToTrxInputPrice(tokensSold).call();
-    const outputAmount = Number(outputRaw.toString()) / 1_000_000; // TRX has 6 decimals
+    // Call getTokenToTrxInputPrice - explicitly use .call() for read-only
+    const result = await contract.methods.getTokenToTrxInputPrice(tokensSold).call();
+    const outputAmount = Number(result.toString()) / 1_000_000; // TRX has 6 decimals
 
     // Calculate minimum output with slippage
     const minimumOutput = outputAmount * (1 - slippage / 100);
