@@ -58,6 +58,7 @@ export async function GET(request: NextRequest) {
     }
 
     const data = await response.json();
+    console.log("Data: ", data)
 
     if (!data.success) {
       throw new Error(data.message || "External API returned error");
