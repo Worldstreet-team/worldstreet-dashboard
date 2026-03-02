@@ -50,7 +50,7 @@ export default function SpotTradingPage() {
   return (
     <>
       {/* MOBILE LAYOUT - Binance Style (Full Screen Chart) */}
-      <div className="md:hidden fixed inset-0 flex flex-col bg-white dark:bg-darkgray overflow-hidden mt-20">
+      <div className="md:hidden fixed inset-0 flex flex-col bg-white dark:bg-darkgray mt-20">
         {/* Pair Header with Price Info */}
         <div className="flex-shrink-0 px-4 py-3 bg-white dark:bg-darkgray border-b border-border dark:border-darkborder">
           <div className="flex items-center justify-between mb-2">
@@ -96,38 +96,34 @@ export default function SpotTradingPage() {
           <button className="pb-2 text-sm font-medium text-muted">
             Trades
           </button>
-          <button className="pb-2 text-sm font-medium text-muted">
-            Info
-          </button>
-          <button className="pb-2 text-sm font-medium text-muted flex items-center gap-1">
-            Trading Data
-            <span className="text-[10px] px-1 bg-gradient-to-r from-blue-500 to-purple-500 rounded text-white">AI</span>
-          </button>
         </div>
 
-        {/* Chart Area - Takes remaining space */}
-        <div className="flex-1 overflow-hidden bg-white dark:bg-darkgray">
-          <LiveChart 
-            symbol={selectedPair}
-            stopLoss={chartStopLoss}
-            takeProfit={chartTakeProfit}
-            onUpdateLevels={handleUpdateLevels}
-          />
+        {/* Scrollable Content Area */}
+        <div className="flex-1 overflow-y-auto pb-[72px]">
+          {/* Chart Area - 65% of viewport height */}
+          <div className="h-[65vh] bg-white dark:bg-darkgray">
+            <LiveChart 
+              symbol={selectedPair}
+              stopLoss={chartStopLoss}
+              takeProfit={chartTakeProfit}
+              onUpdateLevels={handleUpdateLevels}
+            />
+          </div>
+
+          {/* Bottom Tabs - Open Orders / Holdings */}
+          <div className="border-t border-border dark:border-darkborder bg-white dark:bg-darkgray">
+            <BottomTabs 
+              refreshKey={refreshKey}
+              selectedChartSymbol={selectedPair}
+              onPositionTPSLUpdate={handlePositionTPSLUpdate}
+              showTPSLLines={showTPSLLines}
+              onToggleTPSLLines={() => setShowTPSLLines(!showTPSLLines)}
+            />
+          </div>
         </div>
 
-        {/* Bottom Tabs - Open Orders / Holdings */}
-        <div className="flex-shrink-0 border-t border-border dark:border-darkborder bg-white dark:bg-darkgray max-h-[30vh]">
-          <BottomTabs 
-            refreshKey={refreshKey}
-            selectedChartSymbol={selectedPair}
-            onPositionTPSLUpdate={handlePositionTPSLUpdate}
-            showTPSLLines={showTPSLLines}
-            onToggleTPSLLines={() => setShowTPSLLines(!showTPSLLines)}
-          />
-        </div>
-
-        {/* Buy/Sell Buttons - Fixed at bottom */}
-        <div className="flex-shrink-0 flex gap-3 p-4 bg-white dark:bg-darkgray border-t border-border dark:border-darkborder">
+        {/* Buy/Sell Buttons - Fixed at bottom (outside scroll) */}
+        <div className="fixed bottom-0 left-0 right-0 flex gap-3 p-4 bg-white dark:bg-darkgray border-t border-border dark:border-darkborder z-10">
           <button className="flex-1 py-3 bg-success hover:bg-success/90 text-white font-semibold rounded-lg transition-colors">
             Buy
           </button>
