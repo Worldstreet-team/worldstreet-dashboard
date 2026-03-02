@@ -10,10 +10,6 @@ import {
   MarketTrades,
   SpotOrderEntry
 } from "@/components/spot";
-import MobileTopNav from "@/components/spot/MobileTopNav";
-import MobilePairHeader from "@/components/spot/MobilePairHeader";
-import MobileTradingForm from "@/components/spot/MobileTradingForm";
-import MobileOrderBook from "@/components/spot/MobileOrderBook";
 import { Icon } from "@iconify/react";
 
 export default function SpotTradingPage() {
@@ -23,7 +19,6 @@ export default function SpotTradingPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [showTPSLLines, setShowTPSLLines] = useState(true);
   const [isOrderEntryExpanded, setIsOrderEntryExpanded] = useState(true);
-  const [isChartExpanded, setIsChartExpanded] = useState(false);
   const [activePositionTPSL, setActivePositionTPSL] = useState<{
     symbol: string;
     takeProfit: string | null;
@@ -54,35 +49,74 @@ export default function SpotTradingPage() {
 
   return (
     <>
-      {/* MOBILE LAYOUT - Binance Style */}
-      <div className="md:hidden flex flex-col h-screen bg-white dark:bg-darkgray overflow-hidden">
-        {/* Top Navigation Tabs */}
-        <MobileTopNav />
-
-        {/* Pair Header */}
-        <MobilePairHeader 
-          selectedPair={selectedPair}
-          onSelectPair={setSelectedPair}
-        />
-
-        {/* Main Trading Area - Side by Side */}
-        <div className="flex flex-1 overflow-hidden">
-          {/* Left: Trading Form (55%) */}
-          <div className="w-[55%] overflow-y-auto">
-            <MobileTradingForm 
-              selectedPair={selectedPair}
-              balance={0}
-            />
+      {/* MOBILE LAYOUT - Binance Style (Full Screen Chart) */}
+      <div className="md:hidden flex flex-col h-screen bg-[#0B0E11] overflow-hidden">
+        {/* Pair Header with Price Info */}
+        <div className="flex-shrink-0 px-4 py-3 bg-[#0B0E11]">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <span className="text-lg font-bold text-white">{selectedPair.replace('-', '/')}</span>
+              <Icon icon="ph:caret-down" width={16} className="text-gray-400" />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400">Bitcoin Price</span>
+              <Icon icon="ph:arrow-up-right" width={12} className="text-gray-400" />
+            </div>
           </div>
-
-          {/* Right: Order Book (45%) */}
-          <div className="w-[45%] flex flex-col">
-            <MobileOrderBook selectedPair={selectedPair} />
+          
+          <div className="flex items-baseline gap-3">
+            <span className="text-2xl font-bold text-[#0ECB81]">69,201.46</span>
+            <span className="text-sm text-[#0ECB81]">$69,201.46</span>
+            <span className="text-sm text-[#0ECB81]">+3.34%</span>
+          </div>
+          
+          <div className="flex items-center gap-4 mt-2 text-xs">
+            <span className="text-[#F6465D]">POW</span>
+            <span className="text-gray-400">Payments</span>
+            <span className="text-gray-400">Vol</span>
+            <span className="text-gray-400">Hot</span>
+            <span className="text-gray-400">P</span>
+            <Icon icon="ph:caret-right" width={12} className="text-gray-400" />
+          </div>
+          
+          <div className="flex items-center gap-2 mt-2">
+            <span className="text-xs text-gray-400">Networks</span>
+            <span className="text-xs text-white">BTC (5)</span>
           </div>
         </div>
 
-        {/* Bottom Tabs - Positions, Trades, Balances */}
-        <div className="border-t border-border dark:border-darkborder max-h-[40vh] overflow-hidden flex flex-col">
+        {/* Chart Tabs */}
+        <div className="flex-shrink-0 flex items-center gap-6 px-4 border-b border-gray-800">
+          <button className="pb-2 text-sm font-medium text-white border-b-2 border-[#FCD535]">
+            Chart
+          </button>
+          <button className="pb-2 text-sm font-medium text-gray-400">
+            Order Book
+          </button>
+          <button className="pb-2 text-sm font-medium text-gray-400">
+            Trades
+          </button>
+          <button className="pb-2 text-sm font-medium text-gray-400">
+            Info
+          </button>
+          <button className="pb-2 text-sm font-medium text-gray-400 flex items-center gap-1">
+            Trading Data
+            <span className="text-[10px] px-1 bg-gradient-to-r from-blue-500 to-purple-500 rounded">AI</span>
+          </button>
+        </div>
+
+        {/* Chart Area - Takes remaining space */}
+        <div className="flex-1 overflow-hidden bg-[#0B0E11]">
+          <LiveChart 
+            symbol={selectedPair}
+            stopLoss={chartStopLoss}
+            takeProfit={chartTakeProfit}
+            onUpdateLevels={handleUpdateLevels}
+          />
+        </div>
+
+        {/* Bottom Tabs - Open Orders / Holdings */}
+        <div className="flex-shrink-0 border-t border-gray-800 bg-[#0B0E11]">
           <BottomTabs 
             refreshKey={refreshKey}
             selectedChartSymbol={selectedPair}
@@ -92,29 +126,14 @@ export default function SpotTradingPage() {
           />
         </div>
 
-        {/* Chart Section - Collapsible */}
-        <div className="border-t border-border dark:border-darkborder flex-shrink-0">
-          <button 
-            onClick={() => setIsChartExpanded(!isChartExpanded)}
-            className="w-full px-2 py-2 flex items-center justify-between bg-white dark:bg-darkgray hover:bg-muted/10 dark:hover:bg-white/5 transition-colors"
-          >
-            <span className="text-xs font-semibold text-dark dark:text-white">{selectedPair.replace('-', '/')} Chart</span>
-            <Icon 
-              icon={isChartExpanded ? "ph:caret-up" : "ph:caret-down"} 
-              width={16} 
-              className="text-muted" 
-            />
+        {/* Buy/Sell Buttons - Fixed at bottom */}
+        <div className="flex-shrink-0 flex gap-3 p-4 bg-[#0B0E11] border-t border-gray-800">
+          <button className="flex-1 py-3 bg-[#0ECB81] hover:bg-[#0ECB81]/90 text-white font-semibold rounded-lg transition-colors">
+            Buy
           </button>
-          {isChartExpanded && (
-            <div className="h-[50vh] border-t border-border dark:border-darkborder">
-              <LiveChart 
-                symbol={selectedPair}
-                stopLoss={chartStopLoss}
-                takeProfit={chartTakeProfit}
-                onUpdateLevels={handleUpdateLevels}
-              />
-            </div>
-          )}
+          <button className="flex-1 py-3 bg-[#F6465D] hover:bg-[#F6465D]/90 text-white font-semibold rounded-lg transition-colors">
+            Sell
+          </button>
         </div>
       </div>
 
