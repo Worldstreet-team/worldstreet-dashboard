@@ -1,16 +1,14 @@
 /**
  * Tron Wallet Generation Utilities
  * 
- * This module provides functions to generate Tron wallets using external API.
+ * This module provides functions to generate Tron wallets using backend API.
  * Private keys are encrypted with the user's PIN before being sent to the server.
  */
 
 import { encryptWithPIN } from "./encryption";
 
-const EXTERNAL_API_BASE_URL = "https://trading.watchup.site";
-
 /**
- * Generate a new Tron wallet using external API
+ * Generate a new Tron wallet using backend API
  * 
  * @param pin - User's PIN for encrypting the private key
  * @returns Object containing address and encrypted private key
@@ -20,17 +18,14 @@ export async function generateTronWallet(pin: string): Promise<{
   encryptedPrivateKey: string;
 }> {
   try {
-    console.log('[TronWallet] Calling external API to generate Tron wallet...');
+    console.log('[TronWallet] Calling backend API to generate Tron wallet...');
     
-    // Call external API to generate Tron wallet
-    const response = await fetch(`${EXTERNAL_API_BASE_URL}/api/generate-wallet`, {
+    // Call backend API to generate Tron wallet
+    const response = await fetch('/api/wallet/generate-tron', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        chain: 'trc'
-      })
+      }
     });
 
     if (!response.ok) {
@@ -41,7 +36,7 @@ export async function generateTronWallet(pin: string): Promise<{
     const data = await response.json();
     
     if (!data.success) {
-      throw new Error(data.error || 'Wallet generation failed');
+      throw new Error(data.message || 'Wallet generation failed');
     }
 
     console.log('[TronWallet] Wallet generated successfully');
