@@ -196,6 +196,108 @@ export interface TransferResult {
   error?: string;
 }
 
+// Minimum gas thresholds to cover a token transfer
+const MIN_SOL_FOR_GAS = 0.005; // ~5000 lamports
+const MIN_ETH_FOR_GAS = 0.0005; // ~enough for a simple ERC-20 transfer
+
+export interface TreasuryBalanceCheck {
+  ok: boolean;
+  usdtBalance: number;
+  gasBalance: number;
+  error?: string;
+}
+
+/**
+ * Pre-flight balance check before attempting a USDT transfer.
+ * Returns { ok: true } if the treasury has enough USDT and gas,
+ * or { ok: false, error: "..." } with a user-friendly message.
+ */
+export async function checkTreasuryBalance(
+  network: "solana" | "ethereum",
+  usdtAmount: number
+): Promise<TreasuryBalanceCheck> {
+  try {
+    if (network === "solana") {
+      const keypair = await getActiveTreasuryKeypair();
+      if (!keypair) {
+        return { ok: false, usdtBalance: 0, gasBalance: 0, error: "Solana treasury wallet not configured." };
+      }
+      const address = keypair.publicKey.toBase58();
+      const [solBalance, usdtBalance] = await Promise.all([
+        getSolBalance(address),
+        getUsdtBalance(address),
+      ]);
+
+      if (usdtBalance < usdtAmount) {
+        console.error(
+          `Treasury balance check FAILED: need ${usdtAmount} USDT, have ${usdtBalance} USDT (Solana)`
+        );
+        return {
+          ok: false,
+          usdtBalance,
+          gasBalance: solBalance,
+          error: `Treasury has insufficient USDT (${usdtBalance.toFixed(2)} available, ${usdtAmount} needed). Admin has been notified.`,
+        };
+      }
+
+      if (solBalance < MIN_SOL_FOR_GAS) {
+        console.error(
+          `Treasury balance check FAILED: need ${MIN_SOL_FOR_GAS} SOL for gas, have ${solBalance} SOL`
+        );
+        return {
+          ok: false,
+          usdtBalance,
+          gasBalance: solBalance,
+          error: `Treasury has insufficient SOL for transaction fees (${solBalance.toFixed(6)} SOL). Admin has been notified.`,
+        };
+      }
+
+      return { ok: true, usdtBalance, gasBalance: solBalance };
+    } else {
+      // Ethereum
+      const wallet = await getActiveEthTreasuryWallet();
+      if (!wallet) {
+        return { ok: false, usdtBalance: 0, gasBalance: 0, error: "Ethereum treasury wallet not configured." };
+      }
+      const address = await wallet.getAddress();
+      const [ethBalance, usdtBalance] = await Promise.all([
+        getEthBalance(address),
+        getEthUsdtBalance(address),
+      ]);
+
+      if (usdtBalance < usdtAmount) {
+        console.error(
+          `Treasury balance check FAILED: need ${usdtAmount} USDT, have ${usdtBalance} USDT (Ethereum)`
+        );
+        return {
+          ok: false,
+          usdtBalance,
+          gasBalance: ethBalance,
+          error: `Treasury has insufficient USDT (${usdtBalance.toFixed(2)} available, ${usdtAmount} needed). Admin has been notified.`,
+        };
+      }
+
+      if (ethBalance < MIN_ETH_FOR_GAS) {
+        console.error(
+          `Treasury balance check FAILED: need ${MIN_ETH_FOR_GAS} ETH for gas, have ${ethBalance} ETH`
+        );
+        return {
+          ok: false,
+          usdtBalance,
+          gasBalance: ethBalance,
+          error: `Treasury has insufficient ETH for transaction fees (${ethBalance.toFixed(8)} ETH). Admin has been notified.`,
+        };
+      }
+
+      return { ok: true, usdtBalance, gasBalance: ethBalance };
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("Treasury balance check error:", message);
+    return { ok: false, usdtBalance: 0, gasBalance: 0, error: `Balance check failed: ${message}` };
+  }
+}
+
 /**
  * Send SPL USDT from the treasury wallet to a destination address.
  * @param destinationAddress - The user's Solana address (string)
