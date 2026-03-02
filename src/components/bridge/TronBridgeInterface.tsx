@@ -266,14 +266,50 @@ export default function TronBridgeInterface() {
       });
 
       console.log("[Bridge] Executing Tron transaction");
-      console.log("[Bridge] Transaction data from Swing:", txData.tx);
+      console.log("[Bridge] Transaction data from Swing:", txData);
 
-      // Sign the transaction before sending
-      const signedTx = await tronWeb.trx.sign(txData.tx, privateKey);
-      console.log("[Bridge] Transaction signed");
+      // Check if txData has the transaction object
+      if (!txData.tx) {
+        throw new Error("No transaction data received from Swing API");
+      }
 
-      // Send the signed transaction
-      const receipt = await tronWeb.trx.sendRawTransaction(signedTx);
+      let receipt;
+      
+      // Try different approaches based on the transaction structure
+      if (typeof txData.tx === 'string') {
+        // If tx is already a signed hex string, send it directly
+        console.log("[Bridge] Sending pre-signed transaction");
+        receipt = await tronWeb.trx.sendRawTransaction(txData.tx);
+      } else if (txData.tx.raw_data || txData.tx.rawData) {
+        // If tx is an unsigned transaction object, sign it first
+        console.log("[Bridge] Signing transaction object");
+        const signedTx = await tronWeb.trx.sign(txData.tx, privateKey);
+        console.log("[Bridge] Transaction signed");
+        receipt = await tronWeb.trx.sendRawTransaction(signedTx);
+      } else if (txData.tx.data || txData.tx.to) {
+        // If it's an EVM-style transaction, we need to build a Tron transaction
+        console.log("[Bridge] Building Tron transaction from data");
+        
+        const txObject = await tronWeb.transactionBuilder.triggerSmartContract(
+          tronWeb.address.toHex(txData.tx.to),
+          txData.tx.data || "0x",
+          {
+            feeLimit: txData.tx.feeLimit || 100_000_000,
+            callValue: txData.tx.value || 0,
+          },
+          [],
+          tronWeb.address.toHex(tronAddress)
+        );
+
+        if (!txObject.result || !txObject.result.result) {
+          throw new Error("Failed to build transaction");
+        }
+
+        const signedTx = await tronWeb.trx.sign(txObject.transaction, privateKey);
+        receipt = await tronWeb.trx.sendRawTransaction(signedTx);
+      } else {
+        throw new Error("Unsupported transaction format from Swing API");
+      }
 
       if (!receipt.result) {
         throw new Error(receipt.message || "Transaction failed");
