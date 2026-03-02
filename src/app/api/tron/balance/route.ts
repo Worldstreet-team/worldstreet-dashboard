@@ -58,22 +58,37 @@ export async function GET(request: NextRequest) {
     }
 
     const data = await response.json();
-    console.log("Data: ", data)
+    console.log("[tron/balance] External API response:", data);
 
     if (!data.success) {
       throw new Error(data.message || "External API returned error");
     }
+
+    // Parse TRX balance
+    const trxBalance = parseFloat(data.trx?.balance || "0");
+    const trxInSun = data.trx?.balanceInSun || "0";
+
+    // Parse token balances
+    const tokens = (data.tokens || []).map((token: any) => ({
+      symbol: token.symbol,
+      name: token.name,
+      contractAddress: token.contractAddress,
+      balance: parseFloat(token.balance || "0"),
+      decimals: token.decimals || 6,
+      error: token.error,
+    }));
 
     // Return the balance data
     return NextResponse.json({
       success: true,
       address: data.address,
       balance: {
-        trx: parseFloat(data.balance?.trx || "0"),
-        sun: data.balance?.sun || "0",
+        trx: trxBalance,
+        trxInSun: trxInSun,
+        tokens: tokens,
       },
-      network: data.network,
-      timestamp: data.timestamp,
+      network: data.network || "mainnet",
+      timestamp: data.timestamp || new Date().toISOString(),
     });
   } catch (error: any) {
     console.error("[GET /api/tron/balance] Error:", error);
