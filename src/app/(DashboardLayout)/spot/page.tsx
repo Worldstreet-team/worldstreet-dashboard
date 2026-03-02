@@ -50,7 +50,7 @@ export default function SpotTradingPage() {
   return (
     <>
       {/* MOBILE LAYOUT - Binance Style (Full Screen Chart) */}
-      <div className="md:hidden fixed inset-0 flex flex-col bg-white dark:bg-darkgray overflow-hidden">
+      <div className="md:hidden fixed inset-0 flex flex-col bg-white dark:bg-darkgray overflow-hidden mt-20">
         {/* Pair Header with Price Info */}
         <div className="flex-shrink-0 px-4 py-3 bg-white dark:bg-darkgray border-b border-border dark:border-darkborder">
           <div className="flex items-center justify-between mb-2">
