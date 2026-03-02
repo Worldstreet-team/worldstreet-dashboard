@@ -1,70 +1,201 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from "next/server";
+import { connectDB } from "@/lib/mongodb";
+import Deposit from "@/models/Deposit";
+import { getAuthUser } from "@/lib/auth";
+import { sendUsdtFromTreasury, sendEthUsdtFromTreasury } from "@/lib/treasury";
 
-/**
- * POST /api/deposit/verify
- * Verify a deposit transaction
- */
+// ── Constants ──────────────────────────────────────────────────────────────
+
+const GLOBALPAY_BASE =
+  "https://paygw.globalpay.com.ng/globalpay-paymentgateway/api";
+
+const GLOBALPAY_API_KEY = process.env.NEXT_PUBLIC_GLOBALPAY_API_KEY || "";
+
+// ── POST /api/deposit/verify ───────────────────────────────────────────────
+
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { transactionId, depositId } = body;
-
-    if (!transactionId || !depositId) {
+    // 1. Auth
+    const authUser = await getAuthUser();
+    if (!authUser) {
       return NextResponse.json(
-        { success: false, message: 'Transaction ID and Deposit ID are required' },
-        { status: 400 }
+        { success: false, message: "Unauthorized" },
+        { status: 401 }
       );
     }
 
-    // TODO: Implement deposit verification logic
-    // This should:
-    // 1. Verify the transaction on the blockchain
-    // 2. Update the deposit status in the database
-    // 3. Credit the user's account
-
-    return NextResponse.json({
-      success: true,
-      message: 'Deposit verification endpoint - implementation pending',
-      transactionId,
-      depositId
-    });
-  } catch (error) {
-    console.error('Deposit verification error:', error);
-    return NextResponse.json(
-      { success: false, message: 'Failed to verify deposit' },
-      { status: 500 }
-    );
-  }
-}
-
-/**
- * GET /api/deposit/verify
- * Get verification status
- */
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const depositId = searchParams.get('depositId');
+    // 2. Parse body
+    const body = await request.json();
+    const { depositId } = body;
 
     if (!depositId) {
       return NextResponse.json(
-        { success: false, message: 'Deposit ID is required' },
+        { success: false, message: "Deposit ID is required. Please try again." },
         { status: 400 }
       );
     }
 
-    // TODO: Implement status check logic
-    
-    return NextResponse.json({
-      success: true,
-      message: 'Deposit status check endpoint - implementation pending',
-      depositId,
-      status: 'pending'
+    await connectDB();
+
+    // 3. Find deposit
+    const deposit = await Deposit.findOne({
+      _id: depositId,
+      userId: authUser.userId,
     });
+
+    if (!deposit) {
+      return NextResponse.json(
+        { success: false, message: "Deposit not found" },
+        { status: 404 }
+      );
+    }
+
+    // Only verify deposits in actionable states
+    if (!["pending", "awaiting_verification", "payment_failed"].includes(deposit.status)) {
+      return NextResponse.json({
+        success: true,
+        deposit: deposit.toObject(),
+        message: `Deposit is already ${deposit.status}`,
+      });
+    }
+
+    // 4. Update status to verifying
+    deposit.status = "verifying";
+    await deposit.save();
+
+    // 5. Requery GlobalPay
+    //    GlobalPay's requery needs THEIR transaction reference, not our merchant ref.
+    const transRef = deposit.globalPayTransactionReference;
+    const merchantRef = deposit.merchantTransactionReference;
+
+    if (!transRef) {
+      // Cannot requery without a GlobalPay reference — fall back to merchant ref
+      console.warn(
+        `Deposit ${deposit._id}: missing globalPayTransactionReference, trying merchantRef: ${merchantRef}`
+      );
+    }
+
+    const refToQuery = transRef || merchantRef;
+
+    if (!refToQuery) {
+      deposit.status = "payment_failed";
+      await deposit.save();
+      return NextResponse.json({
+        success: false,
+        deposit: deposit.toObject(),
+        message: "No transaction reference available. Please contact support.",
+      });
+    }
+
+    console.log(
+      `Verifying deposit ${deposit._id} — querying GlobalPay with ref: ${refToQuery}`
+    );
+
+    const gpRes = await fetch(
+      `${GLOBALPAY_BASE}/paymentgateway/query-single-transaction/${refToQuery}`,
+      {
+        method: "POST",
+        headers: {
+          apiKey: GLOBALPAY_API_KEY,
+          "Content-Type": "application/json",
+          language: "en",
+        },
+      }
+    );
+
+    const gpData = await gpRes.json();
+    console.log(
+      `GlobalPay requery response for ${refToQuery}:`,
+      JSON.stringify(gpData).slice(0, 500)
+    );
+
+    if (!gpData.isSuccessful) {
+      // If queried with merchant ref and it failed, note that in logs
+      if (!transRef && merchantRef) {
+        console.warn(
+          `GlobalPay requery failed (used merchantRef). GP error: ${gpData.successMessage || gpData.message || "unknown"}`
+        );
+      }
+
+      deposit.status = "awaiting_verification";
+      await deposit.save();
+      return NextResponse.json({
+        success: false,
+        deposit: deposit.toObject(),
+        message:
+          gpData.successMessage ||
+          "Payment has not been confirmed by GlobalPay yet. Please wait a moment and try again.",
+      });
+    }
+
+    const txStatus = (gpData.data?.transactionStatus || "").toLowerCase();
+
+    // 6. Check if payment was successful
+    if (txStatus === "successful" || txStatus === "completed" || txStatus === "approved") {
+      deposit.status = "payment_confirmed";
+      await deposit.save();
+
+      // 7. Attempt auto-send USDT via correct chain
+      deposit.status = "sending_usdt";
+      await deposit.save();
+
+      const destAddress = deposit.userWalletAddress || deposit.userSolanaAddress;
+      const isEthereum = deposit.network === "ethereum";
+
+      const result = isEthereum
+        ? await sendEthUsdtFromTreasury(destAddress, deposit.usdtAmount)
+        : await sendUsdtFromTreasury(destAddress, deposit.usdtAmount);
+
+      if (result.success && result.txHash) {
+        deposit.status = "completed";
+        deposit.txHash = result.txHash;
+        deposit.completedAt = new Date();
+        await deposit.save();
+
+        return NextResponse.json({
+          success: true,
+          deposit: deposit.toObject(),
+          message: "Deposit completed! USDT sent to your wallet.",
+        });
+      } else {
+        // Delivery failed but payment was confirmed
+        deposit.status = "delivery_failed";
+        deposit.deliveryError =
+          result.error || "USDT transfer failed. Contact support.";
+        await deposit.save();
+
+        return NextResponse.json({
+          success: false,
+          deposit: deposit.toObject(),
+          message:
+            "Payment confirmed but USDT delivery failed. Our team will resolve this. Contact support if needed.",
+        });
+      }
+    } else if (txStatus === "failed" || txStatus === "declined") {
+      deposit.status = "payment_failed";
+      await deposit.save();
+
+      return NextResponse.json({
+        success: false,
+        deposit: deposit.toObject(),
+        message: "Payment was not successful. Please try paying again.",
+      });
+    } else {
+      // Still pending or unknown status
+      deposit.status = "awaiting_verification";
+      await deposit.save();
+
+      return NextResponse.json({
+        success: true,
+        deposit: deposit.toObject(),
+        message:
+          "Payment is still being processed by GlobalPay. Please wait a moment and try again.",
+      });
+    }
   } catch (error) {
-    console.error('Deposit status check error:', error);
+    console.error("POST /api/deposit/verify error:", error);
     return NextResponse.json(
-      { success: false, message: 'Failed to check deposit status' },
+      { success: false, message: "Failed to verify deposit" },
       { status: 500 }
     );
   }
