@@ -52,9 +52,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate each wallet has address and encrypted key
-    const chains = ["solana", "ethereum", "bitcoin"] as const;
+    const chains: Array<"solana" | "ethereum" | "bitcoin" | "tron"> = ["solana", "ethereum", "bitcoin"];
     if (wallets.tron) {
-      chains.push("tron" as any);
+      chains.push("tron");
     }
     
     for (const chain of chains) {
@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
  * Check if wallets are already set up.
  * Returns wallet addresses (not encrypted keys) if they exist.
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const authUser = await getAuthUser();
     if (!authUser) {
