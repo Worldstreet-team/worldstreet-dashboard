@@ -64,6 +64,49 @@ export async function generateTronWallet(pin: string): Promise<{
 }
 
 /**
+ * Get token balance for a specific TRC20 token using the balance API
+ * 
+ * @param address - Tron wallet address
+ * @param tokenAddress - TRC20 token contract address
+ * @returns Token balance as a number
+ */
+export async function getTrc20Balance(address: string, tokenAddress: string): Promise<number> {
+  try {
+    console.log('[TronWallet] Fetching TRC20 balance for token:', tokenAddress);
+    
+    // Call the balance API
+    const response = await fetch('/api/tron/balance');
+    
+    if (!response.ok) {
+      throw new Error(`API request failed with status ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    if (!data.success) {
+      throw new Error(data.message || 'Failed to fetch balance');
+    }
+
+    // Find the token in the response
+    const tokens = data.balance?.tokens || [];
+    const token = tokens.find((t: any) => 
+      t.contractAddress.toLowerCase() === tokenAddress.toLowerCase()
+    );
+
+    if (!token) {
+      console.log('[TronWallet] Token not found in balance, returning 0');
+      return 0;
+    }
+
+    console.log('[TronWallet] Token balance:', token.balance, token.symbol);
+    return token.balance;
+  } catch (error) {
+    console.error('[TronWallet] Error fetching TRC20 balance:', error);
+    throw error;
+  }
+}
+
+/**
  * Validate a Tron address
  * 
  * @param address - Tron address to validate

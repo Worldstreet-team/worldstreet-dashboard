@@ -266,18 +266,76 @@ export default function TronBridgeInterface() {
       });
 
       console.log("[Bridge] Executing Tron transaction");
+      console.log("[Bridge] Transaction data from Swing:", txData);
 
-      // Send the transaction using Swing's transaction data
-      const tx = await tronWeb.trx.sendRawTransaction(txData.tx);
-
-      if (!tx.result) {
-        throw new Error(tx.message || "Transaction failed");
+      // Check if txData has the transaction object
+      if (!txData.tx) {
+        throw new Error("No transaction data received from Swing API");
       }
 
-      const txHash = tx.txid;
-      console.log("[Bridge] Tron transaction sent:", txHash);
-
-      alert(`Bridge transaction submitted!\nTX: ${txHash}\n\nFees: ${getFeeSummary()}\n\nYou will receive ETH on Ethereum network.`);
+      let txHash: string;
+      
+      // Handle the transaction based on its structure
+      if (txData.tx.raw_data || txData.tx.rawData) {
+        // Standard Tron transaction object - sign and send
+        console.log("[Bridge] Signing Tron transaction");
+        const signedTx = await tronWeb.trx.sign(txData.tx, privateKey);
+        console.log("[Bridge] Transaction signed, broadcasting...");
+        
+        const receipt = await tronWeb.trx.sendRawTransaction(signedTx);
+        
+        if (!receipt.result) {
+          throw new Error(receipt.message || "Transaction broadcast failed");
+        }
+        
+        txHash = receipt.txid || receipt.transaction?.txID;
+        console.log("[Bridge] Transaction broadcast:", txHash);
+        
+        // Wait for confirmation and check if it reverted
+        console.log("[Bridge] Waiting for transaction confirmation...");
+        let attempts = 0;
+        const maxAttempts = 30; // 30 seconds
+        let confirmed = false;
+        
+        while (attempts < maxAttempts && !confirmed) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          try {
+            const txInfo = await tronWeb.trx.getTransactionInfo(txHash);
+            console.log("[Bridge] Transaction info:", txInfo);
+            
+            if (txInfo && Object.keys(txInfo).length > 0) {
+              // Transaction is confirmed
+              if (txInfo.receipt?.result === "SUCCESS") {
+                confirmed = true;
+                console.log("[Bridge] Transaction confirmed successfully");
+                break;
+              } else if (txInfo.receipt?.result === "REVERT") {
+                throw new Error(`Transaction reverted: ${txInfo.resMessage || "Unknown reason"}`);
+              } else if (txInfo.result === "FAILED") {
+                throw new Error(`Transaction failed: ${txInfo.resMessage || "Unknown reason"}`);
+              }
+            }
+          } catch (err: any) {
+            if (err.message.includes("reverted") || err.message.includes("failed")) {
+              throw err;
+            }
+            // Transaction not yet confirmed, continue waiting
+          }
+          
+          attempts++;
+        }
+        
+        if (!confirmed) {
+          // Transaction is pending but not confirmed yet
+          console.log("[Bridge] Transaction pending confirmation");
+          alert(`Bridge transaction submitted!\nTX: ${txHash}\n\nTransaction is pending confirmation. Please check TronScan for status.\n\nhttps://tronscan.org/#/transaction/${txHash}`);
+        } else {
+          alert(`Bridge transaction confirmed!\nTX: ${txHash}\n\nFees: ${getFeeSummary()}\n\nYou will receive ETH on Ethereum network.\n\nView on TronScan: https://tronscan.org/#/transaction/${txHash}`);
+        }
+      } else {
+        throw new Error("Unsupported transaction format from Swing API. Expected Tron transaction object.");
+      }
       
       // Reset form
       setAmount("");
