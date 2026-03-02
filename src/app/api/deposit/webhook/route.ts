@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Deposit from "@/models/Deposit";
-import { sendUsdtFromTreasury, sendEthUsdtFromTreasury } from "@/lib/treasury";
+import { sendUsdtFromTreasury, sendEthUsdtFromTreasury, checkTreasuryBalance } from "@/lib/treasury";
 
 // ── GlobalPay Webhook ──────────────────────────────────────────────────────
 // URL to configure in GlobalPay dashboard:
@@ -94,6 +94,26 @@ export async function POST(request: NextRequest) {
     ) {
       deposit.status = "payment_confirmed";
       await deposit.save();
+
+      // Pre-flight balance check
+      const balCheck = await checkTreasuryBalance(
+        deposit.network || "solana",
+        deposit.usdtAmount
+      );
+
+      if (!balCheck.ok) {
+        deposit.status = "delivery_failed";
+        deposit.deliveryError = balCheck.error || "Treasury has insufficient funds.";
+        await deposit.save();
+
+        console.error(
+          `Webhook: Treasury balance check failed for deposit ${deposit._id}: ${balCheck.error}`
+        );
+        return NextResponse.json({
+          success: false,
+          message: balCheck.error || "Treasury has insufficient USDT. Admin has been notified.",
+        });
+      }
 
       // Auto-send USDT
       deposit.status = "sending_usdt";

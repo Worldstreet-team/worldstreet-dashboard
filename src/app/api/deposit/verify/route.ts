@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Deposit from "@/models/Deposit";
 import { getAuthUser } from "@/lib/auth";
-import { sendUsdtFromTreasury, sendEthUsdtFromTreasury } from "@/lib/treasury";
+import { sendUsdtFromTreasury, sendEthUsdtFromTreasury, checkTreasuryBalance } from "@/lib/treasury";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -135,7 +135,25 @@ export async function POST(request: NextRequest) {
       deposit.status = "payment_confirmed";
       await deposit.save();
 
-      // 7. Attempt auto-send USDT via correct chain
+      // 7. Pre-flight balance check
+      const balCheck = await checkTreasuryBalance(
+        deposit.network || "solana",
+        deposit.usdtAmount
+      );
+
+      if (!balCheck.ok) {
+        deposit.status = "delivery_failed";
+        deposit.deliveryError = balCheck.error || "Treasury has insufficient funds.";
+        await deposit.save();
+
+        return NextResponse.json({
+          success: false,
+          deposit: deposit.toObject(),
+          message: balCheck.error || "Treasury has insufficient USDT. Admin has been notified.",
+        });
+      }
+
+      // 8. Attempt auto-send USDT via correct chain
       deposit.status = "sending_usdt";
       await deposit.save();
 
