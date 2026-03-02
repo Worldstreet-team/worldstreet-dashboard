@@ -266,15 +266,20 @@ export default function TronBridgeInterface() {
       });
 
       console.log("[Bridge] Executing Tron transaction");
+      console.log("[Bridge] Transaction data from Swing:", txData.tx);
 
-      // Send the transaction using Swing's transaction data
-      const tx = await tronWeb.trx.sendRawTransaction(txData.tx);
+      // Sign the transaction before sending
+      const signedTx = await tronWeb.trx.sign(txData.tx, privateKey);
+      console.log("[Bridge] Transaction signed");
 
-      if (!tx.result) {
-        throw new Error(tx.message || "Transaction failed");
+      // Send the signed transaction
+      const receipt = await tronWeb.trx.sendRawTransaction(signedTx);
+
+      if (!receipt.result) {
+        throw new Error(receipt.message || "Transaction failed");
       }
 
-      const txHash = tx.txid;
+      const txHash = receipt.txid;
       console.log("[Bridge] Tron transaction sent:", txHash);
 
       alert(`Bridge transaction submitted!\nTX: ${txHash}\n\nFees: ${getFeeSummary()}\n\nYou will receive ETH on Ethereum network.`);
