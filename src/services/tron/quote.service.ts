@@ -47,6 +47,8 @@ export async function getQuoteTrxToUsdt(
     // Convert TRX to Sun (6 decimals)
     const trxSold = Math.floor(trxAmount * 1_000_000);
 
+    console.log("[QuoteService] Input TRX:", trxAmount, "Sun:", trxSold);
+
     // Get contract instance
     const contract = await tronWeb.contract(POOL_ABI, JUSTSWAP_POOL_ADDRESS);
 
@@ -55,7 +57,28 @@ export async function getQuoteTrxToUsdt(
 
     // Call getTrxToTokenInputPrice - explicitly use .call() for read-only
     const result = await contract.methods.getTrxToTokenInputPrice(trxSold).call();
-    const outputAmount = Number(result.toString()) / 1_000_000; // USDT has 6 decimals
+    
+    console.log("[QuoteService] Raw result:", result);
+    console.log("[QuoteService] Result type:", typeof result);
+    console.log("[QuoteService] Result toString:", result.toString());
+
+    // Handle BigInt or regular number
+    let outputInBaseUnits: bigint;
+    if (typeof result === 'bigint') {
+      outputInBaseUnits = result;
+    } else if (result._hex) {
+      // TronWeb sometimes returns objects with _hex property
+      outputInBaseUnits = BigInt(result._hex);
+    } else {
+      outputInBaseUnits = BigInt(result.toString());
+    }
+
+    console.log("[QuoteService] Output in base units:", outputInBaseUnits.toString());
+
+    // Convert from base units (6 decimals for USDT)
+    const outputAmount = Number(outputInBaseUnits) / 1_000_000;
+
+    console.log("[QuoteService] Output USDT:", outputAmount);
 
     // Calculate minimum output with slippage
     const minimumOutput = outputAmount * (1 - slippage / 100);
@@ -89,6 +112,8 @@ export async function getQuoteUsdtToTrx(
     // Convert USDT to base units (6 decimals)
     const tokensSold = Math.floor(usdtAmount * 1_000_000);
 
+    console.log("[QuoteService] Input USDT:", usdtAmount, "Base units:", tokensSold);
+
     // Get contract instance
     const contract = await tronWeb.contract(POOL_ABI, JUSTSWAP_POOL_ADDRESS);
 
@@ -97,7 +122,28 @@ export async function getQuoteUsdtToTrx(
 
     // Call getTokenToTrxInputPrice - explicitly use .call() for read-only
     const result = await contract.methods.getTokenToTrxInputPrice(tokensSold).call();
-    const outputAmount = Number(result.toString()) / 1_000_000; // TRX has 6 decimals
+    
+    console.log("[QuoteService] Raw result:", result);
+    console.log("[QuoteService] Result type:", typeof result);
+    console.log("[QuoteService] Result toString:", result.toString());
+
+    // Handle BigInt or regular number
+    let outputInBaseUnits: bigint;
+    if (typeof result === 'bigint') {
+      outputInBaseUnits = result;
+    } else if (result._hex) {
+      // TronWeb sometimes returns objects with _hex property
+      outputInBaseUnits = BigInt(result._hex);
+    } else {
+      outputInBaseUnits = BigInt(result.toString());
+    }
+
+    console.log("[QuoteService] Output in base units:", outputInBaseUnits.toString());
+
+    // Convert from base units (6 decimals for TRX)
+    const outputAmount = Number(outputInBaseUnits) / 1_000_000;
+
+    console.log("[QuoteService] Output TRX:", outputAmount);
 
     // Calculate minimum output with slippage
     const minimumOutput = outputAmount * (1 - slippage / 100);
