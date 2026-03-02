@@ -11,16 +11,16 @@ interface MobilePairHeaderProps {
 const COINGECKO_IDS: Record<string, string> = {
   'BTC-USDT': 'bitcoin',
   'ETH-USDT': 'ethereum',
-  'BNB-USDT': 'binancecoin',
   'SOL-USDT': 'solana',
-  'XRP-USDT': 'ripple',
-  'ADA-USDT': 'cardano'
 };
+
+const TRADING_PAIRS = ['BTC-USDT', 'ETH-USDT', 'SOL-USDT'];
 
 export default function MobilePairHeader({ selectedPair, onSelectPair }: MobilePairHeaderProps) {
   const [price, setPrice] = useState(0);
   const [change24h, setChange24h] = useState(0);
   const [showMarginToggle] = useState(false);
+  const [showPairSelector, setShowPairSelector] = useState(false);
 
   useEffect(() => {
     fetchPrice();
@@ -45,24 +45,53 @@ export default function MobilePairHeader({ selectedPair, onSelectPair }: MobileP
   const isPositive = change24h >= 0;
 
   return (
-    <div className="flex justify-between items-start px-4 py-3 border-b border-border dark:border-darkborder bg-white dark:bg-darkgray">
+    <div className="flex justify-between items-start px-2 py-2 border-b border-border dark:border-darkborder bg-white dark:bg-darkgray relative">
       {/* Left Column */}
       <div className="flex flex-col">
-        <div className="flex items-center gap-2">
+        <button 
+          onClick={() => setShowPairSelector(!showPairSelector)}
+          className="flex items-center gap-1.5 hover:bg-muted/20 dark:hover:bg-white/5 rounded px-1 py-0.5 transition-colors"
+        >
           <span className="text-base font-bold text-dark dark:text-white">
             {selectedPair.replace('-', '/')}
           </span>
           <Icon icon="ph:caret-down" width={14} className="text-muted" />
-        </div>
-        <span className={`text-xs font-semibold mt-0.5 ${
+        </button>
+        <span className={`text-xs font-semibold mt-0.5 px-1 ${
           isPositive ? 'text-error' : 'text-success'
         }`}>
           {isPositive ? '+' : ''}{change24h.toFixed(2)}%
         </span>
       </div>
 
+      {/* Pair Selector Dropdown */}
+      {showPairSelector && (
+        <>
+          <div 
+            className="fixed inset-0 z-40" 
+            onClick={() => setShowPairSelector(false)}
+          />
+          <div className="absolute top-full left-2 mt-1 bg-white dark:bg-darkgray border border-border dark:border-darkborder rounded-lg shadow-lg z-50 min-w-[140px]">
+            {TRADING_PAIRS.map((pair) => (
+              <button
+                key={pair}
+                onClick={() => {
+                  onSelectPair(pair);
+                  setShowPairSelector(false);
+                }}
+                className={`w-full px-3 py-2 text-left text-sm hover:bg-muted/20 dark:hover:bg-white/5 transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                  pair === selectedPair ? 'bg-primary/10 text-primary font-semibold' : 'text-dark dark:text-white'
+                }`}
+              >
+                {pair.replace('-', '/')}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
       {/* Right Column */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         {showMarginToggle && (
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-muted">Margin</span>
@@ -73,11 +102,11 @@ export default function MobilePairHeader({ selectedPair, onSelectPair }: MobileP
         )}
         
         <button className="p-1 hover:bg-muted/20 dark:hover:bg-white/5 rounded transition-colors">
-          <Icon icon="ph:chart-line" width={18} className="text-muted" />
+          <Icon icon="ph:chart-line" width={16} className="text-muted" />
         </button>
         
         <button className="p-1 hover:bg-muted/20 dark:hover:bg-white/5 rounded transition-colors">
-          <Icon icon="ph:dots-three" width={18} className="text-muted" />
+          <Icon icon="ph:dots-three" width={16} className="text-muted" />
         </button>
       </div>
     </div>

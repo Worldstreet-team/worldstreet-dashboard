@@ -14,7 +14,7 @@ import MobileTopNav from "@/components/spot/MobileTopNav";
 import MobilePairHeader from "@/components/spot/MobilePairHeader";
 import MobileTradingForm from "@/components/spot/MobileTradingForm";
 import MobileOrderBook from "@/components/spot/MobileOrderBook";
-import MobileBottomTabs from "@/components/spot/MobileBottomTabs";
+import { Icon } from "@iconify/react";
 
 export default function SpotTradingPage() {
   const [selectedPair, setSelectedPair] = useState('BTC-USDT');
@@ -23,6 +23,7 @@ export default function SpotTradingPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [showTPSLLines, setShowTPSLLines] = useState(true);
   const [isOrderEntryExpanded, setIsOrderEntryExpanded] = useState(true);
+  const [isChartExpanded, setIsChartExpanded] = useState(false);
   const [activePositionTPSL, setActivePositionTPSL] = useState<{
     symbol: string;
     takeProfit: string | null;
@@ -80,17 +81,40 @@ export default function SpotTradingPage() {
           </div>
         </div>
 
-        {/* Bottom Tabs */}
-        <MobileBottomTabs />
+        {/* Bottom Tabs - Positions, Trades, Balances */}
+        <div className="border-t border-border dark:border-darkborder max-h-[40vh] overflow-hidden flex flex-col">
+          <BottomTabs 
+            refreshKey={refreshKey}
+            selectedChartSymbol={selectedPair}
+            onPositionTPSLUpdate={handlePositionTPSLUpdate}
+            showTPSLLines={showTPSLLines}
+            onToggleTPSLLines={() => setShowTPSLLines(!showTPSLLines)}
+          />
+        </div>
 
         {/* Chart Section - Collapsible */}
-        <div className="border-t border-border dark:border-darkborder">
-          <button className="w-full px-4 py-2 flex items-center justify-between bg-white dark:bg-darkgray hover:bg-muted/10 dark:hover:bg-white/5 transition-colors">
-            <span className="text-sm font-semibold text-dark dark:text-white">BTC/USDT Chart</span>
-            <svg className="w-4 h-4 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
+        <div className="border-t border-border dark:border-darkborder flex-shrink-0">
+          <button 
+            onClick={() => setIsChartExpanded(!isChartExpanded)}
+            className="w-full px-2 py-2 flex items-center justify-between bg-white dark:bg-darkgray hover:bg-muted/10 dark:hover:bg-white/5 transition-colors"
+          >
+            <span className="text-xs font-semibold text-dark dark:text-white">{selectedPair.replace('-', '/')} Chart</span>
+            <Icon 
+              icon={isChartExpanded ? "ph:caret-up" : "ph:caret-down"} 
+              width={16} 
+              className="text-muted" 
+            />
           </button>
+          {isChartExpanded && (
+            <div className="h-[50vh] border-t border-border dark:border-darkborder">
+              <LiveChart 
+                symbol={selectedPair}
+                stopLoss={chartStopLoss}
+                takeProfit={chartTakeProfit}
+                onUpdateLevels={handleUpdateLevels}
+              />
+            </div>
+          )}
         </div>
       </div>
 
