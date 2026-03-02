@@ -15,6 +15,12 @@ import { Icon } from "@iconify/react";
 
 const AVAILABLE_PAIRS = ['BTC-USDT', 'ETH-USDT', 'SOL-USDT'];
 
+const PAIR_DATA: Record<string, { name: string; basePrice: number }> = {
+  'BTC-USDT': { name: 'Bitcoin', basePrice: 69201.46 },
+  'ETH-USDT': { name: 'Ethereum', basePrice: 3842.15 },
+  'SOL-USDT': { name: 'Solana', basePrice: 198.73 }
+};
+
 export default function SpotTradingPage() {
   const [selectedPair, setSelectedPair] = useState('BTC-USDT');
   const [stopLoss, setStopLoss] = useState('');
@@ -26,11 +32,29 @@ export default function SpotTradingPage() {
   const [showPairDropdown, setShowPairDropdown] = useState(false);
   const [showTradingPanel, setShowTradingPanel] = useState(false);
   const [tradingPanelSide, setTradingPanelSide] = useState<'buy' | 'sell'>('buy');
+  const [currentPrice, setCurrentPrice] = useState(PAIR_DATA['BTC-USDT'].basePrice);
+  const [priceChange, setPriceChange] = useState(3.34);
   const [activePositionTPSL, setActivePositionTPSL] = useState<{
     symbol: string;
     takeProfit: string | null;
     stopLoss: string | null;
   } | null>(null);
+
+  // Update price when pair changes
+  React.useEffect(() => {
+    const pairData = PAIR_DATA[selectedPair];
+    if (pairData) {
+      setCurrentPrice(pairData.basePrice);
+      // Simulate price changes
+      const interval = setInterval(() => {
+        const variation = (Math.random() - 0.5) * pairData.basePrice * 0.001;
+        const newPrice = pairData.basePrice + variation;
+        setCurrentPrice(newPrice);
+        setPriceChange(((newPrice - pairData.basePrice) / pairData.basePrice) * 100);
+      }, 2000);
+      return () => clearInterval(interval);
+    }
+  }, [selectedPair]);
 
   const handleUpdateLevels = (sl: string, tp: string) => {
     setStopLoss(sl);
@@ -64,6 +88,9 @@ export default function SpotTradingPage() {
   const chartTakeProfit = showTPSLLines && activePositionTPSL?.symbol === selectedPair 
     ? activePositionTPSL.takeProfit || takeProfit 
     : takeProfit;
+
+  const currentPairData = PAIR_DATA[selectedPair];
+  const isPositive = priceChange >= 0;
 
   return (
     <>
@@ -99,15 +126,21 @@ export default function SpotTradingPage() {
               )}
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-muted">Bitcoin Price</span>
+              <span className="text-xs text-muted">{currentPairData.name} Price</span>
               <Icon icon="ph:arrow-up-right" width={12} className="text-muted" />
             </div>
           </div>
           
           <div className="flex items-baseline gap-3">
-            <span className="text-2xl font-bold text-success">69,201.46</span>
-            <span className="text-sm text-success">$69,201.46</span>
-            <span className="text-sm text-success">+3.34%</span>
+            <span className={`text-2xl font-bold ${isPositive ? 'text-success' : 'text-error'}`}>
+              {currentPrice.toFixed(2)}
+            </span>
+            <span className={`text-sm ${isPositive ? 'text-success' : 'text-error'}`}>
+              ${currentPrice.toFixed(2)}
+            </span>
+            <span className={`text-sm ${isPositive ? 'text-success' : 'text-error'}`}>
+              {isPositive ? '+' : ''}{priceChange.toFixed(2)}%
+            </span>
           </div>
           
           <div className="flex items-center gap-4 mt-2 text-xs">
