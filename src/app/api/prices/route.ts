@@ -39,7 +39,7 @@ const BACKOFF_MS = 90_000;    // 90 s cooldown after a 429
 // ── CoinGecko mapping ──────────────────────────────────────────────────────
 
 // Core coins we always need for wallet balance calculations
-const CORE_COINS = ["bitcoin", "ethereum", "solana", "tether", "usd-coin"];
+const CORE_COINS = ["bitcoin", "ethereum", "solana", "tron", "tether", "usd-coin"];
 
 // Additional popular coins for watchlist/market overview
 const MARKET_COINS = [
@@ -55,6 +55,7 @@ const ID_TO_SYMBOL: Record<string, string> = {
   "bitcoin": "BTC",
   "ethereum": "ETH",
   "solana": "SOL",
+  "tron": "TRX",
   "tether": "USDT",
   "usd-coin": "USDC",
   "ripple": "XRP",

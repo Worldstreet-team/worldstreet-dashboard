@@ -195,7 +195,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("POST /api/deposit/verify error:", error);
     return NextResponse.json(
-      { success: false, message: "Internal server error" },
+      { success: false, message: "Failed to verify deposit" },
       { status: 500 }
     );
   }

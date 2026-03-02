@@ -8,8 +8,18 @@ import {
   BottomTabs,
   MarketList,
   MarketTrades,
-  SpotOrderEntry
+  SpotOrderEntry,
+  TradingPanel
 } from "@/components/spot";
+import { Icon } from "@iconify/react";
+
+const AVAILABLE_PAIRS = ['BTC-USDT', 'ETH-USDT', 'SOL-USDT'];
+
+const PAIR_DATA: Record<string, { name: string; basePrice: number }> = {
+  'BTC-USDT': { name: 'Bitcoin', basePrice: 69201.46 },
+  'ETH-USDT': { name: 'Ethereum', basePrice: 3842.15 },
+  'SOL-USDT': { name: 'Solana', basePrice: 198.73 }
+};
 
 export default function SpotTradingPage() {
   const [selectedPair, setSelectedPair] = useState('BTC-USDT');
@@ -18,11 +28,33 @@ export default function SpotTradingPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [showTPSLLines, setShowTPSLLines] = useState(true);
   const [isOrderEntryExpanded, setIsOrderEntryExpanded] = useState(true);
+  const [mobileActiveTab, setMobileActiveTab] = useState<'chart' | 'orderbook' | 'trades'>('chart');
+  const [showPairDropdown, setShowPairDropdown] = useState(false);
+  const [showTradingPanel, setShowTradingPanel] = useState(false);
+  const [tradingPanelSide, setTradingPanelSide] = useState<'buy' | 'sell'>('buy');
+  const [currentPrice, setCurrentPrice] = useState(PAIR_DATA['BTC-USDT'].basePrice);
+  const [priceChange, setPriceChange] = useState(3.34);
   const [activePositionTPSL, setActivePositionTPSL] = useState<{
     symbol: string;
     takeProfit: string | null;
     stopLoss: string | null;
   } | null>(null);
+
+  // Update price when pair changes
+  React.useEffect(() => {
+    const pairData = PAIR_DATA[selectedPair];
+    if (pairData) {
+      setCurrentPrice(pairData.basePrice);
+      // Simulate price changes
+      const interval = setInterval(() => {
+        const variation = (Math.random() - 0.5) * pairData.basePrice * 0.001;
+        const newPrice = pairData.basePrice + variation;
+        setCurrentPrice(newPrice);
+        setPriceChange(((newPrice - pairData.basePrice) / pairData.basePrice) * 100);
+      }, 2000);
+      return () => clearInterval(interval);
+    }
+  }, [selectedPair]);
 
   const handleUpdateLevels = (sl: string, tp: string) => {
     setStopLoss(sl);
@@ -31,12 +63,23 @@ export default function SpotTradingPage() {
 
   const handleTradeExecuted = useCallback(() => {
     setRefreshKey(prev => prev + 1);
+    setShowTradingPanel(false);
   }, []);
 
   const handlePositionTPSLUpdate = useCallback((symbol: string, tp: string | null, sl: string | null) => {
     const normalizedSymbol = symbol.replace('/', '-');
     setActivePositionTPSL({ symbol: normalizedSymbol, takeProfit: tp, stopLoss: sl });
   }, []);
+
+  const handleOpenTradingPanel = (side: 'buy' | 'sell') => {
+    setTradingPanelSide(side);
+    setShowTradingPanel(true);
+  };
+
+  const handleSelectPair = (pair: string) => {
+    setSelectedPair(pair);
+    setShowPairDropdown(false);
+  };
 
   const chartStopLoss = showTPSLLines && activePositionTPSL?.symbol === selectedPair 
     ? activePositionTPSL.stopLoss || stopLoss 
@@ -46,27 +89,114 @@ export default function SpotTradingPage() {
     ? activePositionTPSL.takeProfit || takeProfit 
     : takeProfit;
 
+  const currentPairData = PAIR_DATA[selectedPair];
+  const isPositive = priceChange >= 0;
+
   return (
-    <div className="flex flex-col h-[calc(140vh-64px)] md:h-[calc(120vh-80px)] bg-white dark:bg-darkgray">
-      {/* Pair Info Bar - Full Width */}
-      <PairInfoBar 
-        selectedPair={selectedPair}
-        onSelectPair={setSelectedPair}
-      />
-
-      {/* DESKTOP LAYOUT: 3-Column Grid */}
-      <div className="hidden lg:flex flex-col flex-1 overflow-hidden">
-        {/* Main Trading Grid: Order Book | Chart | Right Sidebar */}
-        <div className="flex-1 grid grid-cols-[22%_53%_25%] overflow-hidden">
-          {/* LEFT: Order Book */}
-          <div className="h-full overflow-hidden">
-            <OrderBook selectedPair={selectedPair} />
+    <>
+      {/* MOBILE LAYOUT - Binance Style (Full Screen Chart) */}
+      <div className="md:hidden fixed inset-0 flex flex-col bg-white dark:bg-darkgray mt-20">
+        {/* Pair Header with Price Info */}
+        <div className="flex-shrink-0 px-4 py-3 bg-white dark:bg-darkgray border-b border-border dark:border-darkborder">
+          <div className="flex items-center justify-between mb-2">
+            <div className="relative">
+              <button 
+                onClick={() => setShowPairDropdown(!showPairDropdown)}
+                className="flex items-center gap-2 hover:bg-muted/10 px-2 py-1 rounded"
+              >
+                <span className="text-lg font-bold text-dark dark:text-white">{selectedPair.replace('-', '/')}</span>
+                <Icon icon="ph:caret-down" width={16} className="text-muted" />
+              </button>
+              
+              {/* Pair Dropdown */}
+              {showPairDropdown && (
+                <div className="absolute top-full left-0 mt-1 bg-white dark:bg-darkgray border border-border dark:border-darkborder rounded-lg shadow-lg z-20 min-w-[150px]">
+                  {AVAILABLE_PAIRS.map((pair) => (
+                    <button
+                      key={pair}
+                      onClick={() => handleSelectPair(pair)}
+                      className={`w-full text-left px-4 py-2 hover:bg-muted/10 ${
+                        selectedPair === pair ? 'bg-muted/20 text-primary' : 'text-dark dark:text-white'
+                      }`}
+                    >
+                      {pair.replace('-', '/')}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted">{currentPairData.name} Price</span>
+              <Icon icon="ph:arrow-up-right" width={12} className="text-muted" />
+            </div>
           </div>
+          
+          <div className="flex items-baseline gap-3">
+            <span className={`text-2xl font-bold ${isPositive ? 'text-success' : 'text-error'}`}>
+              {currentPrice.toFixed(2)}
+            </span>
+            <span className={`text-sm ${isPositive ? 'text-success' : 'text-error'}`}>
+              ${currentPrice.toFixed(2)}
+            </span>
+            <span className={`text-sm ${isPositive ? 'text-success' : 'text-error'}`}>
+              {isPositive ? '+' : ''}{priceChange.toFixed(2)}%
+            </span>
+          </div>
+          
+          <div className="flex items-center gap-4 mt-2 text-xs">
+            <span className="text-error">POW</span>
+            <span className="text-muted">Payments</span>
+            <span className="text-muted">Vol</span>
+            <span className="text-muted">Hot</span>
+            <span className="text-muted">P</span>
+            <Icon icon="ph:caret-right" width={12} className="text-muted" />
+          </div>
+          
+          <div className="flex items-center gap-2 mt-2">
+            <span className="text-xs text-muted">Networks</span>
+            <span className="text-xs text-dark dark:text-white">BTC (5)</span>
+          </div>
+        </div>
 
-          {/* CENTER: Chart + Order Entry */}
-          <div className="h-full flex flex-col overflow-hidden">
-            {/* Chart */}
-            <div className="flex-1 overflow-hidden">
+        {/* Chart Tabs */}
+        <div className="flex-shrink-0 flex items-center gap-6 px-4 border-b border-border dark:border-darkborder bg-white dark:bg-darkgray">
+          <button 
+            onClick={() => setMobileActiveTab('chart')}
+            className={`pb-2 text-sm font-medium ${
+              mobileActiveTab === 'chart' 
+                ? 'text-dark dark:text-white border-b-2 border-warning' 
+                : 'text-muted'
+            }`}
+          >
+            Chart
+          </button>
+          <button 
+            onClick={() => setMobileActiveTab('orderbook')}
+            className={`pb-2 text-sm font-medium ${
+              mobileActiveTab === 'orderbook' 
+                ? 'text-dark dark:text-white border-b-2 border-warning' 
+                : 'text-muted'
+            }`}
+          >
+            Order Book
+          </button>
+          <button 
+            onClick={() => setMobileActiveTab('trades')}
+            className={`pb-2 text-sm font-medium ${
+              mobileActiveTab === 'trades' 
+                ? 'text-dark dark:text-white border-b-2 border-warning' 
+                : 'text-muted'
+            }`}
+          >
+            Trades
+          </button>
+        </div>
+
+        {/* Scrollable Content Area */}
+        <div className="flex-1 overflow-y-auto">
+          {/* Chart Area - 65% of viewport height */}
+          {mobileActiveTab === 'chart' && (
+            <div className="h-[65vh] bg-white dark:bg-darkgray">
               <LiveChart 
                 symbol={selectedPair}
                 stopLoss={chartStopLoss}
@@ -74,117 +204,170 @@ export default function SpotTradingPage() {
                 onUpdateLevels={handleUpdateLevels}
               />
             </div>
+          )}
 
-            {/* Order Entry Panel - Collapsible */}
-            <div className={`flex-shrink-0 transition-all duration-300 ease-in-out ${
-              isOrderEntryExpanded ? 'h-auto' : 'h-[32px]'
-            }`}>
-              <SpotOrderEntry 
-                selectedPair={selectedPair}
-                onTradeExecuted={handleTradeExecuted}
-                isExpanded={isOrderEntryExpanded}
-                onToggleExpand={() => setIsOrderEntryExpanded(!isOrderEntryExpanded)}
-              />
+          {/* Order Book */}
+          {mobileActiveTab === 'orderbook' && (
+            <div className="h-[65vh] bg-white dark:bg-darkgray overflow-auto">
+              <OrderBook selectedPair={selectedPair} />
             </div>
-          </div>
+          )}
 
-          {/* RIGHT: Market List + Market Trades */}
-          <div className="h-full flex flex-col overflow-hidden">
-            {/* Market List - Top half */}
-            <div className="flex-1 overflow-hidden">
-              <MarketList 
-                selectedPair={selectedPair}
-                onSelectPair={setSelectedPair}
-              />
-            </div>
-
-            {/* Market Trades - Bottom half */}
-            <div className="flex-1 overflow-hidden border-t border-border dark:border-darkborder">
+          {/* Market Trades */}
+          {mobileActiveTab === 'trades' && (
+            <div className="h-[65vh] bg-white dark:bg-darkgray overflow-auto">
               <MarketTrades selectedPair={selectedPair} />
             </div>
+          )}
+
+          {/* Bottom Tabs - Open Orders / Holdings */}
+          <div className="border-t border-border dark:border-darkborder bg-white dark:bg-darkgray pb-20">
+            <BottomTabs 
+              refreshKey={refreshKey}
+              selectedChartSymbol={selectedPair}
+              onPositionTPSLUpdate={handlePositionTPSLUpdate}
+              showTPSLLines={showTPSLLines}
+              onToggleTPSLLines={() => setShowTPSLLines(!showTPSLLines)}
+            />
           </div>
         </div>
 
-        {/* Bottom Tabs - Full Width */}
-        <div className="border-t border-border dark:border-darkborder h-[350px] flex-shrink-0">
-          <BottomTabs 
-            refreshKey={refreshKey}
-            selectedChartSymbol={selectedPair}
-            onPositionTPSLUpdate={handlePositionTPSLUpdate}
-            showTPSLLines={showTPSLLines}
-            onToggleTPSLLines={() => setShowTPSLLines(!showTPSLLines)}
-          />
-        </div>
-      </div>
-
-      {/* TABLET LAYOUT: Stacked with Order Book as tab */}
-      <div className="hidden md:flex lg:hidden flex-col flex-1 overflow-hidden">
-        {/* Chart */}
-        <div className="h-[50vh] flex-shrink-0">
-          <LiveChart 
-            symbol={selectedPair}
-            stopLoss={chartStopLoss}
-            takeProfit={chartTakeProfit}
-            onUpdateLevels={handleUpdateLevels}
-          />
+        {/* Buy/Sell Buttons - Fixed at bottom (outside scroll) */}
+        <div className="fixed bottom-0 left-0 right-0 flex gap-3 p-4 bg-white dark:bg-darkgray border-t border-border dark:border-darkborder z-10">
+          <button 
+            onClick={() => handleOpenTradingPanel('buy')}
+            className="flex-1 py-3 bg-success hover:bg-success/90 text-white font-semibold rounded-lg transition-colors"
+          >
+            Buy
+          </button>
+          <button 
+            onClick={() => handleOpenTradingPanel('sell')}
+            className="flex-1 py-3 bg-error hover:bg-error/90 text-white font-semibold rounded-lg transition-colors"
+          >
+            Sell
+          </button>
         </div>
 
-        {/* Order Entry */}
-        <div className="flex-shrink-0 border-t border-border dark:border-darkborder">
-          <SpotOrderEntry 
+        {/* Trading Panel Modal */}
+        {showTradingPanel && (
+          <TradingPanel
             selectedPair={selectedPair}
+            side={tradingPanelSide}
+            onClose={() => setShowTradingPanel(false)}
             onTradeExecuted={handleTradeExecuted}
           />
-        </div>
-
-        {/* Order Book */}
-        <div className="flex-shrink-0 border-t border-border dark:border-darkborder h-[200px]">
-          <OrderBook selectedPair={selectedPair} />
-        </div>
-
-        {/* Bottom Tabs */}
-        <div className="flex-shrink-0 border-t border-border dark:border-darkborder">
-          <BottomTabs 
-            refreshKey={refreshKey}
-            selectedChartSymbol={selectedPair}
-            onPositionTPSLUpdate={handlePositionTPSLUpdate}
-            showTPSLLines={showTPSLLines}
-            onToggleTPSLLines={() => setShowTPSLLines(!showTPSLLines)}
-          />
-        </div>
+        )}
       </div>
 
-      {/* MOBILE LAYOUT: Vertical stack */}
-      <div className="md:hidden flex flex-col flex-1 overflow-auto">
-        {/* Chart */}
-        <div className="h-[45vh] flex-shrink-0">
-          <LiveChart 
-            symbol={selectedPair}
-            stopLoss={chartStopLoss}
-            takeProfit={chartTakeProfit}
-            onUpdateLevels={handleUpdateLevels}
-          />
+      {/* DESKTOP/TABLET LAYOUT - Original */}
+      <div className="hidden md:flex flex-col h-[calc(100vh-80px)] bg-white dark:bg-darkgray">
+        {/* Pair Info Bar - Full Width */}
+        <PairInfoBar 
+          selectedPair={selectedPair}
+          onSelectPair={setSelectedPair}
+        />
+
+        {/* DESKTOP LAYOUT: 3-Column Grid */}
+        <div className="hidden lg:flex flex-col flex-1 overflow-hidden">
+          {/* Main Trading Grid: Order Book | Chart | Right Sidebar */}
+          <div className="flex-1 grid grid-cols-[22%_53%_25%] overflow-hidden">
+            {/* LEFT: Order Book */}
+            <div className="h-full overflow-hidden">
+              <OrderBook selectedPair={selectedPair} />
+            </div>
+
+            {/* CENTER: Chart + Order Entry */}
+            <div className="h-full flex flex-col overflow-hidden">
+              {/* Chart */}
+              <div className="flex-1 overflow-hidden">
+                <LiveChart 
+                  symbol={selectedPair}
+                  stopLoss={chartStopLoss}
+                  takeProfit={chartTakeProfit}
+                  onUpdateLevels={handleUpdateLevels}
+                />
+              </div>
+
+              {/* Order Entry Panel - Collapsible */}
+              <div className={`flex-shrink-0 transition-all duration-300 ease-in-out ${
+                isOrderEntryExpanded ? 'h-auto' : 'h-[32px]'
+              }`}>
+                <SpotOrderEntry 
+                  selectedPair={selectedPair}
+                  onTradeExecuted={handleTradeExecuted}
+                  isExpanded={isOrderEntryExpanded}
+                  onToggleExpand={() => setIsOrderEntryExpanded(!isOrderEntryExpanded)}
+                />
+              </div>
+            </div>
+
+            {/* RIGHT: Market List + Market Trades */}
+            <div className="h-full flex flex-col overflow-hidden">
+              {/* Market List - Top half */}
+              <div className="flex-1 overflow-hidden">
+                <MarketList 
+                  selectedPair={selectedPair}
+                  onSelectPair={setSelectedPair}
+                />
+              </div>
+
+              {/* Market Trades - Bottom half */}
+              <div className="flex-1 overflow-hidden border-t border-border dark:border-darkborder">
+                <MarketTrades selectedPair={selectedPair} />
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom Tabs - Full Width */}
+          <div className="border-t border-border dark:border-darkborder h-[350px] flex-shrink-0">
+            <BottomTabs 
+              refreshKey={refreshKey}
+              selectedChartSymbol={selectedPair}
+              onPositionTPSLUpdate={handlePositionTPSLUpdate}
+              showTPSLLines={showTPSLLines}
+              onToggleTPSLLines={() => setShowTPSLLines(!showTPSLLines)}
+            />
+          </div>
         </div>
 
-        {/* Order Entry */}
-        <div className="flex-shrink-0 border-t border-border dark:border-darkborder">
-          <SpotOrderEntry 
-            selectedPair={selectedPair}
-            onTradeExecuted={handleTradeExecuted}
-          />
-        </div>
+        {/* TABLET LAYOUT: Stacked with Order Book as tab */}
+        <div className="hidden md:flex lg:hidden flex-col flex-1 overflow-hidden">
+          {/* Chart */}
+          <div className="h-[50vh] flex-shrink-0">
+            <LiveChart 
+              symbol={selectedPair}
+              stopLoss={chartStopLoss}
+              takeProfit={chartTakeProfit}
+              onUpdateLevels={handleUpdateLevels}
+            />
+          </div>
 
-        {/* Bottom Tabs */}
-        <div className="flex-shrink-0 border-t border-border dark:border-darkborder">
-          <BottomTabs 
-            refreshKey={refreshKey}
-            selectedChartSymbol={selectedPair}
-            onPositionTPSLUpdate={handlePositionTPSLUpdate}
-            showTPSLLines={showTPSLLines}
-            onToggleTPSLLines={() => setShowTPSLLines(!showTPSLLines)}
-          />
+          {/* Order Entry */}
+          <div className="flex-shrink-0 border-t border-border dark:border-darkborder">
+            <SpotOrderEntry 
+              selectedPair={selectedPair}
+              onTradeExecuted={handleTradeExecuted}
+            />
+          </div>
+
+          {/* Order Book */}
+          <div className="flex-shrink-0 border-t border-border dark:border-darkborder h-[200px]">
+            <OrderBook selectedPair={selectedPair} />
+          </div>
+
+          {/* Bottom Tabs */}
+          <div className="flex-shrink-0 border-t border-border dark:border-darkborder">
+            <BottomTabs 
+              refreshKey={refreshKey}
+              selectedChartSymbol={selectedPair}
+              onPositionTPSLUpdate={handlePositionTPSLUpdate}
+              showTPSLLines={showTPSLLines}
+              onToggleTPSLLines={() => setShowTPSLLines(!showTPSLLines)}
+            />
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
+

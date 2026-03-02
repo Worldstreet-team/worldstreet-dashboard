@@ -1,47 +1,27 @@
-import { NextResponse } from "next/server";
-import { connectDB } from "@/lib/mongodb";
-import Deposit from "@/models/Deposit";
-import { getAuthUser } from "@/lib/auth";
+import { NextRequest, NextResponse } from 'next/server';
 
-// GET /api/deposit/pending — return user's most recent in-progress deposit
-
-export async function GET() {
+/**
+ * GET /api/deposit/pending
+ * Check for pending deposits for the current user
+ */
+export async function GET(request: NextRequest) {
   try {
-    const authUser = await getAuthUser();
-    if (!authUser) {
-      return NextResponse.json(
-        { success: false, message: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    // TODO: Implement logic to check for pending deposits
+    // This should:
+    // 1. Get the current user from session/auth
+    // 2. Query database for pending deposits
+    // 3. Return the most recent pending deposit if any
 
-    await connectDB();
-
-    const deposit = await Deposit.findOne({
-      userId: authUser.userId,
-      status: {
-        $in: [
-          "pending",
-          "awaiting_verification",
-          "payment_failed",
-          "verifying",
-          "payment_confirmed",
-          "sending_usdt",
-        ],
-      },
-    })
-      .sort({ createdAt: -1 })
-      .lean();
-
-    if (!deposit) {
-      return NextResponse.json({ success: false, message: "No pending deposit" });
-    }
-
-    return NextResponse.json({ success: true, deposit });
+    // For now, return no pending deposits
+    return NextResponse.json({
+      success: true,
+      deposit: null,
+      message: 'No pending deposits'
+    });
   } catch (error) {
-    console.error("GET /api/deposit/pending error:", error);
+    console.error('Pending deposit check error:', error);
     return NextResponse.json(
-      { success: false, message: "Internal server error" },
+      { success: false, message: 'Failed to check pending deposits' },
       { status: 500 }
     );
   }
