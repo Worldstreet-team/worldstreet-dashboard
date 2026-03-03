@@ -43,6 +43,9 @@ export default function SpotTradingPage() {
   // Trading form states
   const [amount, setAmount] = useState('');
   const [sliderValue, setSliderValue] = useState(0);
+  
+  // Derive tokens from selected pair
+  const [tokenIn, tokenOut] = selectedPair.split('-');
 
   // Update price when pair changes
   React.useEffect(() => {
