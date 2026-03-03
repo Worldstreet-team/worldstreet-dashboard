@@ -329,32 +329,7 @@ export default function FuturesPage() {
                 </div>
               </div>
 
-              {/* 2. Account Stats Grid */}
-              <div className="grid grid-cols-2 gap-3">
-                {/* Total Balance */}
-                <div className="bg-gradient-to-br from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/5 rounded-xl p-4 border border-primary/20 dark:border-primary/30">
-                  <div className="text-xs font-semibold text-primary/70 dark:text-primary/60 mb-1 uppercase tracking-wide">Total Balance</div>
-                  <div className="text-xl font-bold text-dark dark:text-white tabular-nums">$0.00</div>
-                </div>
-
-                {/* Available */}
-                <div className="bg-gradient-to-br from-success/5 to-success/10 dark:from-success/10 dark:to-success/5 rounded-xl p-4 border border-success/20 dark:border-success/30">
-                  <div className="text-xs font-semibold text-success/70 dark:text-success/60 mb-1 uppercase tracking-wide">Available</div>
-                  <div className="text-xl font-bold text-dark dark:text-white tabular-nums">$0.00</div>
-                </div>
-
-                {/* Unrealized PnL */}
-                <div className="bg-gradient-to-br from-warning/5 to-warning/10 dark:from-warning/10 dark:to-warning/5 rounded-xl p-4 border border-warning/20 dark:border-warning/30">
-                  <div className="text-xs font-semibold text-warning/70 dark:text-warning/60 mb-1 uppercase tracking-wide">Unrealized PnL</div>
-                  <div className="text-xl font-bold text-success tabular-nums">+$0.00</div>
-                </div>
-
-                {/* Margin Ratio */}
-                <div className="bg-gradient-to-br from-gray-100 to-gray-50 dark:from-white/5 dark:to-white/10 rounded-xl p-4 border border-gray-200/50 dark:border-white/10">
-                  <div className="text-xs font-semibold text-muted dark:text-gray-400 mb-1 uppercase tracking-wide">Margin Ratio</div>
-                  <div className="text-xl font-bold text-dark dark:text-white tabular-nums">0%</div>
-                </div>
-              </div>
+              <DriftAccountStatus />
 
               {/* 3. Position Panel */}
               <PositionPanel />
@@ -369,7 +344,6 @@ export default function FuturesPage() {
               <RiskPanel />
 
               {/* 7. Drift Account Status */}
-              <DriftAccountStatus />
             </div>
           </div>
         </div>
