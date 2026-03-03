@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { connectDB } from '@/lib/db';
+import { connectDB } from '@/lib/mongodb';
 import { getSubaccountManager, initializeDriftServices } from '@/services/drift';
 import { handleApiError } from '@/lib/errors/apiErrorHandler';
 
