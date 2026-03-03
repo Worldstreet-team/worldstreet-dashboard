@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { connectDB } from '@/lib/db';
-import { getDepositManager, initializeDriftServices } from '@/services/drift';
+import { getSubaccountManager, initializeDriftServices } from '@/services/drift';
 import { handleApiError } from '@/lib/errors/apiErrorHandler';
 
 export async function POST(req: NextRequest) {
@@ -15,25 +15,15 @@ export async function POST(req: NextRequest) {
       );
     }
     
-    const body = await req.json();
-    const { amount } = body;
-    
-    if (typeof amount !== 'number' || amount <= 0) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid amount' },
-        { status: 400 }
-      );
-    }
-    
     await connectDB();
     await initializeDriftServices();
     
-    const depositManager = getDepositManager();
-    const result = await depositManager.depositCollateral(userId, amount);
+    const subaccountManager = getSubaccountManager();
+    const subaccountInfo = await subaccountManager.initializeSubaccount(userId);
     
     return NextResponse.json({
       success: true,
-      data: result
+      data: subaccountInfo
     });
   } catch (error) {
     return handleApiError(error);
