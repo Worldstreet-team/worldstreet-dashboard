@@ -9,12 +9,11 @@ export const DriftAccountStatus: React.FC = () => {
     isInitialized, 
     needsInitialization, 
     canTrade, 
-    status, 
     summary,
     isLoading,
     error,
-    initializeAccount,
-    refreshSummary
+    refreshSummary,
+    initializeDriftClient
   } = useDrift();
 
   const [initializing, setInitializing] = useState(false);
@@ -22,14 +21,12 @@ export const DriftAccountStatus: React.FC = () => {
 
   const handleInitialize = async () => {
     setInitializing(true);
-    const result = await initializeAccount();
-    
-    if (result.success) {
-      console.log('Drift account initialized successfully');
-    } else {
-      console.error('Failed to initialize:', result.error);
+    try {
+      await initializeDriftClient();
+      console.log('Drift client initialized successfully');
+    } catch (err) {
+      console.error('Failed to initialize:', err);
     }
-    
     setInitializing(false);
   };
 
@@ -39,7 +36,7 @@ export const DriftAccountStatus: React.FC = () => {
     setRefreshing(false);
   };
 
-  if (isLoading && !status) {
+  if (isLoading && !summary) {
     return (
       <div className="bg-white dark:bg-[#0d0d0d] rounded-2xl border border-gray-200/50 dark:border-white/5 shadow-lg shadow-black/5 dark:shadow-black/20 p-6">
         <div className="flex items-center gap-3">
@@ -70,11 +67,9 @@ export const DriftAccountStatus: React.FC = () => {
         <div className="flex items-start gap-3">
           <Icon icon="ph:info-duotone" className="text-warning flex-shrink-0 mt-0.5" height={24} />
           <div className="flex-1">
-            <h4 className="text-sm font-bold text-warning mb-1">Drift Account Initialization Required</h4>
+            <h4 className="text-sm font-bold text-warning mb-1">Drift Client Not Ready</h4>
             <p className="text-xs text-warning/80 mb-4">
-              Your Drift subaccount needs to be initialized before you can trade futures. 
-              This is a one-time setup that costs approximately {status?.initializationCost.sol ?? 0.035} SOL 
-              (~${status?.initializationCost.usd ?? 7}).
+              Your Drift client needs to be initialized to trade futures. Click below to unlock your wallet and connect.
             </p>
             <button
               onClick={handleInitialize}
@@ -89,7 +84,7 @@ export const DriftAccountStatus: React.FC = () => {
               ) : (
                 <span className="flex items-center gap-2">
                   <Icon icon="ph:rocket-launch" height={16} />
-                  Initialize Account ({status?.initializationCost.sol ?? 0.035} SOL)
+                  Initialize Drift Client
                 </span>
               )}
             </button>

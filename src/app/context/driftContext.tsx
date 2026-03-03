@@ -2,7 +2,8 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import { useAuth } from '@/app/context/authContext';
-import { Connection, PublicKey } from '@solana/web3.js';
+import { PinUnlockModal } from '@/components/wallet/PinUnlockModal';
+import { decryptWithPIN } from '@/lib/wallet/encryption';
 
 // Types
 interface DriftAccountSummary {
@@ -92,14 +93,49 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
+  // PIN unlock state
+  const [showPinUnlock, setShowPinUnlock] = useState(false);
+  const [userPin, setUserPin] = useState<string | null>(null);
+  const pinResolveRef = useRef<((pin: string) => void) | null>(null);
+  
   const autoRefreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isInitializingRef = useRef(false);
 
+  // Request PIN from user
+  const requestPin = useCallback((): Promise<string> => {
+    return new Promise((resolve) => {
+      // If we already have the PIN in memory, use it
+      if (userPin) {
+        resolve(userPin);
+        return;
+      }
+      
+      // Otherwise, show PIN unlock modal
+      pinResolveRef.current = resolve;
+      setShowPinUnlock(true);
+    });
+  }, [userPin]);
+
+  // Handle PIN unlock
+  const handlePinUnlock = useCallback((pin: string) => {
+    setUserPin(pin);
+    setShowPinUnlock(false);
+    
+    if (pinResolveRef.current) {
+      pinResolveRef.current(pin);
+      pinResolveRef.current = null;
+    }
+  }, []);
+
   // Initialize Solana connection
   useEffect(() => {
-    const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
-    const conn = new Connection(rpcUrl, 'confirmed');
-    setConnection(conn);
+    const initConnection = async () => {
+      const { Connection } = await import('@solana/web3.js');
+      const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+      const conn = new Connection(rpcUrl, 'confirmed');
+      setConnection(conn as any);
+    };
+    initConnection();
   }, []);
 
   // Initialize Drift client when user is authenticated
@@ -111,26 +147,42 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     setError(null);
     
     try {
-      // Get user's Solana wallet keypair from server (encrypted)
+      // Request PIN from user
+      const pin = await requestPin();
+      
+      // Get user's encrypted Solana wallet from server
       const walletResponse = await fetch('/api/wallet/keys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chain: 'solana' })
+        body: JSON.stringify({ pin })
       });
       
       if (!walletResponse.ok) {
-        throw new Error('Failed to get wallet keys');
+        const errorData = await walletResponse.json();
+        throw new Error(errorData.message || 'Failed to get wallet keys');
       }
       
       const walletData = await walletResponse.json();
       
-      // Dynamic import of Drift SDK
+      if (!walletData.success || !walletData.wallets?.solana?.encryptedPrivateKey) {
+        throw new Error('Solana wallet not found');
+      }
+      
+      // Decrypt private key CLIENT-SIDE with user's PIN
+      let decryptedPrivateKey: string;
+      try {
+        decryptedPrivateKey = decryptWithPIN(walletData.wallets.solana.encryptedPrivateKey, pin);
+      } catch (err) {
+        throw new Error('Incorrect PIN or corrupted wallet data');
+      }
+      
+      // Dynamic import of Drift SDK and Solana
       const { DriftClient, Wallet } = await import('@drift-labs/sdk');
-      const { Keypair } = await import('@solana/web3.js');
+      const { Keypair, PublicKey: SolanaPublicKey } = await import('@solana/web3.js');
       const bs58 = (await import('bs58')).default;
       
-      // Create keypair from private key
-      const secretKey = bs58.decode(walletData.privateKey);
+      // Create keypair from decrypted private key
+      const secretKey = bs58.decode(decryptedPrivateKey);
       const keypair = Keypair.fromSecretKey(secretKey);
       
       // Create wallet wrapper
@@ -153,7 +205,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       const client = new DriftClient({
         connection: connection as any,
         wallet,
-        programID: new PublicKey(DRIFT_PROGRAM_ID) as any,
+        programID: new SolanaPublicKey(DRIFT_PROGRAM_ID) as any,
         accountSubscription: {
           type: 'websocket',
         },
@@ -176,11 +228,14 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       const errorMessage = err instanceof Error ? err.message : 'Failed to initialize Drift client';
       setError(errorMessage);
       console.error('[DriftContext] Initialization error:', err);
+      
+      // Clear PIN on error so user can retry
+      setUserPin(null);
     } finally {
       setIsLoading(false);
       isInitializingRef.current = false;
     }
-  }, [user?.userId, connection]);
+  }, [user?.userId, connection, requestPin]);
 
   // Refresh account summary from client
   const refreshSummaryInternal = async (client: any) => {
@@ -488,5 +543,16 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     stopAutoRefresh,
   };
 
-  return <DriftContext.Provider value={value}>{children}</DriftContext.Provider>;
+  return (
+    <DriftContext.Provider value={value}>
+      {children}
+      <PinUnlockModal
+        isOpen={showPinUnlock}
+        onClose={() => setShowPinUnlock(false)}
+        onUnlock={handlePinUnlock}
+        title="Unlock Drift Wallet"
+        description="Enter your PIN to access Drift Protocol trading"
+      />
+    </DriftContext.Provider>
+  );
 };
