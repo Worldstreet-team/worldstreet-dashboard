@@ -310,7 +310,8 @@ export const OrderPanel: React.FC = () => {
 
   // Safe number formatting
   const formatNumber = (num: number | undefined | null, decimals: number = 2): string => {
-    return (num || 0).toFixed(decimals);
+    const value = Number(num);
+    return (isNaN(value) ? 0 : value).toFixed(decimals);
   };
 
   return (
@@ -420,19 +421,19 @@ export const OrderPanel: React.FC = () => {
           <div className="flex justify-between text-sm">
             <span className="text-muted dark:text-darklink">Base Margin:</span>
             <span className="font-medium text-dark dark:text-white">
-              ${(previewData?.requiredMargin ?? 0).toFixed(2)}
+              ${(Number(previewData?.requiredMargin) || 0).toFixed(2)}
             </span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-muted dark:text-darklink">Trading Fee (0.1%):</span>
             <span className="font-medium text-dark dark:text-white">
-              ${(previewData?.estimatedFee ?? 0).toFixed(2)}
+              ${(Number(previewData?.estimatedFee) || 0).toFixed(2)}
             </span>
           </div>
           <div className="flex justify-between text-sm border-t border-border dark:border-darkborder pt-2">
             <span className="font-semibold text-dark dark:text-white">Total Required:</span>
             <span className="font-semibold text-dark dark:text-white">
-              ${(previewData?.totalRequired ?? 0).toFixed(2)}
+              ${(Number(previewData?.totalRequired) || 0).toFixed(2)}
             </span>
           </div>
           <div className={`flex justify-between text-sm ${
@@ -440,20 +441,20 @@ export const OrderPanel: React.FC = () => {
           }`}>
             <span>Your Available:</span>
             <span className="font-medium">
-              ${(previewData?.freeCollateral ?? 0).toFixed(2)}
+              ${(Number(previewData?.freeCollateral) || 0).toFixed(2)}
             </span>
           </div>
           <div className="border-t border-border dark:border-darkborder pt-2 mt-2 space-y-1">
             <div className="flex justify-between text-xs text-muted dark:text-darklink">
               <span>Est. Liquidation:</span>
               <span className="text-error">
-                ${(previewData?.estimatedLiquidationPrice ?? 0).toFixed(2)}
+                ${(Number(previewData?.estimatedLiquidationPrice) || 0).toFixed(2)}
               </span>
             </div>
             <div className="flex justify-between text-xs text-muted dark:text-darklink">
               <span>Funding Impact:</span>
               <span>
-                ${(previewData?.estimatedFundingImpact ?? 0).toFixed(4)}
+                ${(Number(previewData?.estimatedFundingImpact) || 0).toFixed(4)}
               </span>
             </div>
           </div>

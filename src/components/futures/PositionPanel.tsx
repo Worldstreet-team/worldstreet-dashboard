@@ -190,7 +190,7 @@ export const PositionPanel: React.FC = () => {
                 <td className={`py-3 px-2 text-sm text-right font-semibold ${
                   (position.unrealizedPnl || 0) >= 0 ? 'text-success' : 'text-error'
                 }`}>
-                  {(position.unrealizedPnl || 0) >= 0 ? '+' : ''}${(position.unrealizedPnl || 0).toFixed(2)}
+                  {(position.unrealizedPnl || 0) >= 0 ? '+' : ''}${(Number(position.unrealizedPnl) || 0).toFixed(2)}
                 </td>
                 <td className="py-3 px-2 text-sm text-right text-dark dark:text-white">
                   {position.leverage?.toFixed(1) || '1.0'}x

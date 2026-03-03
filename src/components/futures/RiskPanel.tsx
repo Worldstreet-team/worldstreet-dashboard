@@ -144,7 +144,7 @@ export const RiskPanel: React.FC = () => {
           <div className="flex justify-between items-center">
             <span className="text-sm text-muted dark:text-darklink">Total Collateral</span>
             <span className="text-sm font-semibold text-dark dark:text-white">
-              ${(accountSummary.totalCollateral ?? 0).toFixed(2)}
+              ${(Number(accountSummary.totalCollateral) || 0).toFixed(2)}
             </span>
           </div>
 
@@ -152,7 +152,7 @@ export const RiskPanel: React.FC = () => {
           <div className="flex justify-between items-center">
             <span className="text-sm text-muted dark:text-darklink">Used Margin</span>
             <span className="text-sm font-semibold text-dark dark:text-white">
-              ${(usedCollateral ?? 0).toFixed(2)}
+              ${(Number(usedCollateral) || 0).toFixed(2)}
             </span>
           </div>
 
@@ -160,7 +160,7 @@ export const RiskPanel: React.FC = () => {
           <div className="flex justify-between items-center">
             <span className="text-sm text-muted dark:text-darklink">Free Margin</span>
             <span className="text-sm font-semibold text-success">
-              ${(accountSummary.freeCollateral ?? 0).toFixed(2)}
+              ${(Number(accountSummary.freeCollateral) || 0).toFixed(2)}
             </span>
           </div>
 
@@ -180,7 +180,7 @@ export const RiskPanel: React.FC = () => {
           <div className="flex justify-between items-center">
             <span className="text-sm text-muted dark:text-darklink">Account Leverage</span>
             <span className="text-sm font-semibold text-dark dark:text-white">
-              {(accountSummary?.leverage ?? 0).toFixed(2)}x
+              {(Number(accountSummary?.leverage) || 0).toFixed(2)}x
             </span>
           </div>
 
@@ -190,7 +190,7 @@ export const RiskPanel: React.FC = () => {
             <span className={`text-sm font-semibold ${
               (accountSummary.unrealizedPnl ?? 0) >= 0 ? 'text-success' : 'text-error'
             }`}>
-              {(accountSummary.unrealizedPnl ?? 0) >= 0 ? '+' : ''}${(accountSummary?.unrealizedPnl ?? 0).toFixed(2)}
+              {(accountSummary.unrealizedPnl ?? 0) >= 0 ? '+' : ''}${(Number(accountSummary?.unrealizedPnl) || 0).toFixed(2)}
             </span>
           </div>
 
@@ -252,7 +252,7 @@ export const RiskPanel: React.FC = () => {
                 />
                 {action === 'withdraw' && (
                   <p className="text-xs text-muted dark:text-darklink mt-1">
-                    Available: ${(accountSummary.freeCollateral ?? 0).toFixed(2)}
+                    Available: ${(Number(accountSummary.freeCollateral) || 0).toFixed(2)}
                   </p>
                 )}
               </div>

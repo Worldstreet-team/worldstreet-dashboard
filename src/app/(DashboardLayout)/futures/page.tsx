@@ -84,11 +84,13 @@ export default function FuturesPage() {
 
   // Safe formatting functions
   const formatPrice = (price: number | undefined | null) => {
-    return (price || 0).toFixed(2);
+    const value = Number(price);
+    return (isNaN(value) ? 0 : value).toFixed(2);
   };
 
   const formatPercentage = (percent: number | undefined | null) => {
-    return (percent || 0).toFixed(2);
+    const value = Number(percent);
+    return (isNaN(value) ? 0 : value).toFixed(2);
   };
 
   return (
