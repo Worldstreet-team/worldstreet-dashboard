@@ -155,20 +155,23 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     }
   }, []);
 
-  // Initialize Solana connection with Chainstack RPC
+  // Initialize Solana connection with Tatum RPC
   useEffect(() => {
     const initConnection = async () => {
       const { Connection } = await import('@solana/web3.js');
-      // Use Chainstack RPC endpoint (supports both HTTP and WebSocket)
-      const rpcUrl = 'https://solana-mainnet.core.chainstack.com/21f7bd209bb5ed556f88d4c4896b772c';
-      const wsUrl = 'wss://solana-mainnet.core.chainstack.com/21f7bd209bb5ed556f88d4c4896b772c';
+      // Use Tatum RPC endpoint (HTTP only, no WebSocket support)
+      const rpcUrl = 'https://solana-mainnet.gateway.tatum.io/';
       
       const conn = new Connection(rpcUrl, {
         commitment: 'confirmed',
-        wsEndpoint: wsUrl,
+        httpHeaders: {
+          'accept': 'application/json',
+          'content-type': 'application/json',
+          'x-api-key': 't-69a7490235e1e9d0cac60b89-5869552b507d413580182b34',
+        }
       });
       setConnection(conn as any);
-      console.log('[DriftContext] Connection initialized with Chainstack RPC and WSS');
+      console.log('[DriftContext] Connection initialized with Tatum RPC');
     };
     initConnection();
   }, []);
@@ -282,24 +285,33 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       // Initialize Drift client
       const DRIFT_PROGRAM_ID = process.env.NEXT_PUBLIC_DRIFT_PROGRAM_ID || 'dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH';
       
-      console.log('[DriftContext] Creating Drift client with WebSocket subscription');
+      console.log('[DriftContext] Creating Drift client with polling subscription (Tatum RPC)');
+      
+      // Import BulkAccountLoader for polling
+      const { BulkAccountLoader } = await import('@drift-labs/sdk');
+      
+      // Create account loader for polling (every 2 seconds to stay under rate limits)
+      const accountLoader = new BulkAccountLoader(
+        connection as any,
+        'confirmed',
+        2000 // Poll every 2 seconds (conservative rate limiting)
+      );
       
       const client = new DriftClient({
         connection: connection as any,
         wallet,
         programID: new SolanaPublicKey(DRIFT_PROGRAM_ID) as any,
         accountSubscription: {
-          type: 'websocket',
-          // Rate limiting: Chainstack allows up to 25 requests/second
-          // WebSocket subscriptions are more efficient than polling
+          type: 'polling',
+          accountLoader: accountLoader,
         },
         subAccountIds: [subaccountId]
       } as any);
       
-      // Subscribe to account updates (will use polling)
+      // Subscribe to account updates (using polling with Tatum RPC)
       await client.subscribe();
       
-      console.log('[DriftContext] Subscribed to Drift account updates');
+      console.log('[DriftContext] Subscribed to Drift account updates (polling mode)');
       
       // Check if user account exists, if not, initialize it
       try {
