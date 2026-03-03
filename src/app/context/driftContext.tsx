@@ -103,29 +103,13 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   const autoRefreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isInitializingRef = useRef(false);
 
-  // Load cached encrypted keys from localStorage on mount
-  useEffect(() => {
-    if (user?.userId) {
-      const cacheKey = `drift_encrypted_keys_${user.userId}`;
-      const cached = localStorage.getItem(cacheKey);
-      if (cached) {
-        try {
-          const parsed = JSON.parse(cached);
-          setCachedEncryptedKeys(parsed);
-          console.log('[DriftContext] Loaded cached encrypted keys from localStorage');
-        } catch (err) {
-          console.error('[DriftContext] Failed to parse cached keys:', err);
-          localStorage.removeItem(cacheKey);
-        }
-      }
-    }
-  }, [user?.userId]);
-
   // Clear cache on logout
   useEffect(() => {
     if (!user?.userId) {
       setCachedEncryptedKeys(null);
       setUserPin(null);
+      setDriftClient(null);
+      setIsClientReady(false);
       if (typeof window !== 'undefined') {
         // Clear all cached keys
         Object.keys(localStorage).forEach(key => {
@@ -142,15 +126,23 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     return new Promise((resolve) => {
       // If we already have the PIN in memory, use it
       if (userPin) {
+        console.log('[DriftContext] Using cached PIN from memory');
         resolve(userPin);
         return;
       }
       
+      // If modal is already showing, don't show it again
+      if (showPinUnlock) {
+        console.log('[DriftContext] PIN modal already showing, waiting...');
+        return;
+      }
+      
       // Otherwise, show PIN unlock modal
+      console.log('[DriftContext] Showing PIN unlock modal');
       pinResolveRef.current = resolve;
       setShowPinUnlock(true);
     });
-  }, [userPin]);
+  }, [userPin, showPinUnlock]);
 
   // Handle PIN unlock
   const handlePinUnlock = useCallback((pin: string) => {
@@ -178,6 +170,12 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   const initializeDriftClient = useCallback(async () => {
     if (!user?.userId || !connection || isInitializingRef.current) return;
     
+    // Prevent re-initialization if client is already ready
+    if (isClientReady && driftClient) {
+      console.log('[DriftContext] Client already initialized, skipping');
+      return;
+    }
+    
     isInitializingRef.current = true;
     setIsLoading(true);
     setError(null);
@@ -187,13 +185,30 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       let pin: string;
       
       // Check if we have cached encrypted keys
-      if (cachedEncryptedKeys?.solana?.encryptedPrivateKey) {
+      const cacheKey = `drift_encrypted_keys_${user.userId}`;
+      const cachedData = localStorage.getItem(cacheKey);
+      
+      if (cachedData) {
         console.log('[DriftContext] Using cached encrypted keys');
-        encryptedPrivateKey = cachedEncryptedKeys.solana.encryptedPrivateKey;
-        
-        // Request PIN to decrypt cached keys
-        pin = await requestPin();
-      } else {
+        try {
+          const parsed = JSON.parse(cachedData);
+          encryptedPrivateKey = parsed.solana?.encryptedPrivateKey;
+          
+          if (!encryptedPrivateKey) {
+            throw new Error('No Solana key in cache');
+          }
+          
+          // Request PIN to decrypt cached keys
+          pin = await requestPin();
+        } catch (err) {
+          console.error('[DriftContext] Cache invalid, fetching from server');
+          localStorage.removeItem(cacheKey);
+          // Fall through to server fetch
+          encryptedPrivateKey = '';
+        }
+      }
+      
+      if (!encryptedPrivateKey) {
         console.log('[DriftContext] Fetching encrypted keys from server');
         
         // Request PIN from user first
@@ -220,7 +235,6 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         encryptedPrivateKey = walletData.wallets.solana.encryptedPrivateKey;
         
         // Cache encrypted keys in localStorage for future use
-        const cacheKey = `drift_encrypted_keys_${user.userId}`;
         localStorage.setItem(cacheKey, JSON.stringify(walletData.wallets));
         setCachedEncryptedKeys(walletData.wallets);
         console.log('[DriftContext] Cached encrypted keys to localStorage');
@@ -229,14 +243,12 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       // Decrypt private key CLIENT-SIDE with user's PIN
       let decryptedPrivateKey: string;
       try {
-        decryptedPrivateKey = decryptWithPIN(encryptedPrivateKey, pin);
+        decryptedPrivateKey = decryptWithPIN(encryptedPrivateKey, pin!);
       } catch (err) {
         // Clear cached keys if decryption fails (might be corrupted)
-        if (cachedEncryptedKeys) {
-          const cacheKey = `drift_encrypted_keys_${user.userId}`;
-          localStorage.removeItem(cacheKey);
-          setCachedEncryptedKeys(null);
-        }
+        const cacheKey = `drift_encrypted_keys_${user.userId}`;
+        localStorage.removeItem(cacheKey);
+        setCachedEncryptedKeys(null);
         throw new Error('Incorrect PIN or corrupted wallet data');
       }
       
@@ -575,9 +587,10 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     }
   }, [user?.userId]);
 
-  // Initialize client when user logs in
+  // Initialize client when user logs in (only once)
   useEffect(() => {
-    if (user?.userId && connection && !driftClient) {
+    if (user?.userId && connection && !driftClient && !isInitializingRef.current) {
+      console.log('[DriftContext] Triggering initialization');
       initializeDriftClient();
     }
   }, [user?.userId, connection, driftClient, initializeDriftClient]);
