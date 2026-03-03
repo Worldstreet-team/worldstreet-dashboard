@@ -201,7 +201,7 @@ export default function FuturesPage() {
       </div>
 
       {/* DESKTOP LAYOUT - Professional Two-Column Trading Interface */}
-      <div className="hidden md:block fixed inset-0 top-[64px] bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-[#0a0a0a] dark:via-[#111111] dark:to-[#0a0a0a]">
+      <div className="hidden md:block fixed inset-0 top-[64px] left-0 xl:left-[260px] bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-[#0a0a0a] dark:via-[#111111] dark:to-[#0a0a0a]">
         
         {/* Premium Header Bar - Market Info Only */}
         <div className="h-20 px-8 py-4 bg-white/80 dark:bg-black/40 backdrop-blur-xl border-b border-gray-200/50 dark:border-white/5">
