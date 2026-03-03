@@ -6,7 +6,13 @@ module.exports = {
   ],
   darkMode: 'class',
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        dark: '#0f172a',
+        link: '#334155',
+        darklink: '#94a3b8',
+      },
+    },
   },
   plugins: [
     require('flowbite/plugin'),
