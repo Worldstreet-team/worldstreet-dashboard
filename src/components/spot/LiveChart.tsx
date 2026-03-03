@@ -87,7 +87,9 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
           chartEngineRef.current?.updateCandle(candle);
         },
         // Error callback
-        () => {}
+        (err) => {
+          console.error('[LiveChart] DataFeed error:', err);
+        }
       );
 
       dataFeedRef.current = feed;
@@ -96,10 +98,13 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
         const candles = await feed.fetchHistoricalData();
         if (candles.length > 0) {
           chartEngineRef.current?.setHistoricalData(candles);
+          // Connect WebSocket for live updates
+          feed.connectWebSocket();
         } else {
           setError('No data available for this pair');
         }
-      } catch {
+      } catch (err) {
+        console.error('[LiveChart] Load error:', err);
         setError('Failed to load chart data');
       } finally {
         setIsLoading(false);
@@ -248,7 +253,14 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
 
       {/* Chart canvas */}
       <div className="relative flex-1 min-h-0">
-        <div ref={containerRef} className="w-full h-full" />
+        {/* Watermark */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[1]">
+          <span className="text-6xl md:text-8xl font-bold text-muted/5 dark:text-white/5 select-none">
+            WorldStreet
+          </span>
+        </div>
+        
+        <div ref={containerRef} className="w-full h-full relative z-[2]" />
 
         {/* Loading overlay */}
         {isLoading && (

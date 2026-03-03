@@ -102,7 +102,12 @@ export default function SpotTradingPage() {
   return (
     <>
       {/* MOBILE LAYOUT - Binance Style (Full Screen Chart) */}
-      <div className="md:hidden fixed inset-0 flex flex-col bg-white dark:bg-darkgray mt-20">
+      <div className="md:hidden fixed inset-0 flex flex-col bg-white dark:bg-darkgray">
+        {/* App Header */}
+        <div className="flex-shrink-0 px-4 py-3 bg-primary border-b border-primary-dark">
+          <h1 className="text-base font-bold text-white">WorldStreet Spot Trading</h1>
+        </div>
+        
         {/* Pair Header with Price Info */}
         <div className="flex-shrink-0 px-4 py-3 bg-white dark:bg-darkgray border-b border-border dark:border-darkborder">
           <div className="flex items-center justify-between mb-2">
@@ -268,65 +273,64 @@ export default function SpotTradingPage() {
 
       {/* DESKTOP/TABLET LAYOUT - Mobile-Style Structure */}
       <div className="hidden md:flex flex-col h-[calc(100vh-80px)] bg-white dark:bg-darkgray">
-        {/* Pair Header with Price Info - Mobile Style */}
-        <div className="flex-shrink-0 px-3 py-2 bg-white dark:bg-darkgray border-b border-border dark:border-darkborder">
-          <div className="flex items-center justify-between mb-1.5">
-            <div className="relative">
-              <button 
-                onClick={() => setShowPairDropdown(!showPairDropdown)}
-                className="flex items-center gap-2 hover:bg-muted/10 px-2 py-1 rounded"
-              >
-                <span className="text-lg font-bold text-dark dark:text-white">{selectedPair.replace('-', '/')}</span>
-                <Icon icon="ph:caret-down" width={16} className="text-muted" />
-              </button>
+        {/* Pair Header with Price Info - Compact */}
+        <div className="flex-shrink-0 px-3 py-1.5 bg-white dark:bg-darkgray border-b border-border dark:border-darkborder">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <button 
+                  onClick={() => setShowPairDropdown(!showPairDropdown)}
+                  className="flex items-center gap-1.5 hover:bg-muted/10 px-2 py-1 rounded"
+                >
+                  <span className="text-base font-bold text-dark dark:text-white">{selectedPair.replace('-', '/')}</span>
+                  <Icon icon="ph:caret-down" width={14} className="text-muted" />
+                </button>
+                
+                {/* Pair Dropdown */}
+                {showPairDropdown && (
+                  <>
+                    <div 
+                      className="fixed inset-0 z-40" 
+                      onClick={() => setShowPairDropdown(false)}
+                    />
+                    <div className="absolute top-full left-0 mt-1 bg-white dark:bg-darkgray border border-border dark:border-darkborder rounded-lg shadow-lg z-50 min-w-[150px]">
+                      {AVAILABLE_PAIRS.map((pair) => (
+                        <button
+                          key={pair}
+                          onClick={() => handleSelectPair(pair)}
+                          className={`w-full text-left px-4 py-2 hover:bg-muted/10 ${
+                            selectedPair === pair ? 'bg-muted/20 text-primary' : 'text-dark dark:text-white'
+                          }`}
+                        >
+                          {pair.replace('-', '/')}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
               
-              {/* Pair Dropdown */}
-              {showPairDropdown && (
-                <>
-                  <div 
-                    className="fixed inset-0 z-40" 
-                    onClick={() => setShowPairDropdown(false)}
-                  />
-                  <div className="absolute top-full left-0 mt-1 bg-white dark:bg-darkgray border border-border dark:border-darkborder rounded-lg shadow-lg z-50 min-w-[150px]">
-                    {AVAILABLE_PAIRS.map((pair) => (
-                      <button
-                        key={pair}
-                        onClick={() => handleSelectPair(pair)}
-                        className={`w-full text-left px-4 py-2 hover:bg-muted/10 ${
-                          selectedPair === pair ? 'bg-muted/20 text-primary' : 'text-dark dark:text-white'
-                        }`}
-                      >
-                        {pair.replace('-', '/')}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
+              <div className="flex items-baseline gap-2">
+                <span className={`text-lg font-bold ${isPositive ? 'text-success' : 'text-error'}`}>
+                  ${currentPrice.toFixed(2)}
+                </span>
+                <span className={`text-xs ${isPositive ? 'text-success' : 'text-error'}`}>
+                  {isPositive ? '+' : ''}{priceChange.toFixed(2)}%
+                </span>
+              </div>
             </div>
+            
             <div className="flex items-center gap-2">
-              <span className="text-xs text-muted">{currentPairData.name} Price</span>
-              <Icon icon="ph:arrow-up-right" width={12} className="text-muted" />
+              <span className="text-xs text-muted">{currentPairData.name}</span>
             </div>
-          </div>
-          
-          <div className="flex items-baseline gap-3">
-            <span className={`text-2xl font-bold ${isPositive ? 'text-success' : 'text-error'}`}>
-              {currentPrice.toFixed(2)}
-            </span>
-            <span className={`text-sm ${isPositive ? 'text-success' : 'text-error'}`}>
-              ${currentPrice.toFixed(2)}
-            </span>
-            <span className={`text-sm ${isPositive ? 'text-success' : 'text-error'}`}>
-              {isPositive ? '+' : ''}{priceChange.toFixed(2)}%
-            </span>
           </div>
         </div>
 
         {/* Chart Tabs */}
-        <div className="flex-shrink-0 flex items-center gap-6 px-3 border-b border-border dark:border-darkborder bg-white dark:bg-darkgray">
+        <div className="flex-shrink-0 flex items-center gap-4 px-3 py-1 border-b border-border dark:border-darkborder bg-white dark:bg-darkgray">
           <button 
             onClick={() => setMobileActiveTab('chart')}
-            className={`pb-2 text-sm font-medium ${
+            className={`pb-1 text-xs font-medium ${
               mobileActiveTab === 'chart' 
                 ? 'text-dark dark:text-white border-b-2 border-warning' 
                 : 'text-muted'
@@ -336,7 +340,7 @@ export default function SpotTradingPage() {
           </button>
           <button 
             onClick={() => setMobileActiveTab('orderbook')}
-            className={`pb-2 text-sm font-medium ${
+            className={`pb-1 text-xs font-medium ${
               mobileActiveTab === 'orderbook' 
                 ? 'text-dark dark:text-white border-b-2 border-warning' 
                 : 'text-muted'
@@ -346,7 +350,7 @@ export default function SpotTradingPage() {
           </button>
           <button 
             onClick={() => setMobileActiveTab('trades')}
-            className={`pb-2 text-sm font-medium ${
+            className={`pb-1 text-xs font-medium ${
               mobileActiveTab === 'trades' 
                 ? 'text-dark dark:text-white border-b-2 border-warning' 
                 : 'text-muted'
@@ -357,7 +361,7 @@ export default function SpotTradingPage() {
         </div>
 
         {/* Main Content Area - 2 Column Layout for Desktop */}
-        <div className="flex-1 overflow-hidden grid grid-cols-[1fr_300px]">
+        <div className="flex-1 overflow-hidden grid grid-cols-[1fr_320px]">
           {/* Left: Chart + Bottom Tabs */}
           <div className="flex flex-col overflow-hidden">
             {/* Chart Area */}
@@ -387,7 +391,7 @@ export default function SpotTradingPage() {
             </div>
 
             {/* Bottom Tabs - Open Orders / Holdings */}
-            <div className="border-t border-border dark:border-darkborder bg-white dark:bg-darkgray h-[200px] flex-shrink-0">
+            <div className="border-t border-border dark:border-darkborder bg-white dark:bg-darkgray h-[180px] flex-shrink-0">
               <BottomTabs 
                 refreshKey={refreshKey}
                 selectedChartSymbol={selectedPair}
@@ -399,7 +403,7 @@ export default function SpotTradingPage() {
           </div>
 
           {/* Right: Trading Form (Mobile Style) */}
-          <div className="border-l border-border dark:border-darkborder flex flex-col overflow-hidden">
+          <div className="border-l border-border dark:border-darkborder flex flex-col overflow-hidden bg-white dark:bg-darkgray">
             {/* Trading Form Content */}
             <div className="flex-1 overflow-y-auto">
               <div className="flex flex-col p-2 gap-2 bg-white dark:bg-darkgray">
