@@ -51,6 +51,7 @@ interface DriftContextValue {
   initializeDriftClient: () => Promise<void>;
   refreshSummary: () => Promise<void>;
   refreshPositions: () => Promise<void>;
+  clearCache: () => void;
   
   // Trading operations
   depositCollateral: (amount: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
@@ -96,10 +97,45 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   // PIN unlock state
   const [showPinUnlock, setShowPinUnlock] = useState(false);
   const [userPin, setUserPin] = useState<string | null>(null);
+  const [cachedEncryptedKeys, setCachedEncryptedKeys] = useState<any>(null);
   const pinResolveRef = useRef<((pin: string) => void) | null>(null);
   
   const autoRefreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isInitializingRef = useRef(false);
+
+  // Load cached encrypted keys from localStorage on mount
+  useEffect(() => {
+    if (user?.userId) {
+      const cacheKey = `drift_encrypted_keys_${user.userId}`;
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          setCachedEncryptedKeys(parsed);
+          console.log('[DriftContext] Loaded cached encrypted keys from localStorage');
+        } catch (err) {
+          console.error('[DriftContext] Failed to parse cached keys:', err);
+          localStorage.removeItem(cacheKey);
+        }
+      }
+    }
+  }, [user?.userId]);
+
+  // Clear cache on logout
+  useEffect(() => {
+    if (!user?.userId) {
+      setCachedEncryptedKeys(null);
+      setUserPin(null);
+      if (typeof window !== 'undefined') {
+        // Clear all cached keys
+        Object.keys(localStorage).forEach(key => {
+          if (key.startsWith('drift_encrypted_keys_')) {
+            localStorage.removeItem(key);
+          }
+        });
+      }
+    }
+  }, [user?.userId]);
 
   // Request PIN from user
   const requestPin = useCallback((): Promise<string> => {
@@ -147,32 +183,60 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     setError(null);
     
     try {
-      // Request PIN from user
-      const pin = await requestPin();
+      let encryptedPrivateKey: string;
+      let pin: string;
       
-      // Get user's encrypted Solana wallet from server
-      const walletResponse = await fetch('/api/wallet/keys', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin })
-      });
-      
-      if (!walletResponse.ok) {
-        const errorData = await walletResponse.json();
-        throw new Error(errorData.message || 'Failed to get wallet keys');
-      }
-      
-      const walletData = await walletResponse.json();
-      
-      if (!walletData.success || !walletData.wallets?.solana?.encryptedPrivateKey) {
-        throw new Error('Solana wallet not found');
+      // Check if we have cached encrypted keys
+      if (cachedEncryptedKeys?.solana?.encryptedPrivateKey) {
+        console.log('[DriftContext] Using cached encrypted keys');
+        encryptedPrivateKey = cachedEncryptedKeys.solana.encryptedPrivateKey;
+        
+        // Request PIN to decrypt cached keys
+        pin = await requestPin();
+      } else {
+        console.log('[DriftContext] Fetching encrypted keys from server');
+        
+        // Request PIN from user first
+        pin = await requestPin();
+        
+        // Get user's encrypted Solana wallet from server
+        const walletResponse = await fetch('/api/wallet/keys', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin })
+        });
+        
+        if (!walletResponse.ok) {
+          const errorData = await walletResponse.json();
+          throw new Error(errorData.message || 'Failed to get wallet keys');
+        }
+        
+        const walletData = await walletResponse.json();
+        
+        if (!walletData.success || !walletData.wallets?.solana?.encryptedPrivateKey) {
+          throw new Error('Solana wallet not found');
+        }
+        
+        encryptedPrivateKey = walletData.wallets.solana.encryptedPrivateKey;
+        
+        // Cache encrypted keys in localStorage for future use
+        const cacheKey = `drift_encrypted_keys_${user.userId}`;
+        localStorage.setItem(cacheKey, JSON.stringify(walletData.wallets));
+        setCachedEncryptedKeys(walletData.wallets);
+        console.log('[DriftContext] Cached encrypted keys to localStorage');
       }
       
       // Decrypt private key CLIENT-SIDE with user's PIN
       let decryptedPrivateKey: string;
       try {
-        decryptedPrivateKey = decryptWithPIN(walletData.wallets.solana.encryptedPrivateKey, pin);
+        decryptedPrivateKey = decryptWithPIN(encryptedPrivateKey, pin);
       } catch (err) {
+        // Clear cached keys if decryption fails (might be corrupted)
+        if (cachedEncryptedKeys) {
+          const cacheKey = `drift_encrypted_keys_${user.userId}`;
+          localStorage.removeItem(cacheKey);
+          setCachedEncryptedKeys(null);
+        }
         throw new Error('Incorrect PIN or corrupted wallet data');
       }
       
@@ -500,6 +564,17 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     }
   }, []);
 
+  // Clear cached keys and PIN (useful for troubleshooting or logout)
+  const clearCache = useCallback(() => {
+    if (user?.userId) {
+      const cacheKey = `drift_encrypted_keys_${user.userId}`;
+      localStorage.removeItem(cacheKey);
+      setCachedEncryptedKeys(null);
+      setUserPin(null);
+      console.log('[DriftContext] Cleared cached keys and PIN');
+    }
+  }, [user?.userId]);
+
   // Initialize client when user logs in
   useEffect(() => {
     if (user?.userId && connection && !driftClient) {
@@ -535,6 +610,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     initializeDriftClient,
     refreshSummary,
     refreshPositions,
+    clearCache,
     depositCollateral,
     withdrawCollateral,
     openPosition,
