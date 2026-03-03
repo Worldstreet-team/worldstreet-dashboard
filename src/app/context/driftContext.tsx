@@ -304,9 +304,19 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       // Check if user account exists, if not, initialize it
       try {
         const user = client.getUser();
-        const accountData = user.getUserAccount();
         
-        if (!accountData || !accountData.data) {
+        // Wait a bit for subscription to load data
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        let accountData;
+        try {
+          accountData = user.getUserAccount();
+        } catch (err) {
+          console.log('[DriftContext] Account data not available yet');
+          accountData = null;
+        }
+        
+        if (!accountData) {
           console.log('[DriftContext] Drift account not found, initializing...');
           
           // Initialize Drift account (this creates the on-chain account)
@@ -371,7 +381,8 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         return;
       }
       
-      if (!accountData || !accountData.data) {
+      // Check if accountData exists and has data property
+      if (!accountData) {
         console.warn('[DriftContext] Account data not loaded yet, skipping summary refresh');
         return;
       }
@@ -440,7 +451,8 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         return;
       }
       
-      if (!accountData || !accountData.data) {
+      // Check if accountData exists
+      if (!accountData) {
         console.warn('[DriftContext] Account data not loaded yet, skipping positions refresh');
         return;
       }
