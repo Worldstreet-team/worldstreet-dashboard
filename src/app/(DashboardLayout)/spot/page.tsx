@@ -39,6 +39,10 @@ export default function SpotTradingPage() {
     takeProfit: string | null;
     stopLoss: string | null;
   } | null>(null);
+  
+  // Trading form states
+  const [amount, setAmount] = useState('');
+  const [sliderValue, setSliderValue] = useState(0);
 
   // Update price when pair changes
   React.useEffect(() => {
@@ -452,13 +456,15 @@ export default function SpotTradingPage() {
                     type="range"
                     min="0"
                     max="100"
-                    value={0}
+                    value={sliderValue}
+                    onChange={(e) => setSliderValue(parseInt(e.target.value))}
                     className="w-full h-1 bg-muted/30 dark:bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary"
                   />
                   <div className="flex justify-between mt-0.5">
                     {[0, 25, 50, 75, 100].map((val) => (
                       <button
                         key={val}
+                        onClick={() => setSliderValue(val)}
                         className="text-[9px] text-muted hover:text-primary transition-colors"
                       >
                         {val}%
