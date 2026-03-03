@@ -4,14 +4,14 @@ import React, { useEffect, useRef, useState, useCallback, useContext, memo } fro
 import { Icon } from '@iconify/react';
 import { cn } from '@/lib/utils';
 import { ChartEngine, Candle } from '@/lib/chart/ChartEngine';
-import { DataFeedService, Interval } from '@/lib/chart/DataFeedService';
+import { DataFeedService, Interval as TimeInterval } from '@/lib/chart/DataFeedService';
 import { CustomizerContext } from '@/app/context/customizerContext';
 
 // Symbol mapping - convert "BTC-USDT" to "BTCUSDT"
 const toKlineSymbol = (symbol: string): string => symbol.replace('-', '');
 
 // Timeframe options
-const TIMEFRAMES: { label: string; value: Interval }[] = [
+const TIMEFRAMES: { label: string; value: TimeInterval }[] = [
   { label: '1m', value: '1m' },
   { label: '5m', value: '5m' },
   { label: '15m', value: '15m' },
@@ -30,14 +30,14 @@ interface LiveChartProps {
 const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartEngineRef = useRef<ChartEngine | null>(null);
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingIntervalRef = useRef<number | null>(null);
   const isFirstLoad = useRef(true);
   const lastCandleTimeRef = useRef<number>(0);
 
   const { activeMode } = useContext(CustomizerContext);
   const isDark = activeMode === 'dark';
 
-  const [interval, setInterval] = useState<Interval>('1d');
+  const [interval, setTimeInterval] = useState<TimeInterval>('1d');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showLevelsForm, setShowLevelsForm] = useState(false);
@@ -70,7 +70,7 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
   }, [isDark]);
 
   // Fetch latest candle data
-  const fetchLatestCandle = useCallback(async (sym: string, int: Interval) => {
+  const fetchLatestCandle = useCallback(async (sym: string, int: TimeInterval) => {
     try {
       const klineSym = toKlineSymbol(sym);
       const response = await fetch(`/api/market/${klineSym}/klines?type=${int}&limit=1`);
@@ -105,7 +105,7 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
   }, []);
 
   // Start polling for updates
-  const startPolling = useCallback((sym: string, int: Interval) => {
+  const startPolling = useCallback((sym: string, int: TimeInterval) => {
     // Clear any existing interval
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current);
@@ -114,7 +114,7 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
     // Poll every 3 seconds
     pollingIntervalRef.current = setInterval(() => {
       fetchLatestCandle(sym, int);
-    }, 3000);
+    }, 3000) as unknown as number;
   }, [fetchLatestCandle]);
 
   // Stop polling
@@ -127,7 +127,7 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
 
   // Load initial data
   const loadData = useCallback(
-    async (sym: string, int: Interval) => {
+    async (sym: string, int: TimeInterval) => {
       setIsLoading(true);
       setError(null);
 
@@ -195,9 +195,9 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
   }, [symbol, interval, loadData, stopPolling]);
 
   // Interval change handler
-  const handleIntervalChange = (newInterval: Interval) => {
+  const handleIntervalChange = (newInterval: TimeInterval) => {
     if (newInterval === interval) return;
-    setInterval(newInterval);
+    setTimeInterval(newInterval);
   };
 
   const handleUpdateLevels = () => {
