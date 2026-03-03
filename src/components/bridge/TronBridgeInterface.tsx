@@ -57,29 +57,29 @@ export default function TronBridgeInterface() {
         
         console.log("[Allbridge] Supported chains:", Object.keys(chainDetails));
         
-        // Find USDT on Tron
+        // Find TRX on Tron (native token)
         const tronChain = chainDetails[ChainSymbol.TRX];
-        const usdtOnTron = tronChain?.tokens.find(
-          (token) => token.symbol === "USDT"
+        const trxToken = tronChain?.tokens.find(
+          (token) => token.symbol === "TRX" || token.symbol === "TRON"
         );
         
-        // Find USDT on Ethereum
+        // Find ETH on Ethereum (native token)
         const ethChain = chainDetails[ChainSymbol.ETH];
-        const usdtOnEth = ethChain?.tokens.find(
-          (token) => token.symbol === "USDT"
+        const ethToken = ethChain?.tokens.find(
+          (token) => token.symbol === "ETH" || token.symbol === "WETH"
         );
         
-        if (!usdtOnTron || !usdtOnEth) {
-          throw new Error("USDT not found on Tron or Ethereum");
+        if (!trxToken || !ethToken) {
+          throw new Error("TRX or ETH not found on supported chains");
         }
         
-        setSourceToken(usdtOnTron);
-        setDestinationToken(usdtOnEth);
+        setSourceToken(trxToken);
+        setDestinationToken(ethToken);
         setSdkInitialized(true);
         
         console.log("[Allbridge] SDK initialized successfully");
-        console.log("[Allbridge] Source token:", usdtOnTron.symbol, "on", usdtOnTron.chainSymbol);
-        console.log("[Allbridge] Destination token:", usdtOnEth.symbol, "on", usdtOnEth.chainSymbol);
+        console.log("[Allbridge] Source token:", trxToken.symbol, "on", trxToken.chainSymbol);
+        console.log("[Allbridge] Destination token:", ethToken.symbol, "on", ethToken.chainSymbol);
       } catch (err) {
         console.error("[Allbridge] SDK initialization error:", err);
         setError("Failed to initialize bridge SDK");
@@ -134,7 +134,7 @@ export default function TronBridgeInterface() {
 
     // Validate minimum amount
     if (amountNum < MINIMUM_BRIDGE_AMOUNT_TRX) {
-      setError(`Minimum bridge amount is ${MINIMUM_BRIDGE_AMOUNT_TRX} USDT`);
+      setError(`Minimum bridge amount is ${MINIMUM_BRIDGE_AMOUNT_TRX} TRX`);
       setQuote(null);
       return;
     }
@@ -143,7 +143,7 @@ export default function TronBridgeInterface() {
     setError(null);
 
     try {
-      console.log("[Allbridge] Fetching quote for", amountNum, "USDT");
+      console.log("[Allbridge] Fetching quote for", amountNum, "TRX");
       
       // Use the SDK's calculation method
       const receiveAmountFloat = await sdk.getAmountToBeReceived(
@@ -329,7 +329,7 @@ export default function TronBridgeInterface() {
 
     try {
       console.log("[Allbridge] Starting bridge transaction...");
-      console.log("[Allbridge] Amount:", amount, "USDT");
+      console.log("[Allbridge] Amount:", amount, "TRX");
       console.log("[Allbridge] From:", tronAddress, "(Tron)");
       console.log("[Allbridge] To:", evmAddress, "(Ethereum)");
 
@@ -413,7 +413,7 @@ export default function TronBridgeInterface() {
       if (!confirmed) {
         alert(`Bridge transaction submitted!\nTX: ${txHash}\n\nTransaction is pending confirmation.\n\nView on TronScan: https://tronscan.org/#/transaction/${txHash}`);
       } else {
-        alert(`Bridge successful!\nTX: ${txHash}\n\nYou will receive ${quote.amountOut} USDT on Ethereum.\n\nEstimated time: ~${Math.ceil((quote.transferTime || 300) / 60)} minutes\n\nView on TronScan: https://tronscan.org/#/transaction/${txHash}`);
+        alert(`Bridge successful!\nTX: ${txHash}\n\nYou will receive ${quote.amountOut} ETH on Ethereum.\n\nEstimated time: ~${Math.ceil((quote.transferTime || 300) / 60)} minutes\n\nView on TronScan: https://tronscan.org/#/transaction/${txHash}`);
       }
       
       // Reset form
@@ -433,7 +433,7 @@ export default function TronBridgeInterface() {
     <div className="bg-white dark:bg-black rounded-2xl border border-border dark:border-darkborder shadow-sm">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-border dark:border-darkborder">
-        <h2 className="text-lg font-semibold text-dark dark:text-white">USDT Bridge (Tron → Ethereum)</h2>
+        <h2 className="text-lg font-semibold text-dark dark:text-white">TRX → ETH Bridge</h2>
         <div className="flex items-center gap-2 text-xs text-muted">
           <Icon icon="solar:shield-check-bold-duotone" width={16} />
           <span>Powered by Allbridge</span>
@@ -456,7 +456,7 @@ export default function TronBridgeInterface() {
                 <span className="text-xs text-muted">From</span>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted">
-                    Balance: {trxBalance.toLocaleString(undefined, { maximumFractionDigits: 6 })} USDT
+                    Balance: {trxBalance.toLocaleString(undefined, { maximumFractionDigits: 6 })} TRX
                   </span>
                   {trxBalance > 0 && (
                     <button
@@ -480,11 +480,11 @@ export default function TronBridgeInterface() {
                 
                 <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-black rounded-xl">
                   <img 
-                    src="https://cryptologos.cc/logos/tether-usdt-logo.png" 
-                    alt="USDT" 
+                    src="https://logowik.com/content/uploads/images/tron-trx-icon3386.logowik.com.webp" 
+                    alt="TRX" 
                     className="w-6 h-6 rounded-full" 
                   />
-                  <span className="font-semibold text-dark dark:text-white">USDT</span>
+                  <span className="font-semibold text-dark dark:text-white">TRX</span>
                 </div>
               </div>
 
@@ -509,7 +509,7 @@ export default function TronBridgeInterface() {
               </div>
             </div>
 
-            {/* To section - USDT on Ethereum */}
+            {/* To section - ETH on Ethereum */}
             <div className="bg-lightgray dark:bg-darkborder rounded-xl p-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs text-muted">To (estimated)</span>
@@ -531,11 +531,11 @@ export default function TronBridgeInterface() {
                 
                 <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-black rounded-xl">
                   <img 
-                    src="https://cryptologos.cc/logos/tether-usdt-logo.png" 
-                    alt="USDT" 
+                    src="https://cryptologos.cc/logos/ethereum-eth-logo.png" 
+                    alt="ETH" 
                     className="w-6 h-6 rounded-full" 
                   />
-                  <span className="font-semibold text-dark dark:text-white">USDT</span>
+                  <span className="font-semibold text-dark dark:text-white">ETH</span>
                 </div>
               </div>
 
@@ -566,7 +566,7 @@ export default function TronBridgeInterface() {
                   <div className="flex items-center justify-between">
                     <span className="text-muted">Bridge Fee</span>
                     <span className="text-dark dark:text-white font-medium">
-                      {parseFloat(quote.fee).toFixed(6)} USDT
+                      {parseFloat(quote.fee).toFixed(6)} TRX
                     </span>
                   </div>
                 )}
@@ -581,7 +581,7 @@ export default function TronBridgeInterface() {
                 <div className="flex items-center justify-between">
                   <span className="text-muted">Minimum Amount</span>
                   <span className="text-dark dark:text-white font-medium">
-                    {MINIMUM_BRIDGE_AMOUNT_TRX} USDT
+                    {MINIMUM_BRIDGE_AMOUNT_TRX} TRX
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
@@ -597,7 +597,7 @@ export default function TronBridgeInterface() {
             {allowanceChecked && needsApproval && amount && parseFloat(amount) > 0 && (
               <div className="flex items-center gap-2 p-3 bg-warning/10 rounded-xl text-warning text-sm">
                 <Icon icon="ph:warning" width={18} />
-                <span>You need to approve USDT spending first</span>
+                <span>You need to approve TRX spending first</span>
               </div>
             )}
 
@@ -626,7 +626,7 @@ export default function TronBridgeInterface() {
                     Approving...
                   </span>
                 ) : (
-                  "Approve USDT"
+                  "Approve TRX"
                 )}
               </button>
             ) : (
@@ -651,20 +651,20 @@ export default function TronBridgeInterface() {
                   : !amount || parseFloat(amount) <= 0
                   ? "Enter amount"
                   : parseFloat(amount) < MINIMUM_BRIDGE_AMOUNT_TRX
-                  ? `Minimum ${MINIMUM_BRIDGE_AMOUNT_TRX} USDT`
+                  ? `Minimum ${MINIMUM_BRIDGE_AMOUNT_TRX} TRX`
                   : parseFloat(amount) > trxBalance
                   ? "Insufficient balance"
                   : loading
                   ? "Fetching quote..."
                   : !quote
                   ? "Enter amount"
-                  : "Bridge USDT"}
+                  : "Bridge TRX → ETH"}
               </button>
             )}
 
             {/* Info */}
             <p className="text-xs text-muted text-center">
-              Bridge USDT from Tron to Ethereum • Minimum: {MINIMUM_BRIDGE_AMOUNT_TRX} USDT • Powered by Allbridge Core
+              Bridge TRX from Tron to ETH on Ethereum • Minimum: {MINIMUM_BRIDGE_AMOUNT_TRX} TRX • Powered by Allbridge Core
             </p>
           </>
         )}
@@ -675,11 +675,11 @@ export default function TronBridgeInterface() {
         isOpen={showPinModal}
         onClose={() => setShowPinModal(false)}
         onSuccess={needsApproval ? handleApprove : handleBridge}
-        title={needsApproval ? "Approve USDT" : "Confirm Bridge"}
+        title={needsApproval ? "Approve TRX" : "Confirm Bridge"}
         description={
           needsApproval
-            ? "Enter your PIN to approve USDT spending"
-            : `Enter your PIN to bridge ${amount} USDT to Ethereum`
+            ? "Enter your PIN to approve TRX spending"
+            : `Enter your PIN to bridge ${amount} TRX to ETH on Ethereum`
         }
       />
     </div>
