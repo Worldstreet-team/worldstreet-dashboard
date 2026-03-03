@@ -1,5 +1,4 @@
-import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
-import { DriftClient, Wallet } from '@drift-labs/sdk';
+import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 import bs58 from 'bs58';
 import crypto from 'crypto';
 import { MasterWalletManager } from './MasterWalletManager';
@@ -59,27 +58,45 @@ export class ClientManager {
     );
     
     const keypair = Keypair.fromSecretKey(bs58.decode(privateKey));
-    const wallet = new Wallet(keypair);
     
     // 5. Create Drift client with gRPC subscription
+    // Note: This requires @drift-labs/sdk to be installed
+    // Install with: npm install @drift-labs/sdk
     const DRIFT_PROGRAM_ID = process.env.DRIFT_PROGRAM_ID || 'dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH';
     
-    const driftClient = new DriftClient({
-      connection: this.connection,
-      wallet,
-      programID: new PublicKey(DRIFT_PROGRAM_ID),
-      accountSubscription: {
-        type: 'grpc',
-        grpcConfigs: [{
-          endpoint: process.env.YELLOWSTONE_GRPC_ENDPOINT || '',
-          token: process.env.YELLOWSTONE_GRPC_TOKEN
-        }]
-      },
-      subAccountIds: [subaccountInfo.subaccountId]
-    });
+    let driftClient: any;
+    let wallet: any;
     
-    // 6. Subscribe to updates
-    await driftClient.subscribe();
+    try {
+      // Dynamic import to handle missing SDK gracefully
+      const { DriftClient, Wallet } = await import('@drift-labs/sdk');
+      
+      wallet = new Wallet(keypair as any);
+      
+      // Use type assertions to bypass version conflicts between @solana/web3.js versions
+      driftClient = new DriftClient({
+        connection: this.connection as any,
+        wallet,
+        programID: new PublicKey(DRIFT_PROGRAM_ID) as any,
+        accountSubscription: {
+          type: 'grpc',
+          grpcConfigs: [{
+            endpoint: process.env.YELLOWSTONE_GRPC_ENDPOINT || '',
+            token: process.env.YELLOWSTONE_GRPC_TOKEN || undefined
+          }] as any
+        },
+        subAccountIds: [subaccountInfo.subaccountId]
+      } as any);
+      
+      // 6. Subscribe to updates
+      await driftClient.subscribe();
+    } catch (error) {
+      console.error('[ClientManager] Drift SDK not available:', error);
+      throw new SystemError(
+        'Drift SDK not installed. Please run: npm install @drift-labs/sdk',
+        error as Error
+      );
+    }
     
     console.log(`[ClientManager] Client created and subscribed for user ${userId}`);
     
@@ -97,7 +114,7 @@ export class ClientManager {
     return clientData;
   }
   
-  getMasterClient(): DriftClient {
+  getMasterClient(): any {
     return this.masterWalletManager.getMasterClient();
   }
   

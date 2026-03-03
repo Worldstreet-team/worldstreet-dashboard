@@ -1,4 +1,3 @@
-import { DriftClient, Wallet } from '@drift-labs/sdk';
 import { Connection } from '@solana/web3.js';
 
 // ── Core Types ─────────────────────────────────────────────────────────────
@@ -30,8 +29,8 @@ export interface PositionParams {
 }
 
 export interface UserClientData {
-  driftClient: DriftClient;
-  wallet: Wallet;
+  driftClient: any;
+  wallet: any;
   connection: Connection;
   subaccountId: number;
   lastAccessed: number;
@@ -74,7 +73,7 @@ export interface DriftContextValue {
   
   // Utility
   getUserClient: () => Promise<UserClientData | null>;
-  getMasterClient: () => Promise<DriftClient | null>;
+  getMasterClient: () => Promise<any | null>;
 }
 
 // ── Fee Summary Types ──────────────────────────────────────────────────────

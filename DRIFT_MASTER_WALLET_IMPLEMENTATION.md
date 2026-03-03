@@ -329,10 +329,21 @@ src/
 
 The implementation uses existing dependencies:
 - `@solana/web3.js` - Solana blockchain interaction
-- `@drift-labs/sdk` - Drift Protocol SDK
 - `bs58` - Base58 encoding/decoding
 - `crypto` - Node.js crypto for encryption
 - `mongoose` - MongoDB ODM
+
+### Required Additional Dependency
+
+⚠️ **Important**: The Drift SDK must be installed separately:
+
+```bash
+npm install @drift-labs/sdk
+```
+
+See `DRIFT_SDK_INSTALLATION.md` for detailed installation instructions and troubleshooting.
+
+The system uses dynamic imports to gracefully handle missing SDK and provides clear error messages when it's not installed.
 
 ## Deployment Checklist
 
