@@ -7,31 +7,16 @@ import { useEvm } from "@/app/context/evmContext";
 import { useWallet } from "@/app/context/walletContext";
 import { decryptWithPIN } from "@/lib/wallet/encryption";
 import PinConfirmModal from "../swap/PinConfirmModal";
+import { 
+  AllbridgeCoreSdk, 
+  ChainSymbol, 
+  Messenger,
+  nodeRpcUrlsDefault,
+  ChainDetailsMap,
+  TokenWithChainDetails
+} from "@allbridge/bridge-core-sdk";
 
-// Fixed bridge configuration: TRX → ETH only
-const BRIDGE_CONFIG = {
-  from: {
-    chain: "tron",
-    chainId: 728126428,
-    name: "Tron",
-    symbol: "TRX",
-    logo: "https://logowik.com/content/uploads/images/tron-trx-icon3386.logowik.com.webp",
-    tokenAddress: "0x0000000000000000000000000000000000000000",
-    decimals: 6,
-  },
-  to: {
-    chain: "ethereum",
-    chainId: 1,
-    name: "Ethereum",
-    symbol: "ETH",
-    logo: "https://cryptologos.cc/logos/ethereum-eth-logo.png",
-    tokenAddress: "0x0000000000000000000000000000000000000000",
-    decimals: 18,
-  },
-} as const;
-
-const MINIMUM_BRIDGE_AMOUNT_TRX = 4;
-const MINIMUM_BRIDGE_FEE_USD = 7.5;
+const MINIMUM_BRIDGE_AMOUNT_TRX = 10;
 
 export default function TronBridgeInterface() {
   const { address: tronAddress, balance: trxBalance } = useTron();
@@ -40,28 +25,117 @@ export default function TronBridgeInterface() {
   
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
+  const [sdkInitialized, setSdkInitialized] = useState(false);
+  const [sdk, setSdk] = useState<AllbridgeCoreSdk | null>(null);
+  const [chains, setChains] = useState<ChainDetailsMap | null>(null);
+  const [sourceToken, setSourceToken] = useState<TokenWithChainDetails | null>(null);
+  const [destinationToken, setDestinationToken] = useState<TokenWithChainDetails | null>(null);
   const [quote, setQuote] = useState<any>(null);
-  const [validatedQuote, setValidatedQuote] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [showPinModal, setShowPinModal] = useState(false);
   const [executing, setExecuting] = useState(false);
+  const [allowanceChecked, setAllowanceChecked] = useState(false);
+  const [needsApproval, setNeedsApproval] = useState(false);
 
-  // Fetch quote from Swing API (GET request)
+  // Initialize Allbridge SDK
+  useEffect(() => {
+    const initSdk = async () => {
+      try {
+        console.log("[Allbridge] Initializing SDK...");
+        
+        const sdkInstance = new AllbridgeCoreSdk({
+          ...nodeRpcUrlsDefault,
+          TRX: process.env.NEXT_PUBLIC_TRON_RPC || "https://api.trongrid.io",
+          ETH: process.env.NEXT_PUBLIC_ETH_RPC || "https://eth.llamarpc.com",
+        });
+        
+        setSdk(sdkInstance);
+        
+        // Fetch supported chains and tokens
+        const chainDetails = await sdkInstance.chainDetailsMap();
+        setChains(chainDetails);
+        
+        console.log("[Allbridge] Supported chains:", Object.keys(chainDetails));
+        
+        // Find USDT on Tron
+        const tronChain = chainDetails[ChainSymbol.TRX];
+        const usdtOnTron = tronChain?.tokens.find(
+          (token) => token.symbol === "USDT"
+        );
+        
+        // Find USDT on Ethereum
+        const ethChain = chainDetails[ChainSymbol.ETH];
+        const usdtOnEth = ethChain?.tokens.find(
+          (token) => token.symbol === "USDT"
+        );
+        
+        if (!usdtOnTron || !usdtOnEth) {
+          throw new Error("USDT not found on Tron or Ethereum");
+        }
+        
+        setSourceToken(usdtOnTron);
+        setDestinationToken(usdtOnEth);
+        setSdkInitialized(true);
+        
+        console.log("[Allbridge] SDK initialized successfully");
+        console.log("[Allbridge] Source token:", usdtOnTron.symbol, "on", usdtOnTron.chainSymbol);
+        console.log("[Allbridge] Destination token:", usdtOnEth.symbol, "on", usdtOnEth.chainSymbol);
+      } catch (err) {
+        console.error("[Allbridge] SDK initialization error:", err);
+        setError("Failed to initialize bridge SDK");
+      }
+    };
+
+    initSdk();
+  }, []);
+
+  // Check allowance when amount changes
+  useEffect(() => {
+    const checkAllowance = async () => {
+      if (!sdk || !sourceToken || !tronAddress || !amount || parseFloat(amount) <= 0) {
+        setAllowanceChecked(false);
+        setNeedsApproval(false);
+        return;
+      }
+
+      try {
+        const hasAllowance = await sdk.bridge.checkAllowance({
+          token: sourceToken,
+          owner: tronAddress,
+          amount: amount,
+        });
+        
+        setNeedsApproval(!hasAllowance);
+        setAllowanceChecked(true);
+        
+        console.log("[Allbridge] Allowance check:", hasAllowance ? "Approved" : "Needs approval");
+      } catch (err) {
+        console.error("[Allbridge] Allowance check error:", err);
+        setAllowanceChecked(false);
+      }
+    };
+
+    const timer = setTimeout(() => {
+      checkAllowance();
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [sdk, sourceToken, tronAddress, amount]);
+
+  // Fetch quote
   const fetchQuote = useCallback(async () => {
     const amountNum = parseFloat(amount);
     
-    if (!amount || amountNum <= 0) {
+    if (!amount || amountNum <= 0 || !sdk || !sourceToken || !destinationToken) {
       setQuote(null);
-      setValidatedQuote(null);
       setError(null);
       return;
     }
 
     // Validate minimum amount
     if (amountNum < MINIMUM_BRIDGE_AMOUNT_TRX) {
-      setError(`Minimum bridge amount is ${MINIMUM_BRIDGE_AMOUNT_TRX} TRX`);
+      setError(`Minimum bridge amount is ${MINIMUM_BRIDGE_AMOUNT_TRX} USDT`);
       setQuote(null);
-      setValidatedQuote(null);
       return;
     }
 
@@ -69,82 +143,48 @@ export default function TronBridgeInterface() {
     setError(null);
 
     try {
-      // Convert TRX to Sun (6 decimals)
-      const rawAmount = Math.floor(amountNum * 1_000_000).toString();
+      console.log("[Allbridge] Fetching quote for", amountNum, "USDT");
       
-      // Build query parameters for GET request
-      const params = new URLSearchParams({
-        fromChain: BRIDGE_CONFIG.from.chain,
-        tokenSymbol: BRIDGE_CONFIG.from.symbol,
-        fromTokenAddress: BRIDGE_CONFIG.from.tokenAddress,
-        fromUserAddress: tronAddress || "",
-        toChain: BRIDGE_CONFIG.to.chain,
-        toTokenSymbol: BRIDGE_CONFIG.to.symbol,
-        toTokenAddress: BRIDGE_CONFIG.to.tokenAddress,
-        toUserAddress: evmAddress || "",
-        tokenAmount: rawAmount,
-        projectId: "world-street-gold",
-      });
+      // Use the SDK's calculation method
+      const receiveAmountFloat = await sdk.getAmountToBeReceived(
+        amount,
+        sourceToken,
+        destinationToken,
+        Messenger.ALLBRIDGE
+      );
       
-      const response = await fetch(`https://swap.prod.swing.xyz/v0/transfer/quote?${params.toString()}`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to fetch quote");
-      }
-
-      const data = await response.json();
-      console.log("[Bridge] Raw Swing API response:", data);
+      // Calculate fee manually (input - output)
+      const receiveAmountNum = typeof receiveAmountFloat === 'number' 
+        ? receiveAmountFloat 
+        : parseFloat(receiveAmountFloat.toString());
+      const feeAmount = parseFloat(amount) - receiveAmountNum;
       
-      // Validate the quote
-      if (!data.routes || data.routes.length === 0) {
-        setError("No swap routes found for that amount. Try a different amount.");
-        setQuote(null);
-        setValidatedQuote(null);
-        return;
-      }
-
-      // Use the first route (best route)
-      const bestRoute = data.routes[0];
+      // Estimate transfer time (typically 5-10 minutes for Allbridge)
+      const transferTime = 600; // 10 minutes in seconds
       
-      // Create a validated quote object
-      const validation = {
-        isValid: true,
-        errors: [],
-        warnings: [],
-        amountIn: rawAmount,
-        amountOut: bestRoute.quote.amount,
-        amountOutMin: bestRoute.quote.amount,
-        route: bestRoute,
-        aggregatedFees: bestRoute.quote.fees?.map((fee: any) => ({
-          symbol: fee.tokenSymbol,
-          amount: fee.amount,
-          amountHuman: (parseFloat(fee.amount) / Math.pow(10, fee.decimals || 18)).toFixed(6),
-          usdValue: fee.amountUSD,
-        })) || [],
-        totalFeeUsd: bestRoute.quote.fees?.reduce((sum: number, fee: any) => 
-          sum + parseFloat(fee.amountUSD || "0"), 0
-        ).toFixed(2),
-        estimatedTime: bestRoute.duration,
-        gasUSD: bestRoute.gasUSD,
+      // Gas fee estimation (approximate)
+      const gasFee = "0.5"; // Approximate gas fee in USD
+      
+      const quoteData = {
+        amountIn: amount,
+        amountOut: receiveAmountNum.toString(),
+        fee: feeAmount.toString(),
+        transferTime: transferTime,
+        gasFee: gasFee,
+        sourceToken: sourceToken,
+        destinationToken: destinationToken,
       };
       
-      console.log("[Bridge] Validation result:", validation);
-      
-      setValidatedQuote(validation);
-      setQuote(data);
+      console.log("[Allbridge] Quote received:", quoteData);
+      setQuote(quoteData);
     } catch (err: any) {
-      console.error("Bridge quote error:", err);
+      console.error("[Allbridge] Quote error:", err);
       setError(err.message || "Failed to get bridge quote");
+      setQuote(null);
     } finally {
       setLoading(false);
     }
-  }, [amount, tronAddress, evmAddress]);
+  }, [amount, sdk, sourceToken, destinationToken]);
 
   // Debounced quote fetch
   useEffect(() => {
@@ -158,7 +198,7 @@ export default function TronBridgeInterface() {
   // Set max amount
   const handleSetMax = () => {
     if (trxBalance > 0) {
-      // Leave 10 TRX for fees
+      // Leave some TRX for fees
       const maxAmount = Math.max(0, trxBalance - 10);
       setAmount(maxAmount.toString());
     }
@@ -166,46 +206,28 @@ export default function TronBridgeInterface() {
 
   const canBridge = useMemo(() => {
     if (!walletsGenerated) return false;
+    if (!sdkInitialized) return false;
     if (!amount) return false;
     const amountNum = parseFloat(amount);
     if (amountNum <= 0) return false;
     if (amountNum < MINIMUM_BRIDGE_AMOUNT_TRX) return false;
     if (amountNum > trxBalance) return false;
     if (loading || executing) return false;
-    if (!quote || !validatedQuote) return false;
-    if (!validatedQuote.isValid) return false;
+    if (!quote) return false;
+    if (!allowanceChecked) return false;
     return true;
-  }, [walletsGenerated, amount, trxBalance, loading, executing, quote, validatedQuote]);
+  }, [walletsGenerated, sdkInitialized, amount, trxBalance, loading, executing, quote, allowanceChecked]);
 
-  // Helper function to get fee summary
-  const getFeeSummary = useCallback(() => {
-    if (!validatedQuote || !validatedQuote.aggregatedFees || validatedQuote.aggregatedFees.length === 0) {
-      return "No fees";
-    }
-    return validatedQuote.aggregatedFees
-      .map((fee: any) => `${fee.amountHuman} ${fee.symbol}`)
-      .join(" + ");
-  }, [validatedQuote]);
-
-  // Execute bridge transaction (TRX → ETH only)
-  const handleBridge = useCallback(async (pin: string) => {
-    if (!quote || !validatedQuote) return;
+  // Approve tokens
+  const handleApprove = useCallback(async (pin: string) => {
+    if (!sdk || !sourceToken || !tronAddress) return;
 
     setExecuting(true);
     setError(null);
     setShowPinModal(false);
 
     try {
-      console.log("[Bridge] Starting TRX → ETH bridge execution");
-      console.log("[Bridge] Quote data:", quote);
-      console.log("[Bridge] Validated data:", validatedQuote);
-
-      // Get the best route
-      const bestRoute = validatedQuote.route;
-      
-      if (!bestRoute) {
-        throw new Error("No route available");
-      }
+      console.log("[Allbridge] Starting approval...");
 
       // Get encrypted keys and decrypt
       const response = await fetch("/api/wallet/keys", {
@@ -220,153 +242,40 @@ export default function TronBridgeInterface() {
 
       const data = await response.json();
       
-      if (!data.success) {
-        throw new Error("Failed to retrieve wallet keys");
-      }
-
-      // Get transaction data from Swing API
-      const txResponse = await fetch("https://swap.prod.swing.xyz/v0/transfer/send", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          fromChain: BRIDGE_CONFIG.from.chain,
-          tokenSymbol: BRIDGE_CONFIG.from.symbol,
-          fromTokenAddress: BRIDGE_CONFIG.from.tokenAddress,
-          fromUserAddress: tronAddress,
-          toChain: BRIDGE_CONFIG.to.chain,
-          toTokenSymbol: BRIDGE_CONFIG.to.symbol,
-          toTokenAddress: BRIDGE_CONFIG.to.tokenAddress,
-          toUserAddress: evmAddress,
-          tokenAmount: validatedQuote.amountIn,
-          route: bestRoute.route,
-          projectId: "world-street-gold",
-        }),
-      });
-
-      if (!txResponse.ok) {
-        const errorData = await txResponse.json();
-        throw new Error(errorData.message || "Failed to get transaction data");
-      }
-
-      const txData = await txResponse.json();
-      console.log("[Bridge] Transaction data:", txData);
-
-      // Execute Tron transaction
-      if (!data.wallets?.tron?.encryptedPrivateKey) {
+      if (!data.success || !data.wallets?.tron?.encryptedPrivateKey) {
         throw new Error("Tron wallet not found");
       }
+
       const privateKey = decryptWithPIN(data.wallets.tron.encryptedPrivateKey, pin);
 
+      // Build approve transaction
+      const rawTx = await sdk.bridge.rawTxBuilder.approve({
+        token: sourceToken,
+        owner: tronAddress,
+      });
+
+      console.log("[Allbridge] Approve transaction built:", rawTx);
+
+      // Sign and send transaction
       const TronWeb = (await import("tronweb")).default;
       const tronWeb = new TronWeb({
         fullHost: process.env.NEXT_PUBLIC_TRON_RPC || "https://api.trongrid.io",
         privateKey: privateKey,
       });
 
-      console.log("[Bridge] Executing Tron transaction");
-      console.log("[Bridge] Transaction data from Swing:", txData);
+      const signedTx = await tronWeb.trx.sign(rawTx, privateKey);
+      const receipt = await tronWeb.trx.sendRawTransaction(signedTx);
 
-      // Check if txData has the transaction object
-      if (!txData.tx) {
-        throw new Error("No transaction data received from Swing API");
+      if (!receipt.result) {
+        throw new Error(receipt.message || "Approval transaction failed");
       }
 
-      let txHash: string;
-      
-      // Handle the transaction based on its structure
-      if (txData.tx.raw_data || txData.tx.rawData) {
-        // Standard Tron transaction object - sign and send
-        console.log("[Bridge] Signing Tron transaction");
-        const signedTx = await tronWeb.trx.sign(txData.tx, privateKey);
-        console.log("[Bridge] Transaction signed, broadcasting...");
-        
-        const receipt = await tronWeb.trx.sendRawTransaction(signedTx);
-        
-        if (!receipt.result) {
-          throw new Error(receipt.message || "Transaction broadcast failed");
-        }
-        
-        txHash = receipt.txid || receipt.transaction?.txID;
-        console.log("[Bridge] Transaction broadcast:", txHash);
-      } else if (txData.tx.from && txData.tx.to && txData.tx.data) {
-        // EVM-style transaction from Swing - send as raw transaction
-        console.log("[Bridge] Processing EVM-style transaction for Tron");
-        console.log("[Bridge] Contract:", txData.tx.to);
-        console.log("[Bridge] Data:", txData.tx.data);
-        console.log("[Bridge] Value:", txData.tx.value);
-        
-        // Parse the value (convert hex to decimal if needed)
-        let callValue = 0;
-        if (txData.tx.value) {
-          if (typeof txData.tx.value === 'string' && txData.tx.value.startsWith('0x')) {
-            callValue = parseInt(txData.tx.value, 16);
-          } else {
-            callValue = parseInt(txData.tx.value);
-          }
-        }
-        
-        console.log("[Bridge] Call value (sun):", callValue);
-        
-        // Build a raw Tron transaction
-        // Remove 0x prefix from data if present
-        const data = txData.tx.data.startsWith('0x') ? txData.tx.data.slice(2) : txData.tx.data;
-        
-        // Create transaction using transactionBuilder
-        const unsignedTx = await tronWeb.transactionBuilder.triggerSmartContract(
-          txData.tx.to,
-          data,
-          {
-            feeLimit: 150_000_000,
-            callValue: callValue,
-          },
-          [],
-          tronAddress
-        );
+      const txHash = receipt.txid || receipt.transaction?.txID;
+      console.log("[Allbridge] Approval transaction:", txHash);
 
-        console.log("[Bridge] Unsigned transaction:", unsignedTx);
-
-        if (!unsignedTx.result || !unsignedTx.result.result) {
-          console.error("[Bridge] Failed to build transaction:", unsignedTx);
-          
-          // Log more details about the failure
-          if (unsignedTx.transaction) {
-            console.log("[Bridge] Transaction object exists, attempting to sign anyway");
-            const signedTx = await tronWeb.trx.sign(unsignedTx.transaction, privateKey);
-            const receipt = await tronWeb.trx.sendRawTransaction(signedTx);
-            
-            if (!receipt.result) {
-              throw new Error(receipt.message || "Transaction broadcast failed");
-            }
-            
-            txHash = receipt.txid || receipt.transaction?.txID;
-            console.log("[Bridge] Transaction broadcast:", txHash);
-          } else {
-            throw new Error(unsignedTx.result?.message || "Failed to build transaction");
-          }
-        } else {
-          console.log("[Bridge] Transaction built successfully");
-          const signedTx = await tronWeb.trx.sign(unsignedTx.transaction, privateKey);
-          console.log("[Bridge] Transaction signed, broadcasting...");
-          
-          const receipt = await tronWeb.trx.sendRawTransaction(signedTx);
-          
-          if (!receipt.result) {
-            throw new Error(receipt.message || "Transaction broadcast failed");
-          }
-          
-          txHash = receipt.txid || receipt.transaction?.txID;
-          console.log("[Bridge] Transaction broadcast:", txHash);
-        }
-      } else {
-        throw new Error("Unsupported transaction format from Swing API");
-      }
-      
-      // Wait for confirmation and check if it reverted
-      console.log("[Bridge] Waiting for transaction confirmation...");
+      // Wait for confirmation
       let attempts = 0;
-      const maxAttempts = 30; // 30 seconds
+      const maxAttempts = 30;
       let confirmed = false;
       
       while (attempts < maxAttempts && !confirmed) {
@@ -374,250 +283,404 @@ export default function TronBridgeInterface() {
         
         try {
           const txInfo = await tronWeb.trx.getTransactionInfo(txHash);
-          console.log("[Bridge] Transaction info:", txInfo);
           
           if (txInfo && Object.keys(txInfo).length > 0) {
-            // Transaction is confirmed
             if (txInfo.receipt?.result === "SUCCESS") {
               confirmed = true;
-              console.log("[Bridge] Transaction confirmed successfully");
+              console.log("[Allbridge] Approval confirmed");
+              
+              // Recheck allowance
+              setNeedsApproval(false);
+              setAllowanceChecked(true);
+              
+              alert(`Approval successful!\nTX: ${txHash}\n\nYou can now proceed with the bridge.`);
               break;
             } else if (txInfo.receipt?.result === "REVERT") {
-              throw new Error(`Transaction reverted: ${txInfo.resMessage || "Unknown reason"}`);
-            } else if (txInfo.result === "FAILED") {
-              throw new Error(`Transaction failed: ${txInfo.resMessage || "Unknown reason"}`);
+              throw new Error(`Approval reverted: ${txInfo.resMessage || "Unknown reason"}`);
             }
           }
         } catch (err: any) {
-          if (err.message.includes("reverted") || err.message.includes("failed")) {
+          if (err.message.includes("reverted")) {
             throw err;
           }
-          // Transaction not yet confirmed, continue waiting
         }
         
         attempts++;
       }
       
       if (!confirmed) {
-        // Transaction is pending but not confirmed yet
-        console.log("[Bridge] Transaction pending confirmation");
-        alert(`Bridge transaction submitted!\nTX: ${txHash}\n\nTransaction is pending confirmation. Please check TronScan for status.\n\nhttps://tronscan.org/#/transaction/${txHash}`);
+        alert(`Approval pending confirmation.\nTX: ${txHash}\n\nPlease wait for confirmation before bridging.`);
+      }
+    } catch (err: any) {
+      console.error("[Allbridge] Approval error:", err);
+      setError(err.message || "Failed to approve tokens");
+    } finally {
+      setExecuting(false);
+    }
+  }, [sdk, sourceToken, tronAddress]);
+
+  // Execute bridge transaction
+  const handleBridge = useCallback(async (pin: string) => {
+    if (!sdk || !sourceToken || !destinationToken || !quote || !tronAddress || !evmAddress) return;
+
+    setExecuting(true);
+    setError(null);
+    setShowPinModal(false);
+
+    try {
+      console.log("[Allbridge] Starting bridge transaction...");
+      console.log("[Allbridge] Amount:", amount, "USDT");
+      console.log("[Allbridge] From:", tronAddress, "(Tron)");
+      console.log("[Allbridge] To:", evmAddress, "(Ethereum)");
+
+      // Get encrypted keys and decrypt
+      const response = await fetch("/api/wallet/keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to get wallet keys");
+      }
+
+      const data = await response.json();
+      
+      if (!data.success || !data.wallets?.tron?.encryptedPrivateKey) {
+        throw new Error("Tron wallet not found");
+      }
+
+      const privateKey = decryptWithPIN(data.wallets.tron.encryptedPrivateKey, pin);
+
+      // Build send transaction
+      const rawTx = await sdk.bridge.rawTxBuilder.send({
+        amount: amount,
+        fromAccountAddress: tronAddress,
+        toAccountAddress: evmAddress,
+        sourceToken: sourceToken,
+        destinationToken: destinationToken,
+        messenger: Messenger.ALLBRIDGE,
+      });
+
+      console.log("[Allbridge] Bridge transaction built:", rawTx);
+
+      // Sign and send transaction
+      const TronWeb = (await import("tronweb")).default;
+      const tronWeb = new TronWeb({
+        fullHost: process.env.NEXT_PUBLIC_TRON_RPC || "https://api.trongrid.io",
+        privateKey: privateKey,
+      });
+
+      const signedTx = await tronWeb.trx.sign(rawTx, privateKey);
+      const receipt = await tronWeb.trx.sendRawTransaction(signedTx);
+
+      if (!receipt.result) {
+        throw new Error(receipt.message || "Bridge transaction failed");
+      }
+
+      const txHash = receipt.txid || receipt.transaction?.txID;
+      console.log("[Allbridge] Bridge transaction:", txHash);
+
+      // Wait for confirmation
+      let attempts = 0;
+      const maxAttempts = 30;
+      let confirmed = false;
+      
+      while (attempts < maxAttempts && !confirmed) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        try {
+          const txInfo = await tronWeb.trx.getTransactionInfo(txHash);
+          
+          if (txInfo && Object.keys(txInfo).length > 0) {
+            if (txInfo.receipt?.result === "SUCCESS") {
+              confirmed = true;
+              console.log("[Allbridge] Bridge transaction confirmed");
+              break;
+            } else if (txInfo.receipt?.result === "REVERT") {
+              throw new Error(`Transaction reverted: ${txInfo.resMessage || "Unknown reason"}`);
+            }
+          }
+        } catch (err: any) {
+          if (err.message.includes("reverted")) {
+            throw err;
+          }
+        }
+        
+        attempts++;
+      }
+      
+      if (!confirmed) {
+        alert(`Bridge transaction submitted!\nTX: ${txHash}\n\nTransaction is pending confirmation.\n\nView on TronScan: https://tronscan.org/#/transaction/${txHash}`);
       } else {
-        alert(`Bridge transaction confirmed!\nTX: ${txHash}\n\nFees: ${getFeeSummary()}\n\nYou will receive ETH on Ethereum network.\n\nView on TronScan: https://tronscan.org/#/transaction/${txHash}`);
+        alert(`Bridge successful!\nTX: ${txHash}\n\nYou will receive ${quote.amountOut} USDT on Ethereum.\n\nEstimated time: ~${Math.ceil((quote.transferTime || 300) / 60)} minutes\n\nView on TronScan: https://tronscan.org/#/transaction/${txHash}`);
       }
       
       // Reset form
       setAmount("");
       setQuote(null);
-      setValidatedQuote(null);
+      setAllowanceChecked(false);
+      setNeedsApproval(false);
     } catch (err: any) {
-      console.error("[Bridge] Execution error:", err);
+      console.error("[Allbridge] Bridge error:", err);
       setError(err.message || "Failed to execute bridge");
     } finally {
       setExecuting(false);
     }
-  }, [quote, validatedQuote, amount, tronAddress, evmAddress, getFeeSummary]);
+  }, [sdk, sourceToken, destinationToken, quote, amount, tronAddress, evmAddress]);
 
   return (
     <div className="bg-white dark:bg-black rounded-2xl border border-border dark:border-darkborder shadow-sm">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-border dark:border-darkborder">
-        <h2 className="text-lg font-semibold text-dark dark:text-white">TRX → ETH Bridge</h2>
+        <h2 className="text-lg font-semibold text-dark dark:text-white">USDT Bridge (Tron → Ethereum)</h2>
         <div className="flex items-center gap-2 text-xs text-muted">
           <Icon icon="solar:shield-check-bold-duotone" width={16} />
-          <span>Powered by Swing</span>
+          <span>Powered by Allbridge</span>
         </div>
       </div>
 
       <div className="p-4 space-y-3">
-        {/* From section - TRX */}
-        <div className="bg-lightgray dark:bg-darkborder rounded-xl p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-muted">From</span>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted">
-                Balance: {trxBalance.toLocaleString(undefined, { maximumFractionDigits: 6 })} TRX
-              </span>
-              {trxBalance > 0 && (
-                <button
-                  onClick={handleSetMax}
-                  className="text-xs text-primary font-medium hover:text-primary/80"
-                >
-                  MAX
-                </button>
-              )}
+        {!sdkInitialized ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="flex items-center gap-2 text-muted">
+              <Icon icon="ph:spinner" className="animate-spin" width={24} />
+              <span>Initializing bridge...</span>
             </div>
           </div>
+        ) : (
+          <>
+            {/* From section - USDT on Tron */}
+            <div className="bg-lightgray dark:bg-darkborder rounded-xl p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-muted">From</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted">
+                    Balance: {trxBalance.toLocaleString(undefined, { maximumFractionDigits: 6 })} USDT
+                  </span>
+                  {trxBalance > 0 && (
+                    <button
+                      onClick={handleSetMax}
+                      className="text-xs text-primary font-medium hover:text-primary/80"
+                    >
+                      MAX
+                    </button>
+                  )}
+                </div>
+              </div>
 
-          <div className="flex items-center gap-3">
-            <input
-              type="number"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="0.00"
-              className="flex-1 bg-transparent border-0 text-2xl font-semibold text-dark dark:text-white placeholder:text-muted focus:ring-0 p-0"
-            />
-            
-            <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-black rounded-xl">
-              <img src={BRIDGE_CONFIG.from.logo} alt="TRX" className="w-6 h-6 rounded-full" />
-              <span className="font-semibold text-dark dark:text-white">{BRIDGE_CONFIG.from.symbol}</span>
+              <div className="flex items-center gap-3">
+                <input
+                  type="number"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder="0.00"
+                  className="flex-1 bg-transparent border-0 text-2xl font-semibold text-dark dark:text-white placeholder:text-muted focus:ring-0 p-0"
+                />
+                
+                <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-black rounded-xl">
+                  <img 
+                    src="https://cryptologos.cc/logos/tether-usdt-logo.png" 
+                    alt="USDT" 
+                    className="w-6 h-6 rounded-full" 
+                  />
+                  <span className="font-semibold text-dark dark:text-white">USDT</span>
+                </div>
+              </div>
+
+              {/* Chain info */}
+              <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border/50 dark:border-darkborder/50">
+                <span className="text-xs text-muted">Network:</span>
+                <div className="flex items-center gap-1.5">
+                  <img 
+                    src="https://logowik.com/content/uploads/images/tron-trx-icon3386.logowik.com.webp" 
+                    alt="Tron" 
+                    className="w-4 h-4" 
+                  />
+                  <span className="text-xs font-medium text-dark dark:text-white">Tron</span>
+                </div>
+              </div>
             </div>
-          </div>
 
-          {/* Chain info */}
-          <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border/50 dark:border-darkborder/50">
-            <span className="text-xs text-muted">Network:</span>
-            <div className="flex items-center gap-1.5">
-              <img src={BRIDGE_CONFIG.from.logo} alt="" className="w-4 h-4" />
-              <span className="text-xs font-medium text-dark dark:text-white">{BRIDGE_CONFIG.from.name}</span>
+            {/* Arrow indicator */}
+            <div className="flex justify-center -my-1">
+              <div className="w-9 h-9 bg-white dark:bg-black border-4 border-lightgray dark:border-darkborder rounded-xl flex items-center justify-center">
+                <Icon icon="ph:arrow-down" className="text-muted" width={18} />
+              </div>
             </div>
-          </div>
-        </div>
 
-        {/* Arrow indicator */}
-        <div className="flex justify-center -my-1">
-          <div className="w-9 h-9 bg-white dark:bg-black border-4 border-lightgray dark:border-darkborder rounded-xl flex items-center justify-center">
-            <Icon icon="ph:arrow-down" className="text-muted" width={18} />
-          </div>
-        </div>
+            {/* To section - USDT on Ethereum */}
+            <div className="bg-lightgray dark:bg-darkborder rounded-xl p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-muted">To (estimated)</span>
+              </div>
 
-        {/* To section - ETH */}
-        <div className="bg-lightgray dark:bg-darkborder rounded-xl p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-muted">To (estimated)</span>
-          </div>
+              <div className="flex items-center gap-3">
+                <div className="flex-1 text-2xl font-semibold text-dark dark:text-white">
+                  {loading ? (
+                    <Icon icon="ph:spinner" className="animate-spin text-muted" width={24} />
+                  ) : quote?.amountOut ? (
+                    parseFloat(quote.amountOut).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 6,
+                    })
+                  ) : (
+                    <span className="text-muted">0.00</span>
+                  )}
+                </div>
+                
+                <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-black rounded-xl">
+                  <img 
+                    src="https://cryptologos.cc/logos/tether-usdt-logo.png" 
+                    alt="USDT" 
+                    className="w-6 h-6 rounded-full" 
+                  />
+                  <span className="font-semibold text-dark dark:text-white">USDT</span>
+                </div>
+              </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex-1 text-2xl font-semibold text-dark dark:text-white">
-              {loading ? (
-                <Icon icon="ph:spinner" className="animate-spin text-muted" width={24} />
-              ) : validatedQuote?.amountOut ? (
-                (parseFloat(validatedQuote.amountOut) / Math.pow(10, BRIDGE_CONFIG.to.decimals)).toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 6,
-                })
-              ) : (
-                <span className="text-muted">0.00</span>
-              )}
+              {/* Chain info */}
+              <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border/50 dark:border-darkborder/50">
+                <span className="text-xs text-muted">Network:</span>
+                <div className="flex items-center gap-1.5">
+                  <img 
+                    src="https://cryptologos.cc/logos/ethereum-eth-logo.png" 
+                    alt="Ethereum" 
+                    className="w-4 h-4" 
+                  />
+                  <span className="text-xs font-medium text-dark dark:text-white">Ethereum</span>
+                </div>
+              </div>
             </div>
-            
-            <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-black rounded-xl">
-              <img src={BRIDGE_CONFIG.to.logo} alt="ETH" className="w-6 h-6 rounded-full" />
-              <span className="font-semibold text-dark dark:text-white">{BRIDGE_CONFIG.to.symbol}</span>
-            </div>
-          </div>
 
-          {/* Chain info */}
-          <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border/50 dark:border-darkborder/50">
-            <span className="text-xs text-muted">Network:</span>
-            <div className="flex items-center gap-1.5">
-              <img src={BRIDGE_CONFIG.to.logo} alt="" className="w-4 h-4" />
-              <span className="text-xs font-medium text-dark dark:text-white">{BRIDGE_CONFIG.to.name}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Quote details */}
-        {quote && !error && validatedQuote && (
-          <div className="bg-muted/30 dark:bg-white/5 rounded-xl p-3 space-y-2 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-muted">Estimated Time</span>
-              <span className="text-dark dark:text-white font-medium">
-                ~{Math.ceil((validatedQuote.estimatedTime || 300) / 60)} min
-              </span>
-            </div>
-            {validatedQuote.aggregatedFees && validatedQuote.aggregatedFees.length > 0 && (
-              <div className="flex items-center justify-between">
-                <span className="text-muted">Bridge Fees</span>
-                <span className="text-dark dark:text-white font-medium">
-                  {getFeeSummary()}
-                </span>
+            {/* Quote details */}
+            {quote && !error && (
+              <div className="bg-muted/30 dark:bg-white/5 rounded-xl p-3 space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted">Estimated Time</span>
+                  <span className="text-dark dark:text-white font-medium">
+                    ~{Math.ceil((quote.transferTime || 300) / 60)} min
+                  </span>
+                </div>
+                {quote.fee && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted">Bridge Fee</span>
+                    <span className="text-dark dark:text-white font-medium">
+                      {parseFloat(quote.fee).toFixed(6)} USDT
+                    </span>
+                  </div>
+                )}
+                {quote.gasFee && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted">Est. Gas Fee</span>
+                    <span className="text-dark dark:text-white font-medium">
+                      ${parseFloat(quote.gasFee).toFixed(4)}
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between">
+                  <span className="text-muted">Minimum Amount</span>
+                  <span className="text-dark dark:text-white font-medium">
+                    {MINIMUM_BRIDGE_AMOUNT_TRX} USDT
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted">Bridge Provider</span>
+                  <span className="text-dark dark:text-white font-medium">
+                    Allbridge Core
+                  </span>
+                </div>
               </div>
             )}
-            {validatedQuote.totalFeeUsd && (
-              <div className="flex items-center justify-between">
-                <span className="text-muted">Total Fee (USD)</span>
-                <span className="text-dark dark:text-white font-medium">
-                  ${validatedQuote.totalFeeUsd}
-                </span>
+
+            {/* Approval status */}
+            {allowanceChecked && needsApproval && amount && parseFloat(amount) > 0 && (
+              <div className="flex items-center gap-2 p-3 bg-warning/10 rounded-xl text-warning text-sm">
+                <Icon icon="ph:warning" width={18} />
+                <span>You need to approve USDT spending first</span>
               </div>
             )}
-            <div className="flex items-center justify-between">
-              <span className="text-muted">Minimum Amount</span>
-              <span className="text-dark dark:text-white font-medium">
-                {MINIMUM_BRIDGE_AMOUNT_TRX} TRX
-              </span>
-            </div>
-            {validatedQuote.gasUSD && (
-              <div className="flex items-center justify-between">
-                <span className="text-muted">Est. Gas Cost</span>
-                <span className="text-dark dark:text-white font-medium">
-                  ${parseFloat(validatedQuote.gasUSD).toFixed(4)}
-                </span>
+
+            {/* Error message */}
+            {error && (
+              <div className="flex items-center gap-2 p-3 bg-error/10 rounded-xl text-error text-sm">
+                <Icon icon="ph:warning" width={18} />
+                <span>{error}</span>
               </div>
             )}
-            {validatedQuote.route?.quote?.integration && (
-              <div className="flex items-center justify-between">
-                <span className="text-muted">Bridge Provider</span>
-                <span className="text-dark dark:text-white font-medium capitalize">
-                  {validatedQuote.route.quote.integration}
-                </span>
-              </div>
+
+            {/* Action buttons */}
+            {needsApproval && allowanceChecked ? (
+              <button
+                onClick={() => setShowPinModal(true)}
+                disabled={!amount || parseFloat(amount) <= 0 || executing}
+                className={`w-full py-4 rounded-xl font-semibold text-lg transition-all ${
+                  amount && parseFloat(amount) > 0 && !executing
+                    ? "bg-warning text-white hover:bg-warning/90"
+                    : "bg-lightgray dark:bg-darkborder text-muted cursor-not-allowed"
+                }`}
+              >
+                {executing ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Icon icon="ph:spinner" className="animate-spin" width={20} />
+                    Approving...
+                  </span>
+                ) : (
+                  "Approve USDT"
+                )}
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowPinModal(true)}
+                disabled={!canBridge}
+                className={`w-full py-4 rounded-xl font-semibold text-lg transition-all ${
+                  canBridge
+                    ? "bg-primary text-white hover:bg-primary/90"
+                    : "bg-lightgray dark:bg-darkborder text-muted cursor-not-allowed"
+                }`}
+              >
+                {executing ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Icon icon="ph:spinner" className="animate-spin" width={20} />
+                    Processing...
+                  </span>
+                ) : !walletsGenerated
+                  ? "Set up wallet first"
+                  : !sdkInitialized
+                  ? "Initializing..."
+                  : !amount || parseFloat(amount) <= 0
+                  ? "Enter amount"
+                  : parseFloat(amount) < MINIMUM_BRIDGE_AMOUNT_TRX
+                  ? `Minimum ${MINIMUM_BRIDGE_AMOUNT_TRX} USDT`
+                  : parseFloat(amount) > trxBalance
+                  ? "Insufficient balance"
+                  : loading
+                  ? "Fetching quote..."
+                  : !quote
+                  ? "Enter amount"
+                  : "Bridge USDT"}
+              </button>
             )}
-          </div>
+
+            {/* Info */}
+            <p className="text-xs text-muted text-center">
+              Bridge USDT from Tron to Ethereum • Minimum: {MINIMUM_BRIDGE_AMOUNT_TRX} USDT • Powered by Allbridge Core
+            </p>
+          </>
         )}
-
-        {/* Error message */}
-        {error && (
-          <div className="flex items-center gap-2 p-3 bg-error/10 rounded-xl text-error text-sm">
-            <Icon icon="ph:warning" width={18} />
-            <span>{error}</span>
-          </div>
-        )}
-
-        {/* Bridge button */}
-        <button
-          onClick={() => setShowPinModal(true)}
-          disabled={!canBridge}
-          className={`w-full py-4 rounded-xl font-semibold text-lg transition-all ${
-            canBridge
-              ? "bg-primary text-white hover:bg-primary/90"
-              : "bg-lightgray dark:bg-darkborder text-muted cursor-not-allowed"
-          }`}
-        >
-          {executing ? (
-            <span className="flex items-center justify-center gap-2">
-              <Icon icon="ph:spinner" className="animate-spin" width={20} />
-              Processing...
-            </span>
-          ) : !walletsGenerated
-            ? "Set up wallet first"
-            : !amount || parseFloat(amount) <= 0
-            ? "Enter amount"
-            : parseFloat(amount) < MINIMUM_BRIDGE_AMOUNT_TRX
-            ? `Minimum ${MINIMUM_BRIDGE_AMOUNT_TRX} TRX`
-            : parseFloat(amount) > trxBalance
-            ? "Insufficient balance"
-            : loading
-            ? "Fetching quote..."
-            : !quote
-            ? "Enter amount"
-            : "Bridge TRX → ETH"}
-        </button>
-
-        {/* Info */}
-        <p className="text-xs text-muted text-center">
-          Bridge TRX from Tron to ETH on Ethereum • Minimum: {MINIMUM_BRIDGE_AMOUNT_TRX} TRX • Powered by Swing
-        </p>
       </div>
 
       {/* PIN Confirmation Modal */}
       <PinConfirmModal
         isOpen={showPinModal}
         onClose={() => setShowPinModal(false)}
-        onSuccess={handleBridge}
-        title="Confirm Bridge"
-        description={`Enter your PIN to bridge ${amount} TRX to ETH on Ethereum`}
+        onSuccess={needsApproval ? handleApprove : handleBridge}
+        title={needsApproval ? "Approve USDT" : "Confirm Bridge"}
+        description={
+          needsApproval
+            ? "Enter your PIN to approve USDT spending"
+            : `Enter your PIN to bridge ${amount} USDT to Ethereum`
+        }
       />
     </div>
   );
