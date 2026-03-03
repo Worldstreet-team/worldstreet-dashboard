@@ -317,22 +317,16 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         }
         
         if (!accountData) {
-          console.log('[DriftContext] Drift account not found, initializing...');
-          
-          // Initialize Drift account (this creates the on-chain account)
-          const initTx = await client.initializeUser();
-          await connection?.confirmTransaction(initTx, 'confirmed');
-          
-          console.log('[DriftContext] Drift account initialized successfully');
-          
-          // Wait for account data to load
-          await new Promise(resolve => setTimeout(resolve, 3000));
+          console.log('[DriftContext] Drift account not found');
+          console.log('[DriftContext] Note: Account will be created automatically on first deposit');
+          // Account will be created automatically when user makes first deposit
+          // No need to initialize manually
         } else {
           console.log('[DriftContext] Drift account already exists');
         }
       } catch (err) {
-        console.error('[DriftContext] Error checking/initializing account:', err);
-        // Continue anyway, the account might exist but not loaded yet
+        console.error('[DriftContext] Error checking account:', err);
+        // Continue anyway, account might exist but not loaded yet
       }
       
       setDriftClient(client);
