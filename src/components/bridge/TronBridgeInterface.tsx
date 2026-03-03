@@ -46,7 +46,7 @@ export default function TronBridgeInterface() {
         const sdkInstance = new AllbridgeCoreSdk({
           ...nodeRpcUrlsDefault,
           TRX: process.env.NEXT_PUBLIC_TRON_RPC || "https://api.trongrid.io",
-          ETH: process.env.NEXT_PUBLIC_ETH_RPC || "https://eth.llamarpc.com",
+          ETH: process.env.NEXT_PUBLIC_ETH_RPC || "https://eth-mainnet.g.alchemy.com/v2/Hzb8ZnlDROuI4aqqHYBeV",
         });
         
         setSdk(sdkInstance);
