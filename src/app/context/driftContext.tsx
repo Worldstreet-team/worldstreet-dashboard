@@ -256,10 +256,13 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       const { DriftClient, Wallet } = await import('@drift-labs/sdk');
       const { Keypair, PublicKey: SolanaPublicKey } = await import('@solana/web3.js');
       
-      // The decrypted key is in base64 format (not base58)
-      // Convert base64 to Uint8Array for Keypair
+      // CRITICAL: Solana private keys are stored as BASE64 (not base58!)
+      // The encryption system stores the raw 64-byte secret key as base64
+      // DO NOT use bs58.decode() - that's for public addresses only
+      console.log('[DriftContext] Decoding private key from base64 format');
       const secretKey = new Uint8Array(Buffer.from(decryptedPrivateKey, 'base64'));
       const keypair = Keypair.fromSecretKey(secretKey);
+      console.log('[DriftContext] Keypair created successfully, public key:', keypair.publicKey.toBase58());
       
       // Create wallet wrapper
       const wallet = new Wallet(keypair as any);
@@ -278,18 +281,28 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       // Initialize Drift client
       const DRIFT_PROGRAM_ID = process.env.NEXT_PUBLIC_DRIFT_PROGRAM_ID || 'dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH';
       
+      // Import BulkAccountLoader for polling
+      const { BulkAccountLoader } = await import('@drift-labs/sdk');
+      
+      // Create account loader for polling
+      const accountLoader = new BulkAccountLoader(
+        connection as any,
+        'confirmed',
+        1000 // Poll every 1 second
+      );
+      
       const client = new DriftClient({
         connection: connection as any,
         wallet,
         programID: new SolanaPublicKey(DRIFT_PROGRAM_ID) as any,
         accountSubscription: {
           type: 'polling',
-          accountLoader: undefined, // Use default polling
+          accountLoader: accountLoader,
         },
         subAccountIds: [subaccountId]
       } as any);
       
-      // Subscribe to account updates (will use polling instead of websocket)
+      // Subscribe to account updates (will use polling)
       await client.subscribe();
       
       setDriftClient(client);
@@ -632,7 +645,9 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     return () => {
       stopAutoRefresh();
       if (driftClient) {
-        driftClient.unsubscribe().catch(console.error);
+        driftClient.unsubscribe().catch((err: any) => {
+          console.error('[DriftContext] Error unsubscribing:', err);
+        });
       }
     };
   }, [driftClient, stopAutoRefresh]);

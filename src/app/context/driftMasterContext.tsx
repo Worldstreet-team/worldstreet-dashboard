@@ -1,5 +1,21 @@
 "use client";
 
+/**
+ * DRIFT MASTER WALLET CONTEXT
+ * 
+ * This context is for READ-ONLY operations on the master wallet.
+ * The master wallet ONLY receives trading fees from users.
+ * 
+ * IMPORTANT: This context does NOT need or use any private keys!
+ * - Master wallet private key stays in server environment variables
+ * - All operations here are API calls to server endpoints
+ * - Users sign their own transactions with their PIN-decrypted keys (see driftContext.tsx)
+ * 
+ * Architecture:
+ * - driftContext.tsx: Client-side trading with user's own wallet (uses PIN-decrypted keys)
+ * - driftMasterContext.tsx: Read-only master wallet info (no private keys needed)
+ */
+
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { useAuth } from '@/app/context/authContext';
 import {
