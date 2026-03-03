@@ -255,10 +255,10 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       // Dynamic import of Drift SDK and Solana
       const { DriftClient, Wallet } = await import('@drift-labs/sdk');
       const { Keypair, PublicKey: SolanaPublicKey } = await import('@solana/web3.js');
-      const bs58 = (await import('bs58')).default;
       
-      // Create keypair from decrypted private key
-      const secretKey = bs58.decode(decryptedPrivateKey);
+      // The decrypted key is in base64 format (not base58)
+      // Convert base64 to Uint8Array for Keypair
+      const secretKey = new Uint8Array(Buffer.from(decryptedPrivateKey, 'base64'));
       const keypair = Keypair.fromSecretKey(secretKey);
       
       // Create wallet wrapper
