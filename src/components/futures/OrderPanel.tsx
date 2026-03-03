@@ -21,7 +21,7 @@ interface ErrorState {
 
 export const OrderPanel: React.FC = () => {
   const { selectedMarket, selectedChain, setPreviewData, previewData, markets } = useFuturesStore();
-  const { fetchPositions, fetchAccountSummary } = useDriftTrading();
+  const { openPosition, fetchPositions, fetchAccountSummary, loading: hookLoading } = useDriftTrading();
   const { isPolling: isConfirmingOrder, startPostActionPolling } = usePostActionPolling();
   
   const [side, setSide] = useState<OrderSide>('long');
@@ -220,70 +220,58 @@ export const OrderPanel: React.FC = () => {
       // Determine marketIndex from market symbol
       const marketIndex = markets.findIndex(m => m.id === selectedMarket.id);
       
-      // Use Drift API for opening positions
-      const response = await fetch('/api/drift/position/open', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          marketIndex: marketIndex >= 0 ? marketIndex : 0,
-          direction: side,
-          baseAmount: parseFloat(size),
-          leverage,
-          orderType,
-          price: limitPrice ? parseFloat(limitPrice) : undefined,
-        }),
+      // Use openPosition from useDriftTrading hook
+      const result = await openPosition(
+        marketIndex >= 0 ? marketIndex : 0,
+        side,
+        parseFloat(size),
+        leverage,
+        orderType,
+        limitPrice ? parseFloat(limitPrice) : undefined
+      );
+
+      // Show success message
+      setSuccessMessage(`Position opened! TX: ${result.txSignature?.slice(0, 8)}...`);
+      
+      // Start post-action polling to confirm position appears
+      startPostActionPolling({
+        checkCondition: async () => {
+          const positions = await fetchPositions();
+          const summary = await fetchAccountSummary();
+          // Check if new position exists
+          return positions.length > 0 || (summary !== null && summary.openPositions > 0);
+        },
+        onSuccess: () => {
+          // Reset form
+          setSize('');
+          setLimitPrice('');
+          setError({ type: null, message: '' });
+          setIsSubmitting(false);
+          
+          // Clear success message after 5 seconds
+          setTimeout(() => setSuccessMessage(''), 5000);
+        },
+        onTimeout: () => {
+          setIsSubmitting(false);
+          setSuccessMessage('Position opened but taking longer to confirm. Check your positions.');
+          setTimeout(() => setSuccessMessage(''), 5000);
+        },
+        maxAttempts: 15,
+        interval: 1000,
       });
-
-      const result = await response.json();
-
-      if (response.ok) {
-        // Show success message
-        setSuccessMessage(`Position opened! TX: ${result.txSignature?.slice(0, 8)}...`);
-        
-        // Start post-action polling to confirm position appears
-        startPostActionPolling({
-          checkCondition: async () => {
-            const positions = await fetchPositions();
-            const summary = await fetchAccountSummary();
-            // Check if new position exists
-            return positions.length > 0 || (summary !== null && summary.openPositions > 0);
-          },
-          onSuccess: () => {
-            // Reset form
-            setSize('');
-            setLimitPrice('');
-            setError({ type: null, message: '' });
-            setIsSubmitting(false);
-            
-            // Clear success message after 5 seconds
-            setTimeout(() => setSuccessMessage(''), 5000);
-          },
-          onTimeout: () => {
-            setIsSubmitting(false);
-            setSuccessMessage('Position opened but taking longer to confirm. Check your positions.');
-            setTimeout(() => setSuccessMessage(''), 5000);
-          },
-          maxAttempts: 15,
-          interval: 1000,
-        });
-      } else {
-        // Parse and display error
-        const parsedError = parseError(result.error || '', result.message || result.error || '');
-        setError(parsedError);
-        setIsSubmitting(false);
-
-        // Auto-retry for temporary errors
-        if (parsedError.type === 'oracle_unavailable' || parsedError.type === 'volatility') {
-          setRetryCountdown(5);
-        }
-      }
     } catch (error) {
       console.error('Submit error:', error);
-      setError({
-        type: 'generic',
-        message: 'Network error. Please check your connection and try again.',
-      });
+      
+      // Parse error from hook
+      const errorMessage = error instanceof Error ? error.message : 'Network error. Please check your connection and try again.';
+      const parsedError = parseError('', errorMessage);
+      setError(parsedError);
       setIsSubmitting(false);
+
+      // Auto-retry for temporary errors
+      if (parsedError.type === 'oracle_unavailable' || parsedError.type === 'volatility') {
+        setRetryCountdown(5);
+      }
     }
   };
 
