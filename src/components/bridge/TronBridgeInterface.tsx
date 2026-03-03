@@ -30,7 +30,7 @@ const BRIDGE_CONFIG = {
   },
 } as const;
 
-const MINIMUM_BRIDGE_AMOUNT_TRX = 11;
+const MINIMUM_BRIDGE_AMOUNT_TRX = 4;
 const MINIMUM_BRIDGE_FEE_USD = 7.5;
 
 export default function TronBridgeInterface() {
@@ -103,7 +103,7 @@ export default function TronBridgeInterface() {
       
       // Validate the quote
       if (!data.routes || data.routes.length === 0) {
-        setError("No routes available for this bridge");
+        setError("No swap routes found for that amount. Try a different amount.");
         setQuote(null);
         setValidatedQuote(null);
         return;
