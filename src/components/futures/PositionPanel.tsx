@@ -107,30 +107,40 @@ export const PositionPanel: React.FC = () => {
 
   if (!initialLoad && positions.length === 0) {
     return (
-      <div className="bg-white dark:bg-darkgray rounded-lg border border-border dark:border-darkborder p-6">
-        <h3 className="text-lg font-semibold text-dark dark:text-white mb-4">Open Positions</h3>
-        <div className="text-center py-8">
-          <Icon icon="ph:chart-line-duotone" className="mx-auto text-muted dark:text-darklink mb-2" height={48} />
-          <p className="text-muted dark:text-darklink">No open positions</p>
+      <div className="bg-white dark:bg-[#0d0d0d] rounded-2xl border border-gray-200/50 dark:border-white/5 shadow-lg shadow-black/5 dark:shadow-black/20 p-8">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-sm font-bold text-dark dark:text-white uppercase tracking-wide">Open Positions</h3>
+        </div>
+        <div className="text-center py-12">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center">
+            <Icon icon="ph:chart-line-duotone" className="text-primary" height={32} />
+          </div>
+          <p className="text-muted dark:text-gray-400 font-medium">No open positions</p>
+          <p className="text-xs text-muted dark:text-gray-500 mt-1">Open a long or short position to get started</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-white dark:bg-darkgray rounded-lg border border-border dark:border-darkborder p-4">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <h3 className="text-lg font-semibold text-dark dark:text-white">Open Positions</h3>
+    <div className="bg-white dark:bg-[#0d0d0d] rounded-2xl border border-gray-200/50 dark:border-white/5 shadow-lg shadow-black/5 dark:shadow-black/20 overflow-hidden">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200/50 dark:border-white/5">
+        <div className="flex items-center gap-3">
+          <h3 className="text-sm font-bold text-dark dark:text-white uppercase tracking-wide">Open Positions</h3>
+          {positions.length > 0 && (
+            <span className="px-2 py-0.5 rounded-lg bg-primary/10 text-primary text-xs font-bold">
+              {positions.length}
+            </span>
+          )}
           {lastUpdate && (
-            <span className="text-xs text-muted dark:text-darklink">
+            <span className="text-xs text-muted dark:text-gray-500">
               {loading ? (
                 <span className="flex items-center gap-1">
                   <Icon icon="svg-spinners:ring-resize" height={12} className="opacity-50" />
                   Updating...
                 </span>
               ) : (
-                `Updated ${Math.floor((Date.now() - lastUpdate.getTime()) / 1000)}s ago`
+                `${Math.floor((Date.now() - lastUpdate.getTime()) / 1000)}s ago`
               )}
             </span>
           )}
@@ -138,12 +148,12 @@ export const PositionPanel: React.FC = () => {
         <button
           onClick={handleManualRefresh}
           disabled={loading}
-          className="p-1.5 hover:bg-muted/30 dark:hover:bg-white/5 rounded-lg transition-colors disabled:opacity-50"
+          className="p-2 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-all duration-200 disabled:opacity-50"
           title="Refresh"
         >
           <Icon 
             icon="ph:arrow-clockwise" 
-            className={`text-muted ${loading ? 'animate-spin' : ''}`} 
+            className={`text-muted dark:text-gray-400 ${loading ? 'animate-spin' : ''}`} 
             width={18} 
           />
         </button>
@@ -152,58 +162,58 @@ export const PositionPanel: React.FC = () => {
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-border dark:border-darkborder">
-              <th className="text-left py-2 px-2 text-xs font-medium text-muted dark:text-darklink">Market</th>
-              <th className="text-left py-2 px-2 text-xs font-medium text-muted dark:text-darklink">Side</th>
-              <th className="text-right py-2 px-2 text-xs font-medium text-muted dark:text-darklink">Size</th>
-              <th className="text-right py-2 px-2 text-xs font-medium text-muted dark:text-darklink">Entry</th>
-              <th className="text-right py-2 px-2 text-xs font-medium text-muted dark:text-darklink">Value</th>
-              <th className="text-right py-2 px-2 text-xs font-medium text-muted dark:text-darklink">PnL</th>
-              <th className="text-right py-2 px-2 text-xs font-medium text-muted dark:text-darklink">Leverage</th>
-              <th className="text-center py-2 px-2 text-xs font-medium text-muted dark:text-darklink">Actions</th>
+            <tr className="border-b border-gray-200/50 dark:border-white/5">
+              <th className="text-left py-3 px-4 text-xs font-bold text-muted dark:text-gray-400 uppercase tracking-wider">Market</th>
+              <th className="text-left py-3 px-4 text-xs font-bold text-muted dark:text-gray-400 uppercase tracking-wider">Side</th>
+              <th className="text-right py-3 px-4 text-xs font-bold text-muted dark:text-gray-400 uppercase tracking-wider">Size</th>
+              <th className="text-right py-3 px-4 text-xs font-bold text-muted dark:text-gray-400 uppercase tracking-wider">Entry</th>
+              <th className="text-right py-3 px-4 text-xs font-bold text-muted dark:text-gray-400 uppercase tracking-wider">Value</th>
+              <th className="text-right py-3 px-4 text-xs font-bold text-muted dark:text-gray-400 uppercase tracking-wider">PnL</th>
+              <th className="text-right py-3 px-4 text-xs font-bold text-muted dark:text-gray-400 uppercase tracking-wider">Leverage</th>
+              <th className="text-center py-3 px-4 text-xs font-bold text-muted dark:text-gray-400 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
           <tbody>
             {positions.map((position) => (
-              <tr key={position.marketIndex} className="border-b border-border dark:border-darkborder hover:bg-gray-50 dark:hover:bg-dark">
-                <td className="py-3 px-2 text-sm font-medium text-dark dark:text-white">
+              <tr key={position.marketIndex} className="border-b border-gray-100 dark:border-white/5 hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition-colors">
+                <td className="py-4 px-4 text-sm font-bold text-dark dark:text-white">
                   {getMarketSymbol(position.marketIndex)}
                 </td>
-                <td className="py-3 px-2">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                <td className="py-4 px-4">
+                  <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold ${
                     position.direction === 'long' 
-                      ? 'bg-success/10 text-success' 
-                      : 'bg-error/10 text-error'
+                      ? 'bg-success/10 text-success border border-success/20' 
+                      : 'bg-error/10 text-error border border-error/20'
                   }`}>
                     {position.direction.toUpperCase()}
                   </span>
                 </td>
-                <td className="py-3 px-2 text-sm text-right text-dark dark:text-white">
+                <td className="py-4 px-4 text-sm text-right text-dark dark:text-white font-mono font-semibold tabular-nums">
                   {position.baseAmount?.toFixed(4) || '0.0000'}
                 </td>
-                <td className="py-3 px-2 text-sm text-right text-dark dark:text-white">
+                <td className="py-4 px-4 text-sm text-right text-dark dark:text-white font-mono font-semibold tabular-nums">
                   ${position.entryPrice?.toFixed(2) || '0.00'}
                 </td>
-                <td className="py-3 px-2 text-sm text-right text-dark dark:text-white">
+                <td className="py-4 px-4 text-sm text-right text-dark dark:text-white font-mono font-semibold tabular-nums">
                   ${position.quoteAmount?.toFixed(2) || '0.00'}
                 </td>
-                <td className={`py-3 px-2 text-sm text-right font-semibold ${
+                <td className={`py-4 px-4 text-sm text-right font-bold font-mono tabular-nums ${
                   (position.unrealizedPnl || 0) >= 0 ? 'text-success' : 'text-error'
                 }`}>
                   {(position.unrealizedPnl || 0) >= 0 ? '+' : ''}${(Number(position.unrealizedPnl) || 0).toFixed(2)}
                 </td>
-                <td className="py-3 px-2 text-sm text-right text-dark dark:text-white">
+                <td className="py-4 px-4 text-sm text-right text-dark dark:text-white font-mono font-semibold tabular-nums">
                   {position.leverage?.toFixed(1) || '1.0'}x
                 </td>
-                <td className="py-3 px-2 text-center">
+                <td className="py-4 px-4 text-center">
                   <button
                     onClick={() => handleClose(position.marketIndex)}
                     disabled={closingMarketIndex === position.marketIndex || isConfirmingClose}
-                    className="px-3 py-1 rounded text-xs font-medium bg-error/10 text-error hover:bg-error/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="px-4 py-2 rounded-lg text-xs font-bold bg-error/10 text-error hover:bg-error/20 border border-error/20 hover:border-error/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                   >
                     {closingMarketIndex === position.marketIndex ? (
                       isConfirmingClose ? (
-                        <span className="flex items-center gap-1">
+                        <span className="flex items-center gap-1.5">
                           <Icon icon="svg-spinners:ring-resize" height={12} />
                           Confirming...
                         </span>
