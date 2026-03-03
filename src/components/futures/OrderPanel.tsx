@@ -308,6 +308,11 @@ export const OrderPanel: React.FC = () => {
     ? (previewData.totalRequired ?? 0) - (previewData.freeCollateral ?? 0)
     : 0;
 
+  // Safe number formatting
+  const formatNumber = (num: number | undefined | null, decimals: number = 2): string => {
+    return (num || 0).toFixed(decimals);
+  };
+
   return (
     <div className="bg-white dark:bg-darkgray rounded-lg border border-border dark:border-darkborder p-4">
       <h3 className="text-lg font-semibold text-dark dark:text-white mb-4">Open Position</h3>
@@ -676,7 +681,7 @@ export const OrderPanel: React.FC = () => {
             <div className="flex-1">
               <p className="text-sm font-semibold text-error">Insufficient Margin</p>
               <p className="text-xs text-error/80 mt-1">
-                Need ${shortfall.toFixed(2)} more to open this position.
+                Need ${formatNumber(shortfall, 2)} more to open this position.
               </p>
               <a 
                 href="/futures" 

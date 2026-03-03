@@ -82,6 +82,15 @@ export default function FuturesPage() {
   const priceChange = 0; // TODO: Calculate from market data
   const isPositive = priceChange >= 0;
 
+  // Safe formatting functions
+  const formatPrice = (price: number | undefined | null) => {
+    return (price || 0).toFixed(2);
+  };
+
+  const formatPercentage = (percent: number | undefined | null) => {
+    return (percent || 0).toFixed(2);
+  };
+
   return (
     <>
       {/* MOBILE LAYOUT */}
@@ -135,13 +144,13 @@ export default function FuturesPage() {
           
           <div className="flex items-baseline gap-3">
             <span className={`text-2xl font-bold ${isPositive ? 'text-success' : 'text-error'}`}>
-              ${currentPrice.toFixed(2)}
+              ${formatPrice(currentPrice)}
             </span>
             <span className={`text-sm ${isPositive ? 'text-success' : 'text-error'}`}>
-              ${currentPrice.toFixed(2)}
+              ${formatPrice(currentPrice)}
             </span>
             <span className={`text-sm ${isPositive ? 'text-success' : 'text-error'}`}>
-              {isPositive ? '+' : ''}{priceChange.toFixed(2)}%
+              {isPositive ? '+' : ''}{formatPercentage(priceChange)}%
             </span>
           </div>
           
@@ -279,10 +288,10 @@ export default function FuturesPage() {
               
               <div className="flex items-baseline gap-2">
                 <span className={`text-lg font-bold ${isPositive ? 'text-success' : 'text-error'}`}>
-                  ${currentPrice.toFixed(2)}
+                  ${formatPrice(currentPrice)}
                 </span>
                 <span className={`text-xs ${isPositive ? 'text-success' : 'text-error'}`}>
-                  {isPositive ? '+' : ''}{priceChange.toFixed(2)}%
+                  {isPositive ? '+' : ''}{formatPercentage(priceChange)}%
                 </span>
               </div>
             </div>
