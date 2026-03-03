@@ -1,77 +1,74 @@
 "use client";
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useFuturesStore } from '@/store/futuresStore';
-import { useDriftTrading, DriftPosition } from '@/hooks/useDriftTrading';
-import { useFuturesPolling, usePostActionPolling } from '@/hooks/useFuturesPolling';
+import { useDrift } from '@/app/context/driftContext';
+import { usePostActionPolling } from '@/hooks/useFuturesPolling';
 import { Icon } from '@iconify/react';
 
+interface DriftPosition {
+  marketIndex: number;
+  direction: 'long' | 'short';
+  baseAmount: number;
+  quoteAmount: number;
+  entryPrice: number;
+  unrealizedPnl: number;
+  leverage: number;
+}
+
 export const PositionPanel: React.FC = () => {
-  const { selectedChain, markets } = useFuturesStore();
-  const { closePosition, fetchPositions } = useDriftTrading();
+  const { markets } = useFuturesStore();
+  const { summary, refreshSummary, isLoading } = useDrift();
   const [positions, setPositions] = useState<DriftPosition[]>([]);
   const [closingMarketIndex, setClosingMarketIndex] = useState<number | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [initialLoad, setInitialLoad] = useState(true);
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const { isPolling: isConfirmingClose, startPostActionPolling } = usePostActionPolling();
 
-  // Load positions function (silent background update)
-  const loadPositions = useCallback(async () => {
-    if (loading) return; // Prevent overlapping requests
-    
-    // Don't set loading to true - keep showing current data
+  // Load positions from API when summary changes
+  useEffect(() => {
+    if (summary?.openPositions && summary.openPositions > 0) {
+      loadPositions();
+    } else {
+      setPositions([]);
+    }
+  }, [summary?.openPositions]);
+
+  const loadPositions = async () => {
     try {
-      const data = await fetchPositions();
-      setPositions(data);
-      setLastUpdate(new Date());
-      setInitialLoad(false);
+      const response = await fetch('/api/drift/positions');
+      if (response.ok) {
+        const data = await response.json();
+        setPositions(data.positions || []);
+      }
     } catch (error) {
       console.error('Failed to load positions:', error);
-      setInitialLoad(false);
     }
-  }, [fetchPositions, loading]);
-
-  // Manual refresh function (shows loading spinner)
-  const handleManualRefresh = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await fetchPositions();
-      setPositions(data);
-      setLastUpdate(new Date());
-    } catch (error) {
-      console.error('Failed to load positions:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchPositions]);
-
-  // Auto-polling every 15 seconds (increased from 5s)
-  useFuturesPolling({
-    interval: 15000,
-    enabled: true,
-    onPoll: loadPositions,
-    dependencies: [selectedChain],
-  });
+  };
 
   const handleClose = async (marketIndex: number) => {
     if (!confirm('Are you sure you want to close this position?')) return;
 
     setClosingMarketIndex(marketIndex);
     try {
-      await closePosition(marketIndex);
+      const response = await fetch('/api/drift/position/close', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ marketIndex }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to close position');
+      }
       
       // Start post-action polling to confirm position is closed
       startPostActionPolling({
         checkCondition: async () => {
-          const data = await fetchPositions();
-          setPositions(data);
+          await refreshSummary();
+          await loadPositions();
           // Check if position is gone
-          return !data.some(p => p.marketIndex === marketIndex);
+          return !positions.some(p => p.marketIndex === marketIndex);
         },
         onSuccess: () => {
           setClosingMarketIndex(null);
-          // Success feedback handled by UI
         },
         onTimeout: () => {
           setClosingMarketIndex(null);
@@ -93,7 +90,7 @@ export const PositionPanel: React.FC = () => {
     return market?.symbol || `Market ${marketIndex}`;
   };
 
-  if (initialLoad && positions.length === 0) {
+  if (isLoading && positions.length === 0) {
     return (
       <div className="bg-white dark:bg-darkgray rounded-lg border border-border dark:border-darkborder p-6">
         <h3 className="text-lg font-semibold text-dark dark:text-white mb-4">Open Positions</h3>
@@ -105,7 +102,7 @@ export const PositionPanel: React.FC = () => {
     );
   }
 
-  if (!initialLoad && positions.length === 0) {
+  if (!isLoading && positions.length === 0) {
     return (
       <div className="bg-white dark:bg-[#0d0d0d] rounded-2xl border border-gray-200/50 dark:border-white/5 shadow-lg shadow-black/5 dark:shadow-black/20 p-8">
         <div className="flex items-center justify-between mb-6">
@@ -132,28 +129,16 @@ export const PositionPanel: React.FC = () => {
               {positions.length}
             </span>
           )}
-          {lastUpdate && (
-            <span className="text-xs text-muted dark:text-gray-500">
-              {loading ? (
-                <span className="flex items-center gap-1">
-                  <Icon icon="svg-spinners:ring-resize" height={12} className="opacity-50" />
-                  Updating...
-                </span>
-              ) : (
-                `${Math.floor((Date.now() - lastUpdate.getTime()) / 1000)}s ago`
-              )}
-            </span>
-          )}
         </div>
         <button
-          onClick={handleManualRefresh}
-          disabled={loading}
+          onClick={() => { refreshSummary(); loadPositions(); }}
+          disabled={isLoading}
           className="p-2 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-all duration-200 disabled:opacity-50"
           title="Refresh"
         >
           <Icon 
             icon="ph:arrow-clockwise" 
-            className={`text-muted dark:text-gray-400 ${loading ? 'animate-spin' : ''}`} 
+            className={`text-muted dark:text-gray-400 ${isLoading ? 'animate-spin' : ''}`} 
             width={18} 
           />
         </button>
