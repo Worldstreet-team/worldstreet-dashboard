@@ -77,22 +77,13 @@ export const DriftMasterProvider: React.FC<DriftMasterProviderProps> = ({ childr
     }
   }, [user?.userId]);
   
-  // Subaccount operations
+  // Subaccount operations (deprecated - using client-side architecture now)
   const refreshSubaccountInfo = useCallback(async () => {
     if (!user?.userId) return;
     
-    try {
-      const response = await fetch('/api/futures/subaccount/info');
-      const data = await response.json();
-      
-      if (data.success) {
-        setSubaccountInfo(data.data);
-      } else if (response.status !== 404) {
-        setError(data.error);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch subaccount info');
-    }
+    // This is deprecated in the new client-side architecture
+    // Each user manages their own Drift account via driftContext.tsx
+    console.warn('[DriftMasterContext] refreshSubaccountInfo is deprecated');
   }, [user?.userId]);
   
   const initializeSubaccount = useCallback(async (): Promise<{ success: boolean; error?: string; data?: any }> => {

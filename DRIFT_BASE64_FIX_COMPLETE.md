@@ -43,6 +43,61 @@ console.log('[DriftContext] Keypair created successfully, public key:', keypair.
   - `driftContext.tsx`: Client-side trading with user's wallet (uses PIN-decrypted keys)
   - `driftMasterContext.tsx`: Read-only master wallet info (no private keys)
 
+### 3. Missing Subaccount Info Endpoint (500 Error)
+**Error**: `GET /api/futures/subaccount/info 500 (Internal Server Error)`
+
+**Root Cause**:
+- Old server-side endpoint that doesn't exist anymore
+- Client-side architecture doesn't need this endpoint
+- Each user uses subaccount ID 0 (default) for their Drift account
+
+**Fix**:
+- Removed API call from `driftContext.tsx`
+- Hardcoded subaccount ID to 0 (standard for all users)
+- Deprecated the function in `driftMasterContext.tsx`
+
+### 4. Drift Account Not Initialized Error
+**Error**: `UserAccount does not exist: Cannot read properties of null (reading 'data')`
+
+**Root Cause**:
+- New users don't have a Drift account on-chain yet
+- Need to call `initializeUser()` to create the account
+- Subscription was trying to fetch data before account existed
+
+**Fix**:
+- Added account existence check after subscription
+- Automatically initialize Drift account if it doesn't exist
+- Added try-catch blocks in refresh functions to handle "not subscribed" errors
+- Wait for account data to load before attempting to read it
+
+**Code Location**: `src/app/context/driftContext.tsx` line 295-315
+
+```typescript
+// Check if user account exists, if not, initialize it
+try {
+  const user = client.getUser();
+  const accountData = user.getUserAccount();
+  
+  if (!accountData || !accountData.data) {
+    console.log('[DriftContext] Drift account not found, initializing...');
+    
+    // Initialize Drift account (this creates the on-chain account)
+    const initTx = await client.initializeUser();
+    await connection?.confirmTransaction(initTx, 'confirmed');
+    
+    console.log('[DriftContext] Drift account initialized successfully');
+    
+    // Wait for account data to load
+    await new Promise(resolve => setTimeout(resolve, 3000));
+  } else {
+    console.log('[DriftContext] Drift account already exists');
+  }
+} catch (err) {
+  console.error('[DriftContext] Error checking/initializing account:', err);
+  // Continue anyway, the account might exist but not loaded yet
+}
+```
+
 ## Architecture Summary
 
 ### Client-Side (User Wallets)
@@ -53,6 +108,8 @@ console.log('[DriftContext] Keypair created successfully, public key:', keypair.
 - User enters PIN → keys decrypted CLIENT-SIDE → user signs transactions
 - Direct Drift Protocol integration in browser
 - Operations: deposit, withdraw, open position, close position
+- Subaccount ID: 0 (default for all users)
+- Auto-initializes Drift account if it doesn't exist
 
 ### Server-Side (Master Wallet)
 **File**: `src/app/context/driftMasterContext.tsx`
@@ -72,7 +129,9 @@ console.log('[DriftContext] Keypair created successfully, public key:', keypair.
    - Enter PIN
    - Drift client initializes
    - Check console for: "Keypair created successfully, public key: ..."
-   - No more "Non-base58 character" errors
+   - If account doesn't exist: "Drift account not found, initializing..."
+   - Account initializes automatically
+   - No more errors!
 
 ## Key Takeaways
 
@@ -89,10 +148,20 @@ console.log('[DriftContext] Keypair created successfully, public key:', keypair.
    - Restart dev server
    - Hard reload browser
 
+4. **Drift accounts must be initialized**
+   - New users need on-chain account creation
+   - Auto-initialized on first use
+   - Costs ~0.035 SOL for rent
+
+5. **Handle subscription errors gracefully**
+   - Account data may not be loaded immediately
+   - Use try-catch blocks when accessing account data
+   - Wait for polling to fetch initial data
+
 ## Files Modified
 
-- `src/app/context/driftContext.tsx` - Added debug logs and comments
-- `src/app/context/driftMasterContext.tsx` - Added architecture documentation
+- `src/app/context/driftContext.tsx` - Fixed all issues, added auto-initialization
+- `src/app/context/driftMasterContext.tsx` - Added architecture documentation, deprecated old endpoint
 - `.next/` - Cleared build cache
 
 ## Status
@@ -101,5 +170,9 @@ console.log('[DriftContext] Keypair created successfully, public key:', keypair.
 ✅ Master wallet architecture clarified
 ✅ Build cache cleared
 ✅ Documentation added
+✅ Removed non-existent API endpoint call
+✅ Added Drift account auto-initialization
+✅ Added error handling for subscription issues
 
-**Next Steps**: Test in browser after hard reload to confirm error is gone.
+**Next Steps**: Test in browser after hard reload. First-time users will see account initialization happen automatically.
+

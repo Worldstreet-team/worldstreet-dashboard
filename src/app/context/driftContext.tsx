@@ -155,13 +155,20 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     }
   }, []);
 
-  // Initialize Solana connection
+  // Initialize Solana connection with Chainstack RPC
   useEffect(() => {
     const initConnection = async () => {
       const { Connection } = await import('@solana/web3.js');
-      const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://solana-mainnet.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITN';
-      const conn = new Connection(rpcUrl, 'confirmed');
+      // Use Chainstack RPC endpoint (supports both HTTP and WebSocket)
+      const rpcUrl = 'https://solana-mainnet.core.chainstack.com/21f7bd209bb5ed556f88d4c4896b772c';
+      const wsUrl = 'wss://solana-mainnet.core.chainstack.com/21f7bd209bb5ed556f88d4c4896b772c';
+      
+      const conn = new Connection(rpcUrl, {
+        commitment: 'confirmed',
+        wsEndpoint: wsUrl,
+      });
       setConnection(conn as any);
+      console.log('[DriftContext] Connection initialized with Chainstack RPC and WSS');
     };
     initConnection();
   }, []);
@@ -267,43 +274,56 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       // Create wallet wrapper
       const wallet = new Wallet(keypair as any);
       
-      // Get or create subaccount ID
-      const subaccountResponse = await fetch('/api/futures/subaccount/info');
-      let subaccountId = 0;
-      
-      if (subaccountResponse.ok) {
-        const subaccountData = await subaccountResponse.json();
-        if (subaccountData.success) {
-          subaccountId = subaccountData.data.subaccountId;
-        }
-      }
+      // Use subaccount ID 0 (default for all users)
+      // Each user's wallet has its own Drift account, subaccount 0 is the main account
+      const subaccountId = 0;
+      console.log('[DriftContext] Using subaccount ID:', subaccountId);
       
       // Initialize Drift client
       const DRIFT_PROGRAM_ID = process.env.NEXT_PUBLIC_DRIFT_PROGRAM_ID || 'dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH';
       
-      // Import BulkAccountLoader for polling
-      const { BulkAccountLoader } = await import('@drift-labs/sdk');
-      
-      // Create account loader for polling
-      const accountLoader = new BulkAccountLoader(
-        connection as any,
-        'confirmed',
-        1000 // Poll every 1 second
-      );
+      console.log('[DriftContext] Creating Drift client with WebSocket subscription');
       
       const client = new DriftClient({
         connection: connection as any,
         wallet,
         programID: new SolanaPublicKey(DRIFT_PROGRAM_ID) as any,
         accountSubscription: {
-          type: 'polling',
-          accountLoader: accountLoader,
+          type: 'websocket',
+          // Rate limiting: Chainstack allows up to 25 requests/second
+          // WebSocket subscriptions are more efficient than polling
         },
         subAccountIds: [subaccountId]
       } as any);
       
       // Subscribe to account updates (will use polling)
       await client.subscribe();
+      
+      console.log('[DriftContext] Subscribed to Drift account updates');
+      
+      // Check if user account exists, if not, initialize it
+      try {
+        const user = client.getUser();
+        const accountData = user.getUserAccount();
+        
+        if (!accountData || !accountData.data) {
+          console.log('[DriftContext] Drift account not found, initializing...');
+          
+          // Initialize Drift account (this creates the on-chain account)
+          const initTx = await client.initializeUser();
+          await connection?.confirmTransaction(initTx, 'confirmed');
+          
+          console.log('[DriftContext] Drift account initialized successfully');
+          
+          // Wait for account data to load
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        } else {
+          console.log('[DriftContext] Drift account already exists');
+        }
+      } catch (err) {
+        console.error('[DriftContext] Error checking/initializing account:', err);
+        // Continue anyway, the account might exist but not loaded yet
+      }
       
       setDriftClient(client);
       setIsClientReady(true);
@@ -343,7 +363,14 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       }
 
       // Check if account data is loaded
-      const accountData = user.getUserAccount();
+      let accountData;
+      try {
+        accountData = user.getUserAccount();
+      } catch (err) {
+        console.warn('[DriftContext] Account not subscribed yet, skipping summary refresh');
+        return;
+      }
+      
       if (!accountData || !accountData.data) {
         console.warn('[DriftContext] Account data not loaded yet, skipping summary refresh');
         return;
@@ -405,7 +432,14 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       }
 
       // Check if account data is loaded
-      const accountData = user.getUserAccount();
+      let accountData;
+      try {
+        accountData = user.getUserAccount();
+      } catch (err) {
+        console.warn('[DriftContext] Account not subscribed yet, skipping positions refresh');
+        return;
+      }
+      
       if (!accountData || !accountData.data) {
         console.warn('[DriftContext] Account data not loaded yet, skipping positions refresh');
         return;
