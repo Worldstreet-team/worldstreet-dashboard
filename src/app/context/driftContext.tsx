@@ -283,18 +283,22 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         wallet,
         programID: new SolanaPublicKey(DRIFT_PROGRAM_ID) as any,
         accountSubscription: {
-          type: 'websocket',
+          type: 'polling',
+          accountLoader: undefined, // Use default polling
         },
         subAccountIds: [subaccountId]
       } as any);
       
-      // Subscribe to account updates
+      // Subscribe to account updates (will use polling instead of websocket)
       await client.subscribe();
       
       setDriftClient(client);
       setIsClientReady(true);
       
       console.log('[DriftContext] Client initialized successfully');
+      
+      // Wait a bit for account data to load via polling
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
       // Fetch initial data
       await refreshSummaryInternal(client);
@@ -318,7 +322,20 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     if (!client) return;
     
     try {
+      // Ensure account data is loaded
       const user = client.getUser();
+      if (!user) {
+        console.warn('[DriftContext] User not found, skipping summary refresh');
+        return;
+      }
+
+      // Check if account data is loaded
+      const accountData = user.getUserAccount();
+      if (!accountData || !accountData.data) {
+        console.warn('[DriftContext] Account data not loaded yet, skipping summary refresh');
+        return;
+      }
+      
       const spotPosition = user.getSpotPosition(0); // USDC spot position
       const perpPositions = user.getPerpPositions();
       
@@ -328,10 +345,12 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       let unrealizedPnl = 0;
       let openPositions = 0;
       
-      for (const position of perpPositions) {
-        if (position.baseAssetAmount.toNumber() !== 0) {
-          openPositions++;
-          unrealizedPnl += Number(position.unrealizedPnl || 0) / 1e6;
+      if (perpPositions && Array.isArray(perpPositions)) {
+        for (const position of perpPositions) {
+          if (position.baseAssetAmount && position.baseAssetAmount.toNumber() !== 0) {
+            openPositions++;
+            unrealizedPnl += Number(position.unrealizedPnl || 0) / 1e6;
+          }
         }
       }
       
@@ -367,27 +386,40 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     
     try {
       const user = client.getUser();
+      if (!user) {
+        console.warn('[DriftContext] User not found, skipping positions refresh');
+        return;
+      }
+
+      // Check if account data is loaded
+      const accountData = user.getUserAccount();
+      if (!accountData || !accountData.data) {
+        console.warn('[DriftContext] Account data not loaded yet, skipping positions refresh');
+        return;
+      }
+      
       const perpPositions = user.getPerpPositions();
       
       const positionsList: DriftPosition[] = [];
       
-      for (const position of perpPositions) {
-        const baseAmount = position.baseAssetAmount.toNumber();
-        if (baseAmount === 0) continue;
-        
-        const direction = baseAmount > 0 ? 'long' : 'short';
-        const market = client.getPerpMarketAccount(position.marketIndex);
-        const oraclePrice = client.getOracleDataForPerpMarket(position.marketIndex);
-        
-        positionsList.push({
-          marketIndex: position.marketIndex,
-          direction,
-          baseAmount: Math.abs(baseAmount) / 1e9,
-          quoteAmount: Math.abs(position.quoteAssetAmount.toNumber()) / 1e6,
-          entryPrice: Number(position.quoteEntryAmount) / Math.abs(baseAmount),
-          unrealizedPnl: Number(position.unrealizedPnl || 0) / 1e6,
-          leverage: market ? Number(market.marginRatioInitial) / 10000 : 1
-        });
+      if (perpPositions && Array.isArray(perpPositions)) {
+        for (const position of perpPositions) {
+          const baseAmount = position.baseAssetAmount ? position.baseAssetAmount.toNumber() : 0;
+          if (baseAmount === 0) continue;
+          
+          const direction = baseAmount > 0 ? 'long' : 'short';
+          const market = client.getPerpMarketAccount(position.marketIndex);
+          
+          positionsList.push({
+            marketIndex: position.marketIndex,
+            direction,
+            baseAmount: Math.abs(baseAmount) / 1e9,
+            quoteAmount: Math.abs(position.quoteAssetAmount.toNumber()) / 1e6,
+            entryPrice: Number(position.quoteEntryAmount) / Math.abs(baseAmount),
+            unrealizedPnl: Number(position.unrealizedPnl || 0) / 1e6,
+            leverage: market ? Number(market.marginRatioInitial) / 10000 : 1
+          });
+        }
       }
       
       setPositions(positionsList);
