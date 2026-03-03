@@ -5,7 +5,7 @@ import { Icon } from '@iconify/react';
 import { useDrift } from '@/app/context/driftContext';
 
 export const RiskPanel: React.FC = () => {
-  const { summary, refreshSummary, isLoading } = useDrift();
+  const { summary, refreshSummary, isLoading, depositCollateral, withdrawCollateral } = useDrift();
   const [action, setAction] = useState<'deposit' | 'withdraw' | null>(null);
   const [amount, setAmount] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -23,21 +23,15 @@ export const RiskPanel: React.FC = () => {
     setSuccess('');
 
     try {
-      const response = await fetch('/api/drift/collateral/deposit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: parseFloat(amount) }),
-      });
+      const result = await depositCollateral(parseFloat(amount));
 
-      const data = await response.json();
-
-      if (response.ok) {
-        setSuccess(`Successfully deposited ${amount} USDC. TX: ${data.txSignature?.slice(0, 8)}...`);
+      if (result.success) {
+        setSuccess(`Successfully deposited ${amount} USDC. TX: ${result.txSignature?.slice(0, 8)}...`);
         setAmount('');
         setAction(null);
         await refreshSummary();
       } else {
-        setError(data.error || 'Failed to deposit collateral');
+        setError(result.error || 'Failed to deposit collateral');
       }
     } catch (err) {
       setError((err as Error).message || 'Failed to deposit collateral');
@@ -62,21 +56,15 @@ export const RiskPanel: React.FC = () => {
     setSuccess('');
 
     try {
-      const response = await fetch('/api/drift/collateral/withdraw', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: parseFloat(amount) }),
-      });
+      const result = await withdrawCollateral(parseFloat(amount));
 
-      const data = await response.json();
-
-      if (response.ok) {
-        setSuccess(`Successfully withdrew ${amount} USDC. TX: ${data.txSignature?.slice(0, 8)}...`);
+      if (result.success) {
+        setSuccess(`Successfully withdrew ${amount} USDC. TX: ${result.txSignature?.slice(0, 8)}...`);
         setAmount('');
         setAction(null);
         await refreshSummary();
       } else {
-        setError(data.error || 'Failed to withdraw collateral');
+        setError(result.error || 'Failed to withdraw collateral');
       }
     } catch (err) {
       setError((err as Error).message || 'Failed to withdraw collateral');

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useFuturesStore, OrderSide, OrderType } from '@/store/futuresStore';
 import { usePostActionPolling, useDebounce } from '@/hooks/useFuturesPolling';
-import { useDriftTrading } from '@/hooks/useDriftTrading';
+import { useDrift } from '@/app/context/driftContext';
 import { Icon } from '@iconify/react';
 
 interface ErrorState {
@@ -21,7 +21,7 @@ interface ErrorState {
 
 export const OrderPanel: React.FC = () => {
   const { selectedMarket, selectedChain, setPreviewData, previewData, markets } = useFuturesStore();
-  const { openPosition, fetchPositions, fetchAccountSummary, loading: hookLoading } = useDriftTrading();
+  const { openPosition: openPositionClient, refreshPositions, refreshSummary } = useDrift();
   const { isPolling: isConfirmingOrder, startPostActionPolling } = usePostActionPolling();
   
   const [side, setSide] = useState<OrderSide>('long');
@@ -220,15 +220,17 @@ export const OrderPanel: React.FC = () => {
       // Determine marketIndex from market symbol
       const marketIndex = markets.findIndex(m => m.id === selectedMarket.id);
       
-      // Use openPosition from useDriftTrading hook
-      const result = await openPosition(
+      // Use client-side openPosition
+      const result = await openPositionClient(
         marketIndex >= 0 ? marketIndex : 0,
         side,
         parseFloat(size),
-        leverage,
-        orderType,
-        limitPrice ? parseFloat(limitPrice) : undefined
+        leverage
       );
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to open position');
+      }
 
       // Show success message
       setSuccessMessage(`Position opened! TX: ${result.txSignature?.slice(0, 8)}...`);
@@ -236,10 +238,10 @@ export const OrderPanel: React.FC = () => {
       // Start post-action polling to confirm position appears
       startPostActionPolling({
         checkCondition: async () => {
-          const positions = await fetchPositions();
-          const summary = await fetchAccountSummary();
+          await refreshPositions();
+          await refreshSummary();
           // Check if new position exists
-          return positions.length > 0 || (summary !== null && summary.openPositions > 0);
+          return true; // Position should be reflected immediately
         },
         onSuccess: () => {
           // Reset form

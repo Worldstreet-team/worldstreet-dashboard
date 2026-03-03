@@ -14,7 +14,7 @@ interface CollateralData {
 }
 
 export const CollateralPanel: React.FC = () => {
-  const { summary, isInitialized, isLoading, refreshSummary } = useDrift();
+  const { summary, isInitialized, isLoading, refreshSummary, depositCollateral, withdrawCollateral } = useDrift();
   const [action, setAction] = useState<'deposit' | 'withdraw' | null>(null);
   const [amount, setAmount] = useState('');
   const [processing, setProcessing] = useState(false);
@@ -50,19 +50,11 @@ export const CollateralPanel: React.FC = () => {
     setSuccess('');
 
     try {
-      // Use Drift deposit endpoint
-      const response = await fetch('/api/drift/collateral/deposit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: depositAmount,
-        }),
-      });
+      // Use client-side Drift deposit
+      const result = await depositCollateral(depositAmount);
 
-      const data = await response.json();
-
-      if (response.ok) {
-        setSuccess(`Depositing ${amount} USDC... TX: ${data.txSignature?.slice(0, 8)}...`);
+      if (result.success) {
+        setSuccess(`Depositing ${amount} USDC... TX: ${result.txSignature?.slice(0, 8)}...`);
         
         // Start post-action polling to confirm deposit
         startPostActionPolling({
@@ -90,7 +82,7 @@ export const CollateralPanel: React.FC = () => {
           interval: 1000,
         });
       } else {
-        setError(data.error || 'Failed to deposit collateral');
+        setError(result.error || 'Failed to deposit collateral');
         setProcessing(false);
       }
     } catch (err) {
@@ -118,27 +110,11 @@ export const CollateralPanel: React.FC = () => {
     setSuccess('');
 
     try {
-      // Use Drift withdraw endpoint
-      const response = await fetch('/api/drift/collateral/withdraw', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: withdrawAmount,
-        }),
-      });
+      // Use client-side Drift withdraw
+      const result = await withdrawCollateral(withdrawAmount);
 
-      const data = await response.json();
-
-      if (response.ok) {
-        // Show detailed success message with both transaction hashes
-        const driftTx = data.driftWithdrawTx?.slice(0, 8) || 'N/A';
-        const transferTx = data.transferToUserTx?.slice(0, 8) || 'N/A';
-        
-        setSuccess(
-          `Withdrawing ${amount} USDC...\n` +
-          `Step 1: Drift withdrawal (${driftTx}...)\n` +
-          `Step 2: Transfer to wallet (${transferTx}...)`
-        );
+      if (result.success) {
+        setSuccess(`Withdrawing ${amount} USDC... TX: ${result.txSignature?.slice(0, 8)}...`);
         
         // Start post-action polling to confirm withdrawal
         startPostActionPolling({
@@ -149,22 +125,14 @@ export const CollateralPanel: React.FC = () => {
             return newTotal <= previousTotal - withdrawAmount * 0.99; // Allow 1% tolerance
           },
           onSuccess: () => {
-            setSuccess(
-              `Successfully withdrew ${amount} USDC!\n` +
-              `Funds transferred to your futures wallet.\n` +
-              `Drift TX: ${driftTx}... | Transfer TX: ${transferTx}...`
-            );
+            setSuccess(`Successfully withdrew ${amount} USDC!`);
             setAmount('');
             setAction(null);
             setProcessing(false);
             setTimeout(() => setSuccess(''), 8000);
           },
           onTimeout: () => {
-            setSuccess(
-              `Withdrawal submitted but taking longer to confirm.\n` +
-              `Check your futures wallet balance.\n` +
-              `Drift TX: ${driftTx}... | Transfer TX: ${transferTx}...`
-            );
+            setSuccess('Withdrawal submitted but taking longer to confirm. Check your balance.');
             setAmount('');
             setAction(null);
             setProcessing(false);
@@ -174,16 +142,7 @@ export const CollateralPanel: React.FC = () => {
           interval: 1000,
         });
       } else {
-        // Handle specific error cases
-        if (response.status === 404) {
-          setError('Futures wallet not found. Please create a futures wallet first.');
-        } else if (data.error?.includes('Insufficient balance')) {
-          setError(data.message || data.error);
-        } else if (data.error?.includes('not properly loaded')) {
-          setError('Temporary synchronization issue. Please try again in a few seconds.');
-        } else {
-          setError(data.message || data.error || 'Failed to withdraw collateral');
-        }
+        setError(result.error || 'Failed to withdraw collateral');
         setProcessing(false);
       }
     } catch (err) {

@@ -1,69 +1,42 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useFuturesStore } from '@/store/futuresStore';
 import { useDrift } from '@/app/context/driftContext';
 import { usePostActionPolling } from '@/hooks/useFuturesPolling';
 import { Icon } from '@iconify/react';
 
-interface DriftPosition {
-  marketIndex: number;
-  direction: 'long' | 'short';
-  baseAmount: number;
-  quoteAmount: number;
-  entryPrice: number;
-  unrealizedPnl: number;
-  leverage: number;
-}
-
 export const PositionPanel: React.FC = () => {
   const { markets } = useFuturesStore();
-  const { summary, refreshSummary, isLoading } = useDrift();
-  const [positions, setPositions] = useState<DriftPosition[]>([]);
-  const [closingMarketIndex, setClosingMarketIndex] = useState<number | null>(null);
+  const { positions, refreshPositions, refreshSummary, isLoading, closePosition: closePositionClient } = useDrift();
+  const [closingMarketIndex, setClosingMarketIndex] = React.useState<number | null>(null);
   const { isPolling: isConfirmingClose, startPostActionPolling } = usePostActionPolling();
 
-  // Load positions from API when summary changes
+  // Refresh positions periodically
   useEffect(() => {
-    if (summary?.openPositions && summary.openPositions > 0) {
-      loadPositions();
-    } else {
-      setPositions([]);
-    }
-  }, [summary?.openPositions]);
-
-  const loadPositions = async () => {
-    try {
-      const response = await fetch('/api/drift/positions');
-      if (response.ok) {
-        const data = await response.json();
-        setPositions(data.positions || []);
-      }
-    } catch (error) {
-      console.error('Failed to load positions:', error);
-    }
-  };
+    const interval = setInterval(() => {
+      refreshPositions();
+    }, 15000);
+    
+    return () => clearInterval(interval);
+  }, [refreshPositions]);
 
   const handleClose = async (marketIndex: number) => {
     if (!confirm('Are you sure you want to close this position?')) return;
 
     setClosingMarketIndex(marketIndex);
     try {
-      const response = await fetch('/api/drift/position/close', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ marketIndex }),
-      });
+      const result = await closePositionClient(marketIndex);
 
-      if (!response.ok) {
-        throw new Error('Failed to close position');
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to close position');
       }
       
       // Start post-action polling to confirm position is closed
       startPostActionPolling({
         checkCondition: async () => {
           await refreshSummary();
-          await loadPositions();
+          await refreshPositions();
           // Check if position is gone
           return !positions.some(p => p.marketIndex === marketIndex);
         },
@@ -131,7 +104,7 @@ export const PositionPanel: React.FC = () => {
           )}
         </div>
         <button
-          onClick={() => { refreshSummary(); loadPositions(); }}
+          onClick={() => { refreshSummary(); refreshPositions(); }}
           disabled={isLoading}
           className="p-2 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-all duration-200 disabled:opacity-50"
           title="Refresh"

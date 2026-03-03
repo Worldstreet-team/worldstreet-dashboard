@@ -2,22 +2,9 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import { useAuth } from '@/app/context/authContext';
+import { Connection, PublicKey } from '@solana/web3.js';
 
 // Types
-interface DriftAccountStatus {
-  exists: boolean;
-  initialized: boolean;
-  subaccountId: number;
-  authority: string;
-  requiresInitialization: boolean;
-  initializationCost: {
-    sol: number;
-    usd: number;
-  };
-  lastUpdated: string;
-  needsFuturesWallet?: boolean;
-}
-
 interface DriftAccountSummary {
   subaccountId: number;
   publicAddress: string;
@@ -29,13 +16,26 @@ interface DriftAccountSummary {
   openPositions: number;
   openOrders: number;
   initialized: boolean;
-  error?: string;
+}
+
+interface DriftPosition {
+  marketIndex: number;
+  direction: 'long' | 'short';
+  baseAmount: number;
+  quoteAmount: number;
+  entryPrice: number;
+  unrealizedPnl: number;
+  leverage: number;
 }
 
 interface DriftContextValue {
-  // Raw data
-  status: DriftAccountStatus | null;
+  // Client state
+  driftClient: any | null;
+  isClientReady: boolean;
+  
+  // Account data
   summary: DriftAccountSummary | null;
+  positions: DriftPosition[];
   
   // Loading/error states
   isLoading: boolean;
@@ -47,9 +47,15 @@ interface DriftContextValue {
   needsInitialization: boolean;
   
   // Methods
-  checkStatus: () => Promise<void>;
+  initializeDriftClient: () => Promise<void>;
   refreshSummary: () => Promise<void>;
-  initializeAccount: () => Promise<{ success: boolean; error?: string; data?: any }>;
+  refreshPositions: () => Promise<void>;
+  
+  // Trading operations
+  depositCollateral: (amount: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
+  withdrawCollateral: (amount: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
+  openPosition: (marketIndex: number, direction: 'long' | 'short', size: number, leverage: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
+  closePosition: (marketIndex: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
   
   // Auto-refresh control
   startAutoRefresh: (intervalMs?: number) => void;
@@ -72,130 +78,365 @@ interface DriftProviderProps {
 
 export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   const { user } = useAuth();
-  const [status, setStatus] = useState<DriftAccountStatus | null>(null);
+  
+  // Client state
+  const [driftClient, setDriftClient] = useState<any | null>(null);
+  const [isClientReady, setIsClientReady] = useState(false);
+  const [connection, setConnection] = useState<Connection | null>(null);
+  
+  // Account data
   const [summary, setSummary] = useState<DriftAccountSummary | null>(null);
+  const [positions, setPositions] = useState<DriftPosition[]>([]);
+  
+  // Loading/error states
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
   const autoRefreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const statusCacheRef = useRef<{ data: DriftAccountStatus; timestamp: number } | null>(null);
-  const summaryCacheRef = useRef<{ data: DriftAccountSummary; timestamp: number } | null>(null);
-  
-  const STATUS_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-  const SUMMARY_CACHE_DURATION = 30 * 1000; // 30 seconds
+  const isInitializingRef = useRef(false);
 
-  // Check account status
-  const checkStatus = useCallback(async () => {
-    if (!user?.userId) return;
+  // Initialize Solana connection
+  useEffect(() => {
+    const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+    const conn = new Connection(rpcUrl, 'confirmed');
+    setConnection(conn);
+  }, []);
+
+  // Initialize Drift client when user is authenticated
+  const initializeDriftClient = useCallback(async () => {
+    if (!user?.userId || !connection || isInitializingRef.current) return;
     
-    // Check cache
-    const now = Date.now();
-    if (statusCacheRef.current && (now - statusCacheRef.current.timestamp) < STATUS_CACHE_DURATION) {
-      setStatus(statusCacheRef.current.data);
-      return;
-    }
-    
+    isInitializingRef.current = true;
     setIsLoading(true);
     setError(null);
     
     try {
-      const response = await fetch('/api/drift/account/status');
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch account status');
-      }
-      
-      const data: DriftAccountStatus = await response.json();
-      setStatus(data);
-      statusCacheRef.current = { data, timestamp: now };
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      setError(errorMessage);
-      console.error('[DriftContext] Error checking status:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user?.userId]);
-
-  // Refresh account summary
-  const refreshSummary = useCallback(async () => {
-    if (!user?.userId) return;
-    
-    // Check cache
-    const now = Date.now();
-    if (summaryCacheRef.current && (now - summaryCacheRef.current.timestamp) < SUMMARY_CACHE_DURATION) {
-      setSummary(summaryCacheRef.current.data);
-      return;
-    }
-    
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      const response = await fetch('/api/drift/account/summary');
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch account summary');
-      }
-      
-      const data: DriftAccountSummary = await response.json();
-      setSummary(data);
-      summaryCacheRef.current = { data, timestamp: now };
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      setError(errorMessage);
-      console.error('[DriftContext] Error refreshing summary:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user?.userId]);
-
-  // Initialize Drift account
-  const initializeAccount = useCallback(async (): Promise<{ success: boolean; error?: string; data?: any }> => {
-    if (!user?.userId) {
-      return { success: false, error: 'User not authenticated' };
-    }
-    
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      const response = await fetch('/api/drift/account/initialize', {
+      // Get user's Solana wallet keypair from server (encrypted)
+      const walletResponse = await fetch('/api/wallet/keys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chain: 'solana' })
       });
       
-      const data = await response.json();
-      
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Failed to initialize account');
+      if (!walletResponse.ok) {
+        throw new Error('Failed to get wallet keys');
       }
       
-      statusCacheRef.current = null;
-      summaryCacheRef.current = null;
+      const walletData = await walletResponse.json();
       
-      await checkStatus();
+      // Dynamic import of Drift SDK
+      const { DriftClient, Wallet } = await import('@drift-labs/sdk');
+      const { Keypair } = await import('@solana/web3.js');
+      const bs58 = (await import('bs58')).default;
+      
+      // Create keypair from private key
+      const secretKey = bs58.decode(walletData.privateKey);
+      const keypair = Keypair.fromSecretKey(secretKey);
+      
+      // Create wallet wrapper
+      const wallet = new Wallet(keypair as any);
+      
+      // Get or create subaccount ID
+      const subaccountResponse = await fetch('/api/futures/subaccount/info');
+      let subaccountId = 0;
+      
+      if (subaccountResponse.ok) {
+        const subaccountData = await subaccountResponse.json();
+        if (subaccountData.success) {
+          subaccountId = subaccountData.data.subaccountId;
+        }
+      }
+      
+      // Initialize Drift client
+      const DRIFT_PROGRAM_ID = process.env.NEXT_PUBLIC_DRIFT_PROGRAM_ID || 'dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH';
+      
+      const client = new DriftClient({
+        connection: connection as any,
+        wallet,
+        programID: new PublicKey(DRIFT_PROGRAM_ID) as any,
+        accountSubscription: {
+          type: 'websocket',
+        },
+        subAccountIds: [subaccountId]
+      } as any);
+      
+      // Subscribe to account updates
+      await client.subscribe();
+      
+      setDriftClient(client);
+      setIsClientReady(true);
+      
+      console.log('[DriftContext] Client initialized successfully');
+      
+      // Fetch initial data
+      await refreshSummaryInternal(client);
+      await refreshPositionsInternal(client);
+      
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to initialize Drift client';
+      setError(errorMessage);
+      console.error('[DriftContext] Initialization error:', err);
+    } finally {
+      setIsLoading(false);
+      isInitializingRef.current = false;
+    }
+  }, [user?.userId, connection]);
+
+  // Refresh account summary from client
+  const refreshSummaryInternal = async (client: any) => {
+    if (!client) return;
+    
+    try {
+      const user = client.getUser();
+      const spotPosition = user.getSpotPosition(0); // USDC spot position
+      const perpPositions = user.getPerpPositions();
+      
+      const totalCollateral = spotPosition ? Number(spotPosition.scaledBalance) / 1e6 : 0;
+      const freeCollateral = user.getFreeCollateral ? Number(user.getFreeCollateral()) / 1e6 : 0;
+      
+      let unrealizedPnl = 0;
+      let openPositions = 0;
+      
+      for (const position of perpPositions) {
+        if (position.baseAssetAmount.toNumber() !== 0) {
+          openPositions++;
+          unrealizedPnl += Number(position.unrealizedPnl || 0) / 1e6;
+        }
+      }
+      
+      const leverage = totalCollateral > 0 ? (totalCollateral - freeCollateral) / totalCollateral : 0;
+      const marginRatio = totalCollateral > 0 ? freeCollateral / totalCollateral : 0;
+      
+      setSummary({
+        subaccountId: user.subAccountId || 0,
+        publicAddress: user.authority.toBase58(),
+        totalCollateral,
+        freeCollateral,
+        unrealizedPnl,
+        leverage,
+        marginRatio,
+        openPositions,
+        openOrders: 0,
+        initialized: true
+      });
+      
+    } catch (err) {
+      console.error('[DriftContext] Error refreshing summary:', err);
+    }
+  };
+
+  const refreshSummary = useCallback(async () => {
+    if (!driftClient) return;
+    await refreshSummaryInternal(driftClient);
+  }, [driftClient]);
+
+  // Refresh positions from client
+  const refreshPositionsInternal = async (client: any) => {
+    if (!client) return;
+    
+    try {
+      const user = client.getUser();
+      const perpPositions = user.getPerpPositions();
+      
+      const positionsList: DriftPosition[] = [];
+      
+      for (const position of perpPositions) {
+        const baseAmount = position.baseAssetAmount.toNumber();
+        if (baseAmount === 0) continue;
+        
+        const direction = baseAmount > 0 ? 'long' : 'short';
+        const market = client.getPerpMarketAccount(position.marketIndex);
+        const oraclePrice = client.getOracleDataForPerpMarket(position.marketIndex);
+        
+        positionsList.push({
+          marketIndex: position.marketIndex,
+          direction,
+          baseAmount: Math.abs(baseAmount) / 1e9,
+          quoteAmount: Math.abs(position.quoteAssetAmount.toNumber()) / 1e6,
+          entryPrice: Number(position.quoteEntryAmount) / Math.abs(baseAmount),
+          unrealizedPnl: Number(position.unrealizedPnl || 0) / 1e6,
+          leverage: market ? Number(market.marginRatioInitial) / 10000 : 1
+        });
+      }
+      
+      setPositions(positionsList);
+      
+    } catch (err) {
+      console.error('[DriftContext] Error refreshing positions:', err);
+    }
+  };
+
+  const refreshPositions = useCallback(async () => {
+    if (!driftClient) return;
+    await refreshPositionsInternal(driftClient);
+  }, [driftClient]);
+
+  // Deposit collateral
+  const depositCollateral = useCallback(async (amount: number): Promise<{ success: boolean; txSignature?: string; error?: string }> => {
+    if (!driftClient || !isClientReady) {
+      return { success: false, error: 'Drift client not ready' };
+    }
+    
+    try {
+      setIsLoading(true);
+      
+      // Deposit USDC to Drift account
+      const txSignature = await driftClient.deposit(
+        amount * 1e6, // Convert to USDC base units
+        0, // USDC market index
+        driftClient.getUser().getUserAccountPublicKey()
+      );
+      
+      // Wait for confirmation
+      await connection?.confirmTransaction(txSignature, 'confirmed');
+      
+      // Refresh data
       await refreshSummary();
       
-      return { success: true, data };
+      return { success: true, txSignature };
+      
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      setError(errorMessage);
-      console.error('[DriftContext] Error initializing account:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to deposit collateral';
+      console.error('[DriftContext] Deposit error:', err);
       return { success: false, error: errorMessage };
     } finally {
       setIsLoading(false);
     }
-  }, [user?.userId, checkStatus, refreshSummary]);
+  }, [driftClient, isClientReady, connection, refreshSummary]);
 
+  // Withdraw collateral
+  const withdrawCollateral = useCallback(async (amount: number): Promise<{ success: boolean; txSignature?: string; error?: string }> => {
+    if (!driftClient || !isClientReady) {
+      return { success: false, error: 'Drift client not ready' };
+    }
+    
+    try {
+      setIsLoading(true);
+      
+      // Withdraw USDC from Drift account
+      const txSignature = await driftClient.withdraw(
+        amount * 1e6, // Convert to USDC base units
+        0, // USDC market index
+        driftClient.getUser().getUserAccountPublicKey()
+      );
+      
+      // Wait for confirmation
+      await connection?.confirmTransaction(txSignature, 'confirmed');
+      
+      // Refresh data
+      await refreshSummary();
+      
+      return { success: true, txSignature };
+      
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to withdraw collateral';
+      console.error('[DriftContext] Withdraw error:', err);
+      return { success: false, error: errorMessage };
+    } finally {
+      setIsLoading(false);
+    }
+  }, [driftClient, isClientReady, connection, refreshSummary]);
+
+  // Open position
+  const openPosition = useCallback(async (
+    marketIndex: number,
+    direction: 'long' | 'short',
+    size: number,
+    leverage: number
+  ): Promise<{ success: boolean; txSignature?: string; error?: string }> => {
+    if (!driftClient || !isClientReady) {
+      return { success: false, error: 'Drift client not ready' };
+    }
+    
+    try {
+      setIsLoading(true);
+      
+      const baseAmount = size * 1e9; // Convert to base units
+      const orderParams = {
+        orderType: 'market' as any,
+        marketIndex,
+        direction: direction === 'long' ? 'long' as any : 'short' as any,
+        baseAssetAmount: baseAmount,
+        price: 0, // Market order
+      };
+      
+      const txSignature = await driftClient.placePerpOrder(orderParams);
+      
+      // Wait for confirmation
+      await connection?.confirmTransaction(txSignature, 'confirmed');
+      
+      // Refresh data
+      await refreshSummary();
+      await refreshPositions();
+      
+      return { success: true, txSignature };
+      
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to open position';
+      console.error('[DriftContext] Open position error:', err);
+      return { success: false, error: errorMessage };
+    } finally {
+      setIsLoading(false);
+    }
+  }, [driftClient, isClientReady, connection, refreshSummary, refreshPositions]);
+
+  // Close position
+  const closePosition = useCallback(async (marketIndex: number): Promise<{ success: boolean; txSignature?: string; error?: string }> => {
+    if (!driftClient || !isClientReady) {
+      return { success: false, error: 'Drift client not ready' };
+    }
+    
+    try {
+      setIsLoading(true);
+      
+      const user = driftClient.getUser();
+      const position = user.getPerpPosition(marketIndex);
+      
+      if (!position || position.baseAssetAmount.toNumber() === 0) {
+        return { success: false, error: 'No position found' };
+      }
+      
+      // Close position by placing opposite order
+      const baseAmount = Math.abs(position.baseAssetAmount.toNumber());
+      const direction = position.baseAssetAmount.toNumber() > 0 ? 'short' as any : 'long' as any;
+      
+      const orderParams = {
+        orderType: 'market' as any,
+        marketIndex,
+        direction,
+        baseAssetAmount: baseAmount,
+        price: 0,
+        reduceOnly: true,
+      };
+      
+      const txSignature = await driftClient.placePerpOrder(orderParams);
+      
+      // Wait for confirmation
+      await connection?.confirmTransaction(txSignature, 'confirmed');
+      
+      // Refresh data
+      await refreshSummary();
+      await refreshPositions();
+      
+      return { success: true, txSignature };
+      
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to close position';
+      console.error('[DriftContext] Close position error:', err);
+      return { success: false, error: errorMessage };
+    } finally {
+      setIsLoading(false);
+    }
+  }, [driftClient, isClientReady, connection, refreshSummary, refreshPositions]);
+
+  // Auto-refresh
   const startAutoRefresh = useCallback((intervalMs: number = 30000) => {
     stopAutoRefresh();
     autoRefreshIntervalRef.current = setInterval(() => {
       refreshSummary();
+      refreshPositions();
     }, intervalMs);
-  }, [refreshSummary]);
+  }, [refreshSummary, refreshPositions]);
 
   const stopAutoRefresh = useCallback(() => {
     if (autoRefreshIntervalRef.current) {
@@ -204,43 +445,45 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     }
   }, []);
 
-  // Initial check on mount
+  // Initialize client when user logs in
   useEffect(() => {
-    if (user?.userId) {
-      checkStatus();
+    if (user?.userId && connection && !driftClient) {
+      initializeDriftClient();
     }
-  }, [user?.userId, checkStatus]);
-
-  // Fetch summary when status shows initialized
-  useEffect(() => {
-    if (status?.initialized && user?.userId) {
-      refreshSummary();
-    }
-  }, [status?.initialized, user?.userId, refreshSummary]);
+  }, [user?.userId, connection, driftClient, initializeDriftClient]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       stopAutoRefresh();
+      if (driftClient) {
+        driftClient.unsubscribe().catch(console.error);
+      }
     };
-  }, [stopAutoRefresh]);
+  }, [driftClient, stopAutoRefresh]);
 
   // Computed values
-  const isInitialized = status?.initialized ?? false;
-  const needsInitialization = status?.requiresInitialization ?? false;
+  const isInitialized = isClientReady && summary?.initialized === true;
+  const needsInitialization = !isInitialized;
   const canTrade = isInitialized && (summary?.freeCollateral ?? 0) > 0 && (summary?.marginRatio ?? 0) > 0.1;
 
   const value: DriftContextValue = {
-    status,
+    driftClient,
+    isClientReady,
     summary,
+    positions,
     isLoading,
     error,
     isInitialized,
     canTrade,
     needsInitialization,
-    checkStatus,
+    initializeDriftClient,
     refreshSummary,
-    initializeAccount,
+    refreshPositions,
+    depositCollateral,
+    withdrawCollateral,
+    openPosition,
+    closePosition,
     startAutoRefresh,
     stopAutoRefresh,
   };
