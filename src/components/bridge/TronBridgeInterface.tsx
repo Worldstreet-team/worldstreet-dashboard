@@ -55,14 +55,20 @@ export default function TronBridgeInterface() {
         // TRC20 USDT contract address on Tron mainnet
         const USDT_CONTRACT = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t";
         
+        // Set the default address for the TronWeb instance
+        tronWeb.setAddress(tronAddress);
+        
         const contract = await tronWeb.contract().at(USDT_CONTRACT);
-        const balance = await contract.balanceOf(tronAddress).call();
+        
+        // Call balanceOf with the address in hex format
+        const addressHex = tronWeb.address.toHex(tronAddress);
+        const balance = await contract.balanceOf(addressHex).call();
         
         // USDT has 6 decimals on Tron
         const balanceInUsdt = parseFloat(balance.toString()) / 1e6;
         setUsdtBalance(balanceInUsdt);
         
-        console.log("[USDT] Balance:", balanceInUsdt);
+        console.log("[USDT] Balance:", balanceInUsdt, "USDT");
       } catch (err) {
         console.error("[USDT] Failed to fetch balance:", err);
         setUsdtBalance(0);
