@@ -197,20 +197,21 @@ export default function FuturesPage() {
         </div>
       </div>
 
-      {/* DESKTOP LAYOUT */}
+      {/* DESKTOP LAYOUT - Horizontal/Row Based */}
       <div className="hidden md:flex flex-col h-[calc(100vh-80px)] bg-white dark:bg-darkgray">
-        <div className="flex-shrink-0 px-3 py-2 bg-white dark:bg-darkgray border-b border-border dark:border-darkborder">
+        {/* Compact Header - Single Line */}
+        <div className="flex-shrink-0 px-3 py-1.5 bg-white dark:bg-darkgray border-b border-border dark:border-darkborder">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               <div className="relative">
                 <button 
                   onClick={() => setShowMarketDropdown(!showMarketDropdown)}
-                  className="flex items-center gap-1.5 hover:bg-muted/10 px-2 py-1 rounded"
+                  className="flex items-center gap-1 hover:bg-muted/10 px-1.5 py-0.5 rounded"
                 >
                   <span className="text-sm font-bold text-dark dark:text-white">
                     {selectedMarket?.symbol || 'Select Market'}
                   </span>
-                  <Icon icon="ph:caret-down" width={12} className="text-muted" />
+                  <Icon icon="ph:caret-down" width={10} className="text-muted" />
                 </button>
                 
                 {showMarketDropdown && (
@@ -221,7 +222,7 @@ export default function FuturesPage() {
                         <button
                           key={market.id}
                           onClick={() => handleSelectMarket(market)}
-                          className={`w-full text-left px-4 py-2 hover:bg-muted/10 text-sm ${
+                          className={`w-full text-left px-3 py-1.5 hover:bg-muted/10 text-xs ${
                             selectedMarket?.id === market.id ? 'bg-muted/20 text-primary' : 'text-dark dark:text-white'
                           }`}
                         >
@@ -234,13 +235,13 @@ export default function FuturesPage() {
               </div>
               
               <div className="flex items-center gap-2">
-                <span className={`text-base font-bold ${isPositive ? 'text-success' : 'text-error'}`}>
+                <span className={`text-sm font-bold ${isPositive ? 'text-success' : 'text-error'}`}>
                   ${formatPrice(currentPrice)}
                 </span>
-                <span className={`text-xs ${isPositive ? 'text-success' : 'text-error'}`}>
+                <span className={`text-[10px] ${isPositive ? 'text-success' : 'text-error'}`}>
                   {isPositive ? '+' : ''}{formatPercentage(priceChange)}%
                 </span>
-                <span className="text-xs text-warning font-medium">PERP</span>
+                <span className="text-[10px] text-warning font-medium">PERP</span>
               </div>
             </div>
             
@@ -248,52 +249,52 @@ export default function FuturesPage() {
           </div>
         </div>
 
-        <div className="flex-shrink-0 flex items-center gap-4 px-3 py-1 border-b border-border dark:border-darkborder bg-white dark:bg-darkgray">
-          {['chart', 'positions', 'info'].map((tab) => (
-            <button 
-              key={tab}
-              onClick={() => setMobileActiveTab(tab as any)}
-              className={`pb-1 text-xs font-medium capitalize ${
-                mobileActiveTab === tab 
-                  ? 'text-dark dark:text-white border-b-2 border-warning' 
-                  : 'text-muted'
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
+        {/* Main Content - Horizontal Layout */}
+        <div className="flex-1 overflow-hidden flex flex-row">
+          {/* Left Section: Chart (60% width) */}
+          <div className="flex-1 flex flex-col overflow-hidden border-r border-border dark:border-darkborder">
+            <div className="flex-1 overflow-hidden bg-white dark:bg-darkgray">
+              <FuturesChart symbol={selectedMarket?.symbol} isDarkMode={true} />
+            </div>
+          </div>
 
-        <div className="flex-1 overflow-hidden grid grid-cols-[1fr_280px]">
-          <div className="flex flex-col overflow-hidden">
-            <div className="flex-1 overflow-hidden">
-              {mobileActiveTab === 'chart' && (
-                <div className="h-full bg-white dark:bg-darkgray">
-                  <FuturesChart symbol={selectedMarket?.symbol} isDarkMode={true} />
-                </div>
-              )}
+          {/* Middle Section: Positions & Info Tabs (25% width) */}
+          <div className="w-[25%] min-w-[300px] flex flex-col overflow-hidden border-r border-border dark:border-darkborder bg-white dark:bg-darkgray">
+            <div className="flex items-center gap-3 px-3 py-1.5 border-b border-border dark:border-darkborder">
+              {['positions', 'info'].map((tab) => (
+                <button 
+                  key={tab}
+                  onClick={() => setMobileActiveTab(tab as any)}
+                  className={`pb-1 text-xs font-medium capitalize ${
+                    mobileActiveTab === tab 
+                      ? 'text-dark dark:text-white border-b-2 border-warning' 
+                      : 'text-muted'
+                  }`}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
 
+            <div className="flex-1 overflow-y-auto">
               {mobileActiveTab === 'positions' && (
-                <div className="h-full bg-white dark:bg-darkgray overflow-auto p-4">
+                <div className="p-3">
                   <PositionPanel />
                 </div>
               )}
 
               {mobileActiveTab === 'info' && (
-                <div className="h-full bg-white dark:bg-darkgray overflow-auto p-4 space-y-4">
+                <div className="p-3 space-y-3">
                   <FuturesWalletBalance />
                   <CollateralPanel />
                   <RiskPanel />
                 </div>
               )}
             </div>
-
-            <div className="border-t border-border dark:border-darkborder bg-white dark:bg-darkgray h-[180px] flex-shrink-0 overflow-auto">
-              <PositionPanel />
-            </div>
           </div>
 
-          <div className="border-l border-border dark:border-darkborder flex flex-col overflow-hidden bg-white dark:bg-darkgray">
+          {/* Right Section: Quick Actions (15% width) */}
+          <div className="w-[15%] min-w-[220px] flex flex-col overflow-hidden bg-white dark:bg-darkgray">
             <div className="flex-1 overflow-y-auto p-3 space-y-3">
               <div className="bg-muted/20 dark:bg-white/5 rounded-lg p-3">
                 <div className="text-xs text-muted mb-2">Quick Actions</div>
