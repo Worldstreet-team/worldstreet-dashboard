@@ -1,6 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 @import './layouts/container.css';
 @import './layouts/sidebar.css';
@@ -14,6 +12,15 @@
 @import './theme/dark.css';
 @import './override/reboot.css';
 @import './layouts/rtl.css';
+
+@theme {
+  --color-dark: #0f172a;
+  --color-link: #334155;
+  --color-darklink: #94a3b8;
+  
+  /* Define bg-dark utility */
+  --color-bg-dark: #0f172a;
+}
 
 :root {
   --shadow-md: 0px 1px 4px 0px rgba(133, 146, 173, 0.1);
@@ -90,11 +97,11 @@
 @layer components {
 
   body {
-    @apply text-sm overflow-x-hidden dark:bg-dark;
+    @apply text-sm overflow-x-hidden dark:bg-slate-900;
   }
 
   body {
-    @apply text-link dark:text-darklink;
+    @apply text-slate-700 dark:text-slate-400;
   }
 
   /*heading text color*/
@@ -104,11 +111,11 @@
   h4,
   h5,
   h6 {
-    @apply text-dark dark:text-white font-semibold;
+    @apply text-slate-900 dark:text-white font-semibold;
   }
 
   input::placeholder {
-    @apply text-darklink dark:text-darklink
+    @apply text-slate-400 dark:text-slate-400
   }
 
 }
