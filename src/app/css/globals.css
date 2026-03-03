@@ -14,12 +14,10 @@
 @import './layouts/rtl.css';
 
 @theme {
+  /* Custom colors - these will generate utilities like bg-dark, text-dark, etc. */
   --color-dark: #0f172a;
   --color-link: #334155;
   --color-darklink: #94a3b8;
-  
-  /* Define bg-dark utility */
-  --color-bg-dark: #0f172a;
 }
 
 :root {
@@ -97,11 +95,11 @@
 @layer components {
 
   body {
-    @apply text-sm overflow-x-hidden dark:bg-slate-900;
+    @apply text-sm overflow-x-hidden dark:bg-dark;
   }
 
   body {
-    @apply text-slate-700 dark:text-slate-400;
+    @apply text-link dark:text-darklink;
   }
 
   /*heading text color*/
@@ -111,11 +109,11 @@
   h4,
   h5,
   h6 {
-    @apply text-slate-900 dark:text-white font-semibold;
+    @apply text-dark dark:text-white font-semibold;
   }
 
   input::placeholder {
-    @apply text-slate-400 dark:text-slate-400
+    @apply text-darklink dark:text-darklink
   }
 
 }
