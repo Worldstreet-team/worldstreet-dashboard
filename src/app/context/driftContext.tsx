@@ -155,23 +155,20 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     }
   }, []);
 
-  // Initialize Solana connection with Tatum RPC
+  // Initialize Solana connection with Ankr RPC (WebSocket support)
   useEffect(() => {
     const initConnection = async () => {
       const { Connection } = await import('@solana/web3.js');
-      // Use Tatum RPC endpoint (HTTP only, no WebSocket support)
-      const rpcUrl = 'https://solana-mainnet.gateway.tatum.io/';
+      // Use Ankr RPC with WebSocket support
+      const rpcUrl = 'https://rpc.ankr.com/solana/701746b6d4fe4674bd2a69164cebbcf717b533e80af1bb8d7d04199c04f6f7a9';
+      const wsUrl = 'wss://rpc.ankr.com/solana/ws/701746b6d4fe4674bd2a69164cebbcf717b533e80af1bb8d7d04199c04f6f7a9';
       
       const conn = new Connection(rpcUrl, {
         commitment: 'confirmed',
-        httpHeaders: {
-          'accept': 'application/json',
-          'content-type': 'application/json',
-          'x-api-key': 't-69a7490235e1e9d0cac60b89-5869552b507d413580182b34',
-        }
+        wsEndpoint: wsUrl,
       });
       setConnection(conn as any);
-      console.log('[DriftContext] Connection initialized with Tatum RPC');
+      console.log('[DriftContext] Connection initialized with Ankr RPC and WebSocket');
     };
     initConnection();
   }, []);
@@ -285,33 +282,24 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       // Initialize Drift client
       const DRIFT_PROGRAM_ID = process.env.NEXT_PUBLIC_DRIFT_PROGRAM_ID || 'dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH';
       
-      console.log('[DriftContext] Creating Drift client with polling subscription (Tatum RPC)');
-      
-      // Import BulkAccountLoader for polling
-      const { BulkAccountLoader } = await import('@drift-labs/sdk');
-      
-      // Create account loader for polling (every 2 seconds to stay under rate limits)
-      const accountLoader = new BulkAccountLoader(
-        connection as any,
-        'confirmed',
-        2000 // Poll every 2 seconds (conservative rate limiting)
-      );
+      console.log('[DriftContext] Creating Drift client with WebSocket subscription (Ankr RPC)');
       
       const client = new DriftClient({
         connection: connection as any,
         wallet,
         programID: new SolanaPublicKey(DRIFT_PROGRAM_ID) as any,
         accountSubscription: {
-          type: 'polling',
-          accountLoader: accountLoader,
+          type: 'websocket',
+          // Real-time updates via WebSocket
+          // Ankr provides reliable WebSocket support for instant account updates
         },
         subAccountIds: [subaccountId]
       } as any);
       
-      // Subscribe to account updates (using polling with Tatum RPC)
+      // Subscribe to account updates (using WebSocket with Ankr RPC)
       await client.subscribe();
       
-      console.log('[DriftContext] Subscribed to Drift account updates (polling mode)');
+      console.log('[DriftContext] Subscribed to Drift account updates (WebSocket mode)');
       
       // Check if user account exists, if not, initialize it
       try {
@@ -342,8 +330,8 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       
       console.log('[DriftContext] Client initialized successfully');
       
-      // Wait a bit for account data to load via polling
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Wait briefly for initial WebSocket data to arrive
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Fetch initial data
       await refreshSummaryInternal(client);
