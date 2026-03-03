@@ -71,7 +71,7 @@ export async function GET() {
     }
 
     // Check SOL balance only if Drift is not initialized
-    const rpcUrl = process.env.NEXT_PUBLIC_SOL_RPC || process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+    const rpcUrl = process.env.NEXT_PUBLIC_SOL_RPC || process.env.SOLANA_RPC_URL || 'https://solana-mainnet.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITN';
     const connection = new Connection(rpcUrl, 'confirmed');
     
     const walletPubkey = new PublicKey(walletAddress);

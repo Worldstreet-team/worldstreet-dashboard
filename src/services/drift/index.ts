@@ -24,7 +24,7 @@ export async function initializeDriftServices(): Promise<void> {
   
   console.log('[DriftServices] Initializing...');
   
-  const rpcUrl = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+  const rpcUrl = process.env.SOLANA_RPC_URL || 'https://solana-mainnet.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITN';
   
   try {
     // 1. Initialize master wallet

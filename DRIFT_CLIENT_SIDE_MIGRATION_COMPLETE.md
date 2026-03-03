@@ -145,7 +145,7 @@ const unrealizedPnl = position.unrealizedPnl / 1e6;
 ## Environment Variables Required
 
 ```env
-NEXT_PUBLIC_SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
+NEXT_PUBLIC_SOLANA_RPC_URL=https://solana-mainnet.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITN
 NEXT_PUBLIC_DRIFT_PROGRAM_ID=dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH
 ```
 

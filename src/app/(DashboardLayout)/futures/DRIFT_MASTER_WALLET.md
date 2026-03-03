@@ -64,7 +64,7 @@ MASTER_KEY=<base58_encoded_private_key>
 VAULT_URL=<optional_secure_vault_url>
 
 # Solana
-SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
+SOLANA_RPC_URL=https://solana-mainnet.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITN
 
 # Drift Protocol
 DRIFT_PROGRAM_ID=dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH

@@ -7,7 +7,7 @@ import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-const SOLANA_RPC = process.env.SOLANA_RPC || "https://api.mainnet-beta.solana.com";
+const SOLANA_RPC = process.env.SOLANA_RPC || "https://solana-mainnet.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITN";
 const USDT_MINT = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
 const USDT_DECIMALS = 6;
 

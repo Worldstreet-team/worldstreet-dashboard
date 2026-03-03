@@ -136,7 +136,7 @@ Successfully implemented a comprehensive Drift Protocol Master Wallet Subaccount
 MASTER_KEY=<base58_private_key>
 
 # Solana
-SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
+SOLANA_RPC_URL=https://solana-mainnet.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITN
 
 # Drift Protocol
 DRIFT_PROGRAM_ID=dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH

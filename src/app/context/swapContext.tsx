@@ -17,7 +17,7 @@ const LIFI_API = "https://li.quest/v1";
 
 // Solana RPC — uses Alchemy via env, falls back to public mainnet
 const SOL_RPC =
-  process.env.NEXT_PUBLIC_SOL_RPC || "https://api.mainnet-beta.solana.com";
+  process.env.NEXT_PUBLIC_SOL_RPC || "https://solana-mainnet.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITN";
 
 // Ethereum RPC — uses Alchemy via env
 const ETH_RPC =

@@ -3,7 +3,7 @@ import { Connection, PublicKey } from "@solana/web3.js";
 import { ethers } from "ethers";
 
 // RPC endpoints
-const SOL_RPC = process.env.NEXT_PUBLIC_SOL_RPC || "https://api.mainnet-beta.solana.com";
+const SOL_RPC = process.env.NEXT_PUBLIC_SOL_RPC || "https://solana-mainnet.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITN";
 const ETH_RPC = process.env.NEXT_PUBLIC_ETH_RPC || "https://rpc.ankr.com/eth";
 
 // Minimal ERC20 ABI for metadata
