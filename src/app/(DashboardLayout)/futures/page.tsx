@@ -293,9 +293,6 @@ export default function FuturesPage() {
             {/* Right: Account Status & Actions */}
             <div className="flex items-center gap-4">
               <DriftAccountStatus />
-              <button className="p-2.5 rounded-xl bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200/50 dark:border-white/10 transition-all duration-200">
-                <Icon icon="ph:gear" width={20} className="text-muted dark:text-gray-400" />
-              </button>
             </div>
           </div>
         </div>
