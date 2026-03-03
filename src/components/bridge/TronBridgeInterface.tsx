@@ -291,8 +291,8 @@ export default function TronBridgeInterface() {
         txHash = receipt.txid || receipt.transaction?.txID;
         console.log("[Bridge] Transaction broadcast:", txHash);
       } else if (txData.tx.from && txData.tx.to && txData.tx.data) {
-        // EVM-style transaction from Swing - build Tron smart contract call
-        console.log("[Bridge] Building Tron transaction from EVM-style data");
+        // EVM-style transaction from Swing - send as raw transaction
+        console.log("[Bridge] Processing EVM-style transaction for Tron");
         console.log("[Bridge] Contract:", txData.tx.to);
         console.log("[Bridge] Data:", txData.tx.data);
         console.log("[Bridge] Value:", txData.tx.value);
@@ -309,37 +309,56 @@ export default function TronBridgeInterface() {
         
         console.log("[Bridge] Call value (sun):", callValue);
         
-        // Build the transaction using triggerSmartContract
-        const parameter = txData.tx.data.startsWith('0x') ? txData.tx.data.slice(2) : txData.tx.data;
+        // Build a raw Tron transaction
+        // Remove 0x prefix from data if present
+        const data = txData.tx.data.startsWith('0x') ? txData.tx.data.slice(2) : txData.tx.data;
         
-        const txObject = await tronWeb.transactionBuilder.triggerSmartContract(
+        // Create transaction using transactionBuilder
+        const unsignedTx = await tronWeb.transactionBuilder.triggerSmartContract(
           txData.tx.to,
-          parameter,
+          data,
           {
-            feeLimit: 150_000_000, // 150 TRX max fee
+            feeLimit: 150_000_000,
             callValue: callValue,
           },
           [],
           tronAddress
         );
 
-        if (!txObject.result || !txObject.result.result) {
-          console.error("[Bridge] Failed to build transaction:", txObject);
-          throw new Error(txObject.result?.message || "Failed to build transaction");
-        }
+        console.log("[Bridge] Unsigned transaction:", unsignedTx);
 
-        console.log("[Bridge] Transaction built successfully");
-        const signedTx = await tronWeb.trx.sign(txObject.transaction, privateKey);
-        console.log("[Bridge] Transaction signed, broadcasting...");
-        
-        const receipt = await tronWeb.trx.sendRawTransaction(signedTx);
-        
-        if (!receipt.result) {
-          throw new Error(receipt.message || "Transaction broadcast failed");
+        if (!unsignedTx.result || !unsignedTx.result.result) {
+          console.error("[Bridge] Failed to build transaction:", unsignedTx);
+          
+          // Log more details about the failure
+          if (unsignedTx.transaction) {
+            console.log("[Bridge] Transaction object exists, attempting to sign anyway");
+            const signedTx = await tronWeb.trx.sign(unsignedTx.transaction, privateKey);
+            const receipt = await tronWeb.trx.sendRawTransaction(signedTx);
+            
+            if (!receipt.result) {
+              throw new Error(receipt.message || "Transaction broadcast failed");
+            }
+            
+            txHash = receipt.txid || receipt.transaction?.txID;
+            console.log("[Bridge] Transaction broadcast:", txHash);
+          } else {
+            throw new Error(unsignedTx.result?.message || "Failed to build transaction");
+          }
+        } else {
+          console.log("[Bridge] Transaction built successfully");
+          const signedTx = await tronWeb.trx.sign(unsignedTx.transaction, privateKey);
+          console.log("[Bridge] Transaction signed, broadcasting...");
+          
+          const receipt = await tronWeb.trx.sendRawTransaction(signedTx);
+          
+          if (!receipt.result) {
+            throw new Error(receipt.message || "Transaction broadcast failed");
+          }
+          
+          txHash = receipt.txid || receipt.transaction?.txID;
+          console.log("[Bridge] Transaction broadcast:", txHash);
         }
-        
-        txHash = receipt.txid || receipt.transaction?.txID;
-        console.log("[Bridge] Transaction broadcast:", txHash);
       } else {
         throw new Error("Unsupported transaction format from Swing API");
       }
