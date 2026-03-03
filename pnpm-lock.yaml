@@ -159,6 +159,9 @@ importers:
       '@types/bcryptjs':
         specifier: ^2.4.6
         version: 2.4.6
+      '@types/bs58':
+        specifier: ^4.0.4
+        version: 4.0.4
       '@types/crypto-js':
         specifier: ^4.2.2
         version: 4.2.2
@@ -2487,6 +2490,9 @@ packages:
 
   '@types/bcryptjs@2.4.6':
     resolution: {integrity: sha512-9xlo6R2qDs5uixm0bcIqCeMCE6HiQsIyel9KQySStiyqNl2tnj2mP3DX1Nf56MD6KMenNNlBBsy3LJ7gUEQPXQ==}
+
+  '@types/bs58@4.0.4':
+    resolution: {integrity: sha512-0IEpMFXXQi2zXaXl9GJ3sRwQo0uEkD+yFOv+FnAU5lkPtcu6h61xb7jc2CFPEZ5BUOaiP13ThuGc9HD4R8lR5g==}
 
   '@types/connect@3.4.38':
     resolution: {integrity: sha512-K6uROf1LD88uDQqJCktA4yzL1YYAK6NgfsI0v/mTgyPKWsX1CnJ0XPSDhViejru1GcRkLWb8RlzFYJRqGUbaug==}
@@ -9145,6 +9151,11 @@ snapshots:
     optional: true
 
   '@types/bcryptjs@2.4.6': {}
+
+  '@types/bs58@4.0.4':
+    dependencies:
+      '@types/node': 20.19.35
+      base-x: 3.0.11
 
   '@types/connect@3.4.38':
     dependencies:
