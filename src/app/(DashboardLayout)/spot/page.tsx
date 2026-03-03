@@ -259,113 +259,259 @@ export default function SpotTradingPage() {
         )}
       </div>
 
-      {/* DESKTOP/TABLET LAYOUT - Original */}
+      {/* DESKTOP/TABLET LAYOUT - Mobile-Style Structure */}
       <div className="hidden md:flex flex-col h-[calc(100vh-80px)] bg-white dark:bg-darkgray">
-        {/* Pair Info Bar - Full Width */}
-        <PairInfoBar 
-          selectedPair={selectedPair}
-          onSelectPair={setSelectedPair}
-        />
-
-        {/* DESKTOP LAYOUT: 3-Column Grid */}
-        <div className="hidden lg:flex flex-col flex-1 overflow-hidden">
-          {/* Main Trading Grid: Order Book | Chart | Right Sidebar */}
-          <div className="flex-1 grid grid-cols-[22%_53%_25%] overflow-hidden">
-            {/* LEFT: Order Book */}
-            <div className="h-full overflow-hidden">
-              <OrderBook selectedPair={selectedPair} />
+        {/* Pair Header with Price Info - Mobile Style */}
+        <div className="flex-shrink-0 px-3 py-2 bg-white dark:bg-darkgray border-b border-border dark:border-darkborder">
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="relative">
+              <button 
+                onClick={() => setShowPairDropdown(!showPairDropdown)}
+                className="flex items-center gap-2 hover:bg-muted/10 px-2 py-1 rounded"
+              >
+                <span className="text-lg font-bold text-dark dark:text-white">{selectedPair.replace('-', '/')}</span>
+                <Icon icon="ph:caret-down" width={16} className="text-muted" />
+              </button>
+              
+              {/* Pair Dropdown */}
+              {showPairDropdown && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setShowPairDropdown(false)}
+                  />
+                  <div className="absolute top-full left-0 mt-1 bg-white dark:bg-darkgray border border-border dark:border-darkborder rounded-lg shadow-lg z-50 min-w-[150px]">
+                    {AVAILABLE_PAIRS.map((pair) => (
+                      <button
+                        key={pair}
+                        onClick={() => handleSelectPair(pair)}
+                        className={`w-full text-left px-4 py-2 hover:bg-muted/10 ${
+                          selectedPair === pair ? 'bg-muted/20 text-primary' : 'text-dark dark:text-white'
+                        }`}
+                      >
+                        {pair.replace('-', '/')}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
-
-            {/* CENTER: Chart + Order Entry */}
-            <div className="h-full flex flex-col overflow-hidden">
-              {/* Chart */}
-              <div className="flex-1 overflow-hidden">
-                <LiveChart 
-                  symbol={selectedPair}
-                  stopLoss={chartStopLoss}
-                  takeProfit={chartTakeProfit}
-                  onUpdateLevels={handleUpdateLevels}
-                />
-              </div>
-
-              {/* Order Entry Panel - Collapsible */}
-              <div className={`flex-shrink-0 transition-all duration-300 ease-in-out ${
-                isOrderEntryExpanded ? 'h-auto' : 'h-[32px]'
-              }`}>
-                <SpotOrderEntry 
-                  selectedPair={selectedPair}
-                  onTradeExecuted={handleTradeExecuted}
-                  isExpanded={isOrderEntryExpanded}
-                  onToggleExpand={() => setIsOrderEntryExpanded(!isOrderEntryExpanded)}
-                />
-              </div>
-            </div>
-
-            {/* RIGHT: Market List + Market Trades */}
-            <div className="h-full flex flex-col overflow-hidden">
-              {/* Market List - Top half */}
-              <div className="flex-1 overflow-hidden">
-                <MarketList 
-                  selectedPair={selectedPair}
-                  onSelectPair={setSelectedPair}
-                />
-              </div>
-
-              {/* Market Trades - Bottom half */}
-              <div className="flex-1 overflow-hidden border-t border-border dark:border-darkborder">
-                <MarketTrades selectedPair={selectedPair} />
-              </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted">{currentPairData.name} Price</span>
+              <Icon icon="ph:arrow-up-right" width={12} className="text-muted" />
             </div>
           </div>
-
-          {/* Bottom Tabs - Full Width */}
-          <div className="border-t border-border dark:border-darkborder h-[350px] flex-shrink-0">
-            <BottomTabs 
-              refreshKey={refreshKey}
-              selectedChartSymbol={selectedPair}
-              onPositionTPSLUpdate={handlePositionTPSLUpdate}
-              showTPSLLines={showTPSLLines}
-              onToggleTPSLLines={() => setShowTPSLLines(!showTPSLLines)}
-            />
+          
+          <div className="flex items-baseline gap-3">
+            <span className={`text-2xl font-bold ${isPositive ? 'text-success' : 'text-error'}`}>
+              {currentPrice.toFixed(2)}
+            </span>
+            <span className={`text-sm ${isPositive ? 'text-success' : 'text-error'}`}>
+              ${currentPrice.toFixed(2)}
+            </span>
+            <span className={`text-sm ${isPositive ? 'text-success' : 'text-error'}`}>
+              {isPositive ? '+' : ''}{priceChange.toFixed(2)}%
+            </span>
           </div>
         </div>
 
-        {/* TABLET LAYOUT: Stacked with Order Book as tab */}
-        <div className="hidden md:flex lg:hidden flex-col flex-1 overflow-hidden">
-          {/* Chart */}
-          <div className="h-[50vh] flex-shrink-0">
-            <LiveChart 
-              symbol={selectedPair}
-              stopLoss={chartStopLoss}
-              takeProfit={chartTakeProfit}
-              onUpdateLevels={handleUpdateLevels}
-            />
+        {/* Chart Tabs */}
+        <div className="flex-shrink-0 flex items-center gap-6 px-3 border-b border-border dark:border-darkborder bg-white dark:bg-darkgray">
+          <button 
+            onClick={() => setMobileActiveTab('chart')}
+            className={`pb-2 text-sm font-medium ${
+              mobileActiveTab === 'chart' 
+                ? 'text-dark dark:text-white border-b-2 border-warning' 
+                : 'text-muted'
+            }`}
+          >
+            Chart
+          </button>
+          <button 
+            onClick={() => setMobileActiveTab('orderbook')}
+            className={`pb-2 text-sm font-medium ${
+              mobileActiveTab === 'orderbook' 
+                ? 'text-dark dark:text-white border-b-2 border-warning' 
+                : 'text-muted'
+            }`}
+          >
+            Order Book
+          </button>
+          <button 
+            onClick={() => setMobileActiveTab('trades')}
+            className={`pb-2 text-sm font-medium ${
+              mobileActiveTab === 'trades' 
+                ? 'text-dark dark:text-white border-b-2 border-warning' 
+                : 'text-muted'
+            }`}
+          >
+            Trades
+          </button>
+        </div>
+
+        {/* Main Content Area - 2 Column Layout for Desktop */}
+        <div className="flex-1 overflow-hidden grid grid-cols-[1fr_300px]">
+          {/* Left: Chart + Bottom Tabs */}
+          <div className="flex flex-col overflow-hidden">
+            {/* Chart Area */}
+            <div className="flex-1 overflow-hidden">
+              {mobileActiveTab === 'chart' && (
+                <div className="h-full bg-white dark:bg-darkgray">
+                  <LiveChart 
+                    symbol={selectedPair}
+                    stopLoss={chartStopLoss}
+                    takeProfit={chartTakeProfit}
+                    onUpdateLevels={handleUpdateLevels}
+                  />
+                </div>
+              )}
+
+              {mobileActiveTab === 'orderbook' && (
+                <div className="h-full bg-white dark:bg-darkgray overflow-auto">
+                  <OrderBook selectedPair={selectedPair} />
+                </div>
+              )}
+
+              {mobileActiveTab === 'trades' && (
+                <div className="h-full bg-white dark:bg-darkgray overflow-auto">
+                  <MarketTrades selectedPair={selectedPair} />
+                </div>
+              )}
+            </div>
+
+            {/* Bottom Tabs - Open Orders / Holdings */}
+            <div className="border-t border-border dark:border-darkborder bg-white dark:bg-darkgray h-[200px] flex-shrink-0">
+              <BottomTabs 
+                refreshKey={refreshKey}
+                selectedChartSymbol={selectedPair}
+                onPositionTPSLUpdate={handlePositionTPSLUpdate}
+                showTPSLLines={showTPSLLines}
+                onToggleTPSLLines={() => setShowTPSLLines(!showTPSLLines)}
+              />
+            </div>
           </div>
 
-          {/* Order Entry */}
-          <div className="flex-shrink-0 border-t border-border dark:border-darkborder">
-            <SpotOrderEntry 
-              selectedPair={selectedPair}
-              onTradeExecuted={handleTradeExecuted}
-            />
-          </div>
+          {/* Right: Trading Form (Mobile Style) */}
+          <div className="border-l border-border dark:border-darkborder flex flex-col overflow-hidden">
+            {/* Trading Form Content */}
+            <div className="flex-1 overflow-y-auto">
+              <div className="flex flex-col p-2 gap-2 bg-white dark:bg-darkgray">
+                {/* Buy/Sell Toggle */}
+                <div className="flex bg-muted/20 dark:bg-white/5 rounded-lg p-0.5">
+                  <button
+                    onClick={() => setTradingPanelSide('buy')}
+                    className={`flex-1 py-1.5 text-xs font-semibold rounded transition-colors ${
+                      tradingPanelSide === 'buy'
+                        ? 'bg-success text-white'
+                        : 'text-dark dark:text-white'
+                    }`}
+                  >
+                    Buy
+                  </button>
+                  <button
+                    onClick={() => setTradingPanelSide('sell')}
+                    className={`flex-1 py-1.5 text-xs font-semibold rounded transition-colors ${
+                      tradingPanelSide === 'sell'
+                        ? 'bg-error text-white'
+                        : 'text-dark dark:text-white'
+                    }`}
+                  >
+                    Sell
+                  </button>
+                </div>
 
-          {/* Order Book */}
-          <div className="flex-shrink-0 border-t border-border dark:border-darkborder h-[200px]">
-            <OrderBook selectedPair={selectedPair} />
-          </div>
+                {/* Order Type Dropdown */}
+                <button className="w-full rounded-lg bg-muted/20 dark:bg-white/5 px-2 py-2 flex items-center justify-between">
+                  <span className="text-xs text-dark dark:text-white">Market</span>
+                  <Icon icon="ph:caret-down" width={12} className="text-muted" />
+                </button>
 
-          {/* Bottom Tabs */}
-          <div className="flex-shrink-0 border-t border-border dark:border-darkborder">
-            <BottomTabs 
-              refreshKey={refreshKey}
-              selectedChartSymbol={selectedPair}
-              onPositionTPSLUpdate={handlePositionTPSLUpdate}
-              showTPSLLines={showTPSLLines}
-              onToggleTPSLLines={() => setShowTPSLLines(!showTPSLLines)}
-            />
+                {/* Market Price (Disabled) */}
+                <div className="w-full rounded-lg bg-muted/30 dark:bg-white/10 px-2 py-2">
+                  <span className="text-xs text-muted">Market Price</span>
+                </div>
+
+                {/* Total Input Row */}
+                <div className="flex gap-1.5">
+                  <input
+                    type="number"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder="0.00"
+                    className="flex-1 rounded-lg bg-muted/20 dark:bg-white/5 border border-border dark:border-darkborder px-2 py-2 text-xs text-dark dark:text-white focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  <button className="px-3 py-2 rounded-lg bg-muted/20 dark:bg-white/5 border border-border dark:border-darkborder text-xs font-medium text-dark dark:text-white flex items-center gap-1">
+                    USDT
+                    <Icon icon="ph:caret-down" width={10} className="text-muted" />
+                  </button>
+                </div>
+
+                {/* Slider */}
+                <div className="w-full">
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={0}
+                    className="w-full h-1 bg-muted/30 dark:bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary"
+                  />
+                  <div className="flex justify-between mt-0.5">
+                    {[0, 25, 50, 75, 100].map((val) => (
+                      <button
+                        key={val}
+                        className="text-[9px] text-muted hover:text-primary transition-colors"
+                      >
+                        {val}%
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Available / Max / Fee Section */}
+                <div className="flex flex-col text-[10px] text-muted gap-0.5">
+                  <div className="flex justify-between">
+                    <span>Avbl</span>
+                    <span className="text-dark dark:text-white font-mono">
+                      0.00 {tradingPanelSide === 'buy' ? tokenOut : tokenIn}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Max {tradingPanelSide === 'buy' ? 'Buy' : 'Sell'}</span>
+                    <span className="text-dark dark:text-white font-mono">0 {tokenIn}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Est. Fee</span>
+                    <span className="text-dark dark:text-white font-mono">-- {tokenIn}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Buy/Sell Button - Fixed at bottom */}
+            <div className="flex-shrink-0 p-2 bg-white dark:bg-darkgray border-t border-border dark:border-darkborder">
+              <button
+                onClick={() => handleOpenTradingPanel(tradingPanelSide)}
+                className={`w-full py-2.5 rounded-lg font-semibold text-sm transition-colors ${
+                  tradingPanelSide === 'buy'
+                    ? 'bg-success hover:bg-success/90 text-white'
+                    : 'bg-error hover:bg-error/90 text-white'
+                }`}
+              >
+                {tradingPanelSide === 'buy' ? 'Buy' : 'Sell'} {tokenIn}
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* Trading Panel Modal */}
+        {showTradingPanel && (
+          <TradingPanel
+            selectedPair={selectedPair}
+            side={tradingPanelSide}
+            onClose={() => setShowTradingPanel(false)}
+            onTradeExecuted={handleTradeExecuted}
+          />
+        )}
       </div>
     </>
   );
