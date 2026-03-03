@@ -246,45 +246,8 @@ export default function FuturesPage() {
               )}
             </div>
             
-            {/* Price Display */}
-            <div className="flex items-baseline gap-3 pl-6 border-l border-gray-200 dark:border-white/10">
-              <div>
-                <div className="text-xs text-muted dark:text-gray-500 mb-0.5 font-medium">Mark Price</div>
-                <span className={`text-3xl font-bold tabular-nums tracking-tight ${
-                  isPositive ? 'text-success' : 'text-error'
-                }`}>
-                  ${formatPrice(currentPrice)}
-                </span>
-              </div>
-              <div className="flex flex-col gap-1">
-                <span className={`text-sm font-semibold tabular-nums ${
-                  isPositive ? 'text-success' : 'text-error'
-                }`}>
-                  {isPositive ? '+' : ''}{formatPercentage(priceChange)}%
-                </span>
-                <span className="inline-flex items-center gap-1 text-xs font-bold text-warning bg-warning/10 px-2 py-0.5 rounded-md">
-                  <Icon icon="ph:lightning-fill" width={12} />
-                  PERP
-                </span>
-              </div>
-            </div>
 
-            {/* Timeframe Selector */}
-            <div className="flex items-center gap-1 ml-4 p-1 bg-gray-100 dark:bg-white/5 rounded-xl">
-              {timeframes.map((tf) => (
-                <button
-                  key={tf}
-                  onClick={() => setSelectedTimeframe(tf)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                    selectedTimeframe === tf
-                      ? 'bg-white dark:bg-white/10 text-dark dark:text-white shadow-sm'
-                      : 'text-muted dark:text-gray-500 hover:text-dark dark:hover:text-white'
-                  }`}
-                >
-                  {tf}
-                </button>
-              ))}
-            </div>
+
           </div>
         </div>
 
