@@ -201,11 +201,11 @@ export default function FuturesPage() {
       </div>
 
       {/* DESKTOP LAYOUT - Premium Trading Interface */}
-      <div className="hidden md:flex flex-col h-[calc(100vh-80px)] bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-[#0a0a0a] dark:via-[#111111] dark:to-[#0a0a0a]">
+      <div className="hidden md:block fixed inset-0 top-[64px] bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-[#0a0a0a] dark:via-[#111111] dark:to-[#0a0a0a]">
         
         {/* Premium Header Bar */}
-        <div className="flex-shrink-0 px-8 py-4 bg-white/80 dark:bg-black/40 backdrop-blur-xl border-b border-gray-200/50 dark:border-white/5">
-          <div className="flex items-center justify-between">
+        <div className="h-20 px-8 py-4 bg-white/80 dark:bg-black/40 backdrop-blur-xl border-b border-gray-200/50 dark:border-white/5">
+          <div className="flex items-center justify-between h-full">
             
             {/* Left: Market Info */}
             <div className="flex items-center gap-6">
@@ -289,95 +289,91 @@ export default function FuturesPage() {
                 ))}
               </div>
             </div>
-            
-            {/* Right: Account Status & Actions */}
-            <div className="flex items-center gap-4">
-              <DriftAccountStatus />
-            </div>
           </div>
         </div>
 
-        {/* Main Trading Area - 3 Column Grid */}
-        <div className="flex-1 overflow-hidden grid grid-cols-12 gap-6 p-6">
+        {/* Main Trading Area - Fixed Height Grid */}
+        <div className="h-[calc(100%-80px)] grid grid-cols-12 gap-6 p-6">
           
           {/* LEFT COLUMN: Chart (70% width - 8 cols) */}
-          <div className="col-span-8 flex flex-col gap-6 overflow-hidden">
-            {/* Chart Container */}
-            <div className="flex-1 bg-white dark:bg-[#0d0d0d] rounded-2xl border border-gray-200/50 dark:border-white/5 shadow-lg shadow-black/5 dark:shadow-black/20 overflow-hidden">
+          <div className="col-span-8 flex flex-col gap-6 h-full">
+            {/* Chart Container - Takes remaining space */}
+            <div className="flex-1 min-h-0 bg-white dark:bg-[#0d0d0d] rounded-2xl border border-gray-200/50 dark:border-white/5 shadow-lg shadow-black/5 dark:shadow-black/20">
               <FuturesChart symbol={selectedMarket?.symbol} isDarkMode={true} />
             </div>
 
-            {/* Positions Panel */}
-            <div className="h-[280px] overflow-hidden">
+            {/* Positions Panel - Fixed height */}
+            <div className="h-[280px] flex-shrink-0">
               <PositionPanel />
             </div>
           </div>
 
           {/* RIGHT COLUMN: Account Stats & Actions (30% width - 4 cols) */}
-          <div className="col-span-4 flex flex-col gap-4 overflow-y-auto pr-2 custom-scrollbar">
-            
-            {/* Quick Actions Card */}
-            <div className="bg-white dark:bg-[#0d0d0d] rounded-2xl border border-gray-200/50 dark:border-white/5 shadow-lg shadow-black/5 dark:shadow-black/20 p-6">
-              <h3 className="text-sm font-bold text-dark dark:text-white mb-4 uppercase tracking-wide">Quick Actions</h3>
+          <div className="col-span-4 h-full overflow-y-auto pr-2 custom-scrollbar">
+            <div className="flex flex-col gap-4">
+              {/* Quick Actions Card */}
+              <div className="bg-white dark:bg-[#0d0d0d] rounded-2xl border border-gray-200/50 dark:border-white/5 shadow-lg shadow-black/5 dark:shadow-black/20 p-6">
+                <h3 className="text-sm font-bold text-dark dark:text-white mb-4 uppercase tracking-wide">Quick Actions</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => handleOpenOrderModal('long')}
+                    className="group relative overflow-hidden py-4 bg-gradient-to-br from-success to-success/80 hover:from-success/90 hover:to-success/70 text-white font-bold rounded-xl transition-all duration-200 shadow-lg shadow-success/20 hover:shadow-xl hover:shadow-success/30 hover:-translate-y-0.5"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="relative flex flex-col items-center gap-1">
+                      <Icon icon="ph:arrow-up-bold" width={20} />
+                      <span className="text-sm">Open Long</span>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => handleOpenOrderModal('short')}
+                    className="group relative overflow-hidden py-4 bg-gradient-to-br from-error to-error/80 hover:from-error/90 hover:to-error/70 text-white font-bold rounded-xl transition-all duration-200 shadow-lg shadow-error/20 hover:shadow-xl hover:shadow-error/30 hover:-translate-y-0.5"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="relative flex flex-col items-center gap-1">
+                      <Icon icon="ph:arrow-down-bold" width={20} />
+                      <span className="text-sm">Open Short</span>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Account Stats Grid */}
               <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => handleOpenOrderModal('long')}
-                  className="group relative overflow-hidden py-4 bg-gradient-to-br from-success to-success/80 hover:from-success/90 hover:to-success/70 text-white font-bold rounded-xl transition-all duration-200 shadow-lg shadow-success/20 hover:shadow-xl hover:shadow-success/30 hover:-translate-y-0.5"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <div className="relative flex flex-col items-center gap-1">
-                    <Icon icon="ph:arrow-up-bold" width={20} />
-                    <span className="text-sm">Open Long</span>
-                  </div>
-                </button>
-                <button
-                  onClick={() => handleOpenOrderModal('short')}
-                  className="group relative overflow-hidden py-4 bg-gradient-to-br from-error to-error/80 hover:from-error/90 hover:to-error/70 text-white font-bold rounded-xl transition-all duration-200 shadow-lg shadow-error/20 hover:shadow-xl hover:shadow-error/30 hover:-translate-y-0.5"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <div className="relative flex flex-col items-center gap-1">
-                    <Icon icon="ph:arrow-down-bold" width={20} />
-                    <span className="text-sm">Open Short</span>
-                  </div>
-                </button>
+                {/* Total Balance */}
+                <div className="bg-gradient-to-br from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/5 rounded-xl p-4 border border-primary/20 dark:border-primary/30">
+                  <div className="text-xs font-semibold text-primary/70 dark:text-primary/60 mb-1 uppercase tracking-wide">Total Balance</div>
+                  <div className="text-xl font-bold text-dark dark:text-white tabular-nums">$0.00</div>
+                </div>
+
+                {/* Available */}
+                <div className="bg-gradient-to-br from-success/5 to-success/10 dark:from-success/10 dark:to-success/5 rounded-xl p-4 border border-success/20 dark:border-success/30">
+                  <div className="text-xs font-semibold text-success/70 dark:text-success/60 mb-1 uppercase tracking-wide">Available</div>
+                  <div className="text-xl font-bold text-dark dark:text-white tabular-nums">$0.00</div>
+                </div>
+
+                {/* Unrealized PnL */}
+                <div className="bg-gradient-to-br from-warning/5 to-warning/10 dark:from-warning/10 dark:to-warning/5 rounded-xl p-4 border border-warning/20 dark:border-warning/30">
+                  <div className="text-xs font-semibold text-warning/70 dark:text-warning/60 mb-1 uppercase tracking-wide">Unrealized PnL</div>
+                  <div className="text-xl font-bold text-success tabular-nums">+$0.00</div>
+                </div>
+
+                {/* Margin Ratio */}
+                <div className="bg-gradient-to-br from-gray-100 to-gray-50 dark:from-white/5 dark:to-white/10 rounded-xl p-4 border border-gray-200/50 dark:border-white/10">
+                  <div className="text-xs font-semibold text-muted dark:text-gray-400 mb-1 uppercase tracking-wide">Margin Ratio</div>
+                  <div className="text-xl font-bold text-dark dark:text-white tabular-nums">0%</div>
+                </div>
               </div>
+
+              {/* Wallet Balance */}
+              <FuturesWalletBalance />
+
+              {/* Collateral Panel */}
+              <CollateralPanel />
+
+              {/* Risk Panel */}
+              <RiskPanel />
             </div>
-
-            {/* Account Stats Grid */}
-            <div className="grid grid-cols-2 gap-3">
-              {/* Total Balance */}
-              <div className="bg-gradient-to-br from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/5 rounded-xl p-4 border border-primary/20 dark:border-primary/30">
-                <div className="text-xs font-semibold text-primary/70 dark:text-primary/60 mb-1 uppercase tracking-wide">Total Balance</div>
-                <div className="text-xl font-bold text-dark dark:text-white tabular-nums">$0.00</div>
-              </div>
-
-              {/* Available */}
-              <div className="bg-gradient-to-br from-success/5 to-success/10 dark:from-success/10 dark:to-success/5 rounded-xl p-4 border border-success/20 dark:border-success/30">
-                <div className="text-xs font-semibold text-success/70 dark:text-success/60 mb-1 uppercase tracking-wide">Available</div>
-                <div className="text-xl font-bold text-dark dark:text-white tabular-nums">$0.00</div>
-              </div>
-
-              {/* Unrealized PnL */}
-              <div className="bg-gradient-to-br from-warning/5 to-warning/10 dark:from-warning/10 dark:to-warning/5 rounded-xl p-4 border border-warning/20 dark:border-warning/30">
-                <div className="text-xs font-semibold text-warning/70 dark:text-warning/60 mb-1 uppercase tracking-wide">Unrealized PnL</div>
-                <div className="text-xl font-bold text-success tabular-nums">+$0.00</div>
-              </div>
-
-              {/* Margin Ratio */}
-              <div className="bg-gradient-to-br from-gray-100 to-gray-50 dark:from-white/5 dark:to-white/10 rounded-xl p-4 border border-gray-200/50 dark:border-white/10">
-                <div className="text-xs font-semibold text-muted dark:text-gray-400 mb-1 uppercase tracking-wide">Margin Ratio</div>
-                <div className="text-xl font-bold text-dark dark:text-white tabular-nums">0%</div>
-              </div>
-            </div>
-
-            {/* Wallet Balance */}
-            <FuturesWalletBalance />
-
-            {/* Collateral Panel */}
-            <CollateralPanel />
-
-            {/* Risk Panel */}
-            <RiskPanel />
           </div>
         </div>
       </div>

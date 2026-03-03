@@ -421,9 +421,9 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
     : null;
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-darkgray rounded-lg border border-border dark:border-darkborder">
+    <div className="flex flex-col h-full bg-white dark:bg-[#0d0d0d]">
       {/* Chart Header */}
-      <div className="flex items-center justify-between p-3 border-b border-border dark:border-darkborder">
+      <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b border-gray-200/50 dark:border-white/5">
         <div className="flex items-center gap-4">
           {/* Symbol Display */}
           <div>
@@ -450,8 +450,8 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
               'bg-warning'
             }`} />
             <span className="text-xs text-muted dark:text-darklink">
-              {pollingStatus === 'active' ? 'Live (Polling)' :
-               pollingStatus === 'error' ? 'Update Error' :
+              {pollingStatus === 'active' ? 'Live' :
+               pollingStatus === 'error' ? 'Error' :
                'Paused'}
             </span>
           </div>
@@ -496,7 +496,7 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
 
       {/* Chart Stats */}
       {chartData.length > 0 && (
-        <div className="px-4 py-3 border-b border-border dark:border-darkborder bg-muted/30 dark:bg-white/5">
+        <div className="flex-shrink-0 px-6 py-3 border-b border-gray-200/50 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.02]">
           <div className="flex flex-wrap gap-4 text-xs">
             <div>
               <span className="text-muted dark:text-darklink">O: </span>
@@ -527,7 +527,7 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
       )}
 
       {/* Chart Container */}
-      <div ref={containerRef} className="relative flex-1 p-2 sm:p-4 overflow-hidden">
+      <div ref={containerRef} className="relative flex-1 min-h-0 p-4 overflow-hidden">
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-darkgray/50 z-10">
             <div className="flex flex-col items-center gap-2">
@@ -552,7 +552,7 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
               ref={canvasRef}
               width={1200}
               height={500}
-              className="w-full h-auto rounded-lg touch-none"
+              className="w-full h-full rounded-lg touch-none"
               style={{ touchAction: 'none' }}
             />
             
