@@ -126,35 +126,27 @@ export default function FuturesPage() {
   return (
     <>
       {/* MOBILE LAYOUT */}
-      <div className="md:hidden fixed inset-0 flex flex-col bg-white dark:bg-darkgray overflow-hidden">
-        {/* Mobile Header - Compact */}
+      <div className="md:hidden flex flex-col h-screen bg-white dark:bg-darkgray">
+        {/* Mobile Header */}
         <div className="flex-shrink-0 px-3 py-2 bg-gradient-to-r from-primary/10 to-warning/10 border-b border-border dark:border-darkborder">
           <div className="flex items-center justify-between">
             <h1 className="text-xs font-bold text-dark dark:text-white">WorldStreet Futures</h1>
-            {/* Compact status indicator */}
-            <div className="flex items-center gap-1">
-              {isInitialized ? (
-                <div className="flex items-center gap-1 px-2 py-1 bg-success/10 rounded-full">
-                  <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-                  <span className="text-[10px] font-medium text-success">Active</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1 px-2 py-1 bg-warning/10 rounded-full">
-                  <div className="w-1.5 h-1.5 rounded-full bg-warning" />
-                  <span className="text-[10px] font-medium text-warning">Setup</span>
-                </div>
-              )}
-            </div>
+            {isInitialized && (
+              <div className="flex items-center gap-1 px-2 py-0.5 bg-success/10 rounded-full">
+                <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                <span className="text-[9px] font-medium text-success">Active</span>
+              </div>
+            )}
           </div>
         </div>
         
-        {/* Market Info Bar - Compact */}
+        {/* Market Info Bar */}
         <div className="flex-shrink-0 px-3 py-2 bg-white dark:bg-darkgray border-b border-border dark:border-darkborder">
-          <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center justify-between">
             <div className="relative z-30">
               <button 
                 onClick={() => setShowMarketDropdown(!showMarketDropdown)}
-                className="flex items-center gap-1 hover:bg-muted/10 px-2 py-1 rounded active:bg-muted/20 touch-manipulation"
+                className="flex items-center gap-1 px-2 py-1 rounded active:bg-muted/20"
               >
                 <span className="text-sm font-bold text-dark dark:text-white">
                   {selectedMarket?.symbol || 'Select'}
@@ -164,14 +156,14 @@ export default function FuturesPage() {
               
               {showMarketDropdown && (
                 <>
-                  <div className="fixed inset-0 z-40 bg-black/20" onClick={() => setShowMarketDropdown(false)} />
+                  <div className="fixed inset-0 z-40" onClick={() => setShowMarketDropdown(false)} />
                   <div className="absolute top-full left-0 mt-1 bg-white dark:bg-darkgray border border-border dark:border-darkborder rounded-lg shadow-xl z-50 min-w-[120px] max-h-[250px] overflow-y-auto">
                     {markets.map((market) => (
                       <button
                         key={market.id}
                         onClick={() => handleSelectMarket(market)}
-                        className={`w-full text-left px-3 py-2 hover:bg-muted/10 active:bg-muted/20 text-xs touch-manipulation ${
-                          selectedMarket?.id === market.id ? 'bg-muted/20 text-primary font-medium' : 'text-dark dark:text-white'
+                        className={`w-full text-left px-3 py-2 text-xs ${
+                          selectedMarket?.id === market.id ? 'bg-primary/10 text-primary font-medium' : 'text-dark dark:text-white'
                         }`}
                       >
                         {market.symbol}
@@ -199,7 +191,7 @@ export default function FuturesPage() {
             <button 
               key={tab}
               onClick={() => setMobileActiveTab(tab as any)}
-              className={`pb-1 text-xs font-medium capitalize touch-manipulation ${
+              className={`pb-1 text-xs font-medium capitalize ${
                 mobileActiveTab === tab 
                   ? 'text-dark dark:text-white border-b-2 border-warning' 
                   : 'text-muted'
@@ -210,87 +202,93 @@ export default function FuturesPage() {
           ))}
         </div>
 
-        {/* Content Area - Scrollable */}
-        <div className="flex-1 overflow-y-auto overscroll-contain">
+        {/* Scrollable Content Area */}
+        <div className="flex-1 overflow-y-auto">
           {mobileActiveTab === 'chart' && (
-            <div className="h-[45vh] bg-white dark:bg-darkgray">
+            <div className="h-[400px] bg-white dark:bg-darkgray">
               <FuturesChart symbol={selectedMarket?.symbol} isDarkMode={true} />
             </div>
           )}
 
           {mobileActiveTab === 'positions' && (
-            <div className="bg-white dark:bg-darkgray p-3">
+            <div className="p-3 space-y-3">
               <PositionPanel />
             </div>
           )}
 
           {mobileActiveTab === 'info' && (
-            <div className="bg-white dark:bg-darkgray p-3 space-y-3">
-              {/* Mobile-optimized Drift Status */}
-              <div className="bg-gradient-to-br from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/5 rounded-xl p-3 border border-primary/20">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xs font-bold text-dark dark:text-white uppercase">Drift Account</h3>
-                  {isInitialized && (
-                    <button
-                      onClick={handleRefresh}
-                      disabled={refreshing}
-                      className="p-1 hover:bg-white/10 rounded touch-manipulation"
-                    >
-                      <Icon 
-                        icon="ph:arrow-clockwise" 
-                        className={`text-primary ${refreshing ? 'animate-spin' : ''}`}
-                        height={14} 
-                      />
-                    </button>
-                  )}
-                </div>
-                
+            <div className="p-3 space-y-3 pb-24">
+              {/* Drift Account Status */}
+              <div className="bg-white dark:bg-darkgray rounded-xl border border-border dark:border-darkborder p-3">
+                <h3 className="text-xs font-bold text-dark dark:text-white mb-2 uppercase">Drift Account</h3>
                 {needsInitialization ? (
-                  <button
-                    onClick={handleInitialize}
-                    disabled={initializing}
-                    className="w-full py-2 bg-warning hover:bg-warning/90 text-white rounded-lg text-xs font-bold touch-manipulation disabled:opacity-50"
-                  >
-                    {initializing ? 'Initializing...' : 'Initialize Account'}
-                  </button>
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted dark:text-gray-400">Account not initialized</p>
+                    <button
+                      onClick={handleInitialize}
+                      disabled={initializing}
+                      className="w-full py-2 bg-warning hover:bg-warning/90 text-white rounded-lg text-xs font-bold disabled:opacity-50"
+                    >
+                      {initializing ? 'Initializing...' : 'Initialize Account'}
+                    </button>
+                  </div>
                 ) : isInitialized && summary ? (
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="bg-white/50 dark:bg-black/20 rounded-lg p-2">
-                      <p className="text-[9px] text-muted dark:text-gray-400 mb-0.5">Collateral</p>
-                      <p className="text-xs font-bold text-dark dark:text-white">${summary.totalCollateral.toFixed(2)}</p>
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="bg-muted/10 dark:bg-white/5 rounded-lg p-2">
+                        <p className="text-[9px] text-muted dark:text-gray-400 mb-0.5">Total Collateral</p>
+                        <p className="text-xs font-bold text-dark dark:text-white">${summary.totalCollateral.toFixed(2)}</p>
+                      </div>
+                      <div className="bg-muted/10 dark:bg-white/5 rounded-lg p-2">
+                        <p className="text-[9px] text-muted dark:text-gray-400 mb-0.5">Available</p>
+                        <p className="text-xs font-bold text-success">${summary.freeCollateral.toFixed(2)}</p>
+                      </div>
                     </div>
-                    <div className="bg-white/50 dark:bg-black/20 rounded-lg p-2">
-                      <p className="text-[9px] text-muted dark:text-gray-400 mb-0.5">Available</p>
-                      <p className="text-xs font-bold text-success">${summary.freeCollateral.toFixed(2)}</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="bg-muted/10 dark:bg-white/5 rounded-lg p-2">
+                        <p className="text-[9px] text-muted dark:text-gray-400 mb-0.5">Unrealized PnL</p>
+                        <p className={`text-xs font-bold ${summary.unrealizedPnl >= 0 ? 'text-success' : 'text-error'}`}>
+                          {summary.unrealizedPnl >= 0 ? '+' : ''}${summary.unrealizedPnl.toFixed(2)}
+                        </p>
+                      </div>
+                      <div className="bg-muted/10 dark:bg-white/5 rounded-lg p-2">
+                        <p className="text-[9px] text-muted dark:text-gray-400 mb-0.5">Open Positions</p>
+                        <p className="text-xs font-bold text-dark dark:text-white">{summary.openPositions}</p>
+                      </div>
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-center justify-center py-2">
-                    <Icon icon="svg-spinners:ring-resize" className="text-primary" height={16} />
+                  <div className="flex items-center justify-center py-4">
+                    <Icon icon="svg-spinners:ring-resize" className="text-primary" height={20} />
                   </div>
                 )}
               </div>
-              
+
+              {/* Futures Wallet Balance */}
               <FuturesWalletBalance />
+              
+              {/* Collateral Panel */}
               <CollateralPanel />
+              
+              {/* Risk Panel */}
               <RiskPanel />
             </div>
           )}
         </div>
 
         {/* Fixed Bottom Action Buttons */}
-        <div className="flex-shrink-0 flex gap-2 p-3 bg-white dark:bg-darkgray border-t border-border dark:border-darkborder safe-area-bottom">
+        <div className="flex-shrink-0 flex gap-2 p-3 bg-white dark:bg-darkgray border-t border-border dark:border-darkborder">
           <button 
             onClick={() => handleOpenOrderModal('long')}
             disabled={!isInitialized}
-            className="flex-1 py-3 bg-success hover:bg-success/90 active:bg-success/80 text-white font-semibold rounded-lg transition-colors touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 py-3 bg-success hover:bg-success/90 active:bg-success/80 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Long
           </button>
           <button 
             onClick={() => handleOpenOrderModal('short')}
             disabled={!isInitialized}
-            className="flex-1 py-3 bg-error hover:bg-error/90 active:bg-error/80 text-white font-semibold rounded-lg transition-colors touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 py-3 bg-error hover:bg-error/90 active:bg-error/80 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Short
           </button>
