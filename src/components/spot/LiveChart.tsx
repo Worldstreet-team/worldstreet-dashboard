@@ -10,49 +10,65 @@ interface LiveChartProps {
   onUpdateLevels?: (sl: string, tp: string) => void;
 }
 
+// Global flag to ensure embed script loads only once
+let tradingViewScriptLoaded = false;
+
 const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartProps) => {
   const [showLevelsForm, setShowLevelsForm] = useState(false);
   const [tempStopLoss, setTempStopLoss] = useState(stopLoss || '');
   const [tempTakeProfit, setTempTakeProfit] = useState(takeProfit || '');
   const containerRef = useRef<HTMLDivElement>(null);
+  const widgetRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setTempStopLoss(stopLoss || '');
     setTempTakeProfit(takeProfit || '');
   }, [stopLoss, takeProfit]);
 
+  // Load TradingView embed script globally (once)
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (tradingViewScriptLoaded) return;
+
+    const script = document.createElement('script');
+    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+    script.async = true;
+    script.onload = () => {
+      tradingViewScriptLoaded = true;
+    };
+    document.head.appendChild(script);
+  }, []);
+
+  // Initialize widget when symbol changes
+  useEffect(() => {
+    if (!widgetRef.current || !tradingViewScriptLoaded) return;
 
     // Convert symbol format: BTC-USDT -> BINANCE:BTCUSDT
     const tradingViewSymbol = `BINANCE:${symbol.replace('-', '')}`;
 
-    // Clear previous widget
-    containerRef.current.innerHTML = '<div class="tradingview-widget-container__widget"></div>';
+    // Clear previous content
+    widgetRef.current.innerHTML = '';
 
-    // Create and inject script
-    const script = document.createElement('script');
-    script.type = 'text/x-tradingview-widget';
-    script.textContent = JSON.stringify({
+    // Create the widget container div
+    const widgetDiv = document.createElement('div');
+    widgetDiv.className = 'tradingview-widget-container__widget';
+    widgetRef.current.appendChild(widgetDiv);
+
+    // Create and append the config script
+    const configScript = document.createElement('script');
+    configScript.type = 'text/x-tradingview-widget';
+    configScript.textContent = JSON.stringify({
       symbols: [[tradingViewSymbol]],
       width: '100%',
       height: '100%',
       locale: 'en',
       colorTheme: 'dark',
     });
-    containerRef.current.appendChild(script);
+    widgetRef.current.appendChild(configScript);
 
-    // Load TradingView embed script
-    const embedScript = document.createElement('script');
-    embedScript.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
-    embedScript.async = true;
-    document.body.appendChild(embedScript);
-
-    return () => {
-      if (document.body.contains(embedScript)) {
-        document.body.removeChild(embedScript);
-      }
-    };
+    // Trigger TradingView's widget processor on this specific container
+    if (typeof (window as any).TradingView !== 'undefined' && (window as any).TradingView.widget) {
+      (window as any).TradingView.widget(new (window as any).TradingView.widget());
+    }
   }, [symbol]);
 
   const handleUpdateLevels = () => {
@@ -149,9 +165,16 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
         </div>
       )}
 
-      {/* TradingView Chart Container */}
-      <div className="flex-1 min-h-0 w-full" ref={containerRef}>
-        <div className="tradingview-widget-container w-full h-full"></div>
+      {/* TradingView Chart Container - scoped with CSS containment */}
+      <div 
+        className="flex-1 min-h-0 w-full overflow-hidden" 
+        ref={containerRef}
+        style={{ contain: 'layout style paint' }}
+      >
+        <div 
+          className="tradingview-widget-container w-full h-full"
+          ref={widgetRef}
+        ></div>
       </div>
     </div>
   );
