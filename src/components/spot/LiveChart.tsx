@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 
 interface LiveChartProps {
@@ -14,6 +14,7 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
   const [showLevelsForm, setShowLevelsForm] = useState(false);
   const [tempStopLoss, setTempStopLoss] = useState(stopLoss || '');
   const [tempTakeProfit, setTempTakeProfit] = useState(takeProfit || '');
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setTempStopLoss(stopLoss || '');
@@ -21,36 +22,44 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
   }, [stopLoss, takeProfit]);
 
   useEffect(() => {
-    // Load TradingView script
+    if (!containerRef.current) return;
+
+    // Convert symbol format: BTC-USDT -> BINANCE:BTCUSDT
+    const tradingViewSymbol = `BINANCE:${symbol.replace('-', '')}`;
+
+    // Clear previous widget
+    containerRef.current.innerHTML = '<div class="tradingview-widget-container__widget"></div>';
+
+    // Create and inject script
     const script = document.createElement('script');
-    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
-    script.async = true;
-    document.body.appendChild(script);
+    script.type = 'text/x-tradingview-widget';
+    script.textContent = JSON.stringify({
+      symbols: [[tradingViewSymbol]],
+      width: '100%',
+      height: '100%',
+      locale: 'en',
+      colorTheme: 'dark',
+    });
+    containerRef.current.appendChild(script);
+
+    // Load TradingView embed script
+    const embedScript = document.createElement('script');
+    embedScript.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+    embedScript.async = true;
+    document.body.appendChild(embedScript);
 
     return () => {
-      if (document.body.contains(script)) {
-        document.body.removeChild(script);
+      if (document.body.contains(embedScript)) {
+        document.body.removeChild(embedScript);
       }
     };
-  }, []);
+  }, [symbol]);
 
   const handleUpdateLevels = () => {
     if (onUpdateLevels) {
       onUpdateLevels(tempStopLoss, tempTakeProfit);
     }
     setShowLevelsForm(false);
-  };
-
-  // Convert symbol format: BTC-USDT -> BINANCE:BTCUSDT
-  const tradingViewSymbol = `BINANCE:${symbol.replace('-', '')}`;
-
-  // TradingView widget configuration
-  const widgetConfig = {
-    symbols: [[tradingViewSymbol]],
-    width: '100%',
-    height: '100%',
-    locale: 'en',
-    colorTheme: 'dark',
   };
 
   return (
@@ -141,13 +150,8 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
       )}
 
       {/* TradingView Chart Container */}
-      <div className="flex-1 min-h-0 w-full">
-        <div className="tradingview-widget-container w-full h-full">
-          <div className="tradingview-widget-container__widget w-full h-full"></div>
-          <script type="text/x-tradingview-widget">
-            {JSON.stringify(widgetConfig)}
-          </script>
-        </div>
+      <div className="flex-1 min-h-0 w-full" ref={containerRef}>
+        <div className="tradingview-widget-container w-full h-full"></div>
       </div>
     </div>
   );

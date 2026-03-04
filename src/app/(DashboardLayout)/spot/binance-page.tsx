@@ -121,14 +121,14 @@ export default function BinanceSpotPage() {
       {/* Main Trading Grid */}
       <div className="flex-1 flex flex-col">
         {/* Top Section: 3 Columns */}
-        <div className="grid grid-cols-[280px_1fr_340px] flex-1">
+        <div className="grid grid-cols-[280px_1fr_340px] flex-1 min-h-0">
           {/* LEFT: Order Book */}
           <div className="border-r border-[#2b3139] overflow-hidden">
             <BinanceOrderBook selectedPair={selectedPair} />
           </div>
 
           {/* CENTER: Chart + Order Form */}
-          <div className="border-r border-[#2b3139] flex flex-col">
+          <div className="border-r border-[#2b3139] flex flex-col min-h-0">
             {/* Pair Header */}
             <div className="px-3 py-2 border-b border-[#2b3139] flex items-center justify-between shrink-0">
               <div className="flex items-center gap-4">
@@ -168,7 +168,7 @@ export default function BinanceSpotPage() {
             </div>
 
             {/* Chart */}
-            <div className="flex-1 min-h-0 overflow-hidden">
+            <div className="flex-1 min-h-0">
               <LiveChart 
                 symbol={selectedPair}
                 stopLoss={chartStopLoss}
@@ -187,9 +187,9 @@ export default function BinanceSpotPage() {
           </div>
 
           {/* RIGHT: Market List + Market Trades */}
-          <div className="flex flex-col">
+          <div className="flex flex-col min-h-0">
             {/* Market List */}
-            <div className="flex-1 min-h-[400px] overflow-hidden">
+            <div className="flex-1 min-h-0 overflow-hidden">
               <BinanceMarketList 
                 selectedPair={selectedPair}
                 onSelectPair={handleSelectPair}
