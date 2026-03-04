@@ -120,15 +120,15 @@ export default function BinanceSpotPage() {
 
       {/* Main Trading Grid */}
       <div className="flex-1 flex flex-col min-h-0">
-        {/* Top Section: 3 Columns */}
-        <div className="flex-1 grid grid-cols-[280px_1fr_340px] min-h-0">
+        {/* Top Section: 3 Columns - Fixed Height */}
+        <div className="h-[calc(100vh-12rem)] grid grid-cols-[280px_1fr_340px]">
           {/* LEFT: Order Book */}
-          <div className="border-r border-[#2b3139] flex flex-col min-h-0">
+          <div className="border-r border-[#2b3139] h-full overflow-hidden">
             <BinanceOrderBook selectedPair={selectedPair} />
           </div>
 
           {/* CENTER: Chart + Order Form */}
-          <div className="border-r border-[#2b3139] flex flex-col min-h-0">
+          <div className="border-r border-[#2b3139] flex flex-col h-full">
             {/* Pair Header - Compact Binance Style */}
             <div className="px-3 py-2 border-b border-[#2b3139] flex items-center justify-between shrink-0">
               <div className="flex items-center gap-4">
@@ -167,7 +167,7 @@ export default function BinanceSpotPage() {
               </div>
             </div>
 
-            {/* Chart */}
+            {/* Chart - Takes remaining space */}
             <div className="flex-1 min-h-0 bg-[#181a20]">
               <LiveChart 
                 symbol={selectedPair}
@@ -177,7 +177,7 @@ export default function BinanceSpotPage() {
               />
             </div>
 
-            {/* Order Form */}
+            {/* Order Form - Fixed at bottom */}
             <div className="border-t border-[#2b3139] shrink-0">
               <BinanceOrderForm 
                 selectedPair={selectedPair}
@@ -187,16 +187,16 @@ export default function BinanceSpotPage() {
           </div>
 
           {/* RIGHT: Market List + Market Trades */}
-          <div className="flex flex-col min-h-0">
-            {/* Market List */}
-            <div className="flex-1 min-h-0">
+          <div className="flex flex-col h-full">
+            {/* Market List - Takes remaining space */}
+            <div className="flex-1 min-h-0 overflow-hidden">
               <BinanceMarketList 
                 selectedPair={selectedPair}
                 onSelectPair={handleSelectPair}
               />
             </div>
 
-            {/* Market Trades */}
+            {/* Market Trades - Fixed height at bottom */}
             <div className="h-[280px] border-t border-[#2b3139] bg-[#181a20] shrink-0">
               <div className="flex flex-col h-full">
                 <div className="px-3 py-2 border-b border-[#2b3139] flex items-center justify-between shrink-0">
@@ -210,8 +210,8 @@ export default function BinanceSpotPage() {
           </div>
         </div>
 
-        {/* Bottom Section: Full Width Panel */}
-        <div className="border-t border-[#2b3139] shrink-0">
+        {/* Bottom Section: Full Width Panel - Fixed Height */}
+        <div className="h-48 border-t border-[#2b3139] shrink-0">
           <BinanceBottomPanel
             refreshKey={refreshKey}
             selectedChartSymbol={selectedPair}
