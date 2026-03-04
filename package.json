@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "postinstall": "flowbite-react patch"
+    "postinstall": "flowbite-react build"
   },
   "dependencies": {
     "@allbridge/bridge-core-sdk": "^3.29.1",
