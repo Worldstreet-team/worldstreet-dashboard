@@ -6,6 +6,10 @@ import { decryptWithPIN } from '@/lib/wallet/encryption';
 import { connectDB } from '@/lib/mongodb';
 import DashboardProfile from '@/models/DashboardProfile';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 export async function POST(request: NextRequest) {
   try {
     const { userId, pin, marketIndex } = await request.json();
@@ -66,7 +70,12 @@ export async function POST(request: NextRequest) {
     const position = driftUser.getPerpPosition(marketIndex);
     
     if (!position || position.baseAssetAmount.toNumber() === 0) {
-      await client.unsubscribe();
+      try {
+        await client.unsubscribe();
+      } catch (unsubErr) {
+        // Ignore unsubscribe errors
+        console.log('[Drift Close Position API] Unsubscribe error (ignored):', unsubErr);
+      }
       return NextResponse.json(
         { success: false, error: 'No position found' },
         { status: 404 }
@@ -92,7 +101,12 @@ export async function POST(request: NextRequest) {
     await connection.confirmTransaction(txSignature, 'confirmed');
     
     // Cleanup
-    await client.unsubscribe();
+    try {
+      await client.unsubscribe();
+    } catch (unsubErr) {
+      // Ignore unsubscribe errors
+      console.log('[Drift Close Position API] Unsubscribe error (ignored):', unsubErr);
+    }
     
     return NextResponse.json({
       success: true,

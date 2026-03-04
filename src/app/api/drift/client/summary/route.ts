@@ -6,6 +6,10 @@ import { decryptWithPIN } from '@/lib/wallet/encryption';
 import { connectDB } from '@/lib/mongodb';
 import DashboardProfile from '@/models/DashboardProfile';
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 export async function POST(request: NextRequest) {
   try {
     const { userId, pin } = await request.json();
@@ -61,8 +65,8 @@ export async function POST(request: NextRequest) {
     // Subscribe to account updates
     await client.subscribe();
     
-    // Wait for data to load
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Wait briefly for data to load (reduced to avoid rate limiting)
+    await new Promise(resolve => setTimeout(resolve, 500));
     
     // Get account summary
     const driftUser = client.getUser();
@@ -72,7 +76,12 @@ export async function POST(request: NextRequest) {
       accountData = driftUser.getUserAccount();
     } catch (err) {
       // Account not initialized yet
-      await client.unsubscribe();
+      try {
+        await client.unsubscribe();
+      } catch (unsubErr) {
+        // Ignore unsubscribe errors
+        console.log('[Drift Summary API] Unsubscribe error (ignored):', unsubErr);
+      }
       return NextResponse.json({
         success: true,
         data: {
@@ -112,7 +121,12 @@ export async function POST(request: NextRequest) {
     const marginRatio = totalCollateral > 0 ? freeCollateral / totalCollateral : 0;
     
     // Cleanup
-    await client.unsubscribe();
+    try {
+      await client.unsubscribe();
+    } catch (unsubErr) {
+      // Ignore unsubscribe errors
+      console.log('[Drift Summary API] Unsubscribe error (ignored):', unsubErr);
+    }
     
     return NextResponse.json({
       success: true,
