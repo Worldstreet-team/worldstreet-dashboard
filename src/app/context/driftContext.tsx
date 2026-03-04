@@ -77,6 +77,7 @@ interface DriftContextValue {
   refreshSummary: () => Promise<void>;
   refreshPositions: () => Promise<void>;
   clearCache: () => void;
+  resetInitializationFailure: () => void;
   
   // Trading operations
   depositCollateral: (amount: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
@@ -130,6 +131,9 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     address: string;
   } | null>(null);
   
+  // Track initialization failure to prevent auto-retry
+  const [initializationFailed, setInitializationFailed] = useState(false);
+  
   const autoRefreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const driftClientRef = useRef<any>(null);
   const [encryptedPrivateKey, setEncryptedPrivateKey] = useState<string | null>(null);
@@ -142,6 +146,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       setSummary(null);
       setPositions([]);
       setEncryptedPrivateKey(null);
+      setInitializationFailed(false);
       if (driftClientRef.current) {
         // Unsubscribe from polling
         try {
@@ -268,6 +273,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
               address: keypair.publicKey.toBase58(),
             });
             setShowInsufficientSol(true);
+            setInitializationFailed(true); // Mark initialization as failed
             
             throw new Error(`Insufficient SOL: Need at least ${Math.ceil(requiredSol * 100) / 100} SOL to initialize Drift account`);
           }
@@ -343,6 +349,12 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   // Refresh account summary from Drift client (with polling) - SAFE VERSION
   const refreshSummary = useCallback(async () => {
     if (!user?.userId) return;
+    
+    // Don't retry if initialization already failed
+    if (initializationFailed) {
+      console.log('[DriftContext] Initialization previously failed, skipping auto-retry');
+      return;
+    }
     
     try {
       const pin = await requestPin();
@@ -444,8 +456,9 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     } catch (err) {
       console.error('[DriftContext] Error refreshing summary:', err);
       setError(err instanceof Error ? err.message : 'Failed to refresh summary');
+      setInitializationFailed(true); // Mark as failed on any error
     }
-  }, [user?.userId, requestPin, initializeDriftClient, refreshAccounts]);
+  }, [user?.userId, requestPin, initializeDriftClient, refreshAccounts, initializationFailed]);
 
   // Refresh positions from Drift client (with polling) - SAFE VERSION
   const refreshPositions = useCallback(async () => {
@@ -736,6 +749,13 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     console.log('[DriftContext] Cleared cached PIN');
   }, []);
 
+  // Reset initialization failure flag (called when user clicks "Try Again")
+  const resetInitializationFailure = useCallback(() => {
+    setInitializationFailed(false);
+    setError(null);
+    console.log('[DriftContext] Reset initialization failure flag');
+  }, []);
+
   // Initialize data when user logs in
   useEffect(() => {
     if (user?.userId && !isClientReady) {
@@ -775,6 +795,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     refreshSummary,
     refreshPositions,
     clearCache,
+    resetInitializationFailure,
     depositCollateral,
     withdrawCollateral,
     openPosition,

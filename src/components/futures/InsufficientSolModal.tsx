@@ -36,7 +36,7 @@ export const InsufficientSolModal: React.FC<InsufficientSolModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden border-warning/20">
+      <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden border-warning/20 !bg-white dark:!bg-[#0d0d0d]">
         {/* Header with gradient */}
         <div className="bg-gradient-to-br from-warning/10 to-error/10 dark:from-warning/20 dark:to-error/20 p-6 border-b border-warning/20">
           <DialogHeader>

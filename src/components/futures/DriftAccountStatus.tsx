@@ -13,6 +13,7 @@ export const DriftAccountStatus: React.FC = () => {
     isLoading,
     error,
     refreshSummary,
+    resetInitializationFailure,
   } = useDrift();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -20,12 +21,14 @@ export const DriftAccountStatus: React.FC = () => {
 
   const handleRefresh = async () => {
     setRefreshing(true);
+    resetInitializationFailure(); // Reset the failure flag when manually refreshing
     await refreshSummary();
     setRefreshing(false);
   };
 
   const handleInitialize = async () => {
     setInitializing(true);
+    resetInitializationFailure(); // Reset the failure flag before retrying
     await refreshSummary();
     setInitializing(false);
   };

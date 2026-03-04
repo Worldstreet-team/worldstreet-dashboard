@@ -29,6 +29,7 @@ export default function FuturesPage() {
     showInsufficientSol,
     setShowInsufficientSol,
     solBalanceInfo,
+    resetInitializationFailure,
   } = useDrift();
   const { fetchWallet } = useFuturesData();
   
@@ -348,7 +349,10 @@ export default function FuturesPage() {
       {solBalanceInfo && (
         <InsufficientSolModal
           isOpen={showInsufficientSol}
-          onClose={() => setShowInsufficientSol(false)}
+          onClose={() => {
+            setShowInsufficientSol(false);
+            // Don't reset here - user needs to click "Try Again" button explicitly
+          }}
           requiredSol={solBalanceInfo.required}
           currentSol={solBalanceInfo.current}
           walletAddress={solBalanceInfo.address}
