@@ -16,11 +16,18 @@ export const DriftAccountStatus: React.FC = () => {
   } = useDrift();
 
   const [refreshing, setRefreshing] = useState(false);
+  const [initializing, setInitializing] = useState(false);
 
   const handleRefresh = async () => {
     setRefreshing(true);
     await refreshSummary();
     setRefreshing(false);
+  };
+
+  const handleInitialize = async () => {
+    setInitializing(true);
+    await refreshSummary();
+    setInitializing(false);
   };
 
   if (isLoading && !summary) {
@@ -65,11 +72,11 @@ export const DriftAccountStatus: React.FC = () => {
               Your Drift account needs to be initialized. Click below to start the process.
             </p>
             <button
-              onClick={handleRefresh}
-              disabled={refreshing}
+              onClick={handleInitialize}
+              disabled={initializing}
               className="px-4 py-2.5 bg-warning hover:bg-warning/90 text-white rounded-xl text-sm font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-warning/20 hover:shadow-xl hover:shadow-warning/30"
             >
-              {refreshing ? (
+              {initializing ? (
                 <span className="flex items-center gap-2">
                   <Icon icon="svg-spinners:ring-resize" height={16} />
                   Initializing...
@@ -81,6 +88,23 @@ export const DriftAccountStatus: React.FC = () => {
                 </span>
               )}
             </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading state during initialization
+  if (initializing) {
+    return (
+      <div className="bg-gradient-to-br from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/5 border border-primary/20 dark:border-primary/30 rounded-2xl shadow-lg shadow-primary/10 p-6">
+        <div className="flex items-start gap-3">
+          <Icon icon="svg-spinners:ring-resize" className="text-primary flex-shrink-0 mt-0.5" height={24} />
+          <div className="flex-1">
+            <h4 className="text-sm font-bold text-primary mb-1">Initializing Drift Account</h4>
+            <p className="text-xs text-primary/80">
+              Please wait while we set up your account. This may take a few moments...
+            </p>
           </div>
         </div>
       </div>
