@@ -30,6 +30,9 @@ export default function FuturesPage() {
     setShowInsufficientSol,
     solBalanceInfo,
     resetInitializationFailure,
+    refreshSummary,
+    summary,
+    needsInitialization,
   } = useDrift();
   const { fetchWallet } = useFuturesData();
   
@@ -40,6 +43,22 @@ export default function FuturesPage() {
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [orderSide, setOrderSide] = useState<OrderSide>('long');
   const [selectedTimeframe, setSelectedTimeframe] = useState('1H');
+  const [refreshing, setRefreshing] = useState(false);
+  const [initializing, setInitializing] = useState(false);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    resetInitializationFailure();
+    await refreshSummary();
+    setRefreshing(false);
+  };
+
+  const handleInitialize = async () => {
+    setInitializing(true);
+    resetInitializationFailure();
+    await refreshSummary();
+    setInitializing(false);
+  };
 
   useEffect(() => {
     if (markets.length > 0 && !selectedMarket) {
@@ -107,106 +126,171 @@ export default function FuturesPage() {
   return (
     <>
       {/* MOBILE LAYOUT */}
-      <div className="md:hidden fixed inset-0 flex flex-col bg-white dark:bg-darkgray">
-        <div className="flex-shrink-0 px-4 py-3 bg-gradient-to-r from-primary/10 to-warning/10 border-b border-border dark:border-darkborder">
-          <h1 className="text-sm font-bold text-dark dark:text-white">WorldStreet Futures</h1>
+      <div className="md:hidden fixed inset-0 flex flex-col bg-white dark:bg-darkgray overflow-hidden">
+        {/* Mobile Header - Compact */}
+        <div className="flex-shrink-0 px-3 py-2 bg-gradient-to-r from-primary/10 to-warning/10 border-b border-border dark:border-darkborder">
+          <div className="flex items-center justify-between">
+            <h1 className="text-xs font-bold text-dark dark:text-white">WorldStreet Futures</h1>
+            {/* Compact status indicator */}
+            <div className="flex items-center gap-1">
+              {isInitialized ? (
+                <div className="flex items-center gap-1 px-2 py-1 bg-success/10 rounded-full">
+                  <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                  <span className="text-[10px] font-medium text-success">Active</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1 px-2 py-1 bg-warning/10 rounded-full">
+                  <div className="w-1.5 h-1.5 rounded-full bg-warning" />
+                  <span className="text-[10px] font-medium text-warning">Setup</span>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
         
-        <div className="flex-1 overflow-y-auto pb-20">
-          <div className="px-4 py-2 bg-white dark:bg-darkgray border-b border-border dark:border-darkborder">
-            <div className="flex items-center justify-between mb-1">
-              <div className="relative">
-                <button 
-                  onClick={() => setShowMarketDropdown(!showMarketDropdown)}
-                  className="flex items-center gap-1 hover:bg-muted/10 px-1 py-0.5 rounded"
-                >
-                  <span className="text-base font-bold text-dark dark:text-white">
-                    {selectedMarket?.symbol || 'Select Market'}
-                  </span>
-                  <Icon icon="ph:caret-down" width={14} className="text-muted" />
-                </button>
-                
-                {showMarketDropdown && (
-                  <div className="absolute top-full left-0 mt-1 bg-white dark:bg-darkgray border border-border dark:border-darkborder rounded-lg shadow-lg z-20 min-w-[150px] max-h-[300px] overflow-y-auto">
+        {/* Market Info Bar - Compact */}
+        <div className="flex-shrink-0 px-3 py-2 bg-white dark:bg-darkgray border-b border-border dark:border-darkborder">
+          <div className="flex items-center justify-between mb-1">
+            <div className="relative z-30">
+              <button 
+                onClick={() => setShowMarketDropdown(!showMarketDropdown)}
+                className="flex items-center gap-1 hover:bg-muted/10 px-2 py-1 rounded active:bg-muted/20 touch-manipulation"
+              >
+                <span className="text-sm font-bold text-dark dark:text-white">
+                  {selectedMarket?.symbol || 'Select'}
+                </span>
+                <Icon icon="ph:caret-down" width={12} className="text-muted" />
+              </button>
+              
+              {showMarketDropdown && (
+                <>
+                  <div className="fixed inset-0 z-40 bg-black/20" onClick={() => setShowMarketDropdown(false)} />
+                  <div className="absolute top-full left-0 mt-1 bg-white dark:bg-darkgray border border-border dark:border-darkborder rounded-lg shadow-xl z-50 min-w-[120px] max-h-[250px] overflow-y-auto">
                     {markets.map((market) => (
                       <button
                         key={market.id}
                         onClick={() => handleSelectMarket(market)}
-                        className={`w-full text-left px-4 py-2 hover:bg-muted/10 text-sm ${
-                          selectedMarket?.id === market.id ? 'bg-muted/20 text-primary' : 'text-dark dark:text-white'
+                        className={`w-full text-left px-3 py-2 hover:bg-muted/10 active:bg-muted/20 text-xs touch-manipulation ${
+                          selectedMarket?.id === market.id ? 'bg-muted/20 text-primary font-medium' : 'text-dark dark:text-white'
                         }`}
                       >
                         {market.symbol}
                       </button>
                     ))}
                   </div>
-                )}
-              </div>
-              <DriftAccountStatus />
+                </>
+              )}
             </div>
             
-            <div className="flex items-baseline gap-2">
-              <span className={`text-lg font-bold ${isPositive ? 'text-success' : 'text-error'}`}>
+            <div className="flex items-baseline gap-1.5">
+              <span className={`text-sm font-bold ${isPositive ? 'text-success' : 'text-error'}`}>
                 ${formatPrice(currentPrice)}
               </span>
-              <span className={`text-xs ${isPositive ? 'text-success' : 'text-error'}`}>
+              <span className={`text-[10px] ${isPositive ? 'text-success' : 'text-error'}`}>
                 {isPositive ? '+' : ''}{formatPercentage(priceChange)}%
               </span>
-              <span className="text-xs text-warning">PERP</span>
             </div>
           </div>
+        </div>
 
-          <div className="flex items-center gap-4 px-4 py-2 border-b border-border dark:border-darkborder bg-white dark:bg-darkgray">
-            {['chart', 'positions', 'info'].map((tab) => (
-              <button 
-                key={tab}
-                onClick={() => setMobileActiveTab(tab as any)}
-                className={`pb-1 text-xs font-medium capitalize ${
-                  mobileActiveTab === tab 
-                    ? 'text-dark dark:text-white border-b-2 border-warning' 
-                    : 'text-muted'
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
+        {/* Tab Navigation */}
+        <div className="flex-shrink-0 flex items-center gap-4 px-3 py-2 border-b border-border dark:border-darkborder bg-white dark:bg-darkgray">
+          {['chart', 'positions', 'info'].map((tab) => (
+            <button 
+              key={tab}
+              onClick={() => setMobileActiveTab(tab as any)}
+              className={`pb-1 text-xs font-medium capitalize touch-manipulation ${
+                mobileActiveTab === tab 
+                  ? 'text-dark dark:text-white border-b-2 border-warning' 
+                  : 'text-muted'
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
 
+        {/* Content Area - Scrollable */}
+        <div className="flex-1 overflow-y-auto overscroll-contain">
           {mobileActiveTab === 'chart' && (
-            <div className="h-[50vh] bg-white dark:bg-darkgray">
+            <div className="h-[45vh] bg-white dark:bg-darkgray">
               <FuturesChart symbol={selectedMarket?.symbol} isDarkMode={true} />
             </div>
           )}
 
           {mobileActiveTab === 'positions' && (
-            <div className="bg-white dark:bg-darkgray p-4">
+            <div className="bg-white dark:bg-darkgray p-3">
               <PositionPanel />
             </div>
           )}
 
           {mobileActiveTab === 'info' && (
-            <div className="bg-white dark:bg-darkgray p-4 space-y-4">
+            <div className="bg-white dark:bg-darkgray p-3 space-y-3">
+              {/* Mobile-optimized Drift Status */}
+              <div className="bg-gradient-to-br from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/5 rounded-xl p-3 border border-primary/20">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-bold text-dark dark:text-white uppercase">Drift Account</h3>
+                  {isInitialized && (
+                    <button
+                      onClick={handleRefresh}
+                      disabled={refreshing}
+                      className="p-1 hover:bg-white/10 rounded touch-manipulation"
+                    >
+                      <Icon 
+                        icon="ph:arrow-clockwise" 
+                        className={`text-primary ${refreshing ? 'animate-spin' : ''}`}
+                        height={14} 
+                      />
+                    </button>
+                  )}
+                </div>
+                
+                {needsInitialization ? (
+                  <button
+                    onClick={handleInitialize}
+                    disabled={initializing}
+                    className="w-full py-2 bg-warning hover:bg-warning/90 text-white rounded-lg text-xs font-bold touch-manipulation disabled:opacity-50"
+                  >
+                    {initializing ? 'Initializing...' : 'Initialize Account'}
+                  </button>
+                ) : isInitialized && summary ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="bg-white/50 dark:bg-black/20 rounded-lg p-2">
+                      <p className="text-[9px] text-muted dark:text-gray-400 mb-0.5">Collateral</p>
+                      <p className="text-xs font-bold text-dark dark:text-white">${summary.totalCollateral.toFixed(2)}</p>
+                    </div>
+                    <div className="bg-white/50 dark:bg-black/20 rounded-lg p-2">
+                      <p className="text-[9px] text-muted dark:text-gray-400 mb-0.5">Available</p>
+                      <p className="text-xs font-bold text-success">${summary.freeCollateral.toFixed(2)}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center py-2">
+                    <Icon icon="svg-spinners:ring-resize" className="text-primary" height={16} />
+                  </div>
+                )}
+              </div>
+              
               <FuturesWalletBalance />
               <CollateralPanel />
               <RiskPanel />
             </div>
           )}
-
-          <div className="border-t border-border dark:border-darkborder bg-white dark:bg-darkgray p-4">
-            <PositionPanel />
-          </div>
         </div>
 
-        <div className="fixed bottom-0 left-0 right-0 flex gap-3 p-4 bg-white dark:bg-darkgray border-t border-border dark:border-darkborder z-10">
+        {/* Fixed Bottom Action Buttons */}
+        <div className="flex-shrink-0 flex gap-2 p-3 bg-white dark:bg-darkgray border-t border-border dark:border-darkborder safe-area-bottom">
           <button 
             onClick={() => handleOpenOrderModal('long')}
-            className="flex-1 py-3 bg-success hover:bg-success/90 text-white font-semibold rounded-lg transition-colors"
+            disabled={!isInitialized}
+            className="flex-1 py-3 bg-success hover:bg-success/90 active:bg-success/80 text-white font-semibold rounded-lg transition-colors touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Long
           </button>
           <button 
             onClick={() => handleOpenOrderModal('short')}
-            className="flex-1 py-3 bg-error hover:bg-error/90 text-white font-semibold rounded-lg transition-colors"
+            disabled={!isInitialized}
+            className="flex-1 py-3 bg-error hover:bg-error/90 active:bg-error/80 text-white font-semibold rounded-lg transition-colors touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Short
           </button>

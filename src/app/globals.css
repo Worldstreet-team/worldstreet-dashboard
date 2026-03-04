@@ -140,3 +140,39 @@
 .animate-shake {
   animation: shake 0.5s ease-in-out;
 }
+
+/* Mobile Touch Optimizations */
+.touch-manipulation {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Safe area for mobile devices with notches */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Prevent overscroll bounce on mobile */
+.overscroll-contain {
+  overscroll-behavior: contain;
+}
+
+/* Smooth scrolling for mobile */
+@media (max-width: 768px) {
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Prevent zoom on input focus */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+  
+  /* Better button touch targets */
+  button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
