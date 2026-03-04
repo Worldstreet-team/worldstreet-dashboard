@@ -163,10 +163,70 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
 
   // Initialize Drift client
   const initializeDriftClient = useCallback(async (pin: string) => {
+    // Fetch encrypted wallet with PIN
     if (!encryptedPrivateKey) {
-      throw new Error('No encrypted wallet found');
+      try {
+        const response = await fetch('/api/wallet/keys', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin })
+        });
+        
+        const data = await response.json();
+        
+        if (!data.success || !data.wallets?.solana?.encryptedPrivateKey) {
+          throw new Error(data.message || 'Failed to fetch wallet');
+        }
+        
+        setEncryptedPrivateKey(data.wallets.solana.encryptedPrivateKey);
+        
+        // Use the fetched encrypted key
+        const fetchedEncryptedKey = data.wallets.solana.encryptedPrivateKey;
+        
+        // Load SDK
+        await loadDriftSDK();
+        
+        // Decrypt private key
+        const { decryptWithPIN } = await import('@/lib/wallet/encryption');
+        const decryptedPrivateKey = decryptWithPIN(fetchedEncryptedKey, pin);
+        
+        // Create keypair
+        const secretKey = new Uint8Array(Buffer.from(decryptedPrivateKey, 'base64'));
+        const keypair = Keypair.fromSecretKey(secretKey);
+        
+        // Initialize connection
+        const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+        const connection = new Connection(rpcUrl, 'confirmed');
+        
+        // Create Drift client
+        const wallet = new Wallet(keypair);
+        const DRIFT_PROGRAM_ID = process.env.NEXT_PUBLIC_DRIFT_PROGRAM_ID || 'dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH';
+        
+        const client = new DriftClient({
+          connection,
+          wallet,
+          env: 'mainnet-beta',
+          accountSubscription: {
+            type: 'polling',
+            accountLoader: undefined,
+          },
+        });
+        
+        // Subscribe to account updates
+        await client.subscribe();
+        
+        // Wait briefly for data to load
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        driftClientRef.current = client;
+        return client;
+      } catch (error) {
+        console.error('[DriftContext] Error fetching wallet:', error);
+        throw error;
+      }
     }
     
+    // If we already have encrypted key, use it
     // Load SDK
     await loadDriftSDK();
     
@@ -187,17 +247,17 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     const DRIFT_PROGRAM_ID = process.env.NEXT_PUBLIC_DRIFT_PROGRAM_ID || 'dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH';
     
     const client = new DriftClient({
-  connection,
-  wallet,
-  env: 'mainnet-beta',
-  accountSubscription: {
-    type: 'polling',
-    accountLoader: undefined, // optional
-  },
-});
+      connection,
+      wallet,
+      env: 'mainnet-beta',
+      accountSubscription: {
+        type: 'polling',
+        accountLoader: undefined,
+      },
+    });
     
     // Subscribe to account updates
-    await client.fetchAccounts();
+    await client.subscribe();
     
     // Wait briefly for data to load
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -240,7 +300,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
 
   // Refresh account summary from Drift client
   const refreshSummary = useCallback(async () => {
-    if (!user?.userId || !encryptedPrivateKey) return;
+    if (!user?.userId) return;
     
     try {
       const pin = await requestPin();
@@ -312,11 +372,11 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       console.error('[DriftContext] Error refreshing summary:', err);
       setError(err instanceof Error ? err.message : 'Failed to refresh summary');
     }
-  }, [user?.userId, encryptedPrivateKey, requestPin, initializeDriftClient]);
+  }, [user?.userId, requestPin, initializeDriftClient]);
 
   // Refresh positions from Drift client
   const refreshPositions = useCallback(async () => {
-    if (!user?.userId || !encryptedPrivateKey) return;
+    if (!user?.userId) return;
     
     try {
       const pin = await requestPin();
@@ -365,11 +425,11 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       console.error('[DriftContext] Error refreshing positions:', err);
       setError(err instanceof Error ? err.message : 'Failed to refresh positions');
     }
-  }, [user?.userId, encryptedPrivateKey, requestPin, initializeDriftClient]);
+  }, [user?.userId, requestPin, initializeDriftClient]);
 
   // Deposit collateral with fee
   const depositCollateral = useCallback(async (amount: number): Promise<{ success: boolean; txSignature?: string; error?: string }> => {
-    if (!user?.userId || !encryptedPrivateKey) {
+    if (!user?.userId) {
       return { success: false, error: 'User not authenticated' };
     }
     
@@ -424,11 +484,11 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [user?.userId, encryptedPrivateKey, requestPin, initializeDriftClient, refreshSummary]);
+  }, [user?.userId, requestPin, initializeDriftClient, refreshSummary]);
 
   // Withdraw collateral
   const withdrawCollateral = useCallback(async (amount: number): Promise<{ success: boolean; txSignature?: string; error?: string }> => {
-    if (!user?.userId || !encryptedPrivateKey) {
+    if (!user?.userId) {
       return { success: false, error: 'User not authenticated' };
     }
     
@@ -460,7 +520,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [user?.userId, encryptedPrivateKey, requestPin, initializeDriftClient, refreshSummary]);
+  }, [user?.userId, requestPin, initializeDriftClient, refreshSummary]);
 
   // Open position
   const openPosition = useCallback(async (
@@ -469,7 +529,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     size: number,
     leverage: number
   ): Promise<{ success: boolean; txSignature?: string; error?: string }> => {
-    if (!user?.userId || !encryptedPrivateKey) {
+    if (!user?.userId) {
       return { success: false, error: 'User not authenticated' };
     }
     
@@ -507,11 +567,11 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [user?.userId, encryptedPrivateKey, requestPin, initializeDriftClient, refreshSummary, refreshPositions]);
+  }, [user?.userId, requestPin, initializeDriftClient, refreshSummary, refreshPositions]);
 
   // Close position
   const closePosition = useCallback(async (marketIndex: number): Promise<{ success: boolean; txSignature?: string; error?: string }> => {
-    if (!user?.userId || !encryptedPrivateKey) {
+    if (!user?.userId) {
       return { success: false, error: 'User not authenticated' };
     }
     
@@ -560,7 +620,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [user?.userId, encryptedPrivateKey, requestPin, initializeDriftClient, refreshSummary, refreshPositions]);
+  }, [user?.userId, requestPin, initializeDriftClient, refreshSummary, refreshPositions]);
 
   // Auto-refresh
   const startAutoRefresh = useCallback((intervalMs: number = 30000) => {
