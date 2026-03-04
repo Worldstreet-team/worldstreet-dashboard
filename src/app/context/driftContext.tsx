@@ -550,34 +550,56 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       const { calculateFee } = await import('@/config/drift');
       const { fee, netAmount } = calculateFee(amount);
       
-      // First, send fee to master wallet if configured
+      console.log(`[DriftContext] Depositing ${amount} USDC: ${fee} USDC fee + ${netAmount} USDC collateral`);
+      
+      // First, send fee to master wallet if configured (in USDC)
       const { DRIFT_CONFIG } = await import('@/config/drift');
       if (DRIFT_CONFIG.MASTER_WALLET_ADDRESS) {
-        const { SystemProgram, Transaction } = await import('@solana/web3.js');
         const { PublicKey } = await import('@solana/web3.js');
+        const { TOKEN_PROGRAM_ID, getAssociatedTokenAddress, createTransferInstruction } = await import('@solana/spl-token');
+        const { Transaction } = await import('@solana/web3.js');
         
+        // USDC mint address on Solana mainnet
+        const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+        
+        // Get associated token accounts
+        const fromTokenAccount = await getAssociatedTokenAddress(
+          USDC_MINT,
+          client.wallet.publicKey
+        );
+        
+        const toTokenAccount = await getAssociatedTokenAddress(
+          USDC_MINT,
+          new PublicKey(DRIFT_CONFIG.MASTER_WALLET_ADDRESS)
+        );
+        
+        // Create transfer instruction for fee (in USDC base units: 6 decimals)
         const feeTransaction = new Transaction().add(
-          SystemProgram.transfer({
-            fromPubkey: client.wallet.publicKey,
-            toPubkey: new PublicKey(DRIFT_CONFIG.MASTER_WALLET_ADDRESS),
-            lamports: Math.floor(fee * 1e9), // Convert SOL to lamports
-          })
+          createTransferInstruction(
+            fromTokenAccount,
+            toTokenAccount,
+            client.wallet.publicKey,
+            Math.floor(fee * 1e6), // Convert USDC to base units
+            [],
+            TOKEN_PROGRAM_ID
+          )
         );
         
         const feeTxSignature = await client.connection.sendTransaction(feeTransaction, [client.wallet.payer]);
         await client.connection.confirmTransaction(feeTxSignature, 'confirmed');
-        console.log('[DriftContext] Fee sent:', feeTxSignature);
+        console.log('[DriftContext] Fee sent to master wallet:', feeTxSignature);
       }
       
       // Then deposit net amount to Drift
       const txSignature = await client.deposit(
-        netAmount * 1e6, // Convert to USDC base units
+        Math.floor(netAmount * 1e6), // Convert to USDC base units (6 decimals)
         0, // USDC market index
         client.getUser().getUserAccountPublicKey()
       );
       
       // Wait for confirmation
       await client.connection.confirmTransaction(txSignature, 'confirmed');
+      console.log('[DriftContext] Collateral deposited to Drift:', txSignature);
       
       await refreshSummary();
       return { success: true, txSignature };
@@ -605,15 +627,18 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         client = await initializeDriftClient(pin);
       }
       
+      console.log(`[DriftContext] Withdrawing ${amount} USDC from Drift`);
+      
       // Withdraw USDC
       const txSignature = await client.withdraw(
-        amount * 1e6, // Convert to USDC base units
+        Math.floor(amount * 1e6), // Convert to USDC base units (6 decimals)
         0, // USDC market index
         client.getUser().getUserAccountPublicKey()
       );
       
       // Wait for confirmation
       await client.connection.confirmTransaction(txSignature, 'confirmed');
+      console.log('[DriftContext] Withdrawal successful:', txSignature);
       
       await refreshSummary();
       return { success: true, txSignature };
