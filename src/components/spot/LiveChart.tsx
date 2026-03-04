@@ -1,14 +1,7 @@
 'use client';
 
-import React, { useState, memo } from 'react';
-import dynamic from 'next/dynamic';
+import React, { useState, memo, useEffect } from 'react';
 import { cn } from '@/lib/utils';
-
-// Dynamically import to avoid SSR issues
-const TradingViewWidget = dynamic(
-  () => import('react-tradingview-widget').then(mod => mod.default),
-  { ssr: false, loading: () => <ChartLoader /> }
-);
 
 interface LiveChartProps {
   symbol: string;
@@ -30,8 +23,18 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
   const [showLevelsForm, setShowLevelsForm] = useState(false);
   const [tempStopLoss, setTempStopLoss] = useState(stopLoss || '');
   const [tempTakeProfit, setTempTakeProfit] = useState(takeProfit || '');
+  const [isClient, setIsClient] = useState(false);
+  const [TradingViewWidget, setTradingViewWidget] = useState<any>(null);
 
-  React.useEffect(() => {
+  // Only render on client
+  useEffect(() => {
+    setIsClient(true);
+    import('react-tradingview-widget').then(mod => {
+      setTradingViewWidget(() => mod.default);
+    });
+  }, []);
+
+  useEffect(() => {
     setTempStopLoss(stopLoss || '');
     setTempTakeProfit(takeProfit || '');
   }, [stopLoss, takeProfit]);
@@ -45,6 +48,10 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
 
   // Convert symbol format: BTC-USDT -> BINANCE:BTCUSDT
   const tradingViewSymbol = `BINANCE:${symbol.replace('-', '')}`;
+
+  if (!isClient || !TradingViewWidget) {
+    return <ChartLoader />;
+  }
 
   return (
     <div className="flex flex-col w-full h-full bg-[#181a20] overflow-hidden">
