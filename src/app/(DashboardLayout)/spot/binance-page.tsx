@@ -210,14 +210,14 @@ export default function BinanceSpotPage() {
           </div>
         </div>
 
-        {/* Bottom Section: Full Width Panel - Fixed Height */}
+        {/* Bottom Section: Full Width Panel - Fixed Height
         <div className="h-48 border-t border-[#2b3139] shrink-0">
           <BinanceBottomPanel
             refreshKey={refreshKey}
             selectedChartSymbol={selectedPair}
             onPositionTPSLUpdate={handlePositionTPSLUpdate}
           />
-        </div>
+        </div> */}
       </div>
     </div>
   );
