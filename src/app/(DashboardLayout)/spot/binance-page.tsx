@@ -82,93 +82,93 @@ export default function BinanceSpotPage() {
   const isSpotPage = pathname === '/spot';
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#0b0e11]">
-      {/* Top Header Bar */}
-      <div className="h-16 flex items-center justify-between px-6 border-b border-[#1e2329] bg-[#0b0e11] sticky top-0 z-50">
+    <div className="h-screen flex flex-col bg-[#181a20] w-full overflow-hidden">
+      {/* Top Header Bar - Exact Binance Style */}
+      <div className="h-12 flex items-center justify-between px-4 border-b border-[#2b3139] bg-[#181a20] shrink-0">
         {/* Left: Logo + Nav */}
-        <div className="flex items-center gap-8">
-          <div className="flex items-center gap-2">
-            <Icon icon="cryptocurrency:btc" width={24} className="text-[#f0b90b]" />
-            <span className="text-lg font-bold text-white">WorldStreet</span>
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-1.5">
+            <Icon icon="cryptocurrency:btc" width={20} className="text-[#fcd535]" />
+            <span className="text-base font-semibold text-white">WorldStreet</span>
           </div>
-          <nav className="flex items-center gap-6">
-            <button className="text-sm text-white hover:text-[#f0b90b] transition-colors">Markets</button>
-            <button className="text-sm text-[#f0b90b] font-medium">Trade</button>
-            <button className="text-sm text-[#848e9c] hover:text-white transition-colors">Futures</button>
-            <button className="text-sm text-[#848e9c] hover:text-white transition-colors">Earn</button>
+          <nav className="flex items-center gap-5">
+            <button className="text-[13px] text-[#848e9c] hover:text-white transition-colors">Markets</button>
+            <button className="text-[13px] text-[#fcd535] font-medium">Trade</button>
+            <button className="text-[13px] text-[#848e9c] hover:text-white transition-colors">Futures</button>
+            <button className="text-[13px] text-[#848e9c] hover:text-white transition-colors">Earn</button>
           </nav>
         </div>
 
         {/* Right: Search + Account */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <div className="relative">
-            <Icon icon="ph:magnifying-glass" width={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#848e9c]" />
+            <Icon icon="ph:magnifying-glass" width={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#848e9c]" />
             <input
               type="text"
               placeholder="Search"
-              className="pl-9 pr-4 py-2 bg-[#1e2329] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f0b90b] w-64"
+              className="pl-8 pr-3 py-1.5 bg-[#2b3139] border-none rounded text-[13px] text-white placeholder:text-[#5e6673] focus:outline-none focus:bg-[#2b3139] w-52"
             />
           </div>
-          <button className="px-4 py-2 bg-[#f0b90b] hover:bg-[#f0b90b]/90 text-[#0b0e11] rounded font-semibold text-sm transition-colors">
+          <button className="px-3.5 py-1.5 bg-[#fcd535] hover:bg-[#fcd535]/90 text-[#181a20] rounded text-[13px] font-semibold transition-colors">
             Log In
           </button>
-          <button className="px-4 py-2 bg-transparent border border-[#f0b90b] text-[#f0b90b] hover:bg-[#f0b90b]/10 rounded font-semibold text-sm transition-colors">
+          <button className="px-3.5 py-1.5 bg-transparent hover:bg-[#2b3139] text-[#fcd535] rounded text-[13px] font-semibold transition-colors">
             Sign Up
           </button>
         </div>
       </div>
 
       {/* Main Trading Grid */}
-      <div className="flex flex-col">
+      <div className="flex-1 flex flex-col min-h-0">
         {/* Top Section: 3 Columns */}
-        <div className="grid grid-cols-[20%_1fr_22%]">
+        <div className="flex-1 grid grid-cols-[280px_1fr_340px] min-h-0">
           {/* LEFT: Order Book */}
-          <div className="border-r border-[#1e2329] min-h-[85vh]">
+          <div className="border-r border-[#2b3139] flex flex-col min-h-0">
             <BinanceOrderBook selectedPair={selectedPair} />
           </div>
 
           {/* CENTER: Chart + Order Form */}
-          <div className="border-r border-[#1e2329] flex flex-col">
-            {/* Pair Header */}
-            <div className="px-4 py-3 border-b border-[#1e2329] flex items-center justify-between">
-              <div className="flex items-center gap-6">
-                <div className="flex items-center gap-2">
-                  <span className="text-xl font-bold text-white">{selectedPair.replace('-', '/')}</span>
-                  <Icon icon="ph:caret-down" width={16} className="text-[#848e9c]" />
+          <div className="border-r border-[#2b3139] flex flex-col min-h-0">
+            {/* Pair Header - Compact Binance Style */}
+            <div className="px-3 py-2 border-b border-[#2b3139] flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-base font-semibold text-white">{selectedPair.replace('-', '/')}</span>
+                  <Icon icon="ph:caret-down" width={14} className="text-[#848e9c]" />
                 </div>
-                <div className="flex items-baseline gap-3">
-                  <span className={`text-2xl font-bold ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
+                <div className="flex items-baseline gap-2">
+                  <span className={`text-xl font-semibold ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
                     {currentPrice.toFixed(2)}
                   </span>
-                  <span className="text-sm text-[#848e9c]">
+                  <span className="text-xs text-[#848e9c]">
                     ${currentPrice.toFixed(2)}
                   </span>
                 </div>
               </div>
-              <div className="flex items-center gap-6 text-xs">
-                <div>
+              <div className="flex items-center gap-5 text-[11px]">
+                <div className="flex flex-col">
                   <span className="text-[#848e9c]">24h Change</span>
-                  <span className={`ml-2 font-semibold ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
+                  <span className={`font-medium ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
                     {isPositive ? '+' : ''}{priceChange.toFixed(2)}%
                   </span>
                 </div>
-                <div>
+                <div className="flex flex-col">
                   <span className="text-[#848e9c]">24h High</span>
-                  <span className="ml-2 text-white font-mono">{(currentPrice * 1.02).toFixed(2)}</span>
+                  <span className="text-white">{(currentPrice * 1.02).toFixed(2)}</span>
                 </div>
-                <div>
+                <div className="flex flex-col">
                   <span className="text-[#848e9c]">24h Low</span>
-                  <span className="ml-2 text-white font-mono">{(currentPrice * 0.98).toFixed(2)}</span>
+                  <span className="text-white">{(currentPrice * 0.98).toFixed(2)}</span>
                 </div>
-                <div>
+                <div className="flex flex-col">
                   <span className="text-[#848e9c]">24h Volume({tokenIn})</span>
-                  <span className="ml-2 text-white font-mono">28,500.00</span>
+                  <span className="text-white">28,500.00</span>
                 </div>
               </div>
             </div>
 
             {/* Chart */}
-            <div className="h-[55vh] bg-[#0b0e11]">
+            <div className="flex-1 min-h-0 bg-[#181a20]">
               <LiveChart 
                 symbol={selectedPair}
                 stopLoss={chartStopLoss}
@@ -178,7 +178,7 @@ export default function BinanceSpotPage() {
             </div>
 
             {/* Order Form */}
-            <div className="border-t border-[#1e2329]">
+            <div className="border-t border-[#2b3139] shrink-0">
               <BinanceOrderForm 
                 selectedPair={selectedPair}
                 onTradeExecuted={handleTradeExecuted}
@@ -187,9 +187,9 @@ export default function BinanceSpotPage() {
           </div>
 
           {/* RIGHT: Market List + Market Trades */}
-          <div className="flex flex-col">
+          <div className="flex flex-col min-h-0">
             {/* Market List */}
-            <div className="h-[55vh]">
+            <div className="flex-1 min-h-0">
               <BinanceMarketList 
                 selectedPair={selectedPair}
                 onSelectPair={handleSelectPair}
@@ -197,12 +197,12 @@ export default function BinanceSpotPage() {
             </div>
 
             {/* Market Trades */}
-            <div className="border-t border-[#1e2329] bg-[#0b0e11]">
-              <div className="flex flex-col">
-                <div className="px-4 py-2 border-b border-[#1e2329] flex items-center justify-between">
+            <div className="h-[280px] border-t border-[#2b3139] bg-[#181a20] shrink-0">
+              <div className="flex flex-col h-full">
+                <div className="px-3 py-2 border-b border-[#2b3139] flex items-center justify-between shrink-0">
                   <span className="text-xs font-medium text-[#848e9c]">Market Trades</span>
                 </div>
-                <div className="h-[30vh]">
+                <div className="flex-1 min-h-0">
                   <MarketTrades selectedPair={selectedPair} />
                 </div>
               </div>
@@ -211,7 +211,7 @@ export default function BinanceSpotPage() {
         </div>
 
         {/* Bottom Section: Full Width Panel */}
-        <div className="border-t border-[#1e2329]">
+        <div className="border-t border-[#2b3139] shrink-0">
           <BinanceBottomPanel
             refreshKey={refreshKey}
             selectedChartSymbol={selectedPair}
