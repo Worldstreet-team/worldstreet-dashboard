@@ -1,52 +1,16 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Icon } from '@iconify/react';
-import { useAuth } from '@/app/context/authContext';
-import { useDriftTrading } from '@/hooks/useDriftTrading';
-
-interface AccountSummary {
-  totalCollateral: number;
-  freeCollateral: number;
-  unrealizedPnl: number;
-  leverage: number;
-  marginRatio: number;
-  openPositions: number;
-  openOrders: number;
-}
+import { useDrift } from '@/app/context/driftContext';
 
 export const RiskPanel: React.FC = () => {
-  const { user } = useAuth();
-  const { depositCollateral, withdrawCollateral, fetchAccountSummary } = useDriftTrading();
-  const [accountSummary, setAccountSummary] = useState<AccountSummary | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { summary, refreshSummary, isLoading, depositCollateral, withdrawCollateral } = useDrift();
   const [action, setAction] = useState<'deposit' | 'withdraw' | null>(null);
   const [amount, setAmount] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-
-  const userId = user?.userId || '';
-
-  useEffect(() => {
-    if (userId) {
-      loadAccountSummary();
-    }
-  }, [userId]);
-
-  const loadAccountSummary = async () => {
-    setLoading(true);
-    try {
-      const data = await fetchAccountSummary();
-      setAccountSummary(data);
-      setError('');
-    } catch (err) {
-      console.error('Failed to fetch account summary:', err);
-      setError('Failed to fetch account data');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleDeposit = async () => {
     if (!amount || parseFloat(amount) <= 0) {
@@ -60,10 +24,15 @@ export const RiskPanel: React.FC = () => {
 
     try {
       const result = await depositCollateral(parseFloat(amount));
-      setSuccess(`Successfully deposited ${amount} USDC. TX: ${result.txSignature?.slice(0, 8)}...`);
-      setAmount('');
-      setAction(null);
-      await loadAccountSummary();
+
+      if (result.success) {
+        setSuccess(`Successfully deposited ${amount} USDC. TX: ${result.txSignature?.slice(0, 8)}...`);
+        setAmount('');
+        setAction(null);
+        await refreshSummary();
+      } else {
+        setError(result.error || 'Failed to deposit collateral');
+      }
     } catch (err) {
       setError((err as Error).message || 'Failed to deposit collateral');
     } finally {
@@ -77,7 +46,7 @@ export const RiskPanel: React.FC = () => {
       return;
     }
 
-    if (accountSummary && parseFloat(amount) > accountSummary.freeCollateral) {
+    if (summary && parseFloat(amount) > summary.freeCollateral) {
       setError('Insufficient free collateral');
       return;
     }
@@ -88,10 +57,15 @@ export const RiskPanel: React.FC = () => {
 
     try {
       const result = await withdrawCollateral(parseFloat(amount));
-      setSuccess(`Successfully withdrew ${amount} USDC. TX: ${result.txSignature?.slice(0, 8)}...`);
-      setAmount('');
-      setAction(null);
-      await loadAccountSummary();
+
+      if (result.success) {
+        setSuccess(`Successfully withdrew ${amount} USDC. TX: ${result.txSignature?.slice(0, 8)}...`);
+        setAmount('');
+        setAction(null);
+        await refreshSummary();
+      } else {
+        setError(result.error || 'Failed to withdraw collateral');
+      }
     } catch (err) {
       setError((err as Error).message || 'Failed to withdraw collateral');
     } finally {
@@ -99,7 +73,7 @@ export const RiskPanel: React.FC = () => {
     }
   };
 
-  if (loading) {
+  if (isLoading && !summary) {
     return (
       <div className="bg-white dark:bg-darkgray rounded-lg border border-border dark:border-darkborder p-4">
         <h3 className="text-lg font-semibold text-dark dark:text-white mb-4">Risk Summary</h3>
@@ -110,7 +84,7 @@ export const RiskPanel: React.FC = () => {
     );
   }
 
-  if (!accountSummary) {
+  if (!summary) {
     return (
       <div className="bg-white dark:bg-darkgray rounded-lg border border-border dark:border-darkborder p-4">
         <h3 className="text-lg font-semibold text-dark dark:text-white mb-4">Risk Summary</h3>
@@ -123,8 +97,8 @@ export const RiskPanel: React.FC = () => {
     );
   }
 
-  const usedCollateral = accountSummary.totalCollateral - accountSummary.freeCollateral;
-  const isHighRisk = accountSummary.marginRatio < 0.2;
+  const usedCollateral = summary.totalCollateral - summary.freeCollateral;
+  const isHighRisk = summary.marginRatio < 0.2;
 
   return (
     <>
@@ -132,10 +106,11 @@ export const RiskPanel: React.FC = () => {
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-dark dark:text-white">Risk Summary</h3>
           <button
-            onClick={loadAccountSummary}
-            className="p-1 hover:bg-muted/20 dark:hover:bg-white/5 rounded transition-colors"
+            onClick={refreshSummary}
+            disabled={isLoading}
+            className="p-1 hover:bg-muted/20 dark:hover:bg-white/5 rounded transition-colors disabled:opacity-50"
           >
-            <Icon icon="ph:arrow-clockwise" className="text-muted dark:text-darklink" height={18} />
+            <Icon icon="ph:arrow-clockwise" className={`text-muted dark:text-darklink ${isLoading ? 'animate-spin' : ''}`} height={18} />
           </button>
         </div>
         
@@ -144,7 +119,7 @@ export const RiskPanel: React.FC = () => {
           <div className="flex justify-between items-center">
             <span className="text-sm text-muted dark:text-darklink">Total Collateral</span>
             <span className="text-sm font-semibold text-dark dark:text-white">
-              ${(accountSummary.totalCollateral ?? 0).toFixed(2)}
+              ${(Number(summary.totalCollateral) || 0).toFixed(2)}
             </span>
           </div>
 
@@ -152,7 +127,7 @@ export const RiskPanel: React.FC = () => {
           <div className="flex justify-between items-center">
             <span className="text-sm text-muted dark:text-darklink">Used Margin</span>
             <span className="text-sm font-semibold text-dark dark:text-white">
-              ${(usedCollateral ?? 0).toFixed(2)}
+              ${(Number(usedCollateral) || 0).toFixed(2)}
             </span>
           </div>
 
@@ -160,7 +135,7 @@ export const RiskPanel: React.FC = () => {
           <div className="flex justify-between items-center">
             <span className="text-sm text-muted dark:text-darklink">Free Margin</span>
             <span className="text-sm font-semibold text-success">
-              ${(accountSummary.freeCollateral ?? 0).toFixed(2)}
+              ${(Number(summary.freeCollateral) || 0).toFixed(2)}
             </span>
           </div>
 
@@ -172,7 +147,7 @@ export const RiskPanel: React.FC = () => {
             <span className={`text-sm font-semibold ${
               isHighRisk ? 'text-error' : 'text-dark dark:text-white'
             }`}>
-              {((accountSummary.marginRatio ?? 0) * 100).toFixed(2)}%
+              {((summary.marginRatio ?? 0) * 100).toFixed(2)}%
             </span>
           </div>
 
@@ -180,7 +155,7 @@ export const RiskPanel: React.FC = () => {
           <div className="flex justify-between items-center">
             <span className="text-sm text-muted dark:text-darklink">Account Leverage</span>
             <span className="text-sm font-semibold text-dark dark:text-white">
-              {(accountSummary?.leverage ?? 0).toFixed(2)}x
+              {(Number(summary?.leverage) || 0).toFixed(2)}x
             </span>
           </div>
 
@@ -188,9 +163,9 @@ export const RiskPanel: React.FC = () => {
           <div className="flex justify-between items-center">
             <span className="text-sm text-muted dark:text-darklink">Unrealized PnL</span>
             <span className={`text-sm font-semibold ${
-              (accountSummary.unrealizedPnl ?? 0) >= 0 ? 'text-success' : 'text-error'
+              (summary.unrealizedPnl ?? 0) >= 0 ? 'text-success' : 'text-error'
             }`}>
-              {(accountSummary.unrealizedPnl ?? 0) >= 0 ? '+' : ''}${(accountSummary?.unrealizedPnl ?? 0).toFixed(2)}
+              {(summary.unrealizedPnl ?? 0) >= 0 ? '+' : ''}${(Number(summary?.unrealizedPnl) || 0).toFixed(2)}
             </span>
           </div>
 
@@ -198,7 +173,7 @@ export const RiskPanel: React.FC = () => {
           <div className="flex justify-between items-center">
             <span className="text-sm text-muted dark:text-darklink">Open Positions</span>
             <span className="text-sm font-semibold text-dark dark:text-white">
-              {accountSummary.openPositions}
+              {summary.openPositions}
             </span>
           </div>
 
@@ -227,7 +202,7 @@ export const RiskPanel: React.FC = () => {
               </button>
               <button
                 onClick={() => setAction('withdraw')}
-                disabled={accountSummary.freeCollateral <= 0}
+                disabled={summary.freeCollateral <= 0}
                 className="flex-1 px-3 py-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Icon icon="ph:arrow-up-duotone" className="inline mr-1" height={16} />
@@ -252,7 +227,7 @@ export const RiskPanel: React.FC = () => {
                 />
                 {action === 'withdraw' && (
                   <p className="text-xs text-muted dark:text-darklink mt-1">
-                    Available: ${(accountSummary.freeCollateral ?? 0).toFixed(2)}
+                    Available: ${(Number(summary.freeCollateral) || 0).toFixed(2)}
                   </p>
                 )}
               </div>

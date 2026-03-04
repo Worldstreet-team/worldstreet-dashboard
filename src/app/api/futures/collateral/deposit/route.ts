@@ -1,63 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
+import { connectDB } from '@/lib/mongodb';
+import { getDepositManager, initializeDriftServices } from '@/services/drift';
+import { handleApiError } from '@/lib/errors/apiErrorHandler';
 
-const BASE_API_URL = 'https://trading.watchup.site';
-
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
     const { userId } = await auth();
     
     if (!userId) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { success: false, error: 'Unauthorized' },
         { status: 401 }
       );
     }
-
-    const body = await request.json();
-    const { chain, amount } = body;
-
-    if (!chain || !amount) {
+    
+    const body = await req.json();
+    const { amount } = body;
+    
+    if (typeof amount !== 'number' || amount <= 0) {
       return NextResponse.json(
-        { error: 'Chain and amount are required' },
+        { success: false, error: 'Invalid amount' },
         { status: 400 }
       );
     }
-
-    const response = await fetch(`${BASE_API_URL}/api/futures/collateral/deposit`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        userId,
-        chain,
-        amount: amount.toString(),
-      }),
+    
+    await connectDB();
+    await initializeDriftServices();
+    
+    const depositManager = getDepositManager();
+    const result = await depositManager.depositCollateral(userId, amount);
+    
+    return NextResponse.json({
+      success: true,
+      data: result
     });
-
-    if (!response.ok) {
-      const error = await response.json();
-      return NextResponse.json(
-        { error: error.error || 'Failed to deposit collateral' },
-        { status: response.status }
-      );
-    }
-
-    const data = await response.json();
-    return NextResponse.json(
-      { 
-        message: data.message,
-        amount: data.amount,
-        txHash: data.txHash,
-      },
-      { status: 200 }
-    );
   } catch (error) {
-    console.error('Deposit collateral API error:', error);
-    return NextResponse.json(
-      { error: 'Failed to deposit collateral' },
-      { status: 500 }
-    );
+    return handleApiError(error);
   }
 }

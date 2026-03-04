@@ -1,39 +1,42 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { ChainSelector } from '@/components/futures/ChainSelector';
-import { MarketSelector } from '@/components/futures/MarketSelector';
-import { OrderPanel } from '@/components/futures/OrderPanel';
-import { PositionPanel } from '@/components/futures/PositionPanel';
-import { RiskPanel } from '@/components/futures/RiskPanel';
-import { WalletModal } from '@/components/futures/WalletModal';
-import { FuturesChart } from '@/components/futures/FuturesChart';
-import { FuturesWalletBalance } from '@/components/futures/FuturesWalletBalance';
-import { CollateralPanel } from '@/components/futures/CollateralPanel';
-import { DriftAccountStatus } from '@/components/futures/DriftAccountStatus';
-import { useFuturesData } from '@/hooks/useFuturesData';
+import { Icon } from '@iconify/react';
 import { useFuturesStore } from '@/store/futuresStore';
 import { useDrift } from '@/app/context/driftContext';
-import { Icon } from '@iconify/react';
+import { useFuturesData } from '@/hooks/useFuturesData';
+import { FuturesChart } from '@/components/futures/FuturesChart';
+import { PositionPanel } from '@/components/futures/PositionPanel';
+import { CollateralPanel } from '@/components/futures/CollateralPanel';
+import { FuturesWalletBalance } from '@/components/futures/FuturesWalletBalance';
+import { RiskPanel } from '@/components/futures/RiskPanel';
+import { WalletModal } from '@/components/futures/WalletModal';
+import { DriftAccountStatus } from '@/components/futures/DriftAccountStatus';
+import { FuturesOrderModal } from '@/components/futures/FuturesOrderModal';
+import type { OrderSide } from '@/store/futuresStore';
 
-const FuturesPage: React.FC = () => {
-  const { selectedChain, selectedMarket, markets, walletAddresses, setSelectedMarket } = useFuturesStore();
-  const { fetchWallet } = useFuturesData();
+export default function FuturesPage() {
+  const { selectedMarket, markets, setSelectedMarket } = useFuturesStore();
   const { isInitialized, startAutoRefresh, stopAutoRefresh } = useDrift();
+  const { fetchWallet } = useFuturesData();
+  
+  const [mobileActiveTab, setMobileActiveTab] = useState<'chart' | 'positions' | 'info'>('chart');
+  const [showMarketDropdown, setShowMarketDropdown] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [walletChecked, setWalletChecked] = useState(false);
+  const [showOrderModal, setShowOrderModal] = useState(false);
+  const [orderSide, setOrderSide] = useState<OrderSide>('long');
+  const [selectedTimeframe, setSelectedTimeframe] = useState('1H');
 
-  // Auto-select first market when markets load
   useEffect(() => {
     if (markets.length > 0 && !selectedMarket) {
       setSelectedMarket(markets[0]);
     }
   }, [markets, selectedMarket, setSelectedMarket]);
 
-  // Start auto-refresh when account is initialized
   useEffect(() => {
     if (isInitialized) {
-      startAutoRefresh(30000); // Refresh every 30 seconds
+      startAutoRefresh(30000);
       return () => stopAutoRefresh();
     }
   }, [isInitialized, startAutoRefresh, stopAutoRefresh]);
@@ -51,12 +54,22 @@ const FuturesPage: React.FC = () => {
         setWalletChecked(true);
       }
     };
-
     checkWallet();
-  }, [selectedChain, fetchWallet]);
+  }, [fetchWallet]);
 
   const handleWalletCreated = (address: string) => {
     console.log('Wallet created:', address);
+    setShowWalletModal(false);
+  };
+
+  const handleSelectMarket = (market: typeof selectedMarket) => {
+    setSelectedMarket(market);
+    setShowMarketDropdown(false);
+  };
+
+  const handleOpenOrderModal = (side: OrderSide) => {
+    setOrderSide(side);
+    setShowOrderModal(true);
   };
 
   if (!walletChecked) {
@@ -70,74 +83,247 @@ const FuturesPage: React.FC = () => {
     );
   }
 
+  const currentPrice = selectedMarket?.markPrice || 0;
+  const priceChange = 0;
+  const isPositive = priceChange >= 0;
+  const formatPrice = (price: number | undefined | null) => (Number(price) || 0).toFixed(2);
+  const formatPercentage = (percent: number | undefined | null) => (Number(percent) || 0).toFixed(2);
+  
+  const timeframes = ['1m', '5m', '15m', '1H', '4H', '1D'];
+
   return (
-    <div className="space-y-4">
-      {/* Drift Account Status */}
-      <DriftAccountStatus />
-
-      {/* Header */}
-      <div className="bg-white dark:bg-darkgray rounded-lg border border-border dark:border-darkborder p-4">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-dark dark:text-white mb-1">Futures Trading</h1>
-            <p className="text-sm text-muted dark:text-darklink">
-              Trade perpetual futures with up to 20x leverage
-            </p>
-          </div>
-          
-          <div className="flex flex-col sm:flex-row gap-3">
-            <ChainSelector />
-            <MarketSelector />
-          </div>
+    <>
+      {/* MOBILE LAYOUT */}
+      <div className="md:hidden fixed inset-0 flex flex-col bg-white dark:bg-darkgray">
+        <div className="flex-shrink-0 px-4 py-3 bg-gradient-to-r from-primary/10 to-warning/10 border-b border-border dark:border-darkborder">
+          <h1 className="text-sm font-bold text-dark dark:text-white">WorldStreet Futures</h1>
         </div>
-
-        {/* Wallet Address Display */}
-        {walletAddresses[selectedChain] && (
-          <div className="mt-4 pt-4 border-t border-border dark:border-darkborder">
-            <div className="flex items-center gap-2">
-              <Icon icon="ph:wallet-duotone" className="text-primary" height={20} />
-              <span className="text-sm text-muted dark:text-darklink">Futures Wallet:</span>
-              <code className="text-sm font-mono text-dark dark:text-white bg-gray-100 dark:bg-dark px-2 py-1 rounded">
-                {walletAddresses[selectedChain]}
-              </code>
+        
+        <div className="flex-1 overflow-y-auto pb-20">
+          <div className="px-4 py-2 bg-white dark:bg-darkgray border-b border-border dark:border-darkborder">
+            <div className="flex items-center justify-between mb-1">
+              <div className="relative">
+                <button 
+                  onClick={() => setShowMarketDropdown(!showMarketDropdown)}
+                  className="flex items-center gap-1 hover:bg-muted/10 px-1 py-0.5 rounded"
+                >
+                  <span className="text-base font-bold text-dark dark:text-white">
+                    {selectedMarket?.symbol || 'Select Market'}
+                  </span>
+                  <Icon icon="ph:caret-down" width={14} className="text-muted" />
+                </button>
+                
+                {showMarketDropdown && (
+                  <div className="absolute top-full left-0 mt-1 bg-white dark:bg-darkgray border border-border dark:border-darkborder rounded-lg shadow-lg z-20 min-w-[150px] max-h-[300px] overflow-y-auto">
+                    {markets.map((market) => (
+                      <button
+                        key={market.id}
+                        onClick={() => handleSelectMarket(market)}
+                        className={`w-full text-left px-4 py-2 hover:bg-muted/10 text-sm ${
+                          selectedMarket?.id === market.id ? 'bg-muted/20 text-primary' : 'text-dark dark:text-white'
+                        }`}
+                      >
+                        {market.symbol}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <DriftAccountStatus />
+            </div>
+            
+            <div className="flex items-baseline gap-2">
+              <span className={`text-lg font-bold ${isPositive ? 'text-success' : 'text-error'}`}>
+                ${formatPrice(currentPrice)}
+              </span>
+              <span className={`text-xs ${isPositive ? 'text-success' : 'text-error'}`}>
+                {isPositive ? '+' : ''}{formatPercentage(priceChange)}%
+              </span>
+              <span className="text-xs text-warning">PERP</span>
             </div>
           </div>
-        )}
-      </div>
 
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Left Column - Chart & Positions */}
-        <div className="lg:col-span-2 space-y-4">
-          {/* Trading Chart */}
-          <div className="h-[600px]">
-            <FuturesChart 
-              symbol={selectedMarket?.symbol}
-              isDarkMode={true}
-            />
+          <div className="flex items-center gap-4 px-4 py-2 border-b border-border dark:border-darkborder bg-white dark:bg-darkgray">
+            {['chart', 'positions', 'info'].map((tab) => (
+              <button 
+                key={tab}
+                onClick={() => setMobileActiveTab(tab as any)}
+                className={`pb-1 text-xs font-medium capitalize ${
+                  mobileActiveTab === tab 
+                    ? 'text-dark dark:text-white border-b-2 border-warning' 
+                    : 'text-muted'
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
           </div>
 
-          {/* Positions */}
-          <PositionPanel />
+          {mobileActiveTab === 'chart' && (
+            <div className="h-[50vh] bg-white dark:bg-darkgray">
+              <FuturesChart symbol={selectedMarket?.symbol} isDarkMode={true} />
+            </div>
+          )}
+
+          {mobileActiveTab === 'positions' && (
+            <div className="bg-white dark:bg-darkgray p-4">
+              <PositionPanel />
+            </div>
+          )}
+
+          {mobileActiveTab === 'info' && (
+            <div className="bg-white dark:bg-darkgray p-4 space-y-4">
+              <FuturesWalletBalance />
+              <CollateralPanel />
+              <RiskPanel />
+            </div>
+          )}
+
+          <div className="border-t border-border dark:border-darkborder bg-white dark:bg-darkgray p-4">
+            <PositionPanel />
+          </div>
         </div>
 
-        {/* Right Column - Order & Risk */}
-        <div className="space-y-4">
-          <FuturesWalletBalance />
-          <CollateralPanel />
-          <OrderPanel />
-          <RiskPanel />
+        <div className="fixed bottom-0 left-0 right-0 flex gap-3 p-4 bg-white dark:bg-darkgray border-t border-border dark:border-darkborder z-10">
+          <button 
+            onClick={() => handleOpenOrderModal('long')}
+            className="flex-1 py-3 bg-success hover:bg-success/90 text-white font-semibold rounded-lg transition-colors"
+          >
+            Long
+          </button>
+          <button 
+            onClick={() => handleOpenOrderModal('short')}
+            className="flex-1 py-3 bg-error hover:bg-error/90 text-white font-semibold rounded-lg transition-colors"
+          >
+            Short
+          </button>
         </div>
       </div>
 
-      {/* Wallet Modal */}
+      {/* DESKTOP LAYOUT - Professional Two-Column Trading Interface */}
+      <div className="hidden md:block fixed inset-0 top-[64px] left-0 xl:left-[260px] bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-[#0a0a0a] dark:via-[#111111] dark:to-[#0a0a0a]">
+        
+        {/* Premium Header Bar - Market Info Only */}
+        <div className="h-20 px-8 py-4 bg-white/80 dark:bg-black/40 backdrop-blur-xl border-b border-gray-200/50 dark:border-white/5">
+          <div className="flex items-center gap-6 h-full">
+            {/* Market Selector */}
+            <div className="relative">
+              <button 
+                onClick={() => setShowMarketDropdown(!showMarketDropdown)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200/50 dark:border-white/10 transition-all duration-200 group"
+              >
+                <span className="text-xl font-bold text-dark dark:text-white tracking-tight">
+                  {selectedMarket?.symbol || 'Select Market'}
+                </span>
+                <Icon 
+                  icon="ph:caret-down" 
+                  width={18} 
+                  className="text-muted dark:text-gray-400 group-hover:text-dark dark:group-hover:text-white transition-colors" 
+                />
+              </button>
+              
+              {showMarketDropdown && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowMarketDropdown(false)} />
+                  <div className="absolute top-full left-0 mt-2 bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl shadow-black/10 dark:shadow-black/50 z-50 min-w-[200px] max-h-[400px] overflow-y-auto backdrop-blur-xl">
+                    <div className="p-2">
+                      {markets.map((market) => (
+                        <button
+                          key={market.id}
+                          onClick={() => handleSelectMarket(market)}
+                          className={`w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 dark:hover:bg-white/5 text-sm font-medium transition-all duration-150 ${
+                            selectedMarket?.id === market.id 
+                              ? 'bg-primary/10 text-primary dark:bg-primary/20' 
+                              : 'text-dark dark:text-white'
+                          }`}
+                        >
+                          {market.symbol}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+            
+
+
+          </div>
+        </div>
+
+        {/* Two-Column Layout: 70/30 Split */}
+        <div className="h-[calc(100%-80px)] flex">
+          
+          {/* LEFT COLUMN (70%): Chart Only */}
+          <div className="w-[70%] h-full p-6 pr-3">
+            <div className="h-full bg-white dark:bg-[#0d0d0d] rounded-2xl border border-gray-200/50 dark:border-white/5 shadow-lg shadow-black/5 dark:shadow-black/20 overflow-hidden">
+              <FuturesChart symbol={selectedMarket?.symbol} isDarkMode={true} />
+            </div>
+          </div>
+
+          {/* RIGHT COLUMN (30%): Scrollable Info & Actions */}
+          <div className="w-[30%] h-full overflow-y-auto pl-3 pr-6 py-6 custom-scrollbar">
+            <div className="flex flex-col gap-4">
+              
+              {/* 1. Quick Actions */}
+              <div className="bg-white dark:bg-[#0d0d0d] rounded-2xl border border-gray-200/50 dark:border-white/5 shadow-lg shadow-black/5 dark:shadow-black/20 p-6">
+                <h3 className="text-sm font-bold text-dark dark:text-white mb-4 uppercase tracking-wide">Quick Actions</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => handleOpenOrderModal('long')}
+                    className="group relative overflow-hidden py-4 bg-gradient-to-br from-success to-success/80 hover:from-success/90 hover:to-success/70 text-white font-bold rounded-xl transition-all duration-200 shadow-lg shadow-success/20 hover:shadow-xl hover:shadow-success/30 hover:-translate-y-0.5"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="relative flex flex-col items-center gap-1">
+                      <Icon icon="ph:arrow-up-bold" width={20} />
+                      <span className="text-sm">Open Long</span>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => handleOpenOrderModal('short')}
+                    className="group relative overflow-hidden py-4 bg-gradient-to-br from-error to-error/80 hover:from-error/90 hover:to-error/70 text-white font-bold rounded-xl transition-all duration-200 shadow-lg shadow-error/20 hover:shadow-xl hover:shadow-error/30 hover:-translate-y-0.5"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="relative flex flex-col items-center gap-1">
+                      <Icon icon="ph:arrow-down-bold" width={20} />
+                      <span className="text-sm">Open Short</span>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              <DriftAccountStatus />
+
+              {/* 3. Position Panel */}
+              <PositionPanel />
+
+              {/* 4. Wallet Balance */}
+              <FuturesWalletBalance />
+
+              {/* 5. Collateral Panel */}
+              <CollateralPanel />
+
+              {/* 6. Risk Panel */}
+              <RiskPanel />
+
+              {/* 7. Drift Account Status */}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <WalletModal
         isOpen={showWalletModal}
         onClose={() => setShowWalletModal(false)}
         onWalletCreated={handleWalletCreated}
       />
-    </div>
-  );
-};
 
-export default FuturesPage;
+      <FuturesOrderModal
+        isOpen={showOrderModal}
+        onClose={() => setShowOrderModal(false)}
+        side={orderSide}
+        onSuccess={() => setShowOrderModal(false)}
+      />
+    </>
+  );
+}

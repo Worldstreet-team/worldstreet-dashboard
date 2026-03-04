@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useFuturesStore, OrderSide, OrderType } from '@/store/futuresStore';
 import { usePostActionPolling, useDebounce } from '@/hooks/useFuturesPolling';
-import { useDriftTrading } from '@/hooks/useDriftTrading';
+import { useDrift } from '@/app/context/driftContext';
 import { Icon } from '@iconify/react';
 
 interface ErrorState {
@@ -21,7 +21,7 @@ interface ErrorState {
 
 export const OrderPanel: React.FC = () => {
   const { selectedMarket, selectedChain, setPreviewData, previewData, markets } = useFuturesStore();
-  const { fetchPositions, fetchAccountSummary } = useDriftTrading();
+  const { openPosition: openPositionClient, refreshPositions, refreshSummary } = useDrift();
   const { isPolling: isConfirmingOrder, startPostActionPolling } = usePostActionPolling();
   
   const [side, setSide] = useState<OrderSide>('long');
@@ -220,70 +220,60 @@ export const OrderPanel: React.FC = () => {
       // Determine marketIndex from market symbol
       const marketIndex = markets.findIndex(m => m.id === selectedMarket.id);
       
-      // Use Drift API for opening positions
-      const response = await fetch('/api/drift/position/open', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          marketIndex: marketIndex >= 0 ? marketIndex : 0,
-          direction: side,
-          baseAmount: parseFloat(size),
-          leverage,
-          orderType,
-          price: limitPrice ? parseFloat(limitPrice) : undefined,
-        }),
-      });
+      // Use client-side openPosition
+      const result = await openPositionClient(
+        marketIndex >= 0 ? marketIndex : 0,
+        side,
+        parseFloat(size),
+        leverage
+      );
 
-      const result = await response.json();
-
-      if (response.ok) {
-        // Show success message
-        setSuccessMessage(`Position opened! TX: ${result.txSignature?.slice(0, 8)}...`);
-        
-        // Start post-action polling to confirm position appears
-        startPostActionPolling({
-          checkCondition: async () => {
-            const positions = await fetchPositions();
-            const summary = await fetchAccountSummary();
-            // Check if new position exists
-            return positions.length > 0 || (summary !== null && summary.openPositions > 0);
-          },
-          onSuccess: () => {
-            // Reset form
-            setSize('');
-            setLimitPrice('');
-            setError({ type: null, message: '' });
-            setIsSubmitting(false);
-            
-            // Clear success message after 5 seconds
-            setTimeout(() => setSuccessMessage(''), 5000);
-          },
-          onTimeout: () => {
-            setIsSubmitting(false);
-            setSuccessMessage('Position opened but taking longer to confirm. Check your positions.');
-            setTimeout(() => setSuccessMessage(''), 5000);
-          },
-          maxAttempts: 15,
-          interval: 1000,
-        });
-      } else {
-        // Parse and display error
-        const parsedError = parseError(result.error || '', result.message || result.error || '');
-        setError(parsedError);
-        setIsSubmitting(false);
-
-        // Auto-retry for temporary errors
-        if (parsedError.type === 'oracle_unavailable' || parsedError.type === 'volatility') {
-          setRetryCountdown(5);
-        }
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to open position');
       }
+
+      // Show success message
+      setSuccessMessage(`Position opened! TX: ${result.txSignature?.slice(0, 8)}...`);
+      
+      // Start post-action polling to confirm position appears
+      startPostActionPolling({
+        checkCondition: async () => {
+          await refreshPositions();
+          await refreshSummary();
+          // Check if new position exists
+          return true; // Position should be reflected immediately
+        },
+        onSuccess: () => {
+          // Reset form
+          setSize('');
+          setLimitPrice('');
+          setError({ type: null, message: '' });
+          setIsSubmitting(false);
+          
+          // Clear success message after 5 seconds
+          setTimeout(() => setSuccessMessage(''), 5000);
+        },
+        onTimeout: () => {
+          setIsSubmitting(false);
+          setSuccessMessage('Position opened but taking longer to confirm. Check your positions.');
+          setTimeout(() => setSuccessMessage(''), 5000);
+        },
+        maxAttempts: 15,
+        interval: 1000,
+      });
     } catch (error) {
       console.error('Submit error:', error);
-      setError({
-        type: 'generic',
-        message: 'Network error. Please check your connection and try again.',
-      });
+      
+      // Parse error from hook
+      const errorMessage = error instanceof Error ? error.message : 'Network error. Please check your connection and try again.';
+      const parsedError = parseError('', errorMessage);
+      setError(parsedError);
       setIsSubmitting(false);
+
+      // Auto-retry for temporary errors
+      if (parsedError.type === 'oracle_unavailable' || parsedError.type === 'volatility') {
+        setRetryCountdown(5);
+      }
     }
   };
 
@@ -307,6 +297,12 @@ export const OrderPanel: React.FC = () => {
   const shortfall = previewData && !previewData.marginCheckPassed
     ? (previewData.totalRequired ?? 0) - (previewData.freeCollateral ?? 0)
     : 0;
+
+  // Safe number formatting
+  const formatNumber = (num: number | undefined | null, decimals: number = 2): string => {
+    const value = Number(num);
+    return (isNaN(value) ? 0 : value).toFixed(decimals);
+  };
 
   return (
     <div className="bg-white dark:bg-darkgray rounded-lg border border-border dark:border-darkborder p-4">
@@ -415,19 +411,19 @@ export const OrderPanel: React.FC = () => {
           <div className="flex justify-between text-sm">
             <span className="text-muted dark:text-darklink">Base Margin:</span>
             <span className="font-medium text-dark dark:text-white">
-              ${(previewData?.requiredMargin ?? 0).toFixed(2)}
+              ${(Number(previewData?.requiredMargin) || 0).toFixed(2)}
             </span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-muted dark:text-darklink">Trading Fee (0.1%):</span>
             <span className="font-medium text-dark dark:text-white">
-              ${(previewData?.estimatedFee ?? 0).toFixed(2)}
+              ${(Number(previewData?.estimatedFee) || 0).toFixed(2)}
             </span>
           </div>
           <div className="flex justify-between text-sm border-t border-border dark:border-darkborder pt-2">
             <span className="font-semibold text-dark dark:text-white">Total Required:</span>
             <span className="font-semibold text-dark dark:text-white">
-              ${(previewData?.totalRequired ?? 0).toFixed(2)}
+              ${(Number(previewData?.totalRequired) || 0).toFixed(2)}
             </span>
           </div>
           <div className={`flex justify-between text-sm ${
@@ -435,20 +431,20 @@ export const OrderPanel: React.FC = () => {
           }`}>
             <span>Your Available:</span>
             <span className="font-medium">
-              ${(previewData?.freeCollateral ?? 0).toFixed(2)}
+              ${(Number(previewData?.freeCollateral) || 0).toFixed(2)}
             </span>
           </div>
           <div className="border-t border-border dark:border-darkborder pt-2 mt-2 space-y-1">
             <div className="flex justify-between text-xs text-muted dark:text-darklink">
               <span>Est. Liquidation:</span>
               <span className="text-error">
-                ${(previewData?.estimatedLiquidationPrice ?? 0).toFixed(2)}
+                ${(Number(previewData?.estimatedLiquidationPrice) || 0).toFixed(2)}
               </span>
             </div>
             <div className="flex justify-between text-xs text-muted dark:text-darklink">
               <span>Funding Impact:</span>
               <span>
-                ${(previewData?.estimatedFundingImpact ?? 0).toFixed(4)}
+                ${(Number(previewData?.estimatedFundingImpact) || 0).toFixed(4)}
               </span>
             </div>
           </div>
@@ -676,7 +672,7 @@ export const OrderPanel: React.FC = () => {
             <div className="flex-1">
               <p className="text-sm font-semibold text-error">Insufficient Margin</p>
               <p className="text-xs text-error/80 mt-1">
-                Need ${shortfall.toFixed(2)} more to open this position.
+                Need ${formatNumber(shortfall, 2)} more to open this position.
               </p>
               <a 
                 href="/futures" 

@@ -41,6 +41,7 @@ export async function POST(request: NextRequest) {
 
     if (!response.ok) {
       const errorData = await response.json();
+      console.log("Error Data: ", errorData, response)
       return NextResponse.json(
         { error: errorData.error || 'Failed to open position' },
         { status: response.status }

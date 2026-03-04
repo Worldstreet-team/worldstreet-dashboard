@@ -60,6 +60,7 @@ export function useDriftTrading() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          userId, // Add userId to the payload
           marketIndex,
           direction,
           baseAmount,
@@ -100,6 +101,7 @@ export function useDriftTrading() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          userId,
           marketIndex,
           baseAmount: baseAmount || null,
         }),
@@ -140,6 +142,7 @@ export function useDriftTrading() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          userId,
           marketIndex,
           direction,
           baseAmount,
@@ -176,7 +179,10 @@ export function useDriftTrading() {
       const response = await fetch('/api/drift/order/cancel', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId }),
+        body: JSON.stringify({ 
+          userId,
+          orderId 
+        }),
       });
 
       if (!response.ok) {
@@ -206,7 +212,10 @@ export function useDriftTrading() {
       const response = await fetch('/api/drift/order/cancel-all', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ marketIndex: marketIndex || null }),
+        body: JSON.stringify({ 
+          userId,
+          marketIndex: marketIndex || null 
+        }),
       });
 
       if (!response.ok) {
@@ -236,7 +245,10 @@ export function useDriftTrading() {
       const response = await fetch('/api/drift/collateral/deposit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount }),
+        body: JSON.stringify({ 
+          userId,
+          amount 
+        }),
       });
 
       if (!response.ok) {
@@ -266,7 +278,10 @@ export function useDriftTrading() {
       const response = await fetch('/api/drift/collateral/withdraw', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount }),
+        body: JSON.stringify({ 
+          userId,
+          amount 
+        }),
       });
 
       if (!response.ok) {
@@ -290,7 +305,7 @@ export function useDriftTrading() {
     if (!userId) return [];
 
     try {
-      const response = await fetch('/api/drift/positions');
+      const response = await fetch(`/api/drift/positions?userId=${userId}`);
       if (!response.ok) {
         throw new Error('Failed to fetch positions');
       }
@@ -308,7 +323,7 @@ export function useDriftTrading() {
     if (!userId) return [];
 
     try {
-      const response = await fetch('/api/drift/orders');
+      const response = await fetch(`/api/drift/orders?userId=${userId}`);
       if (!response.ok) {
         throw new Error('Failed to fetch orders');
       }
@@ -326,7 +341,7 @@ export function useDriftTrading() {
     if (!userId) return null;
 
     try {
-      const response = await fetch('/api/drift/account/summary');
+      const response = await fetch(`/api/drift/account/summary?userId=${userId}`);
       if (!response.ok) {
         throw new Error('Failed to fetch account summary');
       }

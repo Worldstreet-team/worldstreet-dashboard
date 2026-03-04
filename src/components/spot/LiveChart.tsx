@@ -4,14 +4,14 @@ import React, { useEffect, useRef, useState, useCallback, useContext, memo } fro
 import { Icon } from '@iconify/react';
 import { cn } from '@/lib/utils';
 import { ChartEngine, Candle } from '@/lib/chart/ChartEngine';
-import { DataFeedService, Interval } from '@/lib/chart/DataFeedService';
+import { DataFeedService, Interval as TimeInterval } from '@/lib/chart/DataFeedService';
 import { CustomizerContext } from '@/app/context/customizerContext';
 
 // Symbol mapping - convert "BTC-USDT" to "BTCUSDT"
 const toKlineSymbol = (symbol: string): string => symbol.replace('-', '');
 
 // Timeframe options
-const TIMEFRAMES: { label: string; value: Interval }[] = [
+const TIMEFRAMES: { label: string; value: TimeInterval }[] = [
   { label: '1m', value: '1m' },
   { label: '5m', value: '5m' },
   { label: '15m', value: '15m' },
@@ -30,13 +30,14 @@ interface LiveChartProps {
 const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartEngineRef = useRef<ChartEngine | null>(null);
-  const dataFeedRef = useRef<DataFeedService | null>(null);
+  const pollingIntervalRef = useRef<number | null>(null);
   const isFirstLoad = useRef(true);
+  const lastCandleTimeRef = useRef<number>(0);
 
   const { activeMode } = useContext(CustomizerContext);
   const isDark = activeMode === 'dark';
 
-  const [interval, setInterval] = useState<Interval>('1d');
+  const [interval, setTimeInterval] = useState<TimeInterval>('1d');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showLevelsForm, setShowLevelsForm] = useState(false);
@@ -68,45 +69,114 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
     chartEngineRef.current?.updateTheme(isDark);
   }, [isDark]);
 
-  // Load data
+  // Fetch latest candle data
+  const fetchLatestCandle = useCallback(async (sym: string, int: TimeInterval) => {
+    try {
+      const klineSym = toKlineSymbol(sym);
+      const response = await fetch(`/api/market/${klineSym}/klines?type=${int}&limit=1`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch latest candle');
+      }
+
+      const data = await response.json();
+      const klineData = Array.isArray(data) ? data : (data.data || []);
+      
+      if (klineData.length > 0) {
+        const latestKline = klineData[0];
+        const candle: Candle = {
+          time: Math.floor(latestKline.time / 1000),
+          open: parseFloat(latestKline.open),
+          high: parseFloat(latestKline.high),
+          low: parseFloat(latestKline.low),
+          close: parseFloat(latestKline.close),
+          volume: parseFloat(latestKline.volume),
+        };
+
+        // Only update if this is a new or updated candle
+        if (candle.time >= lastCandleTimeRef.current) {
+          lastCandleTimeRef.current = candle.time;
+          chartEngineRef.current?.updateCandle(candle);
+        }
+      }
+    } catch (err) {
+      console.error('[LiveChart] Polling error:', err);
+    }
+  }, []);
+
+  // Start polling for updates
+  const startPolling = useCallback((sym: string, int: TimeInterval) => {
+    // Clear any existing interval
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+    }
+
+    // Poll every 3 seconds
+    pollingIntervalRef.current = setInterval(() => {
+      fetchLatestCandle(sym, int);
+    }, 3000) as unknown as number;
+  }, [fetchLatestCandle]);
+
+  // Stop polling
+  const stopPolling = useCallback(() => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+  }, []);
+
+  // Load initial data
   const loadData = useCallback(
-    async (sym: string, int: Interval) => {
+    async (sym: string, int: TimeInterval) => {
       setIsLoading(true);
       setError(null);
 
-      // Clean up previous feed
-      dataFeedRef.current?.disconnect();
+      // Stop any existing polling
+      stopPolling();
 
       const klineSym = toKlineSymbol(sym);
 
-      const feed = new DataFeedService(
-        klineSym,
-        int,
-        // Live candle callback
-        (candle: Candle) => {
-          chartEngineRef.current?.updateCandle(candle);
-        },
-        // Error callback
-        () => {}
-      );
-
-      dataFeedRef.current = feed;
-
       try {
-        const candles = await feed.fetchHistoricalData();
-        if (candles.length > 0) {
+        const response = await fetch(`/api/market/${klineSym}/klines?type=${int}`);
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch historical data: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        const klineData = Array.isArray(data) ? data : (data.data || []);
+
+        if (klineData.length > 0) {
+          const candles: Candle[] = klineData.map((kline: any) => ({
+            time: Math.floor(kline.time / 1000),
+            open: parseFloat(kline.open),
+            high: parseFloat(kline.high),
+            low: parseFloat(kline.low),
+            close: parseFloat(kline.close),
+            volume: parseFloat(kline.volume),
+          }));
+
           chartEngineRef.current?.setHistoricalData(candles);
+          
+          // Store the latest candle time
+          if (candles.length > 0) {
+            lastCandleTimeRef.current = candles[candles.length - 1].time;
+          }
+
+          // Start polling for live updates
+          startPolling(sym, int);
         } else {
           setError('No data available for this pair');
         }
-      } catch {
+      } catch (err) {
+        console.error('[LiveChart] Load error:', err);
         setError('Failed to load chart data');
       } finally {
         setIsLoading(false);
         isFirstLoad.current = false;
       }
     },
-    []
+    [startPolling, stopPolling]
   );
 
   // React to symbol / interval changes
@@ -120,15 +190,14 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
     return () => {
       cancelled = true;
       clearTimeout(timer);
-      dataFeedRef.current?.disconnect();
-      dataFeedRef.current = null;
+      stopPolling();
     };
-  }, [symbol, interval, loadData]);
+  }, [symbol, interval, loadData, stopPolling]);
 
   // Interval change handler
-  const handleIntervalChange = (newInterval: Interval) => {
+  const handleIntervalChange = (newInterval: TimeInterval) => {
     if (newInterval === interval) return;
-    setInterval(newInterval);
+    setTimeInterval(newInterval);
   };
 
   const handleUpdateLevels = () => {
@@ -248,7 +317,14 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
 
       {/* Chart canvas */}
       <div className="relative flex-1 min-h-0">
-        <div ref={containerRef} className="w-full h-full" />
+        {/* Watermark */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-[1]">
+          <span className="text-6xl md:text-8xl font-bold text-muted/5 dark:text-white/5 select-none">
+            WorldStreet
+          </span>
+        </div>
+        
+        <div ref={containerRef} className="w-full h-full relative z-[2]" />
 
         {/* Loading overlay */}
         {isLoading && (

@@ -9,12 +9,11 @@ export const DriftAccountStatus: React.FC = () => {
     isInitialized, 
     needsInitialization, 
     canTrade, 
-    status, 
     summary,
     isLoading,
     error,
-    initializeAccount,
-    refreshSummary
+    refreshSummary,
+    initializeDriftClient
   } = useDrift();
 
   const [initializing, setInitializing] = useState(false);
@@ -22,14 +21,12 @@ export const DriftAccountStatus: React.FC = () => {
 
   const handleInitialize = async () => {
     setInitializing(true);
-    const result = await initializeAccount();
-    
-    if (result.success) {
-      console.log('Drift account initialized successfully');
-    } else {
-      console.error('Failed to initialize:', result.error);
+    try {
+      await initializeDriftClient();
+      console.log('Drift client initialized successfully');
+    } catch (err) {
+      console.error('Failed to initialize:', err);
     }
-    
     setInitializing(false);
   };
 
@@ -39,12 +36,12 @@ export const DriftAccountStatus: React.FC = () => {
     setRefreshing(false);
   };
 
-  if (isLoading && !status) {
+  if (isLoading && !summary) {
     return (
-      <div className="bg-white dark:bg-darkgray rounded-lg border border-border dark:border-darkborder p-4">
+      <div className="bg-white dark:bg-[#0d0d0d] rounded-2xl border border-gray-200/50 dark:border-white/5 shadow-lg shadow-black/5 dark:shadow-black/20 p-6">
         <div className="flex items-center gap-3">
           <Icon icon="svg-spinners:ring-resize" className="text-primary" height={24} />
-          <span className="text-sm text-muted dark:text-darklink">Checking Drift account status...</span>
+          <span className="text-sm font-medium text-muted dark:text-gray-400">Checking account status...</span>
         </div>
       </div>
     );
@@ -52,11 +49,11 @@ export const DriftAccountStatus: React.FC = () => {
 
   if (error) {
     return (
-      <div className="bg-error/10 border-2 border-error/30 rounded-lg p-4">
+      <div className="bg-gradient-to-br from-error/5 to-error/10 dark:from-error/10 dark:to-error/5 border border-error/20 dark:border-error/30 rounded-2xl shadow-lg shadow-error/10 p-6">
         <div className="flex items-start gap-3">
           <Icon icon="ph:warning-circle-duotone" className="text-error flex-shrink-0 mt-0.5" height={24} />
           <div className="flex-1">
-            <h4 className="text-sm font-semibold text-error mb-1">Error Loading Account</h4>
+            <h4 className="text-sm font-bold text-error mb-1">Error Loading Account</h4>
             <p className="text-xs text-error/80">{error}</p>
           </div>
         </div>
@@ -66,31 +63,29 @@ export const DriftAccountStatus: React.FC = () => {
 
   if (needsInitialization) {
     return (
-      <div className="bg-warning/10 border-2 border-warning/30 rounded-lg p-4">
+      <div className="bg-gradient-to-br from-warning/5 to-warning/10 dark:from-warning/10 dark:to-warning/5 border border-warning/20 dark:border-warning/30 rounded-2xl shadow-lg shadow-warning/10 p-6">
         <div className="flex items-start gap-3">
           <Icon icon="ph:info-duotone" className="text-warning flex-shrink-0 mt-0.5" height={24} />
           <div className="flex-1">
-            <h4 className="text-sm font-semibold text-warning mb-1">Drift Account Initialization Required</h4>
-            <p className="text-xs text-warning/80 mb-3">
-              Your Drift subaccount needs to be initialized before you can trade futures. 
-              This is a one-time setup that costs approximately {status?.initializationCost.sol ?? 0.035} SOL 
-              (~${status?.initializationCost.usd ?? 7}).
+            <h4 className="text-sm font-bold text-warning mb-1">Drift Client Not Ready</h4>
+            <p className="text-xs text-warning/80 mb-4">
+              Your Drift client needs to be initialized to trade futures. Click below to unlock your wallet and connect.
             </p>
             <button
               onClick={handleInitialize}
               disabled={initializing}
-              className="px-4 py-2 bg-warning text-white rounded-lg text-sm font-medium hover:bg-warning/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2.5 bg-warning hover:bg-warning/90 text-white rounded-xl text-sm font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-warning/20 hover:shadow-xl hover:shadow-warning/30"
             >
               {initializing ? (
-                <>
-                  <Icon icon="svg-spinners:ring-resize" className="inline mr-2" height={16} />
+                <span className="flex items-center gap-2">
+                  <Icon icon="svg-spinners:ring-resize" height={16} />
                   Initializing...
-                </>
+                </span>
               ) : (
-                <>
-                  <Icon icon="ph:rocket-launch" className="inline mr-2" height={16} />
-                  Initialize Account ({status?.initializationCost.sol ?? 0.035} SOL)
-                </>
+                <span className="flex items-center gap-2">
+                  <Icon icon="ph:rocket-launch" height={16} />
+                  Initialize Drift Client
+                </span>
               )}
             </button>
           </div>
@@ -101,12 +96,12 @@ export const DriftAccountStatus: React.FC = () => {
 
   if (!isInitialized) {
     return (
-      <div className="bg-info/10 border-2 border-info/30 rounded-lg p-4">
+      <div className="bg-gradient-to-br from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/5 border border-primary/20 dark:border-primary/30 rounded-2xl shadow-lg shadow-primary/10 p-6">
         <div className="flex items-start gap-3">
-          <Icon icon="ph:clock-duotone" className="text-info flex-shrink-0 mt-0.5" height={24} />
+          <Icon icon="ph:clock-duotone" className="text-primary flex-shrink-0 mt-0.5" height={24} />
           <div className="flex-1">
-            <h4 className="text-sm font-semibold text-info mb-1">Account Initializing</h4>
-            <p className="text-xs text-info/80">
+            <h4 className="text-sm font-bold text-primary mb-1">Account Initializing</h4>
+            <p className="text-xs text-primary/80">
               Your Drift account is being set up. This may take a few moments...
             </p>
           </div>
@@ -117,89 +112,122 @@ export const DriftAccountStatus: React.FC = () => {
 
   // Account is initialized - show summary
   return (
-    <div className="bg-white dark:bg-darkgray rounded-lg border border-border dark:border-darkborder p-4">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <Icon 
-            icon={canTrade ? "ph:check-circle-duotone" : "ph:warning-duotone"} 
-            className={canTrade ? "text-success" : "text-warning"} 
-            height={24} 
-          />
-          <h3 className="text-sm font-semibold text-dark dark:text-white">
-            Drift Account Status
+    <div className="bg-white dark:bg-[#0d0d0d] rounded-2xl border border-gray-200/50 dark:border-white/5 shadow-lg shadow-black/5 dark:shadow-black/20 overflow-hidden">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200/50 dark:border-white/5">
+        <div className="flex items-center gap-3">
+          <div className={`w-2 h-2 rounded-full ${canTrade ? 'bg-success animate-pulse' : 'bg-warning'}`} />
+          <h3 className="text-sm font-bold text-dark dark:text-white uppercase tracking-wide">
+            Account Status
           </h3>
         </div>
         <button
           onClick={handleRefresh}
           disabled={refreshing}
-          className="p-2 hover:bg-gray-100 dark:hover:bg-dark rounded-lg transition-colors disabled:opacity-50"
+          className="p-2 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-all duration-200 disabled:opacity-50"
           title="Refresh account data"
         >
           <Icon 
             icon="ph:arrow-clockwise" 
-            className={`text-muted dark:text-darklink ${refreshing ? 'animate-spin' : ''}`}
+            className={`text-muted dark:text-gray-400 ${refreshing ? 'animate-spin' : ''}`}
             height={18} 
           />
         </button>
       </div>
 
       {summary && (
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-gray-50 dark:bg-dark rounded-lg p-3">
-            <p className="text-xs text-muted dark:text-darklink mb-1">Total Collateral</p>
-            <p className="text-lg font-semibold text-dark dark:text-white">
-              ${summary.totalCollateral.toFixed(2)}
-            </p>
-          </div>
-          
-          <div className="bg-gray-50 dark:bg-dark rounded-lg p-3">
-            <p className="text-xs text-muted dark:text-darklink mb-1">Free Collateral</p>
-            <p className="text-lg font-semibold text-dark dark:text-white">
-              ${summary.freeCollateral.toFixed(2)}
-            </p>
-          </div>
-          
-          <div className="bg-gray-50 dark:bg-dark rounded-lg p-3">
-            <p className="text-xs text-muted dark:text-darklink mb-1">Unrealized PnL</p>
-            <p className={`text-lg font-semibold ${
-              summary.unrealizedPnl >= 0 ? 'text-success' : 'text-error'
+        <div className="p-6">
+          {/* Horizontal Stats Strip */}
+          <div className="flex flex-wrap gap-3 overflow-x-auto pb-2 custom-scrollbar">
+            {/* Total Collateral */}
+            <div className="flex-1 min-w-[140px] bg-gradient-to-br from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/5 rounded-xl p-4 border border-primary/20 dark:border-primary/30">
+              <p className="text-[10px] font-bold text-primary/70 dark:text-primary/60 mb-1.5 uppercase tracking-wider">
+                Total Collateral
+              </p>
+              <p className="text-xl font-bold text-dark dark:text-white tabular-nums">
+                ${summary.totalCollateral.toFixed(2)}
+              </p>
+            </div>
+            
+            {/* Free Collateral */}
+            <div className="flex-1 min-w-[140px] bg-gradient-to-br from-success/5 to-success/10 dark:from-success/10 dark:to-success/5 rounded-xl p-4 border border-success/20 dark:border-success/30">
+              <p className="text-[10px] font-bold text-success/70 dark:text-success/60 mb-1.5 uppercase tracking-wider">
+                Free Collateral
+              </p>
+              <p className="text-xl font-bold text-dark dark:text-white tabular-nums">
+                ${summary.freeCollateral.toFixed(2)}
+              </p>
+            </div>
+            
+            {/* Unrealized PnL */}
+            <div className="flex-1 min-w-[140px] bg-gradient-to-br from-gray-50 to-gray-100 dark:from-white/5 dark:to-white/10 rounded-xl p-4 border border-gray-200/50 dark:border-white/10">
+              <p className="text-[10px] font-bold text-muted dark:text-gray-400 mb-1.5 uppercase tracking-wider">
+                Unrealized PnL
+              </p>
+              <p className={`text-xl font-bold tabular-nums ${
+                summary.unrealizedPnl >= 0 ? 'text-success' : 'text-error'
+              }`}>
+                {summary.unrealizedPnl >= 0 ? '+' : ''}${summary.unrealizedPnl.toFixed(2)}
+              </p>
+            </div>
+            
+            {/* Leverage */}
+            <div className="flex-1 min-w-[120px] bg-gradient-to-br from-gray-50 to-gray-100 dark:from-white/5 dark:to-white/10 rounded-xl p-4 border border-gray-200/50 dark:border-white/10">
+              <p className="text-[10px] font-bold text-muted dark:text-gray-400 mb-1.5 uppercase tracking-wider">
+                Leverage
+              </p>
+              <p className="text-xl font-bold text-dark dark:text-white tabular-nums">
+                {summary.leverage.toFixed(2)}x
+              </p>
+            </div>
+            
+            {/* Margin Ratio */}
+            <div className={`flex-1 min-w-[120px] rounded-xl p-4 border ${
+              summary.marginRatio > 0.5 
+                ? 'bg-gradient-to-br from-success/5 to-success/10 dark:from-success/10 dark:to-success/5 border-success/20 dark:border-success/30' 
+                : summary.marginRatio > 0.2 
+                ? 'bg-gradient-to-br from-warning/5 to-warning/10 dark:from-warning/10 dark:to-warning/5 border-warning/20 dark:border-warning/30'
+                : 'bg-gradient-to-br from-error/5 to-error/10 dark:from-error/10 dark:to-error/5 border-error/20 dark:border-error/30'
             }`}>
-              ${summary.unrealizedPnl >= 0 ? '+' : ''}{summary.unrealizedPnl.toFixed(2)}
-            </p>
+              <p className={`text-[10px] font-bold mb-1.5 uppercase tracking-wider ${
+                summary.marginRatio > 0.5 
+                  ? 'text-success/70 dark:text-success/60' 
+                  : summary.marginRatio > 0.2 
+                  ? 'text-warning/70 dark:text-warning/60'
+                  : 'text-error/70 dark:text-error/60'
+              }`}>
+                Margin Ratio
+              </p>
+              <p className={`text-xl font-bold tabular-nums ${
+                summary.marginRatio > 0.5 ? 'text-success' : 
+                summary.marginRatio > 0.2 ? 'text-warning' : 'text-error'
+              }`}>
+                {(summary.marginRatio * 100).toFixed(1)}%
+              </p>
+            </div>
+            
+            {/* Open Positions */}
+            <div className="flex-1 min-w-[120px] bg-gradient-to-br from-gray-50 to-gray-100 dark:from-white/5 dark:to-white/10 rounded-xl p-4 border border-gray-200/50 dark:border-white/10">
+              <p className="text-[10px] font-bold text-muted dark:text-gray-400 mb-1.5 uppercase tracking-wider">
+                Open Positions
+              </p>
+              <p className="text-xl font-bold text-dark dark:text-white tabular-nums">
+                {summary.openPositions}
+              </p>
+            </div>
           </div>
-          
-          <div className="bg-gray-50 dark:bg-dark rounded-lg p-3">
-            <p className="text-xs text-muted dark:text-darklink mb-1">Leverage</p>
-            <p className="text-lg font-semibold text-dark dark:text-white">
-              {summary.leverage.toFixed(2)}x
-            </p>
-          </div>
-          
-          <div className="bg-gray-50 dark:bg-dark rounded-lg p-3">
-            <p className="text-xs text-muted dark:text-darklink mb-1">Margin Ratio</p>
-            <p className={`text-lg font-semibold ${
-              summary.marginRatio > 0.5 ? 'text-success' : 
-              summary.marginRatio > 0.2 ? 'text-warning' : 'text-error'
-            }`}>
-              {(summary.marginRatio * 100).toFixed(1)}%
-            </p>
-          </div>
-          
-          <div className="bg-gray-50 dark:bg-dark rounded-lg p-3">
-            <p className="text-xs text-muted dark:text-darklink mb-1">Open Positions</p>
-            <p className="text-lg font-semibold text-dark dark:text-white">
-              {summary.openPositions}
-            </p>
-          </div>
-        </div>
-      )}
 
-      {!canTrade && (
-        <div className="mt-3 p-3 bg-warning/10 border border-warning/30 rounded-lg">
-          <p className="text-xs text-warning">
-            <Icon icon="ph:warning" className="inline mr-1" height={14} />
-            Trading is currently disabled. Please add collateral or close positions to continue trading.
-          </p>
+          {/* Trading Disabled Warning */}
+          {!canTrade && (
+            <div className="mt-4 p-4 bg-warning/10 border border-warning/20 rounded-xl flex items-start gap-3">
+              <Icon icon="ph:warning-duotone" className="text-warning flex-shrink-0 mt-0.5" height={20} />
+              <div>
+                <p className="text-xs font-bold text-warning">Trading Disabled</p>
+                <p className="text-xs text-warning/80 mt-1">
+                  Please add collateral or close positions to continue trading.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

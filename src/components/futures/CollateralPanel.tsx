@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
-import { useAuth } from '@/app/context/authContext';
-import { useFuturesPolling, usePostActionPolling } from '@/hooks/useFuturesPolling';
+import { useDrift } from '@/app/context/driftContext';
+import { usePostActionPolling } from '@/hooks/useFuturesPolling';
 
 interface CollateralData {
   total: number;
@@ -14,103 +14,27 @@ interface CollateralData {
 }
 
 export const CollateralPanel: React.FC = () => {
-  const { user } = useAuth();
-  const [collateral, setCollateral] = useState<CollateralData | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [initialLoad, setInitialLoad] = useState(true);
+  const { summary, isInitialized, isLoading, refreshSummary, depositCollateral, withdrawCollateral } = useDrift();
   const [action, setAction] = useState<'deposit' | 'withdraw' | null>(null);
   const [amount, setAmount] = useState('');
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const { isPolling: isConfirmingAction, startPostActionPolling } = usePostActionPolling();
 
-  const userId = user?.userId || '';
+  // Map summary to collateral format
+  const collateral: CollateralData | null = summary ? {
+    total: summary.totalCollateral || 0,
+    available: summary.freeCollateral || 0,
+    used: (summary.totalCollateral || 0) - (summary.freeCollateral || 0),
+    currency: 'USDC',
+    exists: summary.initialized,
+  } : null;
 
-  const fetchCollateral = useCallback(async () => {
-    if (loading && collateral) return; // Prevent overlapping requests
-    
-    // Don't set loading to true - keep showing current data
-    try {
-      // Use Drift account summary endpoint
-      const response = await fetch('/api/drift/account/summary');
-      
-      if (response.status === 404) {
-        // Wallet not found - show message to create wallet
-        setCollateral(null);
-        setError('Futures wallet not found. Please create a futures wallet first.');
-        setInitialLoad(false);
-        return;
-      }
-      
-      if (response.ok) {
-        const data = await response.json();
-        // Map Drift account summary to collateral format
-        setCollateral({
-          total: data.totalCollateral || 0,
-          available: data.freeCollateral || 0,
-          used: (data.totalCollateral || 0) - (data.freeCollateral || 0),
-          currency: 'USDC',
-          exists: true,
-        });
-        setLastUpdate(new Date());
-        setError('');
-        setInitialLoad(false);
-      } else {
-        const errorData = await response.json();
-        setError(errorData.error || 'Failed to fetch collateral');
-        setInitialLoad(false);
-      }
-    } catch (err) {
-      console.error('Failed to fetch collateral:', err);
-      setError('Failed to fetch collateral');
-      setInitialLoad(false);
-    }
-  }, [loading, collateral]);
-
-  // Manual refresh function (shows loading spinner)
-  const handleManualRefresh = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await fetch('/api/drift/account/summary');
-      
-      if (response.status === 404) {
-        setCollateral(null);
-        setError('Futures wallet not found. Please create a futures wallet first.');
-        return;
-      }
-      
-      if (response.ok) {
-        const data = await response.json();
-        setCollateral({
-          total: data.totalCollateral || 0,
-          available: data.freeCollateral || 0,
-          used: (data.totalCollateral || 0) - (data.freeCollateral || 0),
-          currency: 'USDC',
-          exists: true,
-        });
-        setLastUpdate(new Date());
-        setError('');
-      } else {
-        const errorData = await response.json();
-        setError(errorData.error || 'Failed to fetch collateral');
-      }
-    } catch (err) {
-      console.error('Failed to fetch collateral:', err);
-      setError('Failed to fetch collateral');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Auto-polling every 30 seconds (increased from 10s)
-  useFuturesPolling({
-    interval: 30000,
-    enabled: userId !== '',
-    onPoll: fetchCollateral,
-    dependencies: [userId],
-  });
+  // Manual refresh function
+  const handleManualRefresh = async () => {
+    await refreshSummary();
+  };
 
   const handleDeposit = async () => {
     if (!amount || parseFloat(amount) <= 0) {
@@ -126,25 +50,17 @@ export const CollateralPanel: React.FC = () => {
     setSuccess('');
 
     try {
-      // Use Drift deposit endpoint
-      const response = await fetch('/api/drift/collateral/deposit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: depositAmount,
-        }),
-      });
+      // Use client-side Drift deposit
+      const result = await depositCollateral(depositAmount);
 
-      const data = await response.json();
-
-      if (response.ok) {
-        setSuccess(`Depositing ${amount} USDC... TX: ${data.txSignature?.slice(0, 8)}...`);
+      if (result.success) {
+        setSuccess(`Depositing ${amount} USDC... TX: ${result.txSignature?.slice(0, 8)}...`);
         
         // Start post-action polling to confirm deposit
         startPostActionPolling({
           checkCondition: async () => {
-            await fetchCollateral();
-            const newTotal = collateral?.total || 0;
+            await refreshSummary();
+            const newTotal = summary?.totalCollateral || 0;
             // Check if balance increased
             return newTotal >= previousTotal + depositAmount * 0.99; // Allow 1% slippage
           },
@@ -166,7 +82,7 @@ export const CollateralPanel: React.FC = () => {
           interval: 1000,
         });
       } else {
-        setError(data.error || 'Failed to deposit collateral');
+        setError(result.error || 'Failed to deposit collateral');
         setProcessing(false);
       }
     } catch (err) {
@@ -194,53 +110,29 @@ export const CollateralPanel: React.FC = () => {
     setSuccess('');
 
     try {
-      // Use Drift withdraw endpoint
-      const response = await fetch('/api/drift/collateral/withdraw', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: withdrawAmount,
-        }),
-      });
+      // Use client-side Drift withdraw
+      const result = await withdrawCollateral(withdrawAmount);
 
-      const data = await response.json();
-
-      if (response.ok) {
-        // Show detailed success message with both transaction hashes
-        const driftTx = data.driftWithdrawTx?.slice(0, 8) || 'N/A';
-        const transferTx = data.transferToUserTx?.slice(0, 8) || 'N/A';
-        
-        setSuccess(
-          `Withdrawing ${amount} USDC...\n` +
-          `Step 1: Drift withdrawal (${driftTx}...)\n` +
-          `Step 2: Transfer to wallet (${transferTx}...)`
-        );
+      if (result.success) {
+        setSuccess(`Withdrawing ${amount} USDC... TX: ${result.txSignature?.slice(0, 8)}...`);
         
         // Start post-action polling to confirm withdrawal
         startPostActionPolling({
           checkCondition: async () => {
-            await fetchCollateral();
-            const newTotal = collateral?.total || 0;
+            await refreshSummary();
+            const newTotal = summary?.totalCollateral || 0;
             // Check if balance decreased
             return newTotal <= previousTotal - withdrawAmount * 0.99; // Allow 1% tolerance
           },
           onSuccess: () => {
-            setSuccess(
-              `Successfully withdrew ${amount} USDC!\n` +
-              `Funds transferred to your futures wallet.\n` +
-              `Drift TX: ${driftTx}... | Transfer TX: ${transferTx}...`
-            );
+            setSuccess(`Successfully withdrew ${amount} USDC!`);
             setAmount('');
             setAction(null);
             setProcessing(false);
             setTimeout(() => setSuccess(''), 8000);
           },
           onTimeout: () => {
-            setSuccess(
-              `Withdrawal submitted but taking longer to confirm.\n` +
-              `Check your futures wallet balance.\n` +
-              `Drift TX: ${driftTx}... | Transfer TX: ${transferTx}...`
-            );
+            setSuccess('Withdrawal submitted but taking longer to confirm. Check your balance.');
             setAmount('');
             setAction(null);
             setProcessing(false);
@@ -250,16 +142,7 @@ export const CollateralPanel: React.FC = () => {
           interval: 1000,
         });
       } else {
-        // Handle specific error cases
-        if (response.status === 404) {
-          setError('Futures wallet not found. Please create a futures wallet first.');
-        } else if (data.error?.includes('Insufficient balance')) {
-          setError(data.message || data.error);
-        } else if (data.error?.includes('not properly loaded')) {
-          setError('Temporary synchronization issue. Please try again in a few seconds.');
-        } else {
-          setError(data.message || data.error || 'Failed to withdraw collateral');
-        }
+        setError(result.error || 'Failed to withdraw collateral');
         setProcessing(false);
       }
     } catch (err) {
@@ -269,7 +152,7 @@ export const CollateralPanel: React.FC = () => {
     }
   };
 
-  if (initialLoad) {
+  if (isLoading && !summary) {
     return (
       <div className="bg-white dark:bg-darkgray rounded-lg border border-border dark:border-darkborder p-6">
         <div className="flex items-center justify-center py-8">
@@ -279,18 +162,18 @@ export const CollateralPanel: React.FC = () => {
     );
   }
 
-  // Show wallet creation message if no collateral data
-  if (!collateral && error) {
+  // Show wallet creation message if not initialized
+  if (!isInitialized || !collateral) {
     return (
       <div className="bg-white dark:bg-darkgray rounded-lg border border-border dark:border-darkborder p-4">
         <h3 className="text-lg font-semibold text-dark dark:text-white mb-4">Collateral (USDC)</h3>
         <div className="text-center py-6">
           <Icon icon="ph:wallet-duotone" className="mx-auto text-muted dark:text-darklink mb-3" height={48} />
           <p className="text-sm text-muted dark:text-darklink mb-2">
-            {error}
+            Drift account not initialized
           </p>
           <p className="text-xs text-muted dark:text-darklink">
-            Create a futures wallet to start trading
+            Initialize your Drift account to start trading
           </p>
         </div>
       </div>
@@ -302,20 +185,15 @@ export const CollateralPanel: React.FC = () => {
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <h3 className="text-lg font-semibold text-dark dark:text-white">Collateral (USDC)</h3>
-          {lastUpdate && !loading && (
-            <span className="text-xs text-muted dark:text-darklink">
-              {Math.floor((Date.now() - lastUpdate.getTime()) / 1000)}s ago
-            </span>
-          )}
         </div>
         <button
           onClick={handleManualRefresh}
-          disabled={loading}
+          disabled={isLoading}
           className="p-1 hover:bg-muted/20 dark:hover:bg-white/5 rounded transition-colors disabled:opacity-50"
         >
           <Icon 
             icon="ph:arrow-clockwise" 
-            className={`text-muted dark:text-darklink ${loading ? 'animate-spin' : ''}`} 
+            className={`text-muted dark:text-darklink ${isLoading ? 'animate-spin' : ''}`} 
             height={18} 
           />
         </button>
@@ -326,19 +204,19 @@ export const CollateralPanel: React.FC = () => {
         <div className="bg-muted/20 dark:bg-white/5 rounded-lg p-3">
           <p className="text-xs text-muted dark:text-darklink mb-1">Total</p>
           <p className="text-lg font-semibold text-dark dark:text-white">
-            ${(collateral?.total ?? 0).toFixed(2)}
+            ${(Number(collateral?.total) || 0).toFixed(2)}
           </p>
         </div>
         <div className="bg-muted/20 dark:bg-white/5 rounded-lg p-3">
           <p className="text-xs text-muted dark:text-darklink mb-1">Available</p>
           <p className="text-lg font-semibold text-success">
-            ${(collateral?.available ?? 0).toFixed(2)}
+            ${(Number(collateral?.available) || 0).toFixed(2)}
           </p>
         </div>
         <div className="bg-muted/20 dark:bg-white/5 rounded-lg p-3">
           <p className="text-xs text-muted dark:text-darklink mb-1">Used</p>
           <p className="text-lg font-semibold text-error">
-            ${(collateral?.used ?? 0).toFixed(2)}
+            ${(Number(collateral?.used) || 0).toFixed(2)}
           </p>
         </div>
       </div>
@@ -381,7 +259,7 @@ export const CollateralPanel: React.FC = () => {
             {action === 'withdraw' && collateral && (
               <>
                 <p className="text-xs text-muted dark:text-darklink mt-1">
-                  Available: ${(collateral.available ?? 0).toFixed(2)}
+                  Available: ${(Number(collateral.available) || 0).toFixed(2)}
                 </p>
                 {/* Quick amount buttons for withdraw */}
                 <div className="flex gap-2 mt-2">

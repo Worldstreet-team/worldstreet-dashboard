@@ -70,15 +70,15 @@ export const SolRequirementModal: React.FC<SolRequirementModalProps> = ({
           <div className="space-y-2 sm:space-y-3">
             <div className="flex justify-between items-center p-3 sm:p-4 bg-muted/20 dark:bg-white/5 rounded-lg">
               <span className="text-xs sm:text-sm text-muted dark:text-darklink">Required:</span>
-              <span className="text-base sm:text-lg font-bold text-dark dark:text-white">{(requiredSol ?? 0).toFixed(4)} SOL</span>
+              <span className="text-base sm:text-lg font-bold text-dark dark:text-white">{(Number(requiredSol) || 0).toFixed(4)} SOL</span>
             </div>
             <div className="flex justify-between items-center p-3 sm:p-4 bg-muted/20 dark:bg-white/5 rounded-lg">
               <span className="text-xs sm:text-sm text-muted dark:text-darklink">Your Balance:</span>
-              <span className="text-base sm:text-lg font-bold text-error">{(currentSol ?? 0).toFixed(4)} SOL</span>
+              <span className="text-base sm:text-lg font-bold text-error">{(Number(currentSol) || 0).toFixed(4)} SOL</span>
             </div>
             <div className="flex justify-between items-center p-3 sm:p-4 bg-error/10 border border-error/20 rounded-lg">
               <span className="text-xs sm:text-sm font-semibold text-error">Shortfall:</span>
-              <span className="text-base sm:text-lg font-bold text-error">{(shortfall ?? 0).toFixed(4)} SOL</span>
+              <span className="text-base sm:text-lg font-bold text-error">{(Number(shortfall) || 0).toFixed(4)} SOL</span>
             </div>
           </div>
 
@@ -115,7 +115,7 @@ export const SolRequirementModal: React.FC<SolRequirementModalProps> = ({
               </li>
               <li className="flex items-start gap-2">
                 <span className="flex-shrink-0 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-primary/20 text-primary text-[10px] sm:text-xs flex items-center justify-center font-semibold">3</span>
-                <span>Send at least {(shortfall ?? 0).toFixed(4)} SOL</span>
+                <span>Send at least {(Number(shortfall) || 0).toFixed(4)} SOL</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="flex-shrink-0 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-primary/20 text-primary text-[10px] sm:text-xs flex items-center justify-center font-semibold">4</span>
