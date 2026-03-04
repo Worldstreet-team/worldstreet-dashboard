@@ -86,7 +86,7 @@ export default function Layout({
                             <WalletAddressSync />
                             <DashboardVividProvider>
                             <div className={`flex w-full h-screen overflow-hidden ${isFullscreen ? 'bg-[#181a20]' : ''}`}>
-                              <div className={`page-wrapper flex w-full h-full ${isFullscreen ? 'bg-[#181a20]' : ''}`}>
+                              <div className={`${isFullscreen ? '' : 'page-wrapper'} flex w-full h-full ${isFullscreen ? 'bg-[#181a20]' : ''}`}>
                                 {/* Header/sidebar - Hide for fullscreen routes */}
                                 {!isFullscreen && activeLayout == "vertical" ? <Sidebar /> : null}
                                 <div className={`body-wrapper w-full h-full flex flex-col overflow-hidden ${isFullscreen ? 'bg-[#181a20]' : ''}`}>
