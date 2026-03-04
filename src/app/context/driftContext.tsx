@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import { useAuth } from '@/app/context/authContext';
-import { decryptWithPIN } from '@/lib/wallet/encryption';
 
 // Types
 interface DriftAccountSummary {
@@ -30,7 +29,6 @@ interface DriftPosition {
 
 interface DriftContextValue {
   // Client state
-  driftClient: any | null;
   isClientReady: boolean;
   
   // Account data
@@ -52,7 +50,6 @@ interface DriftContextValue {
   handlePinUnlock: (pin: string) => void;
   
   // Methods
-  initializeDriftClient: () => Promise<void>;
   refreshSummary: () => Promise<void>;
   refreshPositions: () => Promise<void>;
   clearCache: () => void;
@@ -86,9 +83,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   const { user } = useAuth();
   
   // Client state
-  const [driftClient, setDriftClient] = useState<any | null>(null);
   const [isClientReady, setIsClientReady] = useState(false);
-  const [connection, setConnection] = useState<any>(null);
   
   // Account data
   const [summary, setSummary] = useState<DriftAccountSummary | null>(null);
@@ -101,27 +96,17 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   // PIN unlock state
   const [showPinUnlock, setShowPinUnlock] = useState(false);
   const [userPin, setUserPin] = useState<string | null>(null);
-  const [cachedEncryptedKeys, setCachedEncryptedKeys] = useState<any>(null);
   const pinResolveRef = useRef<((pin: string) => void) | null>(null);
   
   const autoRefreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const isInitializingRef = useRef(false);
 
   // Clear cache on logout
   useEffect(() => {
     if (!user?.userId) {
-      setCachedEncryptedKeys(null);
       setUserPin(null);
-      setDriftClient(null);
       setIsClientReady(false);
-      if (typeof window !== 'undefined') {
-        // Clear all cached keys
-        Object.keys(localStorage).forEach(key => {
-          if (key.startsWith('drift_encrypted_keys_')) {
-            localStorage.removeItem(key);
-          }
-        });
-      }
+      setSummary(null);
+      setPositions([]);
     }
   }, [user?.userId]);
 
@@ -159,363 +144,83 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     }
   }, []);
 
-  // Initialize Solana connection with Alchemy RPC
-  useEffect(() => {
-    const initConnection = async () => {
-      const { Connection } = await import('@solana/web3.js');
-      // Use Alchemy RPC - replace with your actual API key
-      const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://solana-mainnet.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITN';
-      
-      const conn = new Connection(rpcUrl, {
-        commitment: 'confirmed',
-      });
-      setConnection(conn as any);
-      console.log('[DriftContext] Connection initialized with RPC:', rpcUrl);
-    };
-    initConnection();
-  }, []);
-
-  // Initialize Drift client when user is authenticated
-  const initializeDriftClient = useCallback(async () => {
-    if (!user?.userId || !connection || isInitializingRef.current) return;
-    
-    // Prevent re-initialization if client is already ready
-    if (isClientReady && driftClient) {
-      console.log('[DriftContext] Client already initialized, skipping');
-      return;
-    }
-    
-    isInitializingRef.current = true;
-    setIsLoading(true);
-    setError(null);
+  // Refresh account summary from API
+  const refreshSummary = useCallback(async () => {
+    if (!user?.userId) return;
     
     try {
-      let encryptedPrivateKey: string = '';
-      let pin: string = '';
+      const pin = await requestPin();
       
-      // Check if we have cached encrypted keys
-      const cacheKey = `drift_encrypted_keys_${user.userId}`;
-      const cachedData = localStorage.getItem(cacheKey);
-      
-      if (cachedData) {
-        console.log('[DriftContext] Using cached encrypted keys');
-        try {
-          const parsed = JSON.parse(cachedData);
-          encryptedPrivateKey = parsed.solana?.encryptedPrivateKey;
-          
-          if (!encryptedPrivateKey) {
-            throw new Error('No Solana key in cache');
-          }
-          
-          // Request PIN to decrypt cached keys
-          pin = await requestPin();
-        } catch (err) {
-          console.error('[DriftContext] Cache invalid, fetching from server');
-          localStorage.removeItem(cacheKey);
-          // Fall through to server fetch
-          encryptedPrivateKey = '';
-        }
-      }
-      
-      if (!encryptedPrivateKey) {
-        console.log('[DriftContext] Fetching encrypted keys from server');
-        
-        // Request PIN from user first
-        pin = await requestPin();
-        
-        // Get user's encrypted Solana wallet from server
-        const walletResponse = await fetch('/api/wallet/keys', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pin })
-        });
-        
-        if (!walletResponse.ok) {
-          const errorData = await walletResponse.json();
-          throw new Error(errorData.message || 'Failed to get wallet keys');
-        }
-        
-        const walletData = await walletResponse.json();
-        
-        if (!walletData.success || !walletData.wallets?.solana?.encryptedPrivateKey) {
-          throw new Error('Solana wallet not found');
-        }
-        
-        encryptedPrivateKey = walletData.wallets.solana.encryptedPrivateKey;
-        
-        // Cache encrypted keys in localStorage for future use
-        localStorage.setItem(cacheKey, JSON.stringify(walletData.wallets));
-        setCachedEncryptedKeys(walletData.wallets);
-        console.log('[DriftContext] Cached encrypted keys to localStorage');
-      }
-      
-      // Decrypt private key CLIENT-SIDE with user's PIN
-      let decryptedPrivateKey: string;
-      try {
-        decryptedPrivateKey = decryptWithPIN(encryptedPrivateKey, pin!);
-      } catch (err) {
-        // Clear cached keys if decryption fails (might be corrupted)
-        const cacheKey = `drift_encrypted_keys_${user.userId}`;
-        localStorage.removeItem(cacheKey);
-        setCachedEncryptedKeys(null);
-        throw new Error('Incorrect PIN or corrupted wallet data');
-      }
-      
-      // Dynamic import of Drift SDK and Solana
-      // @ts-expect-error - Dynamic import, types will be available at runtime
-      const { DriftClient, Wallet } = await import('@drift-labs/sdk');
-      const { Keypair, PublicKey: SolanaPublicKey } = await import('@solana/web3.js');
-      
-      // CRITICAL: Solana private keys are stored as BASE64 (not base58!)
-      // The encryption system stores the raw 64-byte secret key as base64
-      // DO NOT use bs58.decode() - that's for public addresses only
-      console.log('[DriftContext] Decoding private key from base64 format');
-      const secretKey = new Uint8Array(Buffer.from(decryptedPrivateKey, 'base64'));
-      const keypair = Keypair.fromSecretKey(secretKey);
-      console.log('[DriftContext] Keypair created successfully, public key:', keypair.publicKey.toBase58());
-      
-      // Create wallet wrapper
-      const wallet = new Wallet(keypair as any);
-      
-      // Use subaccount ID 0 (default for all users)
-      // Each user's wallet has its own Drift account, subaccount 0 is the main account
-      const subaccountId = 0;
-      console.log('[DriftContext] Using subaccount ID:', subaccountId);
-      
-      // Initialize Drift client
-      const DRIFT_PROGRAM_ID = process.env.NEXT_PUBLIC_DRIFT_PROGRAM_ID || 'dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH';
-      
-      console.log('[DriftContext] Creating Drift client with Yellowstone gRPC subscription');
-      
-      const client = new DriftClient({
-        connection: connection as any,
-        wallet,
-        programID: new SolanaPublicKey(DRIFT_PROGRAM_ID) as any,
-        accountSubscription: {
-          type: 'grpc',
-          grpcConfigs: [{
-            endpoint: process.env.NEXT_PUBLIC_YELLOWSTONE_GRPC_ENDPOINT || 'https://solana-mainnet.g.alchemy.com/',
-            token: process.env.NEXT_PUBLIC_YELLOWSTONE_GRPC_TOKEN || undefined,
-          }],
-        },
-        subAccountIds: [subaccountId]
-      } as any);
-      
-      // Subscribe to account updates (using Yellowstone gRPC)
-      await client.subscribe();
-      
-      console.log('[DriftContext] Subscribed to Drift account updates (Yellowstone gRPC mode)');
-      
-      // Check if user account exists, if not, initialize it
-      try {
-        const user = client.getUser();
-        
-        // Wait a bit for gRPC subscription to load data
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        let accountData;
-        try {
-          accountData = user.getUserAccount();
-        } catch (err) {
-          console.log('[DriftContext] Account data not available yet');
-          accountData = null;
-        }
-        
-        if (!accountData) {
-          console.log('[DriftContext] Drift account not found');
-          console.log('[DriftContext] Note: Account will be created automatically on first deposit');
-          // Account will be created automatically when user makes first deposit
-          // No need to initialize manually
-        } else {
-          console.log('[DriftContext] Drift account already exists');
-        }
-      } catch (err) {
-        console.error('[DriftContext] Error checking account:', err);
-        // Continue anyway, account might exist but not loaded yet
-      }
-      
-      setDriftClient(client);
-      setIsClientReady(true);
-      
-      console.log('[DriftContext] Client initialized successfully');
-      
-      // Wait briefly for initial gRPC data to arrive
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Fetch initial data
-      await refreshSummaryInternal(client);
-      await refreshPositionsInternal(client);
-      
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to initialize Drift client';
-      setError(errorMessage);
-      console.error('[DriftContext] Initialization error:', err);
-      
-      // Clear PIN on error so user can retry
-      setUserPin(null);
-    } finally {
-      setIsLoading(false);
-      isInitializingRef.current = false;
-    }
-  }, [user?.userId, connection, requestPin]);
-
-  // Refresh account summary from client
-  const refreshSummaryInternal = async (client: any) => {
-    if (!client) return;
-    
-    try {
-      // Ensure account data is loaded
-      const user = client.getUser();
-      if (!user) {
-        console.warn('[DriftContext] User not found, skipping summary refresh');
-        return;
-      }
-
-      // Check if account data is loaded via gRPC
-      let accountData;
-      try {
-        accountData = user.getUserAccount();
-      } catch (err) {
-        console.warn('[DriftContext] Account not subscribed via gRPC yet, skipping summary refresh');
-        return;
-      }
-      
-      // Check if accountData exists and has data property
-      if (!accountData) {
-        console.warn('[DriftContext] Account data not loaded yet, skipping summary refresh');
-        return;
-      }
-      
-      const spotPosition = user.getSpotPosition(0); // USDC spot position
-      const perpPositions = user.getPerpPositions();
-      
-      const totalCollateral = spotPosition ? Number(spotPosition.scaledBalance) / 1e6 : 0;
-      const freeCollateral = user.getFreeCollateral ? Number(user.getFreeCollateral()) / 1e6 : 0;
-      
-      let unrealizedPnl = 0;
-      let openPositions = 0;
-      
-      if (perpPositions && Array.isArray(perpPositions)) {
-        for (const position of perpPositions) {
-          if (position.baseAssetAmount && position.baseAssetAmount.toNumber() !== 0) {
-            openPositions++;
-            unrealizedPnl += Number(position.unrealizedPnl || 0) / 1e6;
-          }
-        }
-      }
-      
-      const leverage = totalCollateral > 0 ? (totalCollateral - freeCollateral) / totalCollateral : 0;
-      const marginRatio = totalCollateral > 0 ? freeCollateral / totalCollateral : 0;
-      
-      setSummary({
-        subaccountId: user.subAccountId || 0,
-        publicAddress: user.authority.toBase58(),
-        totalCollateral,
-        freeCollateral,
-        unrealizedPnl,
-        leverage,
-        marginRatio,
-        openPositions,
-        openOrders: 0,
-        initialized: true
+      const response = await fetch('/api/drift/client/summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.userId, pin })
       });
       
+      const data = await response.json();
+      
+      if (data.success) {
+        setSummary(data.data);
+        setIsClientReady(true);
+      } else {
+        setError(data.error);
+      }
     } catch (err) {
       console.error('[DriftContext] Error refreshing summary:', err);
+      setError(err instanceof Error ? err.message : 'Failed to refresh summary');
     }
-  };
+  }, [user?.userId, requestPin]);
 
-  const refreshSummary = useCallback(async () => {
-    if (!driftClient) return;
-    await refreshSummaryInternal(driftClient);
-  }, [driftClient]);
-
-  // Refresh positions from client
-  const refreshPositionsInternal = async (client: any) => {
-    if (!client) return;
+  // Refresh positions from API
+  const refreshPositions = useCallback(async () => {
+    if (!user?.userId) return;
     
     try {
-      const user = client.getUser();
-      if (!user) {
-        console.warn('[DriftContext] User not found, skipping positions refresh');
-        return;
+      const pin = await requestPin();
+      
+      const response = await fetch('/api/drift/client/positions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.userId, pin })
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        setPositions(data.data.positions);
+      } else {
+        setError(data.error);
       }
-
-      // Check if account data is loaded via gRPC
-      let accountData;
-      try {
-        accountData = user.getUserAccount();
-      } catch (err) {
-        console.warn('[DriftContext] Account not subscribed via gRPC yet, skipping positions refresh');
-        return;
-      }
-      
-      // Check if accountData exists
-      if (!accountData) {
-        console.warn('[DriftContext] Account data not loaded yet, skipping positions refresh');
-        return;
-      }
-      
-      const perpPositions = user.getPerpPositions();
-      
-      const positionsList: DriftPosition[] = [];
-      
-      if (perpPositions && Array.isArray(perpPositions)) {
-        for (const position of perpPositions) {
-          const baseAmount = position.baseAssetAmount ? position.baseAssetAmount.toNumber() : 0;
-          if (baseAmount === 0) continue;
-          
-          const direction = baseAmount > 0 ? 'long' : 'short';
-          const market = client.getPerpMarketAccount(position.marketIndex);
-          
-          positionsList.push({
-            marketIndex: position.marketIndex,
-            direction,
-            baseAmount: Math.abs(baseAmount) / 1e9,
-            quoteAmount: Math.abs(position.quoteAssetAmount.toNumber()) / 1e6,
-            entryPrice: Number(position.quoteEntryAmount) / Math.abs(baseAmount),
-            unrealizedPnl: Number(position.unrealizedPnl || 0) / 1e6,
-            leverage: market ? Number(market.marginRatioInitial) / 10000 : 1
-          });
-        }
-      }
-      
-      setPositions(positionsList);
-      
     } catch (err) {
       console.error('[DriftContext] Error refreshing positions:', err);
+      setError(err instanceof Error ? err.message : 'Failed to refresh positions');
     }
-  };
-
-  const refreshPositions = useCallback(async () => {
-    if (!driftClient) return;
-    await refreshPositionsInternal(driftClient);
-  }, [driftClient]);
+  }, [user?.userId, requestPin]);
 
   // Deposit collateral
   const depositCollateral = useCallback(async (amount: number): Promise<{ success: boolean; txSignature?: string; error?: string }> => {
-    if (!driftClient || !isClientReady) {
-      return { success: false, error: 'Drift client not ready' };
+    if (!user?.userId) {
+      return { success: false, error: 'User not authenticated' };
     }
     
     try {
       setIsLoading(true);
+      const pin = await requestPin();
       
-      // Deposit USDC to Drift account
-      const txSignature = await driftClient.deposit(
-        amount * 1e6, // Convert to USDC base units
-        0, // USDC market index
-        driftClient.getUser().getUserAccountPublicKey()
-      );
+      const response = await fetch('/api/drift/client/deposit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.userId, pin, amount })
+      });
       
-      // Wait for confirmation
-      await connection?.confirmTransaction(txSignature, 'confirmed');
+      const data = await response.json();
       
-      // Refresh data
-      await refreshSummary();
-      
-      return { success: true, txSignature };
-      
+      if (data.success) {
+        await refreshSummary();
+        return { success: true, txSignature: data.data.txSignature };
+      } else {
+        return { success: false, error: data.error };
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to deposit collateral';
       console.error('[DriftContext] Deposit error:', err);
@@ -523,32 +228,32 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [driftClient, isClientReady, connection, refreshSummary]);
+  }, [user?.userId, requestPin, refreshSummary]);
 
   // Withdraw collateral
   const withdrawCollateral = useCallback(async (amount: number): Promise<{ success: boolean; txSignature?: string; error?: string }> => {
-    if (!driftClient || !isClientReady) {
-      return { success: false, error: 'Drift client not ready' };
+    if (!user?.userId) {
+      return { success: false, error: 'User not authenticated' };
     }
     
     try {
       setIsLoading(true);
+      const pin = await requestPin();
       
-      // Withdraw USDC from Drift account
-      const txSignature = await driftClient.withdraw(
-        amount * 1e6, // Convert to USDC base units
-        0, // USDC market index
-        driftClient.getUser().getUserAccountPublicKey()
-      );
+      const response = await fetch('/api/drift/client/withdraw', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.userId, pin, amount })
+      });
       
-      // Wait for confirmation
-      await connection?.confirmTransaction(txSignature, 'confirmed');
+      const data = await response.json();
       
-      // Refresh data
-      await refreshSummary();
-      
-      return { success: true, txSignature };
-      
+      if (data.success) {
+        await refreshSummary();
+        return { success: true, txSignature: data.data.txSignature };
+      } else {
+        return { success: false, error: data.error };
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to withdraw collateral';
       console.error('[DriftContext] Withdraw error:', err);
@@ -556,7 +261,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [driftClient, isClientReady, connection, refreshSummary]);
+  }, [user?.userId, requestPin, refreshSummary]);
 
   // Open position
   const openPosition = useCallback(async (
@@ -565,33 +270,29 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     size: number,
     leverage: number
   ): Promise<{ success: boolean; txSignature?: string; error?: string }> => {
-    if (!driftClient || !isClientReady) {
-      return { success: false, error: 'Drift client not ready' };
+    if (!user?.userId) {
+      return { success: false, error: 'User not authenticated' };
     }
     
     try {
       setIsLoading(true);
+      const pin = await requestPin();
       
-      const baseAmount = size * 1e9; // Convert to base units
-      const orderParams = {
-        orderType: 'market' as any,
-        marketIndex,
-        direction: direction === 'long' ? 'long' as any : 'short' as any,
-        baseAssetAmount: baseAmount,
-        price: 0, // Market order
-      };
+      const response = await fetch('/api/drift/client/open-position', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.userId, pin, marketIndex, direction, size })
+      });
       
-      const txSignature = await driftClient.placePerpOrder(orderParams);
+      const data = await response.json();
       
-      // Wait for confirmation
-      await connection?.confirmTransaction(txSignature, 'confirmed');
-      
-      // Refresh data
-      await refreshSummary();
-      await refreshPositions();
-      
-      return { success: true, txSignature };
-      
+      if (data.success) {
+        await refreshSummary();
+        await refreshPositions();
+        return { success: true, txSignature: data.data.txSignature };
+      } else {
+        return { success: false, error: data.error };
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to open position';
       console.error('[DriftContext] Open position error:', err);
@@ -599,48 +300,33 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [driftClient, isClientReady, connection, refreshSummary, refreshPositions]);
+  }, [user?.userId, requestPin, refreshSummary, refreshPositions]);
 
   // Close position
   const closePosition = useCallback(async (marketIndex: number): Promise<{ success: boolean; txSignature?: string; error?: string }> => {
-    if (!driftClient || !isClientReady) {
-      return { success: false, error: 'Drift client not ready' };
+    if (!user?.userId) {
+      return { success: false, error: 'User not authenticated' };
     }
     
     try {
       setIsLoading(true);
+      const pin = await requestPin();
       
-      const user = driftClient.getUser();
-      const position = user.getPerpPosition(marketIndex);
+      const response = await fetch('/api/drift/client/close-position', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.userId, pin, marketIndex })
+      });
       
-      if (!position || position.baseAssetAmount.toNumber() === 0) {
-        return { success: false, error: 'No position found' };
+      const data = await response.json();
+      
+      if (data.success) {
+        await refreshSummary();
+        await refreshPositions();
+        return { success: true, txSignature: data.data.txSignature };
+      } else {
+        return { success: false, error: data.error };
       }
-      
-      // Close position by placing opposite order
-      const baseAmount = Math.abs(position.baseAssetAmount.toNumber());
-      const direction = position.baseAssetAmount.toNumber() > 0 ? 'short' as any : 'long' as any;
-      
-      const orderParams = {
-        orderType: 'market' as any,
-        marketIndex,
-        direction,
-        baseAssetAmount: baseAmount,
-        price: 0,
-        reduceOnly: true,
-      };
-      
-      const txSignature = await driftClient.placePerpOrder(orderParams);
-      
-      // Wait for confirmation
-      await connection?.confirmTransaction(txSignature, 'confirmed');
-      
-      // Refresh data
-      await refreshSummary();
-      await refreshPositions();
-      
-      return { success: true, txSignature };
-      
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to close position';
       console.error('[DriftContext] Close position error:', err);
@@ -648,7 +334,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [driftClient, isClientReady, connection, refreshSummary, refreshPositions]);
+  }, [user?.userId, requestPin, refreshSummary, refreshPositions]);
 
   // Auto-refresh
   const startAutoRefresh = useCallback((intervalMs: number = 30000) => {
@@ -666,36 +352,27 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     }
   }, []);
 
-  // Clear cached keys and PIN (useful for troubleshooting or logout)
+  // Clear cached PIN
   const clearCache = useCallback(() => {
-    if (user?.userId) {
-      const cacheKey = `drift_encrypted_keys_${user.userId}`;
-      localStorage.removeItem(cacheKey);
-      setCachedEncryptedKeys(null);
-      setUserPin(null);
-      console.log('[DriftContext] Cleared cached keys and PIN');
-    }
-  }, [user?.userId]);
+    setUserPin(null);
+    console.log('[DriftContext] Cleared cached PIN');
+  }, []);
 
-  // Initialize client when user logs in (only once)
+  // Initialize data when user logs in
   useEffect(() => {
-    if (user?.userId && connection && !driftClient && !isInitializingRef.current) {
-      console.log('[DriftContext] Triggering initialization');
-      initializeDriftClient();
+    if (user?.userId && !isClientReady) {
+      console.log('[DriftContext] Fetching initial data');
+      refreshSummary();
+      refreshPositions();
     }
-  }, [user?.userId, connection, driftClient, initializeDriftClient]);
+  }, [user?.userId, isClientReady, refreshSummary, refreshPositions]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       stopAutoRefresh();
-      if (driftClient) {
-        driftClient.unsubscribe().catch((err: any) => {
-          console.error('[DriftContext] Error unsubscribing:', err);
-        });
-      }
     };
-  }, [driftClient, stopAutoRefresh]);
+  }, [stopAutoRefresh]);
 
   // Computed values
   const isInitialized = isClientReady && summary?.initialized === true;
@@ -703,7 +380,6 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   const canTrade = isInitialized && (summary?.freeCollateral ?? 0) > 0 && (summary?.marginRatio ?? 0) > 0.1;
 
   const value: DriftContextValue = {
-    driftClient,
     isClientReady,
     summary,
     positions,
@@ -715,7 +391,6 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     showPinUnlock,
     setShowPinUnlock,
     handlePinUnlock,
-    initializeDriftClient,
     refreshSummary,
     refreshPositions,
     clearCache,
