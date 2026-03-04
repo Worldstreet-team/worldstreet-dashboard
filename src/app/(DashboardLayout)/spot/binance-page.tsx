@@ -82,7 +82,7 @@ export default function BinanceSpotPage() {
   const isSpotPage = pathname === '/spot';
 
   return (
-    <div className="h-screen flex flex-col bg-[#181a20] w-full overflow-hidden">
+    <div className="min-h-screen flex flex-col bg-[#181a20] w-full overflow-x-hidden">
       {/* Top Header Bar - Exact Binance Style */}
       <div className="h-12 flex items-center justify-between px-4 border-b border-[#2b3139] bg-[#181a20] shrink-0">
         {/* Left: Logo + Nav */}
