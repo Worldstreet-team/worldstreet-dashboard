@@ -126,7 +126,14 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       setPositions([]);
       setEncryptedPrivateKey(null);
       if (driftClientRef.current) {
-        // No need to unsubscribe with polling
+        // Unsubscribe from polling
+        try {
+          if (driftClientRef.current.isSubscribed) {
+            driftClientRef.current.unsubscribe();
+          }
+        } catch (err) {
+          console.log('[DriftContext] Error unsubscribing:', err);
+        }
         driftClientRef.current = null;
       }
     }
@@ -204,12 +211,12 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         },
       });
       
-      console.log('[DriftContext] DriftClient created, fetching accounts...');
+      console.log('[DriftContext] DriftClient created, subscribing...');
       
-      // Fetch accounts initially
-      await client.fetchAccounts();
+      // Subscribe to the client (required even for polling mode)
+      await client.subscribe();
       
-      console.log('[DriftContext] Accounts fetched, checking user account...');
+      console.log('[DriftContext] Client subscribed, checking user account...');
       
       // Check if user account is initialized
       try {
@@ -221,8 +228,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         console.log('[DriftContext] User account not initialized, initializing...');
         try {
           await client.initializeUserAccount();
-          console.log('[DriftContext] User account initialized, fetching accounts again...');
-          await client.fetchAccounts();
+          console.log('[DriftContext] User account initialized successfully');
         } catch (initErr) {
           console.error('[DriftContext] Failed to initialize user account:', initErr);
           // Continue anyway, might already be initialized
@@ -247,9 +253,13 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     }
     
     try {
-      // Fetch latest account data
-      await client.fetchAccounts();
-      console.log('[DriftContext] Accounts refreshed via polling');
+      // With polling + subscription, accounts are automatically refreshed
+      // We just need to ensure the subscription is active
+      if (!client.isSubscribed) {
+        console.log('[DriftContext] Client not subscribed, subscribing...');
+        await client.subscribe();
+      }
+      console.log('[DriftContext] Accounts refreshed via polling subscription');
     } catch (err) {
       console.error('[DriftContext] Error refreshing accounts:', err);
       // Don't throw, just log
