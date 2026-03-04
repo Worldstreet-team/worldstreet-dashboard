@@ -10,48 +10,39 @@ interface LiveChartProps {
   onUpdateLevels?: (sl: string, tp: string) => void;
 }
 
-// Global flag to ensure embed script loads only once
-let tradingViewScriptLoaded = false;
-
 const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartProps) => {
   const [showLevelsForm, setShowLevelsForm] = useState(false);
   const [tempStopLoss, setTempStopLoss] = useState(stopLoss || '');
   const [tempTakeProfit, setTempTakeProfit] = useState(takeProfit || '');
   const containerRef = useRef<HTMLDivElement>(null);
-  const widgetRef = useRef<HTMLDivElement>(null);
+  const scriptLoadedRef = useRef(false);
 
   useEffect(() => {
     setTempStopLoss(stopLoss || '');
     setTempTakeProfit(takeProfit || '');
   }, [stopLoss, takeProfit]);
 
-  // Load TradingView embed script globally (once)
   useEffect(() => {
-    if (tradingViewScriptLoaded) return;
-
-    const script = document.createElement('script');
-    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
-    script.async = true;
-    script.onload = () => {
-      tradingViewScriptLoaded = true;
-    };
-    document.head.appendChild(script);
-  }, []);
-
-  // Initialize widget when symbol changes
-  useEffect(() => {
-    if (!widgetRef.current || !tradingViewScriptLoaded) return;
+    if (!containerRef.current) return;
 
     // Convert symbol format: BTC-USDT -> BINANCE:BTCUSDT
     const tradingViewSymbol = `BINANCE:${symbol.replace('-', '')}`;
 
     // Clear previous content
-    widgetRef.current.innerHTML = '';
+    containerRef.current.innerHTML = '';
 
-    // Create the widget container div
+    // Create the main widget container
+    const widgetContainer = document.createElement('div');
+    widgetContainer.className = 'tradingview-widget-container';
+    widgetContainer.style.width = '100%';
+    widgetContainer.style.height = '100%';
+
+    // Create the inner widget div
     const widgetDiv = document.createElement('div');
     widgetDiv.className = 'tradingview-widget-container__widget';
-    widgetRef.current.appendChild(widgetDiv);
+    widgetDiv.style.width = '100%';
+    widgetDiv.style.height = '100%';
+    widgetContainer.appendChild(widgetDiv);
 
     // Create and append the config script
     const configScript = document.createElement('script');
@@ -63,11 +54,24 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
       locale: 'en',
       colorTheme: 'dark',
     });
-    widgetRef.current.appendChild(configScript);
+    widgetContainer.appendChild(configScript);
 
-    // Trigger TradingView's widget processor on this specific container
-    if (typeof (window as any).TradingView !== 'undefined' && (window as any).TradingView.widget) {
-      (window as any).TradingView.widget(new (window as any).TradingView.widget());
+    containerRef.current.appendChild(widgetContainer);
+
+    // Load and execute TradingView embed script
+    if (!scriptLoadedRef.current) {
+      const script = document.createElement('script');
+      script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+      script.async = true;
+      script.onload = () => {
+        scriptLoadedRef.current = true;
+      };
+      document.body.appendChild(script);
+    } else {
+      // If script already loaded, manually trigger widget processing
+      if (typeof (window as any).TradingView !== 'undefined') {
+        (window as any).TradingView.widget(new (window as any).TradingView.widget());
+      }
     }
   }, [symbol]);
 
@@ -165,17 +169,8 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
         </div>
       )}
 
-      {/* TradingView Chart Container - scoped with CSS containment */}
-      <div 
-        className="flex-1 min-h-0 w-full overflow-hidden" 
-        ref={containerRef}
-        style={{ contain: 'layout style paint' }}
-      >
-        <div 
-          className="tradingview-widget-container w-full h-full"
-          ref={widgetRef}
-        ></div>
-      </div>
+      {/* TradingView Chart Container */}
+      <div className="flex-1 min-h-0 w-full overflow-hidden" ref={containerRef}></div>
     </div>
   );
 };
