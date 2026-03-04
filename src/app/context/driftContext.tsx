@@ -145,11 +145,13 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     fetchWallet();
   }, [user?.userId]);
 
-  // Initialize Drift client with polling
+  // Initialize Drift client with polling (SAFE VERSION)
   const initializeDriftClient = useCallback(async (pin: string) => {
-    // Fetch encrypted wallet with PIN
-    if (!encryptedPrivateKey) {
-      try {
+    try {
+      // Fetch encrypted wallet with PIN
+      let fetchedEncryptedKey = encryptedPrivateKey;
+      
+      if (!fetchedEncryptedKey) {
         const response = await fetch('/api/wallet/keys', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -162,92 +164,83 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
           throw new Error(data.message || 'Failed to fetch wallet');
         }
         
-        setEncryptedPrivateKey(data.wallets.solana.encryptedPrivateKey);
-        
-        // Use the fetched encrypted key
-        const fetchedEncryptedKey = data.wallets.solana.encryptedPrivateKey;
-        
-        // Load SDK
-        await loadDriftSDK();
-        
-        // Decrypt private key
-        const { decryptWithPIN } = await import('@/lib/wallet/encryption');
-        const decryptedPrivateKey = decryptWithPIN(fetchedEncryptedKey, pin);
-        
-        // Create keypair
-        const secretKey = new Uint8Array(Buffer.from(decryptedPrivateKey, 'base64'));
-        const keypair = Keypair.fromSecretKey(secretKey);
-        
-        // Initialize connection
-        const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
-        const connection = new Connection(rpcUrl, 'confirmed');
-        
-        // Create Drift client with POLLING (no WebSocket)
-        const wallet = new Wallet(keypair);
-        const DRIFT_PROGRAM_ID = process.env.NEXT_PUBLIC_DRIFT_PROGRAM_ID || 'dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH';
-        
-        const client = new DriftClient({
-          connection,
-          wallet,
-          programID: new PublicKey(DRIFT_PROGRAM_ID),
-          accountSubscription: {
-            type: 'polling',
-            accountLoader: undefined,
-          },
-        });
-        
-        // Fetch accounts initially (no subscribe needed with polling)
-        await client.fetchAccounts();
-        
-        driftClientRef.current = client;
-        return client;
-      } catch (error) {
-        console.error('[DriftContext] Error fetching wallet:', error);
-        throw error;
+        fetchedEncryptedKey = data.wallets.solana.encryptedPrivateKey;
+        setEncryptedPrivateKey(fetchedEncryptedKey);
       }
+      
+      // Load SDK
+      await loadDriftSDK();
+      
+      // Decrypt private key
+      const { decryptWithPIN } = await import('@/lib/wallet/encryption');
+      const decryptedPrivateKey = decryptWithPIN(fetchedEncryptedKey!, pin);
+      
+      // Create keypair
+      const secretKey = new Uint8Array(Buffer.from(decryptedPrivateKey, 'base64'));
+      const keypair = Keypair.fromSecretKey(secretKey);
+      
+      // Initialize connection
+      const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+      const connection = new Connection(rpcUrl, 'confirmed');
+      
+      // Create wallet and LOAD IT
+      const wallet = new Wallet(keypair);
+      console.log('[DriftContext] Wallet created, loading...');
+      
+      // Create Drift client with POLLING (no WebSocket)
+      const DRIFT_PROGRAM_ID = process.env.NEXT_PUBLIC_DRIFT_PROGRAM_ID || 'dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH';
+      
+      const client = new DriftClient({
+        connection,
+        wallet,
+        programID: new PublicKey(DRIFT_PROGRAM_ID),
+        accountSubscription: {
+          type: 'polling',
+          accountLoader: undefined,
+        },
+      });
+      
+      console.log('[DriftContext] DriftClient created, fetching accounts...');
+      
+      // Fetch accounts initially
+      await client.fetchAccounts();
+      
+      console.log('[DriftContext] Accounts fetched, checking user account...');
+      
+      // Check if user account is initialized
+      try {
+        const user = client.getUser();
+        const userAccount = user.getUserAccount();
+        console.log('[DriftContext] User account found:', userAccount.authority.toBase58());
+      } catch (err) {
+        // User account not initialized, initialize it
+        console.log('[DriftContext] User account not initialized, initializing...');
+        try {
+          await client.initializeUserAccount();
+          console.log('[DriftContext] User account initialized, fetching accounts again...');
+          await client.fetchAccounts();
+        } catch (initErr) {
+          console.error('[DriftContext] Failed to initialize user account:', initErr);
+          // Continue anyway, might already be initialized
+        }
+      }
+      
+      driftClientRef.current = client;
+      console.log('[DriftContext] Drift client ready!');
+      return client;
+    } catch (error) {
+      console.error('[DriftContext] Error initializing Drift client:', error);
+      throw error;
     }
-    
-    // If we already have encrypted key, use it
-    // Load SDK
-    await loadDriftSDK();
-    
-    // Decrypt private key
-    const { decryptWithPIN } = await import('@/lib/wallet/encryption');
-    const decryptedPrivateKey = decryptWithPIN(encryptedPrivateKey, pin);
-    
-    // Create keypair
-    const secretKey = new Uint8Array(Buffer.from(decryptedPrivateKey, 'base64'));
-    const keypair = Keypair.fromSecretKey(secretKey);
-    
-    // Initialize connection
-    const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
-    const connection = new Connection(rpcUrl, 'confirmed');
-    
-    // Create Drift client with POLLING (no WebSocket)
-    const wallet = new Wallet(keypair);
-    const DRIFT_PROGRAM_ID = process.env.NEXT_PUBLIC_DRIFT_PROGRAM_ID || 'dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH';
-    
-    const client = new DriftClient({
-      connection,
-      wallet,
-      programID: new PublicKey(DRIFT_PROGRAM_ID),
-      accountSubscription: {
-        type: 'polling',
-        accountLoader: undefined,
-      },
-    });
-    
-    // Fetch accounts initially (no subscribe needed with polling)
-    await client.fetchAccounts();
-    
-    driftClientRef.current = client;
-    return client;
   }, [encryptedPrivateKey]);
 
-  // Refresh accounts from Drift (polling)
+  // Refresh accounts from Drift (polling) - SAFE VERSION
   const refreshAccounts = useCallback(async () => {
     const client = driftClientRef.current;
-    if (!client) return;
+    if (!client) {
+      console.log('[DriftContext] No client to refresh');
+      return;
+    }
     
     try {
       // Fetch latest account data
@@ -255,6 +248,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       console.log('[DriftContext] Accounts refreshed via polling');
     } catch (err) {
       console.error('[DriftContext] Error refreshing accounts:', err);
+      // Don't throw, just log
     }
   }, []);
   const requestPin = useCallback((): Promise<string> => {
@@ -290,7 +284,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     }
   }, []);
 
-  // Refresh account summary from Drift client (with polling)
+  // Refresh account summary from Drift client (with polling) - SAFE VERSION
   const refreshSummary = useCallback(async () => {
     if (!user?.userId) return;
     
@@ -299,20 +293,27 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       
       let client = driftClientRef.current;
       if (!client) {
+        console.log('[DriftContext] Initializing client for summary...');
         client = await initializeDriftClient(pin);
       } else {
         // Refresh accounts via polling
         await refreshAccounts();
       }
       
-      const driftUser = client.getUser();
-      const keypair = client.wallet.payer;
+      // SAFE: Try to get user account
+      let driftUser;
+      let userAccount;
+      let accountInitialized = false;
       
-      let accountData;
       try {
-        accountData = driftUser.getUserAccount();
+        driftUser = client.getUser();
+        userAccount = driftUser.getUserAccount();
+        accountInitialized = true;
+        console.log('[DriftContext] User account loaded successfully');
       } catch (err) {
+        console.log('[DriftContext] User account not initialized yet');
         // Account not initialized yet
+        const keypair = client.wallet.payer;
         setSummary({
           initialized: false,
           publicAddress: keypair.publicKey.toBase58(),
@@ -329,22 +330,43 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         return;
       }
       
-      const spotPosition = driftUser.getSpotPosition(0);
-      const perpPositions = driftUser.getPerpPositions();
+      // If we got here, account is initialized
+      const keypair = client.wallet.payer;
       
-      const totalCollateral = spotPosition ? Number(spotPosition.scaledBalance) / 1e6 : 0;
-      const freeCollateral = driftUser.getFreeCollateral ? Number(driftUser.getFreeCollateral()) / 1e6 : 0;
+      let spotPosition;
+      let perpPositions;
+      let totalCollateral = 0;
+      let freeCollateral = 0;
+      
+      try {
+        spotPosition = driftUser.getSpotPosition(0);
+        totalCollateral = spotPosition ? Number(spotPosition.scaledBalance) / 1e6 : 0;
+      } catch (err) {
+        console.log('[DriftContext] No spot position found');
+      }
+      
+      try {
+        freeCollateral = driftUser.getFreeCollateral ? Number(driftUser.getFreeCollateral()) / 1e6 : 0;
+      } catch (err) {
+        console.log('[DriftContext] Could not get free collateral');
+      }
       
       let unrealizedPnl = 0;
       let openPositions = 0;
       
-      if (perpPositions && Array.isArray(perpPositions)) {
-        for (const position of perpPositions) {
-          if (position.baseAssetAmount && position.baseAssetAmount.toNumber() !== 0) {
-            openPositions++;
-            unrealizedPnl += Number(position.unrealizedPnl || 0) / 1e6;
+      try {
+        perpPositions = driftUser.getPerpPositions();
+        
+        if (perpPositions && Array.isArray(perpPositions)) {
+          for (const position of perpPositions) {
+            if (position.baseAssetAmount && position.baseAssetAmount.toNumber() !== 0) {
+              openPositions++;
+              unrealizedPnl += Number(position.unrealizedPnl || 0) / 1e6;
+            }
           }
         }
+      } catch (err) {
+        console.log('[DriftContext] No perp positions found');
       }
       
       const leverage = totalCollateral > 0 ? (totalCollateral - freeCollateral) / totalCollateral : 0;
@@ -369,7 +391,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     }
   }, [user?.userId, requestPin, initializeDriftClient, refreshAccounts]);
 
-  // Refresh positions from Drift client (with polling)
+  // Refresh positions from Drift client (with polling) - SAFE VERSION
   const refreshPositions = useCallback(async () => {
     if (!user?.userId) return;
     
@@ -378,44 +400,59 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       
       let client = driftClientRef.current;
       if (!client) {
+        console.log('[DriftContext] Initializing client for positions...');
         client = await initializeDriftClient(pin);
       } else {
         // Refresh accounts via polling
         await refreshAccounts();
       }
       
-      const driftUser = client.getUser();
+      // SAFE: Try to get user account
+      let driftUser;
+      let userAccount;
       
-      let accountData;
       try {
-        accountData = driftUser.getUserAccount();
+        driftUser = client.getUser();
+        userAccount = driftUser.getUserAccount();
       } catch (err) {
-        // Account not initialized yet
+        console.log('[DriftContext] User account not initialized, no positions');
         setPositions([]);
         return;
       }
       
-      const perpPositions = driftUser.getPerpPositions();
+      // Get positions
       const positionsList = [];
       
-      if (perpPositions && Array.isArray(perpPositions)) {
-        for (const position of perpPositions) {
-          const baseAmount = position.baseAssetAmount ? position.baseAssetAmount.toNumber() : 0;
-          if (baseAmount === 0) continue;
-          
-          const direction: 'long' | 'short' = baseAmount > 0 ? 'long' : 'short';
-          const market = client.getPerpMarketAccount(position.marketIndex);
-          
-          positionsList.push({
-            marketIndex: position.marketIndex,
-            direction,
-            baseAmount: Math.abs(baseAmount) / 1e9,
-            quoteAmount: Math.abs(position.quoteAssetAmount.toNumber()) / 1e6,
-            entryPrice: Number(position.quoteEntryAmount) / Math.abs(baseAmount),
-            unrealizedPnl: Number(position.unrealizedPnl || 0) / 1e6,
-            leverage: market ? Number(market.marginRatioInitial) / 10000 : 1
-          });
+      try {
+        const perpPositions = driftUser.getPerpPositions();
+        
+        if (perpPositions && Array.isArray(perpPositions)) {
+          for (const position of perpPositions) {
+            const baseAmount = position.baseAssetAmount ? position.baseAssetAmount.toNumber() : 0;
+            if (baseAmount === 0) continue;
+            
+            const direction: 'long' | 'short' = baseAmount > 0 ? 'long' : 'short';
+            
+            let market;
+            try {
+              market = client.getPerpMarketAccount(position.marketIndex);
+            } catch (err) {
+              console.log(`[DriftContext] Could not get market ${position.marketIndex}`);
+            }
+            
+            positionsList.push({
+              marketIndex: position.marketIndex,
+              direction,
+              baseAmount: Math.abs(baseAmount) / 1e9,
+              quoteAmount: Math.abs(position.quoteAssetAmount.toNumber()) / 1e6,
+              entryPrice: Number(position.quoteEntryAmount) / Math.abs(baseAmount),
+              unrealizedPnl: Number(position.unrealizedPnl || 0) / 1e6,
+              leverage: market ? Number(market.marginRatioInitial) / 10000 : 1
+            });
+          }
         }
+      } catch (err) {
+        console.log('[DriftContext] Error getting perp positions:', err);
       }
       
       setPositions(positionsList);
