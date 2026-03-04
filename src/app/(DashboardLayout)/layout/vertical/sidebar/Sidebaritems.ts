@@ -121,7 +121,7 @@ const SidebarContent: MenuItem[] = [
         name: "Forex Trading",
         icon: 'ph:currency-dollar-duotone',
         id: uniqueId(),
-        url: "https://portal.worldstreet.app",
+        url: "https://portal.worldstreetgold.com/",
         subtitle: "Trade global currency pairs",
       },
       {
