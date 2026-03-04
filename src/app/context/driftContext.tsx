@@ -163,14 +163,14 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   useEffect(() => {
     const initConnection = async () => {
       const { Connection } = await import('@solana/web3.js');
-      // Use Alchemy RPC
-      const rpcUrl = 'https://solana-mainnet.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITNhttps://solana-mainnet.g.alchemy.com/';
+      // Use Alchemy RPC - replace with your actual API key
+      const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
       
       const conn = new Connection(rpcUrl, {
         commitment: 'confirmed',
       });
       setConnection(conn as any);
-      console.log('[DriftContext] Connection initialized with Alchemy RPC');
+      console.log('[DriftContext] Connection initialized with RPC:', rpcUrl);
     };
     initConnection();
   }, []);
@@ -293,10 +293,10 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         programID: new SolanaPublicKey(DRIFT_PROGRAM_ID) as any,
         accountSubscription: {
           type: 'grpc',
-          grpcConfigs: {
-            endpoint: 'https://solana-mainnet.g.alchemy.com/',
-            token: 'uvE7piT7UVw4cgmTePITNhttps://solana-mainnet.g.alchemy.com/',
-          },
+          grpcConfigs: [{
+            endpoint: process.env.NEXT_PUBLIC_YELLOWSTONE_GRPC_ENDPOINT || 'https://solana-mainnet.g.alchemy.com/',
+            token: process.env.NEXT_PUBLIC_YELLOWSTONE_GRPC_TOKEN || undefined,
+          }],
         },
         subAccountIds: [subaccountId]
       } as any);
