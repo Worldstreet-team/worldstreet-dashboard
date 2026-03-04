@@ -102,9 +102,9 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted }: Bina
   const currentToken = activeTab === 'buy' ? tokenOut : tokenIn;
 
   return (
-    <div className="flex flex-col bg-[#0b0e11] text-white">
+    <div className="flex flex-col bg-[#181a20] text-white">
       {/* Buy/Sell Tabs */}
-      <div className="grid grid-cols-2 gap-0 border-b border-[#1e2329]">
+      <div className="grid grid-cols-2 gap-0 border-b border-[#2b3139]">
         <button
           onClick={() => setActiveTab('buy')}
           className={`py-3 text-sm font-semibold transition-colors ${
@@ -128,7 +128,7 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted }: Bina
       </div>
 
       {/* Order Type Tabs */}
-      <div className="flex gap-4 px-4 py-3 border-b border-[#1e2329]">
+      <div className="flex gap-4 px-4 py-3 border-b border-[#2b3139]">
         {(['limit', 'market', 'stop-limit'] as const).map((type) => (
           <button
             key={type}
@@ -145,7 +145,7 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted }: Bina
       </div>
 
       {/* Form Content */}
-      <div className="max-h-[25vh] overflow-y-auto scrollbar-hide px-4 py-4 space-y-4">
+      <div className="max-h-[25vh] overflow-y-auto px-4 py-4 space-y-4">
         {/* Available Balance */}
         <div className="flex items-center justify-between text-xs">
           <span className="text-[#848e9c]">Avbl</span>
@@ -164,7 +164,7 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted }: Bina
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
                 placeholder="0.00"
-                className="w-full px-3 py-2 bg-[#1e2329] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f0b90b]"
+                className="w-full px-3 py-2 bg-[#2b3139] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#fcd535]"
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#848e9c]">
                 {tokenOut}
@@ -182,7 +182,7 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted }: Bina
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0.00"
-              className="w-full px-3 py-2 bg-[#1e2329] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f0b90b]"
+              className="w-full px-3 py-2 bg-[#2b3139] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#fcd535]"
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#848e9c]">
               {tokenIn}
@@ -226,7 +226,7 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted }: Bina
                 value={total}
                 onChange={(e) => setTotal(e.target.value)}
                 placeholder="0.00"
-                className="w-full px-3 py-2 bg-[#1e2329] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f0b90b]"
+                className="w-full px-3 py-2 bg-[#2b3139] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#fcd535]"
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#848e9c]">
                 {tokenOut}
@@ -249,7 +249,7 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted }: Bina
       </div>
 
       {/* Submit Button */}
-      <div className="p-4 border-t border-[#1e2329]">
+      <div className="p-4 border-t border-[#2b3139]">
         <button
           onClick={executeTrade}
           disabled={executing || !amount}
