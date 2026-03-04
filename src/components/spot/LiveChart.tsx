@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, memo, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import Script from 'next/script';
 import { cn } from '@/lib/utils';
 
 interface LiveChartProps {
@@ -10,29 +11,10 @@ interface LiveChartProps {
   onUpdateLevels?: (sl: string, tp: string) => void;
 }
 
-const ChartLoader = () => (
-  <div className="w-full h-full flex items-center justify-center bg-[#181a20]">
-    <div className="flex flex-col items-center gap-2">
-      <div className="animate-spin rounded-full h-5 w-5 border-2 border-[#fcd535]/20 border-t-[#fcd535]" />
-      <span className="text-[9px] text-[#848e9c]">Loading chart…</span>
-    </div>
-  </div>
-);
-
 const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartProps) => {
   const [showLevelsForm, setShowLevelsForm] = useState(false);
   const [tempStopLoss, setTempStopLoss] = useState(stopLoss || '');
   const [tempTakeProfit, setTempTakeProfit] = useState(takeProfit || '');
-  const [isClient, setIsClient] = useState(false);
-  const [TradingViewWidget, setTradingViewWidget] = useState<any>(null);
-
-  // Only render on client
-  useEffect(() => {
-    setIsClient(true);
-    import('react-tradingview-widget').then(mod => {
-      setTradingViewWidget(() => mod.default);
-    });
-  }, []);
 
   useEffect(() => {
     setTempStopLoss(stopLoss || '');
@@ -49,9 +31,14 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
   // Convert symbol format: BTC-USDT -> BINANCE:BTCUSDT
   const tradingViewSymbol = `BINANCE:${symbol.replace('-', '')}`;
 
-  if (!isClient || !TradingViewWidget) {
-    return <ChartLoader />;
-  }
+  // TradingView widget configuration
+  const widgetConfig = {
+    symbols: [[tradingViewSymbol]],
+    width: '100%',
+    height: '100%',
+    locale: 'en',
+    colorTheme: 'dark',
+  };
 
   return (
     <div className="flex flex-col w-full h-full bg-[#181a20] overflow-hidden">
@@ -140,25 +127,20 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
         </div>
       )}
 
-      {/* TradingView Chart */}
+      {/* TradingView Chart Container */}
       <div className="flex-1 min-h-0 w-full">
-        <TradingViewWidget
-          symbol={tradingViewSymbol}
-          theme="dark"
-          locale="en"
-          autosize
-          interval="D"
-          style="1"
-          toolbar_bg="#181a20"
-          enable_publishing={false}
-          allow_symbol_change={false}
-          show_popup_button={false}
-          hide_top_toolbar={false}
-          hide_legend={false}
-        />
+        <div className="tradingview-widget-container w-full h-full">
+          <div className="tradingview-widget-container__widget w-full h-full"></div>
+          <Script
+            src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js"
+            strategy="lazyOnload"
+          >
+            {JSON.stringify(widgetConfig)}
+          </Script>
+        </div>
       </div>
     </div>
   );
 };
 
-export default memo(LiveChart);
+export default LiveChart;
