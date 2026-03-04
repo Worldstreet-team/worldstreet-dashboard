@@ -64,6 +64,15 @@ interface DriftContextValue {
   setShowPinUnlock: (show: boolean) => void;
   handlePinUnlock: (pin: string) => void;
   
+  // Insufficient SOL modal state
+  showInsufficientSol: boolean;
+  setShowInsufficientSol: (show: boolean) => void;
+  solBalanceInfo: {
+    required: number;
+    current: number;
+    address: string;
+  } | null;
+  
   // Methods
   refreshSummary: () => Promise<void>;
   refreshPositions: () => Promise<void>;
@@ -112,6 +121,14 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   const [showPinUnlock, setShowPinUnlock] = useState(false);
   const [userPin, setUserPin] = useState<string | null>(null);
   const pinResolveRef = useRef<((pin: string) => void) | null>(null);
+  
+  // Insufficient SOL modal state
+  const [showInsufficientSol, setShowInsufficientSol] = useState(false);
+  const [solBalanceInfo, setSolBalanceInfo] = useState<{
+    required: number;
+    current: number;
+    address: string;
+  } | null>(null);
   
   const autoRefreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const driftClientRef = useRef<any>(null);
@@ -229,9 +246,34 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         try {
           await client.initializeUserAccount();
           console.log('[DriftContext] User account initialized successfully');
-        } catch (initErr) {
+        } catch (initErr: any) {
           console.error('[DriftContext] Failed to initialize user account:', initErr);
-          // Continue anyway, might already be initialized
+          
+          // Check if it's an insufficient SOL error
+          const errorMessage = initErr?.message || String(initErr);
+          if (errorMessage.includes('insufficient lamports') || errorMessage.includes('Transfer: insufficient')) {
+            // Parse the error to get required amount
+            const match = errorMessage.match(/need (\d+)/);
+            const requiredLamports = match ? parseInt(match[1]) : 2561280; // Default from error
+            const requiredSol = requiredLamports / 1e9;
+            
+            // Get current balance
+            const balance = await connection.getBalance(keypair.publicKey);
+            const currentSol = balance / 1e9;
+            
+            // Show insufficient SOL modal
+            setSolBalanceInfo({
+              required: Math.ceil(requiredSol * 100) / 100, // Round up to 2 decimals
+              current: currentSol,
+              address: keypair.publicKey.toBase58(),
+            });
+            setShowInsufficientSol(true);
+            
+            throw new Error(`Insufficient SOL: Need at least ${Math.ceil(requiredSol * 100) / 100} SOL to initialize Drift account`);
+          }
+          
+          // Re-throw other errors
+          throw initErr;
         }
       }
       
@@ -727,6 +769,9 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     showPinUnlock,
     setShowPinUnlock,
     handlePinUnlock,
+    showInsufficientSol,
+    setShowInsufficientSol,
+    solBalanceInfo,
     refreshSummary,
     refreshPositions,
     clearCache,
