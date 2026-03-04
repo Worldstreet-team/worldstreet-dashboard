@@ -3,20 +3,16 @@
 /**
  * DRIFT MASTER WALLET CONTEXT
  * 
- * This context is for READ-ONLY operations on the master wallet.
- * The master wallet ONLY receives trading fees from users.
- * 
- * IMPORTANT: This context does NOT need or use any private keys!
- * - Master wallet private key stays in server environment variables
- * - All operations here are API calls to server endpoints
- * - Users sign their own transactions with their PIN-decrypted keys (see driftContext.tsx)
+ * This context manages the master wallet for Drift Protocol.
+ * The master wallet collects trading fees from users.
  * 
  * Architecture:
  * - driftContext.tsx: Client-side trading with user's own wallet (uses PIN-decrypted keys)
- * - driftMasterContext.tsx: Read-only master wallet info (no private keys needed)
+ * - driftMasterContext.tsx: Master wallet operations (uses client-side Drift SDK)
  */
 
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, ReactNode, useRef } from 'react';
+import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 import { useAuth } from '@/app/context/authContext';
 import {
   SubaccountInfo,
@@ -25,6 +21,20 @@ import {
   MasterWalletInfo,
   DriftContextValue as MasterDriftContextValue
 } from '@/types/drift-master-wallet';
+
+// Dynamic imports for Drift SDK
+let DriftClient: any;
+let Wallet: any;
+
+// Load Drift SDK dynamically
+const loadDriftSDK = async () => {
+  if (!DriftClient || !Wallet) {
+    // @ts-expect-error - Dynamic import, types will be available at runtime
+    const sdk = await import('@drift-labs/sdk');
+    DriftClient = sdk.DriftClient;
+    Wallet = sdk.Wallet;
+  }
+};
 
 const DriftMasterContext = createContext<MasterDriftContextValue | undefined>(undefined);
 
@@ -52,30 +62,130 @@ export const DriftMasterProvider: React.FC<DriftMasterProviderProps> = ({ childr
   const [isClosingPosition, setIsClosingPosition] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
+  const masterClientRef = useRef<any>(null);
+  const userClientRef = useRef<any>(null);
+  
+  // Initialize master Drift client
+  const initializeMasterClient = useCallback(async () => {
+    if (masterClientRef.current) {
+      return masterClientRef.current;
+    }
+    
+    await loadDriftSDK();
+    
+    // Get master wallet private key from environment
+    const masterPrivateKey = process.env.NEXT_PUBLIC_DRIFT_MASTER_PRIVATE_KEY;
+    if (!masterPrivateKey) {
+      throw new Error('Master wallet private key not configured');
+    }
+    
+    const secretKey = new Uint8Array(Buffer.from(masterPrivateKey, 'base64'));
+    const keypair = Keypair.fromSecretKey(secretKey);
+    
+    const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+    const connection = new Connection(rpcUrl, 'confirmed');
+    
+    const wallet = new Wallet(keypair);
+    const DRIFT_PROGRAM_ID = process.env.NEXT_PUBLIC_DRIFT_PROGRAM_ID || 'dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH';
+    
+    const client = new DriftClient({
+      connection,
+      wallet,
+      programID: new PublicKey(DRIFT_PROGRAM_ID),
+      accountSubscription: {
+        type: 'websocket',
+        resubTimeoutMs: 30000,
+      },
+      subAccountIds: [0]
+    });
+    
+    await client.subscribe();
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    masterClientRef.current = client;
+    return client;
+  }, []);
+  
+  // Initialize user Drift client
+  const initializeUserClient = useCallback(async (pin: string) => {
+    if (userClientRef.current) {
+      return userClientRef.current;
+    }
+    
+    await loadDriftSDK();
+    
+    // Fetch user's encrypted wallet
+    const response = await fetch('/api/wallet/keys', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: user?.userId })
+    });
+    
+    const data = await response.json();
+    if (!data.success || !data.data?.solana?.encryptedPrivateKey) {
+      throw new Error('Solana wallet not found');
+    }
+    
+    // Decrypt private key
+    const { decryptWithPIN } = await import('@/lib/wallet/encryption');
+    const decryptedPrivateKey = decryptWithPIN(data.data.solana.encryptedPrivateKey, pin);
+    
+    const secretKey = new Uint8Array(Buffer.from(decryptedPrivateKey, 'base64'));
+    const keypair = Keypair.fromSecretKey(secretKey);
+    
+    const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+    const connection = new Connection(rpcUrl, 'confirmed');
+    
+    const wallet = new Wallet(keypair);
+    const DRIFT_PROGRAM_ID = process.env.NEXT_PUBLIC_DRIFT_PROGRAM_ID || 'dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH';
+    
+    const client = new DriftClient({
+      connection,
+      wallet,
+      programID: new PublicKey(DRIFT_PROGRAM_ID),
+      accountSubscription: {
+        type: 'websocket',
+        resubTimeoutMs: 30000,
+      },
+      subAccountIds: [0]
+    });
+    
+    await client.subscribe();
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    userClientRef.current = client;
+    return client;
+  }, [user?.userId]);
+  
   // Master wallet operations
   const refreshMasterWallet = useCallback(async () => {
     if (!user?.userId) return;
     
     try {
-      const response = await fetch('/api/futures/master/balance');
-      const data = await response.json();
+      const client = await initializeMasterClient();
+      const balance = await client.connection.getBalance(client.wallet.publicKey);
       
-      if (data.success) {
-        const feesResponse = await fetch('/api/futures/master/fees');
-        const feesData = await feesResponse.json();
-        
-        setMasterWallet({
-          address: data.data.address,
-          balance: data.data.balance,
-          totalFeesCollected: feesData.success ? feesData.data.totalFeesCollected : 0
-        });
-      } else {
-        setError(data.error);
+      // Get fees from Drift user account
+      const driftUser = client.getUser();
+      let totalFeesCollected = 0;
+      
+      try {
+        const accountData = driftUser.getUserAccount();
+        // Calculate fees from account data if available
+        totalFeesCollected = 0; // Placeholder - implement fee calculation
+      } catch (err) {
+        console.log('[DriftMasterContext] Account not initialized yet');
       }
+      
+      setMasterWallet({
+        address: client.wallet.publicKey.toBase58(),
+        balance: balance / 1e9, // Convert lamports to SOL
+        totalFeesCollected
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch master wallet');
     }
-  }, [user?.userId]);
+  }, [user?.userId, initializeMasterClient]);
   
   // Subaccount operations (deprecated - using client-side architecture now)
   const refreshSubaccountInfo = useCallback(async () => {
@@ -215,14 +325,12 @@ export const DriftMasterProvider: React.FC<DriftMasterProviderProps> = ({ childr
   
   // Utility functions
   const getUserClient = useCallback(async () => {
-    // This would be implemented if needed for direct client access
-    return null;
+    return userClientRef.current;
   }, []);
   
   const getMasterClient = useCallback(async () => {
-    // This would be implemented if needed for direct client access
-    return null;
-  }, []);
+    return masterClientRef.current || await initializeMasterClient();
+  }, [initializeMasterClient]);
   
   const clearError = useCallback(() => {
     setError(null);
