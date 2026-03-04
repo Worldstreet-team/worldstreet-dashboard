@@ -85,11 +85,11 @@ export default function Layout({
                             {/* Syncs wallet addresses to chain contexts */}
                             <WalletAddressSync />
                             <DashboardVividProvider>
-                            <div className="flex w-full h-screen overflow-hidden">
-                              <div className="page-wrapper flex w-full h-full">
+                            <div className={`flex w-full h-screen overflow-hidden ${isFullscreen ? 'bg-[#181a20]' : ''}`}>
+                              <div className={`page-wrapper flex w-full h-full ${isFullscreen ? 'bg-[#181a20]' : ''}`}>
                                 {/* Header/sidebar - Hide for fullscreen routes */}
                                 {!isFullscreen && activeLayout == "vertical" ? <Sidebar /> : null}
-                                <div className="body-wrapper w-full h-full flex flex-col overflow-hidden">
+                                <div className={`body-wrapper w-full h-full flex flex-col overflow-hidden ${isFullscreen ? 'bg-[#181a20]' : ''}`}>
                                   {/* Top Header - Hide for fullscreen routes */}
                                   {!isFullscreen && (
                                     activeLayout == "horizontal" ? (
@@ -102,7 +102,7 @@ export default function Layout({
                                   {/* Body Content - Scrollable or Fullscreen */}
                                   {isFullscreen ? (
                                     // Fullscreen mode - no padding, no scroll wrapper
-                                    <div className="relative z-0 flex-1 w-full h-full overflow-hidden">
+                                    <div className="relative z-0 flex-1 w-full h-full overflow-hidden bg-[#181a20]">
                                       {children}
                                     </div>
                                   ) : (

@@ -186,3 +186,8 @@
 .scrollbar-hide::-webkit-scrollbar {
   display: none;  /* Chrome, Safari and Opera */
 }
+
+/* Prevent white flash on Binance spot page */
+html:has([data-page="spot"]) body {
+  background-color: #181a20 !important;
+}
