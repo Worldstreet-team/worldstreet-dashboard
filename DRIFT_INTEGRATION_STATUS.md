@@ -4,8 +4,9 @@
 
 ### 1. Architecture: Client-Side Drift SDK
 - **Client Context** (`src/app/context/driftContext.tsx`): Handles ALL Drift SDK operations client-side
-- **Master Context** (`src/app/context/driftMasterContext.tsx`): Manages master wallet operations client-side
+- **Drift Config** (`src/config/drift.ts`): Contains master wallet public address and fee configuration
 - **No Server-Side API Routes**: All Drift operations happen in the browser with dynamic imports
+- **No Master Wallet Context**: Only master wallet public key is needed for fee collection
 
 ### 2. Client-Side Implementation
 All operations in `src/app/context/driftContext.tsx`:
@@ -37,10 +38,17 @@ All operations in `src/app/context/driftContext.tsx`:
 ### 5. Environment Variables
 Required in `.env.local`:
 ```env
-NEXT_PUBLIC_SOLANA_RPC_URL=https://solana-mainnet.g.alchemy.com/v2/Hzb8ZnlDROuI4aqqHYBeV
+# Client-side (NEXT_PUBLIC_ prefix)
+NEXT_PUBLIC_SOLANA_RPC_URL=https://solana-mainnet.g.alchemy.com/v2/YOUR_KEY
 NEXT_PUBLIC_DRIFT_PROGRAM_ID=dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH
-NEXT_PUBLIC_DRIFT_MASTER_PRIVATE_KEY=[base64_encoded_master_key]
+NEXT_PUBLIC_DRIFT_MASTER_WALLET_ADDRESS=YOUR_MASTER_WALLET_PUBLIC_KEY
+
+# Server-side (NO NEXT_PUBLIC_ prefix - for future server operations)
+MASTER_KEY=<base58_encoded_private_key>  # Only if you need server-side operations
+WALLET_ENCRYPTION_KEY=<hex_encoded_32_byte_key>
 ```
+
+**Note**: The master wallet public address is safe to expose client-side. Only the private key must stay server-side.
 
 ## 📋 Architecture Overview
 
@@ -109,11 +117,15 @@ rm -rf .next && pnpm run dev
 ## 📚 Key Files
 
 - `src/app/context/driftContext.tsx` - Main Drift client context (client-side)
-- `src/app/context/driftMasterContext.tsx` - Master wallet context (client-side)
+- `src/config/drift.ts` - Drift configuration (master wallet address, fees)
 - `src/app/(DashboardLayout)/futures/page.tsx` - Futures trading page
 - `src/components/wallet/PinUnlockModal.tsx` - PIN entry modal
 - `.env.local` - Environment variables
 
 ## ✨ Summary
 
-The Drift integration now runs entirely client-side using dynamic imports of the Drift SDK. Users decrypt their wallets with a PIN and interact directly with the Drift Protocol on Solana. No server-side API routes are needed, providing better security and simpler architecture.
+The Drift integration now runs entirely client-side using dynamic imports of the Drift SDK. Users decrypt their wallets with a PIN and interact directly with the Drift Protocol on Solana. 
+
+**Fee Collection**: When users deposit collateral, 5% is automatically sent to the master wallet (public address only, no private key needed client-side), and the remaining 95% is deposited to their Drift account.
+
+No server-side API routes or master wallet context provider needed - just a simple config file with the master wallet's public address.

@@ -40,19 +40,19 @@ Removed all files in `src/app/api/drift/client/`:
 - Graceful handling of uninitialized accounts
 - Type-safe direction casting for positions
 
-### 3. Updated `src/app/context/driftMasterContext.tsx`
+### 3. Updated `src/config/drift.ts`
 
-**Added:**
-- Dynamic Drift SDK imports with `@ts-expect-error` suppression
-- `loadDriftSDK()` function for lazy loading
-- `initializeMasterClient()` function for master wallet
-- `initializeUserClient()` function for user wallet
-- `masterClientRef` and `userClientRef` for persistence
+**Created new config file:**
+- Master wallet public address (safe to expose)
+- Fee percentage configuration (5%)
+- Fee calculation helper function
+- Drift program ID
+- RPC URL configuration
 
-**Modified:**
-- `refreshMasterWallet()` - Now uses Drift SDK directly
-- `getUserClient()` - Returns actual client instance
-- `getMasterClient()` - Returns actual client instance
+**Removed `src/app/context/driftMasterContext.tsx`:**
+- No longer needed - only master wallet public key required
+- Fee collection happens in deposit flow
+- No complex context provider needed
 
 ### 4. Updated `DRIFT_INTEGRATION_STATUS.md`
 

@@ -367,7 +367,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     }
   }, [user?.userId, encryptedPrivateKey, requestPin, initializeDriftClient]);
 
-  // Deposit collateral
+  // Deposit collateral with fee
   const depositCollateral = useCallback(async (amount: number): Promise<{ success: boolean; txSignature?: string; error?: string }> => {
     if (!user?.userId || !encryptedPrivateKey) {
       return { success: false, error: 'User not authenticated' };
@@ -382,9 +382,32 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         client = await initializeDriftClient(pin);
       }
       
-      // Deposit USDC
+      // Calculate fee (5%)
+      const { calculateFee } = await import('@/config/drift');
+      const { fee, netAmount } = calculateFee(amount);
+      
+      // First, send fee to master wallet if configured
+      const { DRIFT_CONFIG } = await import('@/config/drift');
+      if (DRIFT_CONFIG.MASTER_WALLET_ADDRESS) {
+        const { SystemProgram, Transaction } = await import('@solana/web3.js');
+        const { PublicKey } = await import('@solana/web3.js');
+        
+        const feeTransaction = new Transaction().add(
+          SystemProgram.transfer({
+            fromPubkey: client.wallet.publicKey,
+            toPubkey: new PublicKey(DRIFT_CONFIG.MASTER_WALLET_ADDRESS),
+            lamports: Math.floor(fee * 1e9), // Convert SOL to lamports
+          })
+        );
+        
+        const feeTxSignature = await client.connection.sendTransaction(feeTransaction, [client.wallet.payer]);
+        await client.connection.confirmTransaction(feeTxSignature, 'confirmed');
+        console.log('[DriftContext] Fee sent:', feeTxSignature);
+      }
+      
+      // Then deposit net amount to Drift
       const txSignature = await client.deposit(
-        amount * 1e6, // Convert to USDC base units
+        netAmount * 1e6, // Convert to USDC base units
         0, // USDC market index
         client.getUser().getUserAccountPublicKey()
       );
