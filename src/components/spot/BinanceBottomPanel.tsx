@@ -64,7 +64,7 @@ export default function BinanceBottomPanel({
       </div>
 
       {/* Tab Content */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto scrollbar-hide">
         {activeTab === 'open-orders' && (
           <div className="p-8 text-center">
             <div className="w-16 h-16 rounded-full bg-[#1e2329] flex items-center justify-center mx-auto mb-4">

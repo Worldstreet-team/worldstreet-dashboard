@@ -145,7 +145,7 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted }: Bina
       </div>
 
       {/* Form Content */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+      <div className="flex-1 overflow-y-auto scrollbar-hide px-4 py-4 space-y-4">
         {/* Available Balance */}
         <div className="flex items-center justify-between text-xs">
           <span className="text-[#848e9c]">Avbl</span>

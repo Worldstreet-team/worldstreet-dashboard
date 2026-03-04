@@ -122,93 +122,99 @@ export default function BinanceSpotPage() {
       </div>
 
       {/* Main Trading Grid */}
-      <div className="flex-1 grid grid-cols-[300px_1fr_320px] grid-rows-[auto_1fr_250px] overflow-hidden">
-        {/* LEFT: Order Book */}
-        <div className="row-span-2 border-r border-[#1e2329] overflow-hidden">
-          <BinanceOrderBook selectedPair={selectedPair} />
-        </div>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Top Section: 3 Columns */}
+        <div className="flex-1 grid grid-cols-[300px_1fr_320px] overflow-hidden">
+          {/* LEFT: Order Book (Full Height) */}
+          <div className="border-r border-[#1e2329] flex flex-col overflow-hidden">
+            <BinanceOrderBook selectedPair={selectedPair} />
+          </div>
 
-        {/* CENTER TOP: Pair Header + Chart */}
-        <div className="col-start-2 row-start-1 row-span-2 flex flex-col border-r border-[#1e2329] overflow-hidden">
-          {/* Pair Header */}
-          <div className="px-4 py-3 border-b border-[#1e2329] flex items-center justify-between flex-shrink-0">
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2">
-                <span className="text-xl font-bold text-white">{selectedPair.replace('-', '/')}</span>
-                <Icon icon="ph:caret-down" width={16} className="text-[#848e9c]" />
+          {/* CENTER: Chart + Order Form */}
+          <div className="border-r border-[#1e2329] flex flex-col overflow-hidden">
+            {/* Pair Header */}
+            <div className="px-4 py-3 border-b border-[#1e2329] flex items-center justify-between flex-shrink-0">
+              <div className="flex items-center gap-6">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl font-bold text-white">{selectedPair.replace('-', '/')}</span>
+                  <Icon icon="ph:caret-down" width={16} className="text-[#848e9c]" />
+                </div>
+                <div className="flex items-baseline gap-3">
+                  <span className={`text-2xl font-bold ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
+                    {currentPrice.toFixed(2)}
+                  </span>
+                  <span className="text-sm text-[#848e9c]">
+                    ${currentPrice.toFixed(2)}
+                  </span>
+                </div>
               </div>
-              <div className="flex items-baseline gap-3">
-                <span className={`text-2xl font-bold ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
-                  {currentPrice.toFixed(2)}
-                </span>
-                <span className="text-sm text-[#848e9c]">
-                  ${currentPrice.toFixed(2)}
-                </span>
+              <div className="flex items-center gap-6 text-xs">
+                <div>
+                  <span className="text-[#848e9c]">24h Change</span>
+                  <span className={`ml-2 font-semibold ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
+                    {isPositive ? '+' : ''}{priceChange.toFixed(2)}%
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[#848e9c]">24h High</span>
+                  <span className="ml-2 text-white font-mono">{(currentPrice * 1.02).toFixed(2)}</span>
+                </div>
+                <div>
+                  <span className="text-[#848e9c]">24h Low</span>
+                  <span className="ml-2 text-white font-mono">{(currentPrice * 0.98).toFixed(2)}</span>
+                </div>
+                <div>
+                  <span className="text-[#848e9c]">24h Volume({tokenIn})</span>
+                  <span className="ml-2 text-white font-mono">28,500.00</span>
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-6 text-xs">
-              <div>
-                <span className="text-[#848e9c]">24h Change</span>
-                <span className={`ml-2 font-semibold ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
-                  {isPositive ? '+' : ''}{priceChange.toFixed(2)}%
-                </span>
-              </div>
-              <div>
-                <span className="text-[#848e9c]">24h High</span>
-                <span className="ml-2 text-white font-mono">{(currentPrice * 1.02).toFixed(2)}</span>
-              </div>
-              <div>
-                <span className="text-[#848e9c]">24h Low</span>
-                <span className="ml-2 text-white font-mono">{(currentPrice * 0.98).toFixed(2)}</span>
-              </div>
-              <div>
-                <span className="text-[#848e9c]">24h Volume({tokenIn})</span>
-                <span className="ml-2 text-white font-mono">28,500.00</span>
-              </div>
+
+            {/* Chart */}
+            <div className="flex-1 overflow-hidden bg-[#0b0e11]">
+              <LiveChart 
+                symbol={selectedPair}
+                stopLoss={chartStopLoss}
+                takeProfit={chartTakeProfit}
+                onUpdateLevels={handleUpdateLevels}
+              />
+            </div>
+
+            {/* Order Form */}
+            <div className="h-[280px] border-t border-[#1e2329] flex-shrink-0">
+              <BinanceOrderForm 
+                selectedPair={selectedPair}
+                onTradeExecuted={handleTradeExecuted}
+              />
             </div>
           </div>
 
-          {/* Chart */}
-          <div className="flex-1 overflow-hidden bg-[#0b0e11]">
-            <LiveChart 
-              symbol={selectedPair}
-              stopLoss={chartStopLoss}
-              takeProfit={chartTakeProfit}
-              onUpdateLevels={handleUpdateLevels}
-            />
-          </div>
-        </div>
-
-        {/* RIGHT: Market List */}
-        <div className="row-span-2 overflow-hidden">
-          <BinanceMarketList 
-            selectedPair={selectedPair}
-            onSelectPair={handleSelectPair}
-          />
-        </div>
-
-        {/* BOTTOM LEFT: Order Form */}
-        <div className="col-start-1 row-start-3 border-r border-t border-[#1e2329] overflow-hidden">
-          <BinanceOrderForm 
-            selectedPair={selectedPair}
-            onTradeExecuted={handleTradeExecuted}
-          />
-        </div>
-
-        {/* BOTTOM CENTER: Trades */}
-        <div className="col-start-2 row-start-3 border-r border-t border-[#1e2329] overflow-hidden bg-[#0b0e11]">
-          <div className="h-full flex flex-col">
-            <div className="px-4 py-2 border-b border-[#1e2329] flex items-center justify-between">
-              <span className="text-xs font-medium text-[#848e9c]">Market Trades</span>
-            </div>
+          {/* RIGHT: Market List + Market Trades */}
+          <div className="flex flex-col overflow-hidden">
+            {/* Market List */}
             <div className="flex-1 overflow-hidden">
-              <MarketTrades selectedPair={selectedPair} />
+              <BinanceMarketList 
+                selectedPair={selectedPair}
+                onSelectPair={handleSelectPair}
+              />
+            </div>
+
+            {/* Market Trades */}
+            <div className="h-[280px] border-t border-[#1e2329] flex-shrink-0 bg-[#0b0e11]">
+              <div className="h-full flex flex-col">
+                <div className="px-4 py-2 border-b border-[#1e2329] flex items-center justify-between flex-shrink-0">
+                  <span className="text-xs font-medium text-[#848e9c]">Market Trades</span>
+                </div>
+                <div className="flex-1 overflow-hidden">
+                  <MarketTrades selectedPair={selectedPair} />
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* BOTTOM RIGHT: Bottom Panel (Orders/History) */}
-        <div className="col-start-3 row-start-3 border-t border-[#1e2329] overflow-hidden">
+        {/* Bottom Section: Full Width Panel */}
+        <div className="h-[200px] border-t border-[#1e2329] flex-shrink-0">
           <BinanceBottomPanel
             refreshKey={refreshKey}
             selectedChartSymbol={selectedPair}
