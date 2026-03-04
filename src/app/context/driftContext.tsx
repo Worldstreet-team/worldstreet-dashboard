@@ -2,7 +2,6 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import { useAuth } from '@/app/context/authContext';
-import { PinUnlockModal } from '@/components/wallet/PinUnlockModal';
 import { decryptWithPIN } from '@/lib/wallet/encryption';
 
 // Types
@@ -47,6 +46,11 @@ interface DriftContextValue {
   canTrade: boolean;
   needsInitialization: boolean;
   
+  // PIN unlock state (for futures page)
+  showPinUnlock: boolean;
+  setShowPinUnlock: (show: boolean) => void;
+  handlePinUnlock: (pin: string) => void;
+  
   // Methods
   initializeDriftClient: () => Promise<void>;
   refreshSummary: () => Promise<void>;
@@ -84,7 +88,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   // Client state
   const [driftClient, setDriftClient] = useState<any | null>(null);
   const [isClientReady, setIsClientReady] = useState(false);
-  const [connection, setConnection] = useState<Connection | null>(null);
+  const [connection, setConnection] = useState<any>(null);
   
   // Account data
   const [summary, setSummary] = useState<DriftAccountSummary | null>(null);
@@ -155,20 +159,18 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     }
   }, []);
 
-  // Initialize Solana connection with Ankr RPC (WebSocket support)
+  // Initialize Solana connection with Alchemy RPC
   useEffect(() => {
     const initConnection = async () => {
       const { Connection } = await import('@solana/web3.js');
-      // Use Ankr RPC with WebSocket support
-      const rpcUrl = 'https://rpc.ankr.com/solana/701746b6d4fe4674bd2a69164cebbcf717b533e80af1bb8d7d04199c04f6f7a9';
-      const wsUrl = 'wss://rpc.ankr.com/solana/ws/701746b6d4fe4674bd2a69164cebbcf717b533e80af1bb8d7d04199c04f6f7a9';
+      // Use Alchemy RPC
+      const rpcUrl = 'https://solana-mainnet.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITNhttps://solana-mainnet.g.alchemy.com/';
       
       const conn = new Connection(rpcUrl, {
         commitment: 'confirmed',
-        wsEndpoint: wsUrl,
       });
       setConnection(conn as any);
-      console.log('[DriftContext] Connection initialized with Ankr RPC and WebSocket');
+      console.log('[DriftContext] Connection initialized with Alchemy RPC');
     };
     initConnection();
   }, []);
@@ -188,8 +190,8 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     setError(null);
     
     try {
-      let encryptedPrivateKey: string;
-      let pin: string;
+      let encryptedPrivateKey: string = '';
+      let pin: string = '';
       
       // Check if we have cached encrypted keys
       const cacheKey = `drift_encrypted_keys_${user.userId}`;
@@ -260,6 +262,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       }
       
       // Dynamic import of Drift SDK and Solana
+      // @ts-expect-error - Dynamic import, types will be available at runtime
       const { DriftClient, Wallet } = await import('@drift-labs/sdk');
       const { Keypair, PublicKey: SolanaPublicKey } = await import('@solana/web3.js');
       
@@ -282,30 +285,32 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       // Initialize Drift client
       const DRIFT_PROGRAM_ID = process.env.NEXT_PUBLIC_DRIFT_PROGRAM_ID || 'dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH';
       
-      console.log('[DriftContext] Creating Drift client with WebSocket subscription (Ankr RPC)');
+      console.log('[DriftContext] Creating Drift client with Yellowstone gRPC subscription');
       
       const client = new DriftClient({
         connection: connection as any,
         wallet,
         programID: new SolanaPublicKey(DRIFT_PROGRAM_ID) as any,
         accountSubscription: {
-          type: 'websocket',
-          // Real-time updates via WebSocket
-          // Ankr provides reliable WebSocket support for instant account updates
+          type: 'grpc',
+          grpcConfigs: {
+            endpoint: 'https://solana-mainnet.g.alchemy.com/',
+            token: 'uvE7piT7UVw4cgmTePITNhttps://solana-mainnet.g.alchemy.com/',
+          },
         },
         subAccountIds: [subaccountId]
       } as any);
       
-      // Subscribe to account updates (using WebSocket with Ankr RPC)
+      // Subscribe to account updates (using Yellowstone gRPC)
       await client.subscribe();
       
-      console.log('[DriftContext] Subscribed to Drift account updates (WebSocket mode)');
+      console.log('[DriftContext] Subscribed to Drift account updates (Yellowstone gRPC mode)');
       
       // Check if user account exists, if not, initialize it
       try {
         const user = client.getUser();
         
-        // Wait a bit for subscription to load data
+        // Wait a bit for gRPC subscription to load data
         await new Promise(resolve => setTimeout(resolve, 2000));
         
         let accountData;
@@ -334,7 +339,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       
       console.log('[DriftContext] Client initialized successfully');
       
-      // Wait briefly for initial WebSocket data to arrive
+      // Wait briefly for initial gRPC data to arrive
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Fetch initial data
@@ -366,12 +371,12 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         return;
       }
 
-      // Check if account data is loaded
+      // Check if account data is loaded via gRPC
       let accountData;
       try {
         accountData = user.getUserAccount();
       } catch (err) {
-        console.warn('[DriftContext] Account not subscribed yet, skipping summary refresh');
+        console.warn('[DriftContext] Account not subscribed via gRPC yet, skipping summary refresh');
         return;
       }
       
@@ -436,12 +441,12 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         return;
       }
 
-      // Check if account data is loaded
+      // Check if account data is loaded via gRPC
       let accountData;
       try {
         accountData = user.getUserAccount();
       } catch (err) {
-        console.warn('[DriftContext] Account not subscribed yet, skipping positions refresh');
+        console.warn('[DriftContext] Account not subscribed via gRPC yet, skipping positions refresh');
         return;
       }
       
@@ -707,6 +712,9 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     isInitialized,
     canTrade,
     needsInitialization,
+    showPinUnlock,
+    setShowPinUnlock,
+    handlePinUnlock,
     initializeDriftClient,
     refreshSummary,
     refreshPositions,
@@ -722,13 +730,6 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   return (
     <DriftContext.Provider value={value}>
       {children}
-      <PinUnlockModal
-        isOpen={showPinUnlock}
-        onClose={() => setShowPinUnlock(false)}
-        onUnlock={handlePinUnlock}
-        title="Unlock Drift Wallet"
-        description="Enter your PIN to access Drift Protocol trading"
-      />
     </DriftContext.Provider>
   );
 };

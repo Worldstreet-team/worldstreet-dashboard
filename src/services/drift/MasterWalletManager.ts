@@ -41,6 +41,7 @@ export class MasterWalletManager {
     
     try {
       // Dynamic import to handle missing SDK gracefully
+      // @ts-expect-error - Dynamic import, types will be available at runtime
       const { DriftClient, Wallet } = await import('@drift-labs/sdk');
       
       // Use type assertions to bypass version conflicts between @solana/web3.js versions

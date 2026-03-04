@@ -13,11 +13,12 @@ import { RiskPanel } from '@/components/futures/RiskPanel';
 import { WalletModal } from '@/components/futures/WalletModal';
 import { DriftAccountStatus } from '@/components/futures/DriftAccountStatus';
 import { FuturesOrderModal } from '@/components/futures/FuturesOrderModal';
+import { PinUnlockModal } from '@/components/wallet/PinUnlockModal';
 import type { OrderSide } from '@/store/futuresStore';
 
 export default function FuturesPage() {
   const { selectedMarket, markets, setSelectedMarket } = useFuturesStore();
-  const { isInitialized, startAutoRefresh, stopAutoRefresh } = useDrift();
+  const { isInitialized, startAutoRefresh, stopAutoRefresh, showPinUnlock, setShowPinUnlock, handlePinUnlock } = useDrift();
   const { fetchWallet } = useFuturesData();
   
   const [mobileActiveTab, setMobileActiveTab] = useState<'chart' | 'positions' | 'info'>('chart');
@@ -323,6 +324,14 @@ export default function FuturesPage() {
         onClose={() => setShowOrderModal(false)}
         side={orderSide}
         onSuccess={() => setShowOrderModal(false)}
+      />
+
+      <PinUnlockModal
+        isOpen={showPinUnlock}
+        onClose={() => setShowPinUnlock(false)}
+        onUnlock={handlePinUnlock}
+        title="Unlock Drift Wallet"
+        description="Enter your PIN to access Drift Protocol trading"
       />
     </>
   );
