@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import Script from 'next/script';
 import { cn } from '@/lib/utils';
 
 interface LiveChartProps {
@@ -20,6 +19,20 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
     setTempStopLoss(stopLoss || '');
     setTempTakeProfit(takeProfit || '');
   }, [stopLoss, takeProfit]);
+
+  useEffect(() => {
+    // Load TradingView script
+    const script = document.createElement('script');
+    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+    script.async = true;
+    document.body.appendChild(script);
+
+    return () => {
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
+      }
+    };
+  }, []);
 
   const handleUpdateLevels = () => {
     if (onUpdateLevels) {
@@ -131,12 +144,9 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
       <div className="flex-1 min-h-0 w-full">
         <div className="tradingview-widget-container w-full h-full">
           <div className="tradingview-widget-container__widget w-full h-full"></div>
-          <Script
-            src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js"
-            strategy="lazyOnload"
-          >
+          <script type="text/x-tradingview-widget">
             {JSON.stringify(widgetConfig)}
-          </Script>
+          </script>
         </div>
       </div>
     </div>

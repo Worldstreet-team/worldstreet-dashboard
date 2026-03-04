@@ -168,7 +168,7 @@ export default function BinanceSpotPage() {
             </div>
 
             {/* Chart */}
-            <div className="flex-1 min-h-[400px]">
+            <div className="flex-1 min-h-0 overflow-hidden">
               <LiveChart 
                 symbol={selectedPair}
                 stopLoss={chartStopLoss}
