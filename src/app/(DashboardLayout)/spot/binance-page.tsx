@@ -121,9 +121,9 @@ export default function BinanceSpotPage() {
       {/* Main Trading Grid */}
       <div className="flex flex-col">
         {/* Top Section: 3 Columns */}
-        <div className="grid grid-cols-[300px_1fr_320px]">
+        <div className="grid grid-cols-[20%_1fr_22%]">
           {/* LEFT: Order Book */}
-          <div className="border-r border-[#1e2329] min-h-[800px]">
+          <div className="border-r border-[#1e2329] min-h-[85vh]">
             <BinanceOrderBook selectedPair={selectedPair} />
           </div>
 
@@ -168,7 +168,7 @@ export default function BinanceSpotPage() {
             </div>
 
             {/* Chart */}
-            <div className="h-[600px] bg-[#0b0e11]">
+            <div className="h-[55vh] bg-[#0b0e11]">
               <LiveChart 
                 symbol={selectedPair}
                 stopLoss={chartStopLoss}
@@ -189,7 +189,7 @@ export default function BinanceSpotPage() {
           {/* RIGHT: Market List + Market Trades */}
           <div className="flex flex-col">
             {/* Market List */}
-            <div className="h-[600px]">
+            <div className="h-[55vh]">
               <BinanceMarketList 
                 selectedPair={selectedPair}
                 onSelectPair={handleSelectPair}
@@ -202,7 +202,7 @@ export default function BinanceSpotPage() {
                 <div className="px-4 py-2 border-b border-[#1e2329] flex items-center justify-between">
                   <span className="text-xs font-medium text-[#848e9c]">Market Trades</span>
                 </div>
-                <div className="h-[400px]">
+                <div className="h-[30vh]">
                   <MarketTrades selectedPair={selectedPair} />
                 </div>
               </div>

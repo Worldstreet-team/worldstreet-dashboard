@@ -129,7 +129,7 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
       <div className="flex flex-col">
         {/* Asks (Sell Orders) */}
         {(viewMode === 'both' || viewMode === 'asks') && (
-          <div className="h-[350px] overflow-y-auto flex flex-col-reverse scrollbar-hide">
+          <div className="h-[38vh] overflow-y-auto flex flex-col-reverse scrollbar-hide">
             {asks.map((ask, index) => (
               <div
                 key={`ask-${index}`}
@@ -171,7 +171,7 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
 
         {/* Bids (Buy Orders) */}
         {(viewMode === 'both' || viewMode === 'bids') && (
-          <div className="h-[350px] overflow-y-auto scrollbar-hide">
+          <div className="h-[38vh] overflow-y-auto scrollbar-hide">
             {bids.map((bid, index) => (
               <div
                 key={`bid-${index}`}
