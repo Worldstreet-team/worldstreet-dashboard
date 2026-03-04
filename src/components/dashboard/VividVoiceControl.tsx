@@ -1,7 +1,9 @@
 'use client'
 
-import { useVivid, VividWidget } from '@worldstreet/vivid-voice'
+import { useCallback } from 'react'
+import { useVivid } from '@worldstreet/vivid-voice'
 import type { VividAgentState } from '@worldstreet/vivid-voice'
+import BlobOrb from './BlobOrb'
 
 /** Human-readable labels for each agent state */
 const STATE_LABELS: Record<VividAgentState, string> = {
@@ -30,22 +32,30 @@ const STATE_DOT: Record<VividAgentState, string> = {
  * Must be rendered inside a <VividProvider>.
  */
 export default function VividVoiceControl() {
-  const { state, isConnected, endSession } = useVivid()
+  const { state, isConnected, startSession, endSession, getAudioLevels } = useVivid()
 
   const isActive = state !== 'idle' && state !== 'error'
 
+  const handleOrbClick = useCallback(async () => {
+    if (state === 'connecting') return
+    if (isConnected) {
+      endSession()
+    } else {
+      await startSession()
+    }
+  }, [state, isConnected, startSession, endSession])
+
   return (
     <>
-      {/* Voice widget — always visible */}
-      <VividWidget
-        showTranscript={true}
-        size="md"
-        position={{ bottom: '24px', right: '24px' }}
-        classNames={{
-          container:
-            'fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3 max-sm:bottom-5 max-sm:right-4 max-sm:scale-75 max-sm:origin-bottom-right',
-        }}
-      />
+      {/* Voice blob orb — always visible */}
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3 max-sm:bottom-5 max-sm:right-4 max-sm:scale-75 max-sm:origin-bottom-right">
+        <BlobOrb
+          state={state}
+          onClick={handleOrbClick}
+          size="md"
+          getAudioLevels={getAudioLevels}
+        />
+      </div>
 
       {/* Status pill — appears above the mic when a session is active */}
       {isActive && (

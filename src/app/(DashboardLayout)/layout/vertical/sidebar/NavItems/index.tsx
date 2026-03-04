@@ -29,6 +29,9 @@ const NavItems: React.FC<NavItemsProps> = ({ item, handleClose }) => {
     <Link
       href={item.disabled ? "#" : item.url}
       onClick={handleClick}
+      {...(isExternal && !item.disabled
+        ? { target: "_blank", rel: "noopener noreferrer" }
+        : {})}
       className={cn(
         "nav-item-link group/link",
         item.disabled && "opacity-40 cursor-default pointer-events-none",
