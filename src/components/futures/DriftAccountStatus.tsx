@@ -13,22 +13,9 @@ export const DriftAccountStatus: React.FC = () => {
     isLoading,
     error,
     refreshSummary,
-    initializeDriftClient
   } = useDrift();
 
-  const [initializing, setInitializing] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-
-  const handleInitialize = async () => {
-    setInitializing(true);
-    try {
-      await initializeDriftClient();
-      console.log('Drift client initialized successfully');
-    } catch (err) {
-      console.error('Failed to initialize:', err);
-    }
-    setInitializing(false);
-  };
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -55,6 +42,12 @@ export const DriftAccountStatus: React.FC = () => {
           <div className="flex-1">
             <h4 className="text-sm font-bold text-error mb-1">Error Loading Account</h4>
             <p className="text-xs text-error/80">{error}</p>
+            <button
+              onClick={handleRefresh}
+              className="mt-3 px-4 py-2 bg-error hover:bg-error/90 text-white rounded-xl text-xs font-bold transition-all duration-200"
+            >
+              Try Again
+            </button>
           </div>
         </div>
       </div>
@@ -67,16 +60,16 @@ export const DriftAccountStatus: React.FC = () => {
         <div className="flex items-start gap-3">
           <Icon icon="ph:info-duotone" className="text-warning flex-shrink-0 mt-0.5" height={24} />
           <div className="flex-1">
-            <h4 className="text-sm font-bold text-warning mb-1">Drift Client Not Ready</h4>
+            <h4 className="text-sm font-bold text-warning mb-1">Drift Account Not Initialized</h4>
             <p className="text-xs text-warning/80 mb-4">
-              Your Drift client needs to be initialized to trade futures. Click below to unlock your wallet and connect.
+              Your Drift account needs to be initialized. Click below to start the process.
             </p>
             <button
-              onClick={handleInitialize}
-              disabled={initializing}
+              onClick={handleRefresh}
+              disabled={refreshing}
               className="px-4 py-2.5 bg-warning hover:bg-warning/90 text-white rounded-xl text-sm font-bold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-warning/20 hover:shadow-xl hover:shadow-warning/30"
             >
-              {initializing ? (
+              {refreshing ? (
                 <span className="flex items-center gap-2">
                   <Icon icon="svg-spinners:ring-resize" height={16} />
                   Initializing...
@@ -84,7 +77,7 @@ export const DriftAccountStatus: React.FC = () => {
               ) : (
                 <span className="flex items-center gap-2">
                   <Icon icon="ph:rocket-launch" height={16} />
-                  Initialize Drift Client
+                  Initialize Drift Account
                 </span>
               )}
             </button>
