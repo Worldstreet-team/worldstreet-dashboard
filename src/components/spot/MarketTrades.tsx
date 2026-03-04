@@ -69,15 +69,15 @@ export default function MarketTrades({ selectedPair }: MarketTradesProps) {
   };
 
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-darkgray">
+    <div className="h-full flex flex-col bg-[#181a20]">
       {/* Tabs */}
-      <div className="flex border-b border-border dark:border-darkborder">
+      <div className="flex border-b border-[#2b3139]">
         <button
           onClick={() => setActiveTab('market')}
           className={`flex-1 px-2 py-1.5 text-[10px] font-medium transition-colors border-b-2 ${
             activeTab === 'market'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted hover:text-dark dark:hover:text-white'
+              ? 'border-[#fcd535] text-[#fcd535]'
+              : 'border-transparent text-[#848e9c] hover:text-white'
           }`}
         >
           Market Trades
@@ -86,8 +86,8 @@ export default function MarketTrades({ selectedPair }: MarketTradesProps) {
           onClick={() => setActiveTab('my')}
           className={`flex-1 px-2 py-1.5 text-[10px] font-medium transition-colors border-b-2 ${
             activeTab === 'my'
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted hover:text-dark dark:hover:text-white'
+              ? 'border-[#fcd535] text-[#fcd535]'
+              : 'border-transparent text-[#848e9c] hover:text-white'
           }`}
         >
           My Trades
@@ -97,29 +97,29 @@ export default function MarketTrades({ selectedPair }: MarketTradesProps) {
       {activeTab === 'market' ? (
         <>
           {/* Column Headers */}
-          <div className="px-2 py-1 border-b border-border dark:border-darkborder grid grid-cols-3 gap-2 text-[9px] text-muted font-medium">
+          <div className="px-2 py-1 border-b border-[#2b3139] grid grid-cols-3 gap-2 text-[9px] text-[#848e9c] font-medium">
             <div className="text-left">Price(USDT)</div>
             <div className="text-right">Amount</div>
             <div className="text-right">Time</div>
           </div>
 
           {/* Trades List */}
-          <div className="flex-1 overflow-y-auto scrollbar-hide">
+          <div className="flex-1 overflow-y-auto">
             {trades.map((trade) => (
               <div
                 key={trade.id}
-                className="px-2 py-0.5 hover:bg-muted/20 dark:hover:bg-white/5 transition-colors"
+                className="px-2 py-0.5 hover:bg-[#2b3139]/50 transition-colors"
               >
                 <div className="grid grid-cols-3 gap-2 text-[10px] font-mono">
                   <div className={`font-semibold ${
-                    trade.side === 'buy' ? 'text-success' : 'text-error'
+                    trade.side === 'buy' ? 'text-[#0ecb81]' : 'text-[#f6465d]'
                   }`}>
                     {formatPrice(trade.price)}
                   </div>
-                  <div className="text-right text-dark dark:text-white">
+                  <div className="text-right text-white">
                     {formatAmount(trade.amount)}
                   </div>
-                  <div className="text-right text-muted">
+                  <div className="text-right text-[#848e9c]">
                     {formatTime(trade.time)}
                   </div>
                 </div>
@@ -130,8 +130,8 @@ export default function MarketTrades({ selectedPair }: MarketTradesProps) {
       ) : (
         <div className="flex-1 flex items-center justify-center p-4">
           <div className="text-center">
-            <Icon icon="ph:swap" className="mx-auto mb-2 text-muted" width={24} />
-            <p className="text-xs text-muted">No trades yet</p>
+            <Icon icon="ph:swap" className="mx-auto mb-2 text-[#848e9c]" width={24} />
+            <p className="text-xs text-[#848e9c]">No trades yet</p>
           </div>
         </div>
       )}

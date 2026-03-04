@@ -1,17 +1,11 @@
 'use client';
 
-import React, { useEffect, useRef, useState, useCallback, useContext, memo } from 'react';
+import React, { useEffect, useRef, useState, useCallback, memo } from 'react';
 import { Icon } from '@iconify/react';
 import { cn } from '@/lib/utils';
-import { ChartEngine, Candle } from '@/lib/chart/ChartEngine';
-import { DataFeedService, Interval as TimeInterval } from '@/lib/chart/DataFeedService';
-import { CustomizerContext } from '@/app/context/customizerContext';
-
-// Symbol mapping - convert "BTC-USDT" to "BTCUSDT"
-const toKlineSymbol = (symbol: string): string => symbol.replace('-', '');
 
 // Timeframe options
-const TIMEFRAMES: { label: string; value: TimeInterval }[] = [
+const TIMEFRAMES: { label: string; value: string }[] = [
   { label: '1m', value: '1m' },
   { label: '5m', value: '5m' },
   { label: '15m', value: '15m' },
@@ -29,15 +23,10 @@ interface LiveChartProps {
 
 const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const chartEngineRef = useRef<ChartEngine | null>(null);
-  const pollingIntervalRef = useRef<number | null>(null);
-  const isFirstLoad = useRef(true);
-  const lastCandleTimeRef = useRef<number>(0);
+  const chartRef = useRef<any>(null);
+  const seriesRef = useRef<any>(null);
 
-  const { activeMode } = useContext(CustomizerContext);
-  const isDark = activeMode === 'dark';
-
-  const [interval, setTimeInterval] = useState<TimeInterval>('1d');
+  const [interval, setTimeInterval] = useState('1d');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showLevelsForm, setShowLevelsForm] = useState(false);
@@ -50,154 +39,102 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
     setTempTakeProfit(takeProfit || '');
   }, [stopLoss, takeProfit]);
 
-  // Initialize chart engine (once)
+  // Initialize chart
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const engine = new ChartEngine(containerRef.current);
-    engine.initChart(isDark);
-    chartEngineRef.current = engine;
+    const initChart = async () => {
+      try {
+        const { createChart } = await import('lightweight-charts');
+        
+        const chart = createChart(containerRef.current!, {
+          layout: {
+            textColor: '#848e9c',
+            background: { color: '#181a20' },
+          },
+          width: containerRef.current!.clientWidth,
+          height: containerRef.current!.clientHeight,
+          timeScale: {
+            timeVisible: true,
+            secondsVisible: false,
+          },
+        });
 
-    return () => {
-      engine.destroy();
-      chartEngineRef.current = null;
-    };
-  }, []);
+        const candleSeries = chart.addCandlestickSeries({
+          upColor: '#0ecb81',
+          downColor: '#f6465d',
+          borderUpColor: '#0ecb81',
+          borderDownColor: '#f6465d',
+          wickUpColor: '#0ecb81',
+          wickDownColor: '#f6465d',
+        });
 
-  // Theme sync
-  useEffect(() => {
-    chartEngineRef.current?.updateTheme(isDark);
-  }, [isDark]);
+        chartRef.current = chart;
+        seriesRef.current = candleSeries;
 
-  // Fetch latest candle data
-  const fetchLatestCandle = useCallback(async (sym: string, int: TimeInterval) => {
-    try {
-      const klineSym = toKlineSymbol(sym);
-      const response = await fetch(`/api/market/${klineSym}/klines?type=${int}&limit=1`);
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch latest candle');
-      }
+        // Generate mock data
+        const mockData = generateMockCandles();
+        candleSeries.setData(mockData);
+        chart.timeScale().fitContent();
 
-      const data = await response.json();
-      const klineData = Array.isArray(data) ? data : (data.data || []);
-      
-      if (klineData.length > 0) {
-        const latestKline = klineData[0];
-        const candle: Candle = {
-          time: Math.floor(latestKline.time / 1000),
-          open: parseFloat(latestKline.open),
-          high: parseFloat(latestKline.high),
-          low: parseFloat(latestKline.low),
-          close: parseFloat(latestKline.close),
-          volume: parseFloat(latestKline.volume),
+        setIsLoading(false);
+
+        // Handle resize
+        const handleResize = () => {
+          if (containerRef.current) {
+            chart.applyOptions({
+              width: containerRef.current.clientWidth,
+              height: containerRef.current.clientHeight,
+            });
+          }
         };
 
-        // Only update if this is a new or updated candle
-        if (candle.time >= lastCandleTimeRef.current) {
-          lastCandleTimeRef.current = candle.time;
-          chartEngineRef.current?.updateCandle(candle);
-        }
-      }
-    } catch (err) {
-      console.error('[LiveChart] Polling error:', err);
-    }
-  }, []);
-
-  // Start polling for updates
-  const startPolling = useCallback((sym: string, int: TimeInterval) => {
-    // Clear any existing interval
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-    }
-
-    // Poll every 3 seconds
-    pollingIntervalRef.current = setInterval(() => {
-      fetchLatestCandle(sym, int);
-    }, 3000) as unknown as number;
-  }, [fetchLatestCandle]);
-
-  // Stop polling
-  const stopPolling = useCallback(() => {
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-      pollingIntervalRef.current = null;
-    }
-  }, []);
-
-  // Load initial data
-  const loadData = useCallback(
-    async (sym: string, int: TimeInterval) => {
-      setIsLoading(true);
-      setError(null);
-
-      // Stop any existing polling
-      stopPolling();
-
-      const klineSym = toKlineSymbol(sym);
-
-      try {
-        const response = await fetch(`/api/market/${klineSym}/klines?type=${int}`);
-        
-        if (!response.ok) {
-          throw new Error(`Failed to fetch historical data: ${response.statusText}`);
-        }
-
-        const data = await response.json();
-        const klineData = Array.isArray(data) ? data : (data.data || []);
-
-        if (klineData.length > 0) {
-          const candles: Candle[] = klineData.map((kline: any) => ({
-            time: Math.floor(kline.time / 1000),
-            open: parseFloat(kline.open),
-            high: parseFloat(kline.high),
-            low: parseFloat(kline.low),
-            close: parseFloat(kline.close),
-            volume: parseFloat(kline.volume),
-          }));
-
-          chartEngineRef.current?.setHistoricalData(candles);
-          
-          // Store the latest candle time
-          if (candles.length > 0) {
-            lastCandleTimeRef.current = candles[candles.length - 1].time;
-          }
-
-          // Start polling for live updates
-          startPolling(sym, int);
-        } else {
-          setError('No data available for this pair');
-        }
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
       } catch (err) {
-        console.error('[LiveChart] Load error:', err);
-        setError('Failed to load chart data');
-      } finally {
+        console.error('Chart initialization error:', err);
+        setError('Failed to load chart');
         setIsLoading(false);
-        isFirstLoad.current = false;
       }
-    },
-    [startPolling, stopPolling]
-  );
+    };
 
-  // React to symbol / interval changes
-  useEffect(() => {
-    let cancelled = false;
-
-    const timer = setTimeout(() => {
-      if (!cancelled) loadData(symbol, interval);
-    }, 50);
+    initChart();
 
     return () => {
-      cancelled = true;
-      clearTimeout(timer);
-      stopPolling();
+      if (chartRef.current) {
+        chartRef.current.remove();
+      }
     };
-  }, [symbol, interval, loadData, stopPolling]);
+  }, []);
 
-  // Interval change handler
-  const handleIntervalChange = (newInterval: TimeInterval) => {
+  const generateMockCandles = () => {
+    const candles = [];
+    const now = Math.floor(Date.now() / 1000);
+    const basePrice = 69201.46;
+
+    for (let i = 100; i >= 0; i--) {
+      const time = now - i * 86400; // Daily candles
+      const open = basePrice + (Math.random() - 0.5) * 1000;
+      const close = open + (Math.random() - 0.5) * 1000;
+      const high = Math.max(open, close) + Math.random() * 500;
+      const low = Math.min(open, close) - Math.random() * 500;
+
+      candles.push({
+        time,
+        open,
+        high,
+        low,
+        close,
+      });
+    }
+
+    return candles;
+  };
+
+  const handleIntervalChange = (newInterval: string) => {
     if (newInterval === interval) return;
     setTimeInterval(newInterval);
+    // In a real app, you'd fetch new data for the selected interval
   };
 
   const handleUpdateLevels = () => {
@@ -217,7 +154,7 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
             {symbol.replace('-', '/')}
           </span>
           <span className="text-[8px] text-[#848e9c]">Candlestick</span>
-          
+
           {/* TP/SL Indicators */}
           {(stopLoss || takeProfit) && (
             <div className="flex items-center gap-1 text-[8px]">
@@ -317,14 +254,7 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
 
       {/* Chart canvas */}
       <div className="relative flex-1 min-h-0">
-        {/* Watermark */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0">
-          <span className="text-6xl md:text-8xl font-bold text-white/5 select-none">
-            WorldStreet
-          </span>
-        </div>
-        
-        <div ref={containerRef} className="w-full h-full relative z-0" />
+        <div ref={containerRef} className="w-full h-full" />
 
         {/* Loading overlay */}
         {isLoading && (
@@ -342,12 +272,6 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
             <div className="flex flex-col items-center gap-2 text-center px-6">
               <Icon icon="solar:chart-broken" className="h-6 w-6 text-[#848e9c]" />
               <p className="text-[9px] text-[#848e9c]">{error}</p>
-              <button
-                onClick={() => loadData(symbol, interval)}
-                className="text-[9px] text-[#fcd535] hover:underline cursor-pointer"
-              >
-                Retry
-              </button>
             </div>
           </div>
         )}
