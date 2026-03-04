@@ -82,12 +82,9 @@ export default function BinanceSpotPage() {
   const isSpotPage = pathname === '/spot';
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-[#0b0e11]" style={{ 
-      marginTop: isSpotPage ? '0' : 'var(--header-height, 64px)',
-      height: isSpotPage ? '100vh' : 'calc(100vh - var(--header-height, 64px))'
-    }}>
+    <div className="min-h-screen flex flex-col bg-[#0b0e11]">
       {/* Top Header Bar */}
-      <div className="h-16 flex items-center justify-between px-6 border-b border-[#1e2329] bg-[#0b0e11] flex-shrink-0">
+      <div className="h-16 flex items-center justify-between px-6 border-b border-[#1e2329] bg-[#0b0e11] sticky top-0 z-50">
         {/* Left: Logo + Nav */}
         <div className="flex items-center gap-8">
           <div className="flex items-center gap-2">
@@ -122,18 +119,18 @@ export default function BinanceSpotPage() {
       </div>
 
       {/* Main Trading Grid */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex flex-col">
         {/* Top Section: 3 Columns */}
-        <div className="flex-1 grid grid-cols-[300px_1fr_320px] overflow-hidden">
-          {/* LEFT: Order Book (Full Height) */}
-          <div className="border-r border-[#1e2329] flex flex-col overflow-hidden">
+        <div className="grid grid-cols-[300px_1fr_320px]">
+          {/* LEFT: Order Book */}
+          <div className="border-r border-[#1e2329] min-h-[800px]">
             <BinanceOrderBook selectedPair={selectedPair} />
           </div>
 
           {/* CENTER: Chart + Order Form */}
-          <div className="border-r border-[#1e2329] flex flex-col overflow-hidden">
+          <div className="border-r border-[#1e2329] flex flex-col">
             {/* Pair Header */}
-            <div className="px-4 py-3 border-b border-[#1e2329] flex items-center justify-between flex-shrink-0">
+            <div className="px-4 py-3 border-b border-[#1e2329] flex items-center justify-between">
               <div className="flex items-center gap-6">
                 <div className="flex items-center gap-2">
                   <span className="text-xl font-bold text-white">{selectedPair.replace('-', '/')}</span>
@@ -171,7 +168,7 @@ export default function BinanceSpotPage() {
             </div>
 
             {/* Chart */}
-            <div className="flex-1 overflow-hidden bg-[#0b0e11]">
+            <div className="h-[600px] bg-[#0b0e11]">
               <LiveChart 
                 symbol={selectedPair}
                 stopLoss={chartStopLoss}
@@ -181,7 +178,7 @@ export default function BinanceSpotPage() {
             </div>
 
             {/* Order Form */}
-            <div className="h-[280px] border-t border-[#1e2329] flex-shrink-0">
+            <div className="border-t border-[#1e2329]">
               <BinanceOrderForm 
                 selectedPair={selectedPair}
                 onTradeExecuted={handleTradeExecuted}
@@ -190,9 +187,9 @@ export default function BinanceSpotPage() {
           </div>
 
           {/* RIGHT: Market List + Market Trades */}
-          <div className="flex flex-col overflow-hidden">
+          <div className="flex flex-col">
             {/* Market List */}
-            <div className="flex-1 overflow-hidden">
+            <div className="h-[600px]">
               <BinanceMarketList 
                 selectedPair={selectedPair}
                 onSelectPair={handleSelectPair}
@@ -200,12 +197,12 @@ export default function BinanceSpotPage() {
             </div>
 
             {/* Market Trades */}
-            <div className="h-[280px] border-t border-[#1e2329] flex-shrink-0 bg-[#0b0e11]">
-              <div className="h-full flex flex-col">
-                <div className="px-4 py-2 border-b border-[#1e2329] flex items-center justify-between flex-shrink-0">
+            <div className="border-t border-[#1e2329] bg-[#0b0e11]">
+              <div className="flex flex-col">
+                <div className="px-4 py-2 border-b border-[#1e2329] flex items-center justify-between">
                   <span className="text-xs font-medium text-[#848e9c]">Market Trades</span>
                 </div>
-                <div className="flex-1 overflow-hidden">
+                <div className="h-[400px]">
                   <MarketTrades selectedPair={selectedPair} />
                 </div>
               </div>
@@ -214,7 +211,7 @@ export default function BinanceSpotPage() {
         </div>
 
         {/* Bottom Section: Full Width Panel */}
-        <div className="h-[200px] border-t border-[#1e2329] flex-shrink-0">
+        <div className="border-t border-[#1e2329]">
           <BinanceBottomPanel
             refreshKey={refreshKey}
             selectedChartSymbol={selectedPair}

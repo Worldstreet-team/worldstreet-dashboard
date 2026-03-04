@@ -104,7 +104,7 @@ export default function MarketTrades({ selectedPair }: MarketTradesProps) {
           </div>
 
           {/* Trades List */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto scrollbar-hide">
             {trades.map((trade) => (
               <div
                 key={trade.id}

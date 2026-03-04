@@ -28,7 +28,7 @@ export default function BinanceBottomPanel({
   ];
 
   return (
-    <div className="h-full flex flex-col bg-[#0b0e11] text-white border-t border-[#1e2329]">
+    <div className="flex flex-col bg-[#0b0e11] text-white min-h-[300px]">
       {/* Tab Headers */}
       <div className="flex items-center px-4 border-b border-[#1e2329] flex-shrink-0">
         {tabs.map((tab) => (
@@ -64,7 +64,7 @@ export default function BinanceBottomPanel({
       </div>
 
       {/* Tab Content */}
-      <div className="flex-1 overflow-auto scrollbar-hide">
+      <div className="max-h-[250px] overflow-auto scrollbar-hide">
         {activeTab === 'open-orders' && (
           <div className="p-8 text-center">
             <div className="w-16 h-16 rounded-full bg-[#1e2329] flex items-center justify-center mx-auto mb-4">
