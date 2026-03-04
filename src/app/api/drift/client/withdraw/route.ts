@@ -52,11 +52,8 @@ export async function POST(request: NextRequest) {
       wallet,
       programID: new PublicKey(DRIFT_PROGRAM_ID),
       accountSubscription: {
-        type: 'grpc',
-        grpcConfigs: [{
-          endpoint: process.env.NEXT_PUBLIC_YELLOWSTONE_GRPC_ENDPOINT || 'https://solana-mainnet.g.alchemy.com/',
-          token: process.env.NEXT_PUBLIC_YELLOWSTONE_GRPC_TOKEN,
-        }],
+        type: 'websocket',
+        resubTimeoutMs: 30000,
       },
       subAccountIds: [0]
     });
