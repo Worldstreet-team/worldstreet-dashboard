@@ -164,7 +164,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     const initConnection = async () => {
       const { Connection } = await import('@solana/web3.js');
       // Use Alchemy RPC - replace with your actual API key
-      const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+      const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://solana-mainnet.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITN';
       
       const conn = new Connection(rpcUrl, {
         commitment: 'confirmed',
