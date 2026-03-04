@@ -190,13 +190,17 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       // Create Drift client with POLLING (no WebSocket)
       const DRIFT_PROGRAM_ID = process.env.NEXT_PUBLIC_DRIFT_PROGRAM_ID || 'dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH';
       
+      // Import BulkAccountLoader for polling
+      const { BulkAccountLoader } = await import('@drift-labs/sdk');
+      const accountLoader = new BulkAccountLoader(connection, 'confirmed', 1000);
+      
       const client = new DriftClient({
         connection,
         wallet,
         programID: new PublicKey(DRIFT_PROGRAM_ID),
         accountSubscription: {
           type: 'polling',
-          accountLoader: undefined,
+          accountLoader,
         },
       });
       
