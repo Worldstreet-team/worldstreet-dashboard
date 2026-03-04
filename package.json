@@ -10,6 +10,7 @@
     "postinstall": "flowbite-react patch"
   },
   "dependencies": {
+    "@allbridge/bridge-core-sdk": "^3.29.1",
     "@clerk/nextjs": "^6.37.4",
     "@iconify/react": "^6.0.0",
     "@radix-ui/react-dialog": "^1.1.15",
