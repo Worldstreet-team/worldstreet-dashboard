@@ -1,28 +1,24 @@
-@import "tailwindcss";
-@import "flowbite-react/plugin/tailwindcss";
-@source "../../../.flowbite-react/class-list.json";
+@import 'tailwindcss';
+@plugin 'flowbite-react/plugin/tailwindcss';
+@import './layouts/container.css' layer(utilities);
+@import './layouts/sidebar.css' layer(utilities);
+@import './layouts/horizontal.css' layer(utilities);
+@import './layouts/header.css' layer(utilities);
+@import './pages/dashboards.css' layer(utilities);
+@import './pages/widgets.css' layer(utilities);
+@import './pages/auth.css' layer(utilities);
+@import './pages/app.css' layer(utilities);
+@import './theme/default-colors.css' layer(utilities);
+@import './theme/dark.css' layer(utilities);
+@import './override/reboot.css' layer(utilities);
+@import './layouts/rtl.css' layer(utilities);
 
-@import './layouts/container.css';
-@import './layouts/sidebar.css';
-@import './layouts/horizontal.css';
-@import './layouts/header.css';
-@import './pages/dashboards.css';
-@import './pages/widgets.css';
-@import './pages/auth.css';
-@import './pages/app.css';
-@import './theme/default-colors.css';
-@import './theme/dark.css';
-@import './override/reboot.css';
-@import './layouts/rtl.css';
+@source '../../../node_modules/flowbite-react/**/*.js';
+@source '../../../.flowbite-react/class-list.json';
+
+@custom-variant dark (&:is(.dark *));
 
 @theme {
-  /* Custom colors - these will generate utilities like bg-dark, text-dark, etc. */
-  --color-dark: #0f172a;
-  --color-link: #334155;
-  --color-darklink: #94a3b8;
-}
-
-:root {
   --shadow-md: 0px 1px 4px 0px rgba(133, 146, 173, 0.1);
   --shadow-lg: 0 1rem 3rem rgba(0, 0, 0, 0.175);
   --shadow-dark-md:
