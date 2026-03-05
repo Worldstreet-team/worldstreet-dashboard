@@ -313,6 +313,14 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         console.log('[DriftContext] Client not subscribed, subscribing...');
         await client.subscribe();
       }
+      
+      // Fetch latest account data
+      const driftUser = client.getUser();
+      if (driftUser && driftUser.fetchAccounts) {
+        await driftUser.fetchAccounts();
+        console.log('[DriftContext] User accounts fetched successfully');
+      }
+      
       console.log('[DriftContext] Accounts refreshed via polling subscription');
     } catch (err) {
       console.error('[DriftContext] Error refreshing accounts:', err);
@@ -429,7 +437,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       let openPositions = 0;
       
       try {
-        perpPositions = driftUser.getPerpPositions();
+        perpPositions = driftUser.getActivePerpPositions ? driftUser.getActivePerpPositions() : [];
         
         if (perpPositions && Array.isArray(perpPositions)) {
           for (const position of perpPositions) {
@@ -499,7 +507,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       const positionsList = [];
       
       try {
-        const perpPositions = driftUser.getPerpPositions();
+        const perpPositions = driftUser.getActivePerpPositions ? driftUser.getActivePerpPositions() : [];
         
         if (perpPositions && Array.isArray(perpPositions)) {
           for (const position of perpPositions) {
