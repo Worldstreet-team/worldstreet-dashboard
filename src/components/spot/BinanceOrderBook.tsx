@@ -44,6 +44,21 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
   const currentTopicRef = useRef<string | null>(null);
 
   useEffect(() => {
+    // Close existing connection and clear state
+    if (wsRef.current) {
+      console.log('Closing existing WebSocket connection for pair change');
+      wsRef.current.close();
+      wsRef.current = null;
+      currentTopicRef.current = null;
+      setConnected(false);
+    }
+
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = undefined;
+    }
+
+    // Connect to new pair
     connectWebSocket();
     
     return () => {
@@ -51,19 +66,11 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
         clearTimeout(reconnectTimeoutRef.current);
       }
       if (wsRef.current) {
-        // Unsubscribe from current topic before closing
-        if (currentTopicRef.current) {
-          const unsubscribeMessage = {
-            id: Date.now().toString(),
-            type: 'unsubscribe',
-            topic: currentTopicRef.current,
-            privateChannel: false,
-            response: true
-          };
-          wsRef.current.send(JSON.stringify(unsubscribeMessage));
-        }
+        console.log('Cleaning up WebSocket connection');
         wsRef.current.close();
+        wsRef.current = null;
       }
+      currentTopicRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPair]);
@@ -89,23 +96,10 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log('KuCoin WebSocket connected');
+        console.log('KuCoin WebSocket connected for pair:', selectedPair);
         setConnected(true);
         
-        // Unsubscribe from previous topic if exists
-        if (currentTopicRef.current && currentTopicRef.current !== `/spotMarket/level2Depth50:${selectedPair}`) {
-          const unsubscribeMessage = {
-            id: Date.now().toString(),
-            type: 'unsubscribe',
-            topic: currentTopicRef.current,
-            privateChannel: false,
-            response: true
-          };
-          ws.send(JSON.stringify(unsubscribeMessage));
-          console.log('Unsubscribed from:', currentTopicRef.current);
-        }
-        
-        // Subscribe to new order book updates
+        // Subscribe to order book updates for the current pair
         const newTopic = `/spotMarket/level2Depth50:${selectedPair}`;
         const subscribeMessage = {
           id: Date.now().toString(),

@@ -117,6 +117,49 @@ export default function BinanceSpotPage() {
     return () => clearInterval(interval);
   }, []);
 
+  // Fetch specific pair data when selectedPair changes
+  useEffect(() => {
+    const fetchSelectedPairData = async () => {
+      if (!selectedPair) return;
+      
+      try {
+        const response = await fetch(`/api/kucoin/ticker?symbol=${selectedPair}`);
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch ${selectedPair}`);
+        }
+
+        const result = await response.json();
+        
+        if (result.code !== '200000' || !result.data) {
+          throw new Error(`Invalid response for ${selectedPair}`);
+        }
+
+        const data = result.data;
+        const pairName = selectedPair.split('-')[0];
+        const fullName = pairName === 'BTC' ? 'Bitcoin' : 
+                        pairName === 'ETH' ? 'Ethereum' : 
+                        pairName === 'SOL' ? 'Solana' : pairName;
+
+        setPairData(prev => ({
+          ...prev,
+          [selectedPair]: {
+            name: fullName,
+            price: parseFloat(data.last) || 0,
+            change24h: parseFloat(data.changeRate) * 100 || 0,
+            high24h: parseFloat(data.high) || 0,
+            low24h: parseFloat(data.low) || 0,
+            volume24h: parseFloat(data.vol) || 0
+          }
+        }));
+      } catch (error) {
+        console.error('Error fetching selected pair data:', error);
+      }
+    };
+
+    fetchSelectedPairData();
+  }, [selectedPair]);
+
   // Update price when pair changes
   useEffect(() => {
     const currentPairData = pairData[selectedPair];

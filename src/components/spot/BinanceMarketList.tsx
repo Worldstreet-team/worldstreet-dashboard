@@ -60,8 +60,8 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
 
     fetchMarketData();
     
-    // Refresh every 10 seconds
-    const interval = setInterval(fetchMarketData, 10000);
+    // Refresh every 3 minutes (180000ms)
+    const interval = setInterval(fetchMarketData, 180000);
     return () => clearInterval(interval);
   }, []);
 
@@ -112,7 +112,7 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
   };
 
   return (
-    <div className="h-full max-h-[calc(60vh-200px)] flex flex-col bg-[#0b0e11] text-white overflow-hidden">
+    <div className="h-full max-h-[calc(80vh-200px)] flex flex-col bg-[#0b0e11] text-white overflow-hidden">
       {/* Search Bar */}
       <div className="p-3 border-b border-[#1e2329]">
         <div className="relative">
