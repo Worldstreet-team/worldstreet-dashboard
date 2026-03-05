@@ -104,7 +104,7 @@ export const PositionPanel: React.FC = () => {
         <button
           onClick={() => { refreshSummary(); refreshPositions(); }}
           disabled={isLoading}
-          className="p-1.5 hover:bg-[#2b3139] rounded transition-colors disabled:opacity-50"
+          className="p-2 hover:bg-[#2b3139] active:bg-[#2b3139]/80 rounded transition-all duration-200 disabled:opacity-50 active:scale-95 min-h-[44px] min-w-[44px] flex items-center justify-center touch-feedback"
           title="Refresh"
         >
           <Icon 
@@ -131,7 +131,7 @@ export const PositionPanel: React.FC = () => {
           </thead>
           <tbody>
             {positions.map((position) => (
-              <tr key={position.marketIndex} className="border-b border-[#2b3139] hover:bg-[#2b3139]/30 transition-colors">
+              <tr key={position.marketIndex} className="border-b border-[#2b3139] hover:bg-[#2b3139]/30 active:bg-[#2b3139]/50 transition-colors">
                 <td className="py-3 px-3 text-sm font-semibold text-white">
                   {getMarketSymbol(position.marketIndex)}
                 </td>
@@ -165,7 +165,7 @@ export const PositionPanel: React.FC = () => {
                   <button
                     onClick={() => handleClose(position.marketIndex)}
                     disabled={closingMarketIndex === position.marketIndex || isConfirmingClose}
-                    className="px-3 py-1.5 rounded text-xs font-bold bg-[#f6465d]/10 text-[#f6465d] hover:bg-[#f6465d]/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="px-3 py-2 rounded text-xs font-bold bg-[#f6465d]/10 text-[#f6465d] hover:bg-[#f6465d]/20 active:bg-[#f6465d]/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 active:scale-95 min-h-[36px] touch-feedback"
                   >
                     {closingMarketIndex === position.marketIndex ? (
                       isConfirmingClose ? (

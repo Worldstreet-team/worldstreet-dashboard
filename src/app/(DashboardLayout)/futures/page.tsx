@@ -113,7 +113,7 @@ export default function BinanceFuturesPage() {
   const isPositive = priceChange >= 0;
 
   return (
-    <div className="flex flex-col bg-[#181a20] w-full min-h-screen">
+    <div className="fixed inset-0 flex flex-col bg-[#181a20] overflow-hidden">
       {/* Top Header Bar - Desktop Only */}
       <div className="hidden md:flex h-12 items-center justify-between px-4 border-b border-[#2b3139] bg-[#181a20] shrink-0">
         {/* Left: Logo + Nav */}
@@ -173,7 +173,7 @@ export default function BinanceFuturesPage() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {/* Desktop Layout */}
         <div className="hidden md:grid md:grid-cols-[280px_1fr_340px] flex-1 min-h-0">
           {/* LEFT: Position Panel */}
@@ -218,10 +218,10 @@ export default function BinanceFuturesPage() {
                 </div>
                 <div className="flex items-baseline gap-2">
                   <span className={`text-xl font-semibold ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
-                    ${currentPrice.toFixed(2)}
+                    ${Number(currentPrice).toFixed(2)}
                   </span>
                   <span className="text-xs text-[#848e9c]">
-                    ${currentPrice.toFixed(2)}
+                    ${Number(currentPrice).toFixed(2)}
                   </span>
                 </div>
               </div>
@@ -229,7 +229,7 @@ export default function BinanceFuturesPage() {
                 <div className="flex flex-col">
                   <span className="text-[#848e9c]">24h Change</span>
                   <span className={`font-medium ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
-                    {isPositive ? '+' : ''}{priceChange.toFixed(2)}%
+                    {isPositive ? '+' : ''}{Number(priceChange).toFixed(2)}%
                   </span>
                 </div>
               </div>
@@ -278,7 +278,7 @@ export default function BinanceFuturesPage() {
               <div className="relative">
                 <button 
                   onClick={() => setShowMarketDropdown(!showMarketDropdown)}
-                  className="flex items-center gap-2 hover:bg-[#2b3139] px-2 py-1 rounded transition-colors"
+                  className="flex items-center gap-2 hover:bg-[#2b3139] active:bg-[#2b3139]/80 px-2 py-1 rounded transition-all duration-200 active:scale-95 min-h-[44px]"
                 >
                   <div className="flex items-center gap-1">
                     <span className="text-sm font-semibold text-white">{selectedMarket?.symbol || 'Select'}</span>
@@ -288,13 +288,13 @@ export default function BinanceFuturesPage() {
                 
                 {showMarketDropdown && (
                   <>
-                    <div className="fixed inset-0 z-40" onClick={() => setShowMarketDropdown(false)} />
-                    <div className="absolute left-0 top-full mt-2 bg-[#2b3139] rounded-lg shadow-lg z-50 min-w-[200px] max-h-60 overflow-y-auto scrollbar-hide">
+                    <div className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm animate-fadeIn" onClick={() => setShowMarketDropdown(false)} />
+                    <div className="absolute left-0 top-full mt-2 bg-[#2b3139] rounded-lg shadow-2xl z-50 min-w-[200px] max-h-60 overflow-y-auto scrollbar-hide animate-slideDown">
                       {markets.map((market) => (
                         <button
                           key={market.id}
                           onClick={() => handleSelectMarket(market)}
-                          className={`w-full px-4 py-3 text-left hover:bg-[#181a20] transition-colors ${
+                          className={`w-full px-4 py-3 text-left hover:bg-[#181a20] active:bg-[#181a20]/80 transition-all duration-200 min-h-[44px] ${
                             selectedMarket?.id === market.id ? 'bg-[#181a20]' : ''
                           }`}
                         >
@@ -310,10 +310,10 @@ export default function BinanceFuturesPage() {
             
             <div className="flex items-baseline gap-2 mb-2">
               <span className={`text-2xl font-bold ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
-                ${currentPrice.toFixed(2)}
+                ${Number(currentPrice).toFixed(2)}
               </span>
               <span className="text-sm text-[#848e9c]">
-                ${currentPrice.toFixed(2)}
+                ${Number(currentPrice).toFixed(2)}
               </span>
             </div>
 
@@ -321,7 +321,7 @@ export default function BinanceFuturesPage() {
               <div>
                 <span className="text-[#848e9c]">24h Change </span>
                 <span className={`font-medium ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
-                  {isPositive ? '+' : ''}{priceChange.toFixed(2)}%
+                  {isPositive ? '+' : ''}{Number(priceChange).toFixed(2)}%
                 </span>
               </div>
             </div>
@@ -333,10 +333,10 @@ export default function BinanceFuturesPage() {
               <button
                 key={tab}
                 onClick={() => setMobileActiveTab(tab)}
-                className={`px-4 py-3 text-xs font-medium whitespace-nowrap border-b-2 transition-colors ${
+                className={`px-4 py-3 text-xs font-medium whitespace-nowrap border-b-2 transition-all duration-200 active:scale-95 ${
                   mobileActiveTab === tab
                     ? 'border-[#fcd535] text-white'
-                    : 'border-transparent text-[#848e9c]'
+                    : 'border-transparent text-[#848e9c] active:text-white'
                 }`}
               >
                 {tab === 'chart' && 'Chart'}
@@ -347,60 +347,81 @@ export default function BinanceFuturesPage() {
           </div>
 
           {/* Tab Content */}
-          <div className="flex-1 min-h-0 relative">
-            {mobileActiveTab === 'chart' && (
-              <div className="absolute inset-0">
-                <FuturesChart symbol={selectedMarket?.symbol} isDarkMode={true} />
-              </div>
-            )}
+          <div className="flex-1 min-h-0 relative overflow-hidden">
+            {/* Chart Tab */}
+            <div 
+              className={`absolute inset-0 transition-all duration-300 ${
+                mobileActiveTab === 'chart' 
+                  ? 'translate-x-0 opacity-100' 
+                  : 'translate-x-full opacity-0 pointer-events-none'
+              }`}
+            >
+              <FuturesChart symbol={selectedMarket?.symbol} isDarkMode={true} />
+            </div>
             
-            {mobileActiveTab === 'positions' && (
-              <div className="absolute inset-0 overflow-y-auto scrollbar-hide p-4">
-                <PositionPanel />
-              </div>
-            )}
+            {/* Positions Tab */}
+            <div 
+              className={`absolute inset-0 overflow-y-auto scrollbar-hide p-4 transition-all duration-300 ${
+                mobileActiveTab === 'positions' 
+                  ? 'translate-x-0 opacity-100' 
+                  : '-translate-x-full opacity-0 pointer-events-none'
+              }`}
+            >
+              <PositionPanel />
+            </div>
             
-            {mobileActiveTab === 'info' && (
-              <div className="absolute inset-0 overflow-y-auto scrollbar-hide p-4 space-y-4 pb-24">
-                {needsInitialization ? (
-                  <div className="bg-[#2b3139] rounded-lg p-4">
-                    <h3 className="text-xs font-bold text-white mb-2 uppercase">Drift Account</h3>
-                    <p className="text-xs text-[#848e9c] mb-3">Account not initialized</p>
-                    <button
-                      onClick={handleInitialize}
-                      disabled={initializing}
-                      className="w-full py-2 bg-[#fcd535] hover:bg-[#fcd535]/90 text-[#181a20] rounded text-xs font-bold disabled:opacity-50"
-                    >
-                      {initializing ? 'Initializing...' : 'Initialize Account'}
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <DriftAccountStatus />
-                    <FuturesWalletBalance />
-                    <CollateralPanel />
-                    <RiskPanel />
-                  </>
-                )}
-              </div>
-            )}
+            {/* Info Tab */}
+            <div 
+              className={`absolute inset-0 overflow-y-auto scrollbar-hide p-4 space-y-4 pb-24 transition-all duration-300 ${
+                mobileActiveTab === 'info' 
+                  ? 'translate-x-0 opacity-100' 
+                  : 'translate-x-full opacity-0 pointer-events-none'
+              }`}
+            >
+              {needsInitialization ? (
+                <div className="bg-[#2b3139] rounded-lg p-4 animate-fadeIn">
+                  <h3 className="text-xs font-bold text-white mb-2 uppercase">Drift Account</h3>
+                  <p className="text-xs text-[#848e9c] mb-3">Account not initialized</p>
+                  <button
+                    onClick={handleInitialize}
+                    disabled={initializing}
+                    className="w-full py-2.5 bg-[#fcd535] hover:bg-[#fcd535]/90 active:scale-95 text-[#181a20] rounded text-xs font-bold disabled:opacity-50 transition-all duration-200"
+                  >
+                    {initializing ? 'Initializing...' : 'Initialize Account'}
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <DriftAccountStatus />
+                  <FuturesWalletBalance />
+                  <CollateralPanel />
+                  <RiskPanel />
+                </>
+              )}
+            </div>
           </div>
 
           {/* Fixed Bottom Action Buttons */}
-          <div className="grid grid-cols-2 gap-0 border-t border-[#2b3139] bg-[#181a20] safe-area-bottom shrink-0">
+          <div className="grid grid-cols-2 gap-0 border-t border-[#2b3139] bg-[#181a20] safe-area-bottom shrink-0 shadow-[0_-4px_12px_rgba(0,0,0,0.3)]">
             <button 
               onClick={() => handleOpenOrderModal('long')}
               disabled={!isInitialized}
-              className="py-4 bg-[#0ecb81] hover:bg-[#0ecb81]/90 text-white font-semibold text-base transition-colors disabled:opacity-50"
+              className="py-4 bg-[#0ecb81] hover:bg-[#0ecb81]/90 active:bg-[#0ecb81]/80 text-white font-semibold text-base transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 min-h-[56px]"
             >
-              Long
+              <span className="flex items-center justify-center gap-2">
+                <Icon icon="ph:arrow-up-bold" width={18} />
+                Long
+              </span>
             </button>
             <button 
               onClick={() => handleOpenOrderModal('short')}
               disabled={!isInitialized}
-              className="py-4 bg-[#f6465d] hover:bg-[#f6465d]/90 text-white font-semibold text-base transition-colors disabled:opacity-50"
+              className="py-4 bg-[#f6465d] hover:bg-[#f6465d]/90 active:bg-[#f6465d]/80 text-white font-semibold text-base transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 min-h-[56px]"
             >
-              Short
+              <span className="flex items-center justify-center gap-2">
+                <Icon icon="ph:arrow-down-bold" width={18} />
+                Short
+              </span>
             </button>
           </div>
         </div>
