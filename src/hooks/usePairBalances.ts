@@ -130,7 +130,7 @@ export function usePairBalances(
   };
 
   /**
-   * Fetch balances from the API
+   * Fetch balances from the API (backend via Next.js proxy)
    */
   const fetchBalances = useCallback(async () => {
     // Reset if no user
@@ -148,16 +148,9 @@ export function usePairBalances(
     setError(null);
 
     try {
-      // Build query parameters
-      const params = new URLSearchParams({
-        assets: `${baseAsset},${quoteAsset}`,
-      });
-
-      if (chain) {
-        params.append('chain', chain);
-      }
-
-      const url = `/api/users/${userId}/balances?${params.toString()}`;
+      // Call Next.js API route which proxies to backend
+      // Backend returns ALL balances with real-time RPC data
+      const url = `/api/users/${userId}/balances`;
       console.log('[usePairBalances] Fetching from:', url);
 
       const response = await fetch(url);
@@ -173,47 +166,53 @@ export function usePairBalances(
       console.log('[usePairBalances] Parsed balances:', balances);
 
       if (balances.length === 0) {
-        console.warn('[usePairBalances] No balances returned from API');
+        console.warn('[usePairBalances] No balances returned from backend');
       }
 
+      // Determine which chain to use for USDT based on the base asset
+      const usdtChain = getUSDTChain(baseAsset);
+      console.log('[usePairBalances] USDT chain for', baseAsset, ':', usdtChain);
+
       // Find balance for base asset (tokenIn - what you're selling/trading)
+      // Match by asset name and chain
       const baseBalance = balances.find(
         (b: AssetBalance) => {
-          const match = b.asset.toUpperCase() === baseAsset.toUpperCase();
-          console.log(`[usePairBalances] Checking base asset: ${b.asset} === ${baseAsset}? ${match}`);
-          return match;
+          const matchesAsset = b.asset.toUpperCase() === baseAsset.toUpperCase();
+          const matchesChain = chain ? b.chain.toLowerCase() === chain.toLowerCase() : true;
+          console.log(`[usePairBalances] Checking base: ${b.asset}(${b.chain}) === ${baseAsset}(${chain})? asset=${matchesAsset}, chain=${matchesChain}`);
+          return matchesAsset && matchesChain;
         }
       );
       const tokenInValue = baseBalance ? parseFloat(baseBalance.available_balance || '0') : 0;
       console.log('[usePairBalances] Base asset balance:', { 
         baseAsset, 
+        chain,
         balance: baseBalance, 
         value: tokenInValue,
-        allAssets: balances.map((b: AssetBalance) => b.asset)
+        allAssets: balances.map((b: AssetBalance) => `${b.asset}(${b.chain})`)
       });
       setTokenIn(isNaN(tokenInValue) ? 0 : tokenInValue);
 
       // Find balance for quote asset (tokenOut - what you're buying with, typically USDT)
+      // For USDT, match both asset AND the correct chain
       const quoteBalance = balances.find(
         (b: AssetBalance) => {
-          // Match both asset AND chain for USDT
           if (quoteAsset.toUpperCase() === 'USDT') {
-            const usdtChain = getUSDTChain(baseAsset);
             const matchesAsset = b.asset.toUpperCase() === 'USDT';
             const matchesChain = b.chain.toLowerCase() === usdtChain.toLowerCase();
-            console.log(`[usePairBalances] Checking USDT: asset=${b.asset}, chain=${b.chain}, expected=${usdtChain}, matches=${matchesAsset && matchesChain}`);
+            console.log(`[usePairBalances] Checking USDT: ${b.asset}(${b.chain}) expected=${usdtChain}, matches=${matchesAsset && matchesChain}`);
             return matchesAsset && matchesChain;
           }
-          const match = b.asset.toUpperCase() === quoteAsset.toUpperCase();
-          console.log(`[usePairBalances] Checking quote asset: ${b.asset} === ${quoteAsset}? ${match}`);
-          return match;
+          const matchesAsset = b.asset.toUpperCase() === quoteAsset.toUpperCase();
+          const matchesChain = chain ? b.chain.toLowerCase() === chain.toLowerCase() : true;
+          console.log(`[usePairBalances] Checking quote: ${b.asset}(${b.chain}) === ${quoteAsset}(${chain})? asset=${matchesAsset}, chain=${matchesChain}`);
+          return matchesAsset && matchesChain;
         }
       );
       let tokenOutValue = quoteBalance ? parseFloat(quoteBalance.available_balance || '0') : 0;
       
-      // If quote asset is USDT and we didn't find it in spot balances with correct chain, try fallback
+      // If quote asset is USDT and we didn't find it with the expected chain, try fallback
       if (quoteAsset.toUpperCase() === 'USDT' && tokenOutValue === 0) {
-        const usdtChain = getUSDTChain(baseAsset);
         console.log(`[usePairBalances] USDT not found on ${usdtChain} chain, trying fallback...`);
         
         // Try Tron as fallback
@@ -221,11 +220,19 @@ export function usePairBalances(
         if (tronUSDT > 0) {
           tokenOutValue = tronUSDT;
           console.log('[usePairBalances] Using USDT from Tron wallet (fallback):', tronUSDT);
+        } else {
+          // Try any USDT balance as last resort
+          const anyUSDT = balances.find((b: AssetBalance) => b.asset.toUpperCase() === 'USDT');
+          if (anyUSDT) {
+            tokenOutValue = parseFloat(anyUSDT.available_balance || '0');
+            console.log('[usePairBalances] Using any USDT balance (last resort):', tokenOutValue, 'from chain:', anyUSDT.chain);
+          }
         }
       }
       
       console.log('[usePairBalances] Quote asset balance:', { 
         quoteAsset, 
+        expectedChain: usdtChain,
         balance: quoteBalance, 
         value: tokenOutValue,
         allAssets: balances.map((b: AssetBalance) => `${b.asset}(${b.chain})`)
