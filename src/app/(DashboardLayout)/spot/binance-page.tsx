@@ -45,6 +45,21 @@ export default function BinanceSpotPage() {
 
   const [tokenIn, tokenOut] = selectedPair.split('-');
 
+  // Close pair selector when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showPairSelector) {
+        const target = event.target as HTMLElement;
+        if (!target.closest('.pair-selector-container')) {
+          setShowPairSelector(false);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showPairSelector]);
+
   // Fetch real-time data from KuCoin
   useEffect(() => {
     const fetchPairData = async () => {
@@ -237,9 +252,34 @@ export default function BinanceSpotPage() {
             {/* Pair Header */}
             <div className="px-3 py-2 border-b border-[#2b3139] flex items-center justify-between shrink-0">
               <div className="flex items-center gap-4">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-base font-semibold text-white">{selectedPair.replace('-', '/')}</span>
-                  <Icon icon="ph:caret-down" width={14} className="text-[#848e9c]" />
+                <div className="relative pair-selector-container">
+                  <button
+                    onClick={() => setShowPairSelector(!showPairSelector)}
+                    className="flex items-center gap-1.5 hover:bg-[#2b3139] px-2 py-1 rounded transition-colors"
+                  >
+                    <span className="text-base font-semibold text-white">{selectedPair.replace('-', '/')}</span>
+                    <Icon icon="ph:caret-down" width={14} className="text-[#848e9c]" />
+                  </button>
+                  
+                  {/* Desktop Pair Selector Dropdown */}
+                  {showPairSelector && (
+                    <div className="absolute left-0 top-full mt-1 bg-[#2b3139] rounded-lg shadow-lg z-50 min-w-[200px]">
+                      {Object.keys(pairData).map((pair) => (
+                        <button
+                          key={pair}
+                          onClick={() => handleSelectPair(pair)}
+                          className={`w-full px-4 py-3 text-left hover:bg-[#1e2329] transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                            selectedPair === pair ? 'bg-[#1e2329]' : ''
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-white font-medium text-sm">{pair.replace('-', '/')}</span>
+                            <span className="text-[#848e9c] text-xs">${pairData[pair]?.price.toFixed(2) || '0.00'}</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-baseline gap-2">
                   <span className={`text-xl font-semibold ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
@@ -320,38 +360,40 @@ export default function BinanceSpotPage() {
           {/* Pair Info Header */}
           <div className="px-4 py-3 border-b border-[#2b3139] bg-[#181a20] shrink-0">
             <div className="flex items-center justify-between mb-2">
-              <button 
-                onClick={() => setShowPairSelector(!showPairSelector)}
-                className="flex items-center gap-2 hover:bg-[#2b3139] px-2 py-1 rounded transition-colors"
-              >
-                <Icon icon="cryptocurrency:btc" width={24} className="text-[#fcd535]" />
-                <div className="flex items-center gap-1">
-                  <span className="text-sm font-semibold text-white">{selectedPair.replace('-', '/')}</span>
-                  <Icon icon="ph:caret-down" width={12} className="text-[#848e9c]" />
-                </div>
-              </button>
+              <div className="relative pair-selector-container">
+                <button 
+                  onClick={() => setShowPairSelector(!showPairSelector)}
+                  className="flex items-center gap-2 hover:bg-[#2b3139] px-2 py-1 rounded transition-colors"
+                >
+                  <Icon icon="cryptocurrency:btc" width={24} className="text-[#fcd535]" />
+                  <div className="flex items-center gap-1">
+                    <span className="text-sm font-semibold text-white">{selectedPair.replace('-', '/')}</span>
+                    <Icon icon="ph:caret-down" width={12} className="text-[#848e9c]" />
+                  </div>
+                </button>
+                
+                {/* Pair Selector Dropdown */}
+                {showPairSelector && (
+                  <div className="absolute left-0 top-full mt-2 bg-[#2b3139] rounded-lg shadow-lg z-10 min-w-[200px] max-h-60 overflow-y-auto scrollbar-hide">
+                    {Object.keys(pairData).map((pair) => (
+                      <button
+                        key={pair}
+                        onClick={() => handleSelectPair(pair)}
+                        className={`w-full px-4 py-3 text-left hover:bg-[#181a20] transition-colors ${
+                          selectedPair === pair ? 'bg-[#181a20]' : ''
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-white font-medium">{pair.replace('-', '/')}</span>
+                          <span className="text-[#848e9c] text-sm">${pairData[pair]?.price.toFixed(2) || '0.00'}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <Icon icon="ph:star" width={18} className="text-[#848e9c]" />
             </div>
-            
-            {/* Pair Selector Dropdown */}
-            {showPairSelector && (
-              <div className="absolute left-4 right-4 mt-2 bg-[#2b3139] rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto scrollbar-hide">
-                {Object.keys(pairData).map((pair) => (
-                  <button
-                    key={pair}
-                    onClick={() => handleSelectPair(pair)}
-                    className={`w-full px-4 py-3 text-left hover:bg-[#181a20] transition-colors ${
-                      selectedPair === pair ? 'bg-[#181a20]' : ''
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-white font-medium">{pair.replace('-', '/')}</span>
-                      <span className="text-[#848e9c] text-sm">${pairData[pair]?.price.toFixed(2) || '0.00'}</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
             
             <div className="flex items-baseline gap-2 mb-2">
               <span className={`text-2xl font-bold ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
