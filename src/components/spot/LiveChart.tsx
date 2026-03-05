@@ -39,21 +39,33 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
   useEffect(() => {
     if (!containerRef.current) return;
 
-    // Use setTimeout to ensure the container is fully rendered
-    const initTimeout = setTimeout(() => {
+    let retryCount = 0;
+    const maxRetries = 10;
+
+    const tryInitChart = () => {
       if (!containerRef.current) return;
 
       const width = containerRef.current.clientWidth;
       const height = containerRef.current.clientHeight;
 
-      console.log('Chart container dimensions:', { width, height });
+      console.log('Chart container dimensions:', { width, height, retryCount });
 
       if (width === 0 || height === 0) {
-        console.warn('Chart container has no dimensions, retrying...');
+        if (retryCount < maxRetries) {
+          retryCount++;
+          console.warn(`Chart container has no dimensions, retrying... (${retryCount}/${maxRetries})`);
+          setTimeout(tryInitChart, 200);
+        }
         return;
       }
 
       try {
+        // Clean up existing chart if any
+        if (chartRef.current) {
+          chartRef.current.remove();
+          chartRef.current = null;
+        }
+
         const chart = createChart(containerRef.current, {
           layout: {
             background: { type: ColorType.Solid, color: '#181a20' },
@@ -101,38 +113,43 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
 
         console.log('Chart initialized successfully');
 
-        // Handle window resize
-        const handleResize = () => {
-          if (containerRef.current && chartRef.current) {
-            const newWidth = containerRef.current.clientWidth;
-            const newHeight = containerRef.current.clientHeight;
-            if (newWidth > 0 && newHeight > 0) {
-              chartRef.current.applyOptions({
-                width: newWidth,
-                height: newHeight,
-              });
-            }
-          }
-        };
-
-        window.addEventListener('resize', handleResize);
-
-        return () => {
-          window.removeEventListener('resize', handleResize);
-        };
+        // Fetch data immediately after initialization
+        if (symbol) {
+          fetchAndUpdateData(symbol);
+        }
       } catch (error) {
         console.error('Error initializing chart:', error);
       }
-    }, 100); // Small delay to ensure container is rendered
+    };
+
+    // Start initialization after a small delay
+    const initTimeout = setTimeout(tryInitChart, 100);
+
+    // Handle window resize
+    const handleResize = () => {
+      if (containerRef.current && chartRef.current) {
+        const newWidth = containerRef.current.clientWidth;
+        const newHeight = containerRef.current.clientHeight;
+        if (newWidth > 0 && newHeight > 0) {
+          chartRef.current.applyOptions({
+            width: newWidth,
+            height: newHeight,
+          });
+        }
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
 
     return () => {
       clearTimeout(initTimeout);
+      window.removeEventListener('resize', handleResize);
       if (chartRef.current) {
         chartRef.current.remove();
         chartRef.current = null;
       }
     };
-  }, []);
+  }, [symbol]); // Re-initialize when symbol changes
 
   // Fetch and update chart data
   const fetchAndUpdateData = useCallback(async (pair: string) => {
@@ -178,17 +195,21 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
 
   // Set up polling for data updates
   useEffect(() => {
-    if (!symbol || !seriesRef.current) return;
+    if (!symbol) return;
 
-    // Initial fetch
-    fetchAndUpdateData(symbol);
-
-    // Set up polling every 3 seconds
-    pollingIntervalRef.current = setInterval(() => {
+    // Wait a bit for chart to initialize, then start fetching
+    const startPolling = setTimeout(() => {
+      // Initial fetch
       fetchAndUpdateData(symbol);
-    }, 3000);
+
+      // Set up polling every 3 seconds
+      pollingIntervalRef.current = setInterval(() => {
+        fetchAndUpdateData(symbol);
+      }, 3000);
+    }, 500);
 
     return () => {
+      clearTimeout(startPolling);
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
         pollingIntervalRef.current = null;
