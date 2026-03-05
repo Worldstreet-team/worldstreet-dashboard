@@ -171,6 +171,11 @@ export function useSpotSwap() {
         ? (fromAmountNum / toAmountNum).toFixed(6)
         : (toAmountNum / fromAmountNum).toFixed(6);
 
+      // Extract tool name safely (backend might return string or object)
+      const routeName = typeof data.route === "string"
+        ? data.route
+        : (data.route?.tool || data.route?.name || "LI.FI");
+
       const spotQuote: SpotSwapQuote = {
         id: `quote-${Date.now()}`,
         fromAmount: fromAmountHuman,
@@ -180,7 +185,7 @@ export function useSpotSwap() {
         estimatedDuration: 30,
         priceImpact: data.priceImpact || 0,
         gasEstimate: data.gasEstimate || '0',
-        route: data.route || 'LI.FI',
+        route: routeName,
         _raw: data,
       };
 

@@ -331,8 +331,11 @@ export function SwapProvider({ children }: { children: ReactNode }) {
           return null;
         }
 
-        // Build SwapQuote from backend response
-        // The backend returns: expectedOutput, priceImpact, gasEstimate, route, executionData, toAmountMin
+        // Extract tool name safely (backend might return string or object)
+        const toolName = typeof data.route === "string"
+          ? data.route
+          : (data.route?.tool || data.route?.name || "LI.FI");
+
         const parsedQuote: SwapQuote = {
           id: `quote-${Date.now()}`,
           fromChain: params.fromChain,
@@ -358,7 +361,7 @@ export function SwapProvider({ children }: { children: ReactNode }) {
           gasCosts: [],
           feeCosts: [],
           transactionRequest: data.executionData || undefined,
-          toolDetails: data.route ? { name: data.route, logoURI: "" } : undefined,
+          toolDetails: { name: toolName, logoURI: "" },
         };
 
         setQuote(parsedQuote);
