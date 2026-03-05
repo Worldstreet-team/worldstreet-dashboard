@@ -3,16 +3,15 @@
 /**
  * BinanceOrderBook Component
  * 
- * Real-time order book display using Socket.IO backend
- * - Connects to Socket.IO server at http://localhost:3000
- * - Subscribes to order book updates via 'orderbook' event
+ * Real-time order book display using Binance REST API with polling
+ * - Polls /api/binance/orderbook every 3 seconds
+ * - Fetches order book data from Binance
  * - Displays top 15 bids and asks with depth visualization
- * - Auto-reconnects on disconnect
+ * - Handles errors and connection status
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Icon } from '@iconify/react';
-import { io, Socket } from 'socket.io-client';
 
 interface OrderBookEntry {
   price: number;
@@ -25,14 +24,15 @@ interface BinanceOrderBookProps {
   selectedPair: string;
 }
 
-interface OrderBookMessage {
-  symbol: string;
+interface BinanceOrderBookData {
+  lastUpdateId: number;
   bids: [string, string][];
   asks: [string, string][];
+  error?: string;
 }
 
-// Socket.IO configuration
-const SOCKET_URL = 'wss://kucoin.watchup.site';
+// Polling configuration
+const POLLING_INTERVAL = 3000; // 3 seconds
 
 export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps) {
   const [asks, setAsks] = useState<OrderBookEntry[]>([]);
@@ -44,18 +44,37 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // Refs for Socket.IO management
-  const socketRef = useRef<Socket | null>(null);
-  const currentSymbolRef = useRef<string>('');
+  // Refs for polling management
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const activePairRef = useRef<string>(selectedPair);
+  const isMountedRef = useRef<boolean>(true);
 
   // Convert pair format (BTC-USDT -> BTCUSDT)
   const formatSymbol = (pair: string): string => {
     return pair.replace('-', '');
   };
 
-  // Process order book data
-  const processOrderBook = useCallback((data: OrderBookMessage) => {
+  // Fetch order book data from API
+  const fetchOrderBook = useCallback(async (pair: string) => {
     try {
+      const symbol = formatSymbol(pair);
+      const response = await fetch(`/api/binance/orderbook?symbol=${symbol}&limit=20`);
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data: BinanceOrderBookData = await response.json();
+      
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      // Only update if still mounted and pair hasn't changed
+      if (!isMountedRef.current || activePairRef.current !== pair) {
+        return;
+      }
+
       // Process bids (buy orders) - take top 15, sorted highest to lowest
       const processedBids: OrderBookEntry[] = [];
       let bidCumulativeTotal = 0;
@@ -114,100 +133,73 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
         });
       }
       
+      setConnected(true);
       setLoading(false);
       setError(null);
     } catch (err) {
-      console.error('[OrderBook] Error processing data:', err);
-      setError('Failed to process order book data');
+      console.error('[OrderBook] Error fetching data:', err);
+      
+      if (isMountedRef.current && activePairRef.current === pair) {
+        setConnected(false);
+        setError(err instanceof Error ? err.message : 'Failed to fetch order book');
+        setLoading(false);
+      }
+    }
+  }, []);
+
+  // Start polling
+  const startPolling = useCallback((pair: string) => {
+    console.log('[OrderBook] Starting polling for pair:', pair);
+    
+    // Clear any existing interval
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+    }
+
+    // Fetch immediately
+    fetchOrderBook(pair);
+
+    // Set up polling interval
+    pollingIntervalRef.current = setInterval(() => {
+      fetchOrderBook(pair);
+    }, POLLING_INTERVAL);
+  }, [fetchOrderBook]);
+
+  // Stop polling
+  const stopPolling = useCallback(() => {
+    console.log('[OrderBook] Stopping polling');
+    
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
     }
   }, []);
 
   useEffect(() => {
-    // Initialize Socket.IO connection
-    const socket = io(SOCKET_URL, {
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      reconnectionAttempts: Infinity
-    });
-
-    socketRef.current = socket;
-
-    // Connection event handlers
-    socket.on('connect', () => {
-      console.log('[OrderBook] Socket.IO connected');
-      setConnected(true);
-      setError(null);
-      
-      // Subscribe to initial pair
-      const symbol = formatSymbol(selectedPair);
-      socket.emit('subscribe', symbol);
-      currentSymbolRef.current = symbol;
-      console.log('[OrderBook] Subscribed to:', symbol);
-    });
-
-    socket.on('disconnect', () => {
-      console.log('[OrderBook] Socket.IO disconnected');
-      setConnected(false);
-      setError('Disconnected from server');
-    });
-
-    socket.on('connect_error', (err) => {
-      console.error('[OrderBook] Connection error:', err);
-      setConnected(false);
-      setError('Connection error');
-    });
-
-    // Order book data handler
-    socket.on('orderbook', (data: OrderBookMessage) => {
-      // Only process if it's for the current symbol
-      if (data.symbol === currentSymbolRef.current) {
-        processOrderBook(data);
-      }
-    });
-
-    // Cleanup on unmount
-    return () => {
-      console.log('[OrderBook] Cleaning up Socket.IO connection');
-      if (currentSymbolRef.current) {
-        socket.emit('unsubscribe', currentSymbolRef.current);
-      }
-      socket.disconnect();
-    };
-  }, [processOrderBook]);
-
-  // Handle pair changes
-  useEffect(() => {
-    const socket = socketRef.current;
-    if (!socket || !socket.connected) return;
-
-    const newSymbol = formatSymbol(selectedPair);
+    console.log('[OrderBook] Pair changed to:', selectedPair);
     
-    // Skip if same symbol
-    if (newSymbol === currentSymbolRef.current) return;
-
-    console.log('[OrderBook] Switching pair from', currentSymbolRef.current, 'to', newSymbol);
-
-    // Unsubscribe from old symbol
-    if (currentSymbolRef.current) {
-      socket.emit('unsubscribe', currentSymbolRef.current);
-      console.log('[OrderBook] Unsubscribed from:', currentSymbolRef.current);
-    }
+    // Update active pair ref
+    activePairRef.current = selectedPair;
+    isMountedRef.current = true;
 
     // Reset state
     setAsks([]);
     setBids([]);
     setLastPrice(0);
     setPriceChange(0);
+    setConnected(false);
     setLoading(true);
     setError(null);
 
-    // Subscribe to new symbol
-    socket.emit('subscribe', newSymbol);
-    currentSymbolRef.current = newSymbol;
-    console.log('[OrderBook] Subscribed to:', newSymbol);
-  }, [selectedPair]);
+    // Start polling for new pair
+    startPolling(selectedPair);
+    
+    return () => {
+      console.log('[OrderBook] Cleanup');
+      isMountedRef.current = false;
+      stopPolling();
+    };
+  }, [selectedPair, startPolling, stopPolling]);
 
   const formatPrice = (price: number): string => {
     if (price >= 1000) return price.toFixed(2);
