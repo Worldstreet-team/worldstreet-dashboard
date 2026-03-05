@@ -7,7 +7,7 @@ import { useSolana } from '@/app/context/solanaContext';
 import { useEvm } from '@/app/context/evmContext';
 import { useWallet } from '@/app/context/walletContext';
 import { usePairBalances } from '@/hooks/usePairBalances';
-import { useSpotSwap } from '@/hooks/useSpotSwap';
+import { useSwap, SwapQuote } from '@/app/context/swapContext';
 import SpotQuoteDetails from './SpotQuoteDetails';
 
 interface MobileTradingModalProps {
@@ -23,6 +23,10 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
   const { address: solAddress, balance: solBalance, fetchBalance: fetchSolBalance, refreshCustomTokens: refreshSolCustom } = useSolana();
   const { address: evmAddress, balance: ethBalance, fetchBalance: fetchEvmBalance, refreshCustomTokens: refreshEvmCustom } = useEvm();
   const { walletsGenerated } = useWallet();
+  
+  // Use swapContext directly
+  const { getQuote, executeSwap, quoteLoading, executing } = useSwap();
+  
   const [orderType, setOrderType] = useState<'market' | 'limit'>('market');
   const [price, setPrice] = useState('');
   const [amount, setAmount] = useState('');
@@ -36,8 +40,24 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
   const [showPin, setShowPin] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [quote, setQuote] = useState<SwapQuote | null>(null);
 
-  const { quote, fetchQuote, executeSpotSwap, loading: quoteLoading, executing, error: swapError } = useSpotSwap();
+  // Token metadata for Li.Fi
+  const TOKEN_META: Record<string, Record<string, { address: string; decimals: number }>> = {
+    ethereum: {
+      ETH: { address: '0x0000000000000000000000000000000000000000', decimals: 18 },
+      BTC: { address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', decimals: 8 },
+      WBTC: { address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', decimals: 8 },
+      USDT: { address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', decimals: 6 },
+      USDC: { address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', decimals: 6 },
+    },
+    solana: {
+      SOL: { address: '11111111111111111111111111111111', decimals: 9 },
+      WSOL: { address: 'So11111111111111111111111111111111111111112', decimals: 9 },
+      USDT: { address: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', decimals: 6 },
+      USDC: { address: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', decimals: 6 },
+    },
+  };
 
   const [tokenIn, tokenOut] = selectedPair.split('-');
 
@@ -170,17 +190,57 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
     setFetchingQuote(true);
     
     try {
-      const quoteResult = await fetchQuote({
+      // Determine chain type
+      const chainType = effectiveChain === 'sol' ? 'solana' : 'ethereum';
+      const chainMeta = effectiveChain === 'sol' ? TOKEN_META.solana : TOKEN_META.ethereum;
+      
+      // Get token addresses
+      const fromTokenMeta = side === 'buy' ? chainMeta[tokenOut] : chainMeta[tokenIn];
+      const toTokenMeta = side === 'buy' ? chainMeta[tokenIn] : chainMeta[tokenOut];
+      
+      if (!fromTokenMeta || !toTokenMeta) {
+        throw new Error('Token not supported');
+      }
+      
+      // Get wallet address
+      const walletAddress = chainType === 'solana' ? solAddress : evmAddress;
+      
+      if (!walletAddress) {
+        throw new Error(`${chainType === 'solana' ? 'Solana' : 'Ethereum'} wallet not available`);
+      }
+      
+      // Convert amount to smallest unit
+      const decimals = fromTokenMeta.decimals;
+      const [intPart = '0', fracPart = ''] = amount.split('.');
+      const paddedFrac = fracPart.padEnd(decimals, '0').slice(0, decimals);
+      const rawAmount = (intPart + paddedFrac).replace(/^0+/, '') || '0';
+      
+      console.log('[MobileTradingModal] Fetching quote:', {
         pair: selectedPair,
         side,
-        amount,
-        slippage: 0.5,
+        chainType,
+        fromToken: fromTokenMeta.address,
+        toToken: toTokenMeta.address,
+        rawAmount,
+        walletAddress
+      });
+      
+      // Call swapContext.getQuote
+      const quoteResult = await getQuote({
+        fromChain: chainType,
+        toChain: chainType,
+        fromToken: fromTokenMeta.address,
+        toToken: toTokenMeta.address,
+        fromAmount: rawAmount,
+        fromAddress: walletAddress,
+        toAddress: walletAddress,
       });
       
       if (quoteResult) {
+        setQuote(quoteResult);
         setShowQuote(true);
       } else {
-        setError(swapError || 'Failed to get quote');
+        setError('Failed to get quote from Li.Fi');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to get quote');
@@ -197,39 +257,57 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
       return;
     }
 
-    try {
-      const result = await executeSpotSwap({
-        pair: selectedPair,
-        side,
-        amount,
-      }, pin);
+    if (!quote) {
+      setError('No quote available');
+      return;
+    }
 
-      if (result.success) {
-        setSuccess(`${side === 'buy' ? 'Buy' : 'Sell'} order executed! TX: ${result.txHash?.slice(0, 10)}...`);
-        
-        // Refetch balances from wallet contexts
-        await refetchBalances();
-        fetchSolBalance();
-        fetchEvmBalance();
-        refreshSolCustom();
-        refreshEvmCustom();
-        
-        // Reset form
-        setAmount('');
-        setPrice('');
-        setTotal('');
-        setSliderValue(0);
-        setPin('');
-        setShowQuote(false);
-        
-        // Close modal after 3 seconds
-        setTimeout(() => {
-          onClose();
-        }, 3000);
-      } else {
-        setError(result.error || 'Failed to execute swap');
-        setPinError('Transaction failed');
+    try {
+      // Call swapContext.executeSwap directly
+      const txHash = await executeSwap(quote, pin);
+      
+      setSuccess(`${side === 'buy' ? 'Buy' : 'Sell'} order executed! TX: ${txHash.slice(0, 10)}...`);
+      
+      // Save to trade history
+      try {
+        await fetch('/api/spot/trades', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: user?.userId,
+            pair: selectedPair,
+            side,
+            txHash,
+            chain: effectiveChain,
+            fromAmount: amount,
+            toAmount: total,
+            status: 'COMPLETED',
+          }),
+        });
+      } catch (historyErr) {
+        console.warn('[MobileTradingModal] Failed to save trade history:', historyErr);
       }
+      
+      // Refetch balances from wallet contexts
+      await refetchBalances();
+      fetchSolBalance();
+      fetchEvmBalance();
+      refreshSolCustom();
+      refreshEvmCustom();
+      
+      // Reset form
+      setAmount('');
+      setPrice('');
+      setTotal('');
+      setSliderValue(0);
+      setPin('');
+      setShowQuote(false);
+      setQuote(null);
+      
+      // Close modal after 3 seconds
+      setTimeout(() => {
+        onClose();
+      }, 3000);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to execute swap';
       setError(errorMsg);
@@ -368,7 +446,30 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
           ) : (
             <>
               {/* Quote Details */}
-              {quote && <SpotQuoteDetails quote={quote} pair={selectedPair} side={side} />}
+              {quote && (
+                <div className="space-y-3">
+                  <div className="p-3 bg-[#2b3139] rounded-lg space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-[#848e9c]">You {side === 'buy' ? 'Pay' : 'Sell'}</span>
+                      <span className="text-white font-mono">
+                        {(parseFloat(quote.fromAmount) / Math.pow(10, quote.fromToken.decimals)).toFixed(6)} {quote.fromToken.symbol}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-[#848e9c]">You {side === 'buy' ? 'Receive' : 'Get'}</span>
+                      <span className="text-white font-mono">
+                        {(parseFloat(quote.toAmount) / Math.pow(10, quote.toToken.decimals)).toFixed(6)} {quote.toToken.symbol}
+                      </span>
+                    </div>
+                    {quote.toolDetails && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-[#848e9c]">Route</span>
+                        <span className="text-white">{quote.toolDetails.name}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* PIN Input */}
               <div className="mt-4 space-y-3">

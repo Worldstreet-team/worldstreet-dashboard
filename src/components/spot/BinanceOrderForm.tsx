@@ -6,7 +6,7 @@ import { useSolana } from '@/app/context/solanaContext';
 import { useEvm } from '@/app/context/evmContext';
 import { useWallet } from '@/app/context/walletContext';
 import { usePairBalances } from '@/hooks/usePairBalances';
-import { useSpotSwap } from '@/hooks/useSpotSwap';
+import { useSwap, SwapQuote } from '@/app/context/swapContext';
 import SpotSwapConfirmModal from './SpotSwapConfirmModal';
 
 interface BinanceOrderFormProps {
@@ -20,6 +20,10 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
   const { address: solAddress, balance: solBalance, fetchBalance: fetchSolBalance, refreshCustomTokens: refreshSolCustom } = useSolana();
   const { address: evmAddress, balance: ethBalance, fetchBalance: fetchEvmBalance, refreshCustomTokens: refreshEvmCustom } = useEvm();
   const { walletsGenerated } = useWallet();
+  
+  // Use swapContext directly
+  const { getQuote, executeSwap, quoteLoading, executing: swapExecuting } = useSwap();
+  
   const [activeTab, setActiveTab] = useState<'buy' | 'sell'>('buy');
   const [orderType, setOrderType] = useState<'market' | 'limit' | 'stop-limit'>('market');
   const [price, setPrice] = useState('');
@@ -32,8 +36,24 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
   const [currentMarketPrice, setCurrentMarketPrice] = useState<number>(0);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [fetchingQuote, setFetchingQuote] = useState(false);
+  const [quote, setQuote] = useState<SwapQuote | null>(null);
 
-  const { quote, fetchQuote, executeSpotSwap, loading: quoteLoading, executing: swapExecuting, error: swapError } = useSpotSwap();
+  // Token metadata for Li.Fi
+  const TOKEN_META: Record<string, Record<string, { address: string; decimals: number }>> = {
+    ethereum: {
+      ETH: { address: '0x0000000000000000000000000000000000000000', decimals: 18 },
+      BTC: { address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', decimals: 8 },
+      WBTC: { address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', decimals: 8 },
+      USDT: { address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', decimals: 6 },
+      USDC: { address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', decimals: 6 },
+    },
+    solana: {
+      SOL: { address: '11111111111111111111111111111111', decimals: 9 },
+      WSOL: { address: 'So11111111111111111111111111111111111111112', decimals: 9 },
+      USDT: { address: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', decimals: 6 },
+      USDC: { address: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', decimals: 6 },
+    },
+  };
 
   const [tokenIn, tokenOut] = selectedPair.split('-');
 
@@ -157,18 +177,57 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
     setFetchingQuote(true);
 
     try {
-      // Fetch quote
-      const quoteResult = await fetchQuote({
+      // Determine chain type
+      const chainType = effectiveChain === 'sol' ? 'solana' : 'ethereum';
+      const chainMeta = effectiveChain === 'sol' ? TOKEN_META.solana : TOKEN_META.ethereum;
+      
+      // Get token addresses
+      const fromTokenMeta = activeTab === 'buy' ? chainMeta[tokenOut] : chainMeta[tokenIn];
+      const toTokenMeta = activeTab === 'buy' ? chainMeta[tokenIn] : chainMeta[tokenOut];
+      
+      if (!fromTokenMeta || !toTokenMeta) {
+        throw new Error('Token not supported');
+      }
+      
+      // Get wallet address
+      const walletAddress = chainType === 'solana' ? solAddress : evmAddress;
+      
+      if (!walletAddress) {
+        throw new Error(`${chainType === 'solana' ? 'Solana' : 'Ethereum'} wallet not available`);
+      }
+      
+      // Convert amount to smallest unit
+      const decimals = fromTokenMeta.decimals;
+      const [intPart = '0', fracPart = ''] = amount.split('.');
+      const paddedFrac = fracPart.padEnd(decimals, '0').slice(0, decimals);
+      const rawAmount = (intPart + paddedFrac).replace(/^0+/, '') || '0';
+      
+      console.log('[BinanceOrderForm] Fetching quote:', {
         pair: selectedPair,
         side: activeTab,
-        amount,
-        slippage: 0.5,
+        chainType,
+        fromToken: fromTokenMeta.address,
+        toToken: toTokenMeta.address,
+        rawAmount,
+        walletAddress
+      });
+      
+      // Call swapContext.getQuote
+      const quoteResult = await getQuote({
+        fromChain: chainType,
+        toChain: chainType,
+        fromToken: fromTokenMeta.address,
+        toToken: toTokenMeta.address,
+        fromAmount: rawAmount,
+        fromAddress: walletAddress,
+        toAddress: walletAddress,
       });
 
       if (quoteResult) {
+        setQuote(quoteResult);
         setShowConfirmModal(true);
       } else {
-        setError(swapError || 'Failed to get quote');
+        setError('Failed to get quote from Li.Fi');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to get quote');
@@ -178,39 +237,58 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
   };
 
   const handleConfirmSwap = async (pin: string) => {
+    if (!quote) {
+      setError('No quote available');
+      throw new Error('No quote available');
+    }
+
     try {
-      const result = await executeSpotSwap({
-        pair: selectedPair,
-        side: activeTab,
-        amount,
-      }, pin);
-
-      if (result.success) {
-        setSuccess(`${activeTab === 'buy' ? 'Buy' : 'Sell'} order executed! TX: ${result.txHash?.slice(0, 10)}...`);
-        setShowConfirmModal(false);
-        
-        // Reset form
-        setAmount('');
-        setPrice('');
-        setTotal('');
-        setSliderValue(0);
-        
-        // Refetch balances from wallet contexts
-        await refetchBalances();
-        fetchSolBalance();
-        fetchEvmBalance();
-        refreshSolCustom();
-        refreshEvmCustom();
-        
-        if (onTradeExecuted) {
-          onTradeExecuted();
-        }
-
-        // Clear success after 5 seconds
-        setTimeout(() => setSuccess(null), 5000);
-      } else {
-        throw new Error(result.error || 'Failed to execute swap');
+      // Call swapContext.executeSwap directly
+      const txHash = await executeSwap(quote, pin);
+      
+      setSuccess(`${activeTab === 'buy' ? 'Buy' : 'Sell'} order executed! TX: ${txHash.slice(0, 10)}...`);
+      setShowConfirmModal(false);
+      
+      // Save to trade history
+      try {
+        await fetch('/api/spot/trades', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: user?.userId,
+            pair: selectedPair,
+            side: activeTab,
+            txHash,
+            chain: effectiveChain,
+            fromAmount: amount,
+            toAmount: total,
+            status: 'COMPLETED',
+          }),
+        });
+      } catch (historyErr) {
+        console.warn('[BinanceOrderForm] Failed to save trade history:', historyErr);
       }
+      
+      // Reset form
+      setAmount('');
+      setPrice('');
+      setTotal('');
+      setSliderValue(0);
+      setQuote(null);
+      
+      // Refetch balances from wallet contexts
+      await refetchBalances();
+      fetchSolBalance();
+      fetchEvmBalance();
+      refreshSolCustom();
+      refreshEvmCustom();
+      
+      if (onTradeExecuted) {
+        onTradeExecuted();
+      }
+
+      // Clear success after 5 seconds
+      setTimeout(() => setSuccess(null), 5000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to execute trade');
       throw err; // Re-throw to show in modal
