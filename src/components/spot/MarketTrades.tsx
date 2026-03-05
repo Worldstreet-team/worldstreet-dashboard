@@ -69,7 +69,7 @@ export default function MarketTrades({ selectedPair }: MarketTradesProps) {
   };
 
   return (
-    <div className="h-full flex flex-col bg-[#181a20]">
+    <div className="h-full flex flex-col bg-[#181a20] scrollbar-hide">
       {/* Tabs */}
       <div className="flex border-b border-[#2b3139]">
         <button

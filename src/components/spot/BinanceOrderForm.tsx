@@ -102,7 +102,7 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted }: Bina
   const currentToken = activeTab === 'buy' ? tokenOut : tokenIn;
 
   return (
-    <div className="flex flex-col bg-[#181a20] text-white">
+    <div className="flex flex-col bg-[#181a20] text-white scrollbar-hide">
       {/* Buy/Sell Tabs */}
       <div className="grid grid-cols-2 gap-0 border-b border-[#2b3139]">
         <button

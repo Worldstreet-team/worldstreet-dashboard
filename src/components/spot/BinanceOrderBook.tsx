@@ -92,7 +92,7 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
   };
 
   return (
-    <div className="h-full flex flex-col bg-[#0b0e11] text-white">
+    <div className="h-full flex flex-col bg-[#0b0e11] text-white scrollbar-hide">
       {/* Header */}
       <div className="px-3 py-2 border-b border-[#1e2329] flex items-center justify-between">
         <span className="text-xs font-medium text-[#848e9c]">Order Book</span>

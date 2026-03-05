@@ -28,7 +28,7 @@ export default function BinanceBottomPanel({
   ];
 
   return (
-    <div className="flex flex-col bg-[#0b0e11] text-white min-h-[25vh]">
+    <div className="flex flex-col bg-[#0b0e11] text-white min-h-[25vh] scrollbar-hide">
       {/* Tab Headers */}
       <div className="flex items-center px-4 border-b border-[#1e2329] flex-shrink-0">
         {tabs.map((tab) => (
