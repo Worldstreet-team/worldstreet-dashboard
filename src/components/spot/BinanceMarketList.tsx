@@ -103,7 +103,7 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
         const tickerMap = new Map(tickers.map((t) => [t.symbol, t]));
 
         // Map symbols to market data with chain detection
-        const marketData: MarketData[] = usdtSymbols
+        const marketData = usdtSymbols
           .map((symbol) => {
             const ticker = tickerMap.get(symbol.symbol);
             if (!ticker) return null;
@@ -121,11 +121,14 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
               chain = 'ethereum';
             }
 
-            return {
+            const price = parseFloat(ticker.last);
+            if (isNaN(price)) return null;
+
+            const marketItem: MarketData = {
               symbol: `${baseAsset}-USDT`,
               baseAsset,
               quoteAsset: 'USDT',
-              price: parseFloat(ticker.last),
+              price,
               change24h: parseFloat(ticker.changeRate) * 100,
               volume24h: parseFloat(ticker.volValue),
               high24h: parseFloat(ticker.high),
@@ -134,8 +137,10 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
               mintAddress: solanaToken?.address,
               logoURI: solanaToken?.logoURI,
             };
+
+            return marketItem;
           })
-          .filter((m): m is MarketData => m !== null && !isNaN(m.price));
+          .filter((m): m is MarketData => m !== null);
 
         setMarkets(marketData);
       } catch (err) {
