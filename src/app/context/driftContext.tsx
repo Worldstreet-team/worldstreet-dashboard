@@ -575,142 +575,114 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   };
 
   // Deposit collateral with fee
-  const depositCollateral = useCallback(async (amount: number): Promise<{ success: boolean; txSignature?: string; error?: string }> => {
+const depositCollateral = useCallback(
+  async (amount: number): Promise<{ success: boolean; txSignature?: string; error?: string }> => {
     if (!user?.userId) {
       return { success: false, error: 'User not authenticated' };
     }
-    
+
     try {
       setIsLoading(true);
       const pin = await requestPin();
-      
+
+      // Initialize Drift client if not already
       let client = driftClientRef.current;
       if (!client) {
         client = await initializeDriftClient(pin);
       }
-      
-      // Calculate fee (5%)
+
+      // Calculate fee and net amount
       const { calculateFee } = await import('@/config/drift');
       const { fee, netAmount } = calculateFee(amount);
-      
-      console.log(`[DriftContext] Depositing ${amount} USDC: ${fee} USDC fee + ${netAmount} USDC collateral`);
-      
-      // First, send fee to master wallet if configured (in USDC)
+
+      console.log(`[DriftContext] Depositing ${amount} USDC: ${fee} fee + ${netAmount} net`);
+
+      // Send fee to master wallet if configured
       const { DRIFT_CONFIG } = await import('@/config/drift');
       if (DRIFT_CONFIG.MASTER_WALLET_ADDRESS) {
-        const { PublicKey } = await import('@solana/web3.js');
+        const { PublicKey, Transaction } = await import('@solana/web3.js');
         const { TOKEN_PROGRAM_ID, getAssociatedTokenAddress, createTransferInstruction } = await import('@solana/spl-token');
-        const { Transaction } = await import('@solana/web3.js');
-        
-        // USDC mint address on Solana mainnet
+
         const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
-        
-        // Get associated token accounts
-        const fromTokenAccount = await getAssociatedTokenAddress(
-          USDC_MINT,
-          client.wallet.publicKey
+        const fromTokenAccount = await getAssociatedTokenAddress(USDC_MINT, client.wallet.publicKey);
+        const toTokenAccount = await getAssociatedTokenAddress(USDC_MINT, new PublicKey(DRIFT_CONFIG.MASTER_WALLET_ADDRESS));
+
+        const feeTx = new Transaction().add(
+          createTransferInstruction(fromTokenAccount, toTokenAccount, client.wallet.publicKey, Math.floor(fee * 1e6), [], TOKEN_PROGRAM_ID)
         );
-        
-        const toTokenAccount = await getAssociatedTokenAddress(
-          USDC_MINT,
-          new PublicKey(DRIFT_CONFIG.MASTER_WALLET_ADDRESS)
-        );
-        
-        // Create transfer instruction for fee (in USDC base units: 6 decimals)
-        const feeTransaction = new Transaction().add(
-          createTransferInstruction(
-            fromTokenAccount,
-            toTokenAccount,
-            client.wallet.publicKey,
-            Math.floor(fee * 1e6), // Convert USDC to base units
-            [],
-            TOKEN_PROGRAM_ID
-          )
-        );
-        
-        // Get recent blockhash
+
         const { blockhash } = await client.connection.getLatestBlockhash('finalized');
-        feeTransaction.recentBlockhash = blockhash;
-        feeTransaction.feePayer = client.wallet.publicKey;
-        
-        // Sign and send fee transaction
-        feeTransaction.sign(client.wallet.payer);
-        const feeTxSignature = await client.connection.sendRawTransaction(feeTransaction.serialize(), {
-          skipPreflight: false,
-          preflightCommitment: 'confirmed',
-        });
-        
-        console.log('[DriftContext] Fee transaction sent:', feeTxSignature);
-        
-        // Poll for fee transaction confirmation
-        await pollTransactionStatus(client.connection, feeTxSignature, 30, 2000);
-        console.log('[DriftContext] Fee sent to master wallet confirmed:', feeTxSignature);
+        feeTx.recentBlockhash = blockhash;
+        feeTx.feePayer = client.wallet.publicKey;
+
+        feeTx.sign(client.wallet.payer);
+        const feeTxSig = await client.connection.sendRawTransaction(feeTx.serialize(), { skipPreflight: false, preflightCommitment: 'confirmed' });
+        console.log('[DriftContext] Fee transaction sent:', feeTxSig);
+
+        await pollTransactionStatus(client.connection, feeTxSig, 30, 2000);
+        console.log('[DriftContext] Fee transaction confirmed:', feeTxSig);
       }
-      
-      // Then deposit net amount to Drift
-      // Import BN for proper amount encoding
+
+      // Import BN for deposit amount
       const BN = (await import('bn.js')).default;
+      const depositAmount = new BN(Math.floor(netAmount * 1e6)); // 6 decimals USDC
+
+      // Get user token account
       const { getAssociatedTokenAddress, createAssociatedTokenAccountInstruction } = await import('@solana/spl-token');
       const { Transaction, PublicKey: SolanaPublicKey } = await import('@solana/web3.js');
-      
-      const depositAmount = new BN(Math.floor(netAmount * 1e6)); // Convert to USDC base units (6 decimals)
-      
-      // USDC mint address on Solana mainnet
       const USDC_MINT = new SolanaPublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
-      
-      // Get user's USDC associated token account
-      const userTokenAccount = await getAssociatedTokenAddress(
-        USDC_MINT,
-        client.wallet.publicKey
-      );
-      
-      // Check if the token account exists, if not create it
+
+      const userTokenAccount = await getAssociatedTokenAddress(USDC_MINT, client.wallet.publicKey);
+
+      // Ensure token account exists
       const accountInfo = await client.connection.getAccountInfo(userTokenAccount);
       if (!accountInfo) {
         console.log('[DriftContext] Creating USDC token account...');
-        const createAtaIx = createAssociatedTokenAccountInstruction(
-          client.wallet.publicKey, // payer
-          userTokenAccount, // ata
-          client.wallet.publicKey, // owner
-          USDC_MINT // mint
-        );
-        
+        const createAtaIx = createAssociatedTokenAccountInstruction(client.wallet.publicKey, userTokenAccount, client.wallet.publicKey, USDC_MINT);
         const createAtaTx = new Transaction().add(createAtaIx);
         const { blockhash } = await client.connection.getLatestBlockhash('finalized');
         createAtaTx.recentBlockhash = blockhash;
         createAtaTx.feePayer = client.wallet.publicKey;
-        
         createAtaTx.sign(client.wallet.payer);
-        const createAtaSig = await client.connection.sendRawTransaction(createAtaTx.serialize(), {
-          skipPreflight: false,
-          preflightCommitment: 'confirmed',
-        });
-        
+        const createAtaSig = await client.connection.sendRawTransaction(createAtaTx.serialize(), { skipPreflight: false, preflightCommitment: 'confirmed' });
         await pollTransactionStatus(client.connection, createAtaSig, 30, 2000);
         console.log('[DriftContext] USDC token account created:', createAtaSig);
       }
-      
-      // Get the user account public key from the client
+
+      // VALIDATIONS BEFORE DEPOSIT
       const driftUser = client.getUser();
+      await driftUser.reloadUserAccount(); // Ensure latest on-chain state
       const userAccountPublicKey = driftUser.getUserAccountPublicKey();
-      
-      console.log('[DriftContext] User account public key:', userAccountPublicKey.toBase58());
-      console.log('[DriftContext] User token account:', userTokenAccount.toBase58());
-      console.log('[DriftContext] Deposit amount (BN):', depositAmount.toString());
-      
-      const txSignature = await client.deposit(
-        depositAmount,
-        0, // USDC market index
-        userAccountPublicKey,
-        userTokenAccount // Pass the user's token account explicitly
-      );
-      
+      const userAccount = driftUser.getUserAccount();
+
+      if (!userAccount || !userAccount.isInitialized) {
+        throw new Error('Drift user account not initialized');
+      }
+
+      if (depositAmount.lte(new BN(0))) {
+        throw new Error(`Deposit amount too small after fee deduction: ${netAmount} USDC`);
+      }
+
+      const tokenBalanceInfo = await client.connection.getTokenAccountBalance(userTokenAccount);
+      if (!tokenBalanceInfo || Number(tokenBalanceInfo.value.amount) < depositAmount.toNumber()) {
+        throw new Error(
+          `Insufficient USDC balance. Needed: ${depositAmount.toString()}, Available: ${tokenBalanceInfo?.value.amount ?? 0}`
+        );
+      }
+
+      console.log('[Validation] All checks passed before deposit');
+      console.log(' - Net deposit (BN):', depositAmount.toString());
+      console.log(' - User account initialized:', userAccount.isInitialized);
+      console.log(' - User token account:', userTokenAccount.toBase58());
+      console.log(' - User account public key:', userAccountPublicKey.toBase58());
+
+      // Execute deposit
+      const txSignature = await client.deposit(depositAmount, 0, userAccountPublicKey, userTokenAccount);
       console.log('[DriftContext] Deposit transaction sent:', txSignature);
-      
-      // Poll for deposit transaction confirmation
+
       await pollTransactionStatus(client.connection, txSignature, 30, 2000);
       console.log('[DriftContext] Collateral deposited to Drift confirmed:', txSignature);
-      
+
       await refreshSummary();
       return { success: true, txSignature };
     } catch (err) {
@@ -720,8 +692,9 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [user?.userId, requestPin, initializeDriftClient, refreshSummary]);
-
+  },
+  [user?.userId, requestPin, initializeDriftClient, refreshSummary]
+);
   // Withdraw collateral
   const withdrawCollateral = useCallback(async (amount: number): Promise<{ success: boolean; txSignature?: string; error?: string }> => {
     if (!user?.userId) {
