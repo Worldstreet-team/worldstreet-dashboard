@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { createChart, ColorType } from 'lightweight-charts';
-import type { IChartApi, CandlestickSeriesOptions } from 'lightweight-charts';
+import { createChart, ColorType, CandlestickSeries } from 'lightweight-charts';
 import { cn } from '@/lib/utils';
 
 interface LiveChartProps {
@@ -20,27 +19,16 @@ interface CandleData {
   close: number;
 }
 
-interface KucoinKline {
-  time: string;
-  open: string;
-  high: string;
-  low: string;
-  close: string;
-  volume: string;
-  turnover: string;
-}
-
 const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartProps) => {
   const [showLevelsForm, setShowLevelsForm] = useState(false);
   const [tempStopLoss, setTempStopLoss] = useState(stopLoss || '');
   const [tempTakeProfit, setTempTakeProfit] = useState(takeProfit || '');
   
   const containerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<IChartApi | null>(null);
+  const chartRef = useRef<any>(null);
   const seriesRef = useRef<any>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const candlesRef = useRef<Map<number, CandleData>>(new Map());
-  const currentIntervalRef = useRef<number | null>(null);
 
   useEffect(() => {
     setTempStopLoss(stopLoss || '');
@@ -51,79 +39,82 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const chart = createChart(containerRef.current, {
-      layout: {
-        background: { type: ColorType.Solid, color: '#181a20' },
-        textColor: '#848e9c',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-      },
-      width: containerRef.current.clientWidth,
-      height: containerRef.current.clientHeight,
-      timeScale: {
-        timeVisible: true,
-        secondsVisible: false,
-        fixLeftEdge: true,
-        fixRightEdge: true,
-      },
-      crosshair: {
-        mode: 1,
-        vertLine: {
-          color: '#2b3139',
-          width: 1,
-          style: 2,
+    try {
+      const chart = createChart(containerRef.current, {
+        layout: {
+          background: { type: ColorType.Solid, color: '#181a20' },
+          textColor: '#848e9c',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         },
-        horzLine: {
-          color: '#2b3139',
-          width: 1,
-          style: 2,
+        width: containerRef.current.clientWidth,
+        height: containerRef.current.clientHeight,
+        timeScale: {
+          timeVisible: true,
+          secondsVisible: false,
+          fixLeftEdge: true,
+          fixRightEdge: true,
         },
-      },
-      grid: {
-        vertLines: { color: '#2b3139', style: 2 },
-        horzLines: { color: '#2b3139', style: 2 },
-      },
-    });
+        crosshair: {
+          mode: 1,
+          vertLine: {
+            color: '#2b3139',
+            width: 1,
+            style: 2,
+          },
+          horzLine: {
+            color: '#2b3139',
+            width: 1,
+            style: 2,
+          },
+        },
+        grid: {
+          vertLines: { color: '#2b3139', style: 2 },
+          horzLines: { color: '#2b3139', style: 2 },
+        },
+      });
 
-    const candlestickSeries = (chart as any).addCandlestickSeries({
-      upColor: '#0ecb81',
-      downColor: '#f6465d',
-      borderUpColor: '#0ecb81',
-      borderDownColor: '#f6465d',
-      wickUpColor: '#0ecb81',
-      wickDownColor: '#f6465d',
-    });
+      // Correct API: chart.addSeries(CandlestickSeries)
+      const candlestickSeries = chart.addSeries(CandlestickSeries, {
+        upColor: '#0ecb81',
+        downColor: '#f6465d',
+        borderUpColor: '#0ecb81',
+        borderDownColor: '#f6465d',
+        wickUpColor: '#0ecb81',
+        wickDownColor: '#f6465d',
+      });
 
-    chartRef.current = chart;
-    seriesRef.current = candlestickSeries;
+      chartRef.current = chart;
+      seriesRef.current = candlestickSeries;
 
-    // Handle window resize
-    const handleResize = () => {
-      if (containerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({
-          width: containerRef.current.clientWidth,
-          height: containerRef.current.clientHeight,
-        });
-      }
-    };
+      // Handle window resize
+      const handleResize = () => {
+        if (containerRef.current && chartRef.current) {
+          chartRef.current.applyOptions({
+            width: containerRef.current.clientWidth,
+            height: containerRef.current.clientHeight,
+          });
+        }
+      };
 
-    window.addEventListener('resize', handleResize);
+      window.addEventListener('resize', handleResize);
 
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      if (chartRef.current) {
-        chartRef.current.remove();
-        chartRef.current = null;
-      }
-    };
+      return () => {
+        window.removeEventListener('resize', handleResize);
+        if (chartRef.current) {
+          chartRef.current.remove();
+          chartRef.current = null;
+        }
+      };
+    } catch (error) {
+      console.error('Error initializing chart:', error);
+    }
   }, []);
 
   // Fetch historical data
   const fetchHistoricalData = useCallback(async (pair: string) => {
     try {
-      // Convert BTC-USDT to BTC-USDT format for Kucoin
       const kucoinPair = pair.replace('-', '-');
       
-      // Fetch 1-hour candles (last 100)
       const response = await fetch(
         `https://api.kucoin.com/api/v1/market/candles?symbol=${kucoinPair}&type=1hour&limit=100`
       );
@@ -137,11 +128,9 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
         return;
       }
 
-      // Transform Kucoin data to lightweight-charts format
-      // Kucoin returns [time, open, high, low, close, volume, turnover]
       const candles: CandleData[] = data.data
         .map((kline: string[]) => ({
-          time: Math.floor(parseInt(kline[0]) / 1000), // Convert ms to seconds
+          time: Math.floor(parseInt(kline[0]) / 1000),
           open: parseFloat(kline[1]),
           high: parseFloat(kline[3]),
           low: parseFloat(kline[4]),
@@ -149,7 +138,6 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
         }))
         .sort((a: CandleData, b: CandleData) => (typeof a.time === 'number' && typeof b.time === 'number' ? a.time - b.time : 0));
 
-      // Store candles in map for easy updates
       candlesRef.current.clear();
       candles.forEach(candle => {
         if (typeof candle.time === 'number') {
@@ -157,7 +145,6 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
         }
       });
 
-      // Set data on series
       if (seriesRef.current) {
         seriesRef.current.setData(candles);
         chartRef.current?.timeScale().fitContent();
@@ -169,18 +156,15 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
 
   // Subscribe to WebSocket for real-time updates
   const subscribeToWebSocket = useCallback((pair: string) => {
-    // Close existing connection
     if (wsRef.current) {
       wsRef.current.close();
     }
 
     try {
-      // Kucoin WebSocket endpoint
       const ws = new WebSocket('wss://ws-api.kucoin.com/socket.io/?transport=websocket');
       wsRef.current = ws;
 
       ws.onopen = () => {
-        // Subscribe to 1-hour candles
         const kucoinPair = pair.replace('-', '-');
         const subscribeMessage = {
           id: Date.now().toString(),
@@ -196,11 +180,10 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
         try {
           const message = JSON.parse(event.data);
 
-          // Handle candle updates
           if (message.type === 'message' && message.topic?.includes('candles')) {
             const data = message.data;
             if (data && data.candles && data.candles.length > 0) {
-              const kline = data.candles[0]; // [time, open, high, low, close, volume, turnover]
+              const kline = data.candles[0];
               const candleTime = Math.floor(parseInt(kline[0]) / 1000);
               const candle: CandleData = {
                 time: candleTime,
@@ -210,21 +193,9 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
                 close: parseFloat(kline[2]),
               };
 
-              // Update or add candle
-              const existingCandle = candlesRef.current.get(candleTime);
-              if (existingCandle) {
-                // Update existing candle (still in progress)
-                candlesRef.current.set(candleTime, candle);
-              } else {
-                // New candle started
-                candlesRef.current.set(candleTime, candle);
-              }
+              candlesRef.current.set(candleTime, candle);
 
-              // Update series with all candles
               if (seriesRef.current) {
-                const allCandles = Array.from(candlesRef.current.values()).sort(
-                  (a: CandleData, b: CandleData) => (typeof a.time === 'number' && typeof b.time === 'number' ? a.time - b.time : 0)
-                );
                 seriesRef.current.update(candle);
               }
             }
@@ -250,13 +221,9 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
   useEffect(() => {
     if (!symbol) return;
 
-    // Fetch historical data
     fetchHistoricalData(symbol);
-
-    // Subscribe to WebSocket
     subscribeToWebSocket(symbol);
 
-    // Cleanup on unmount or symbol change
     return () => {
       if (wsRef.current) {
         wsRef.current.close();
