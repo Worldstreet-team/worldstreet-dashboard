@@ -27,8 +27,8 @@ interface BinanceOrderBookProps {
 interface GateIOOrderBookData {
   sequence: number;
   timestamp: number;
-  bids: { price: number; size: number }[];
-  asks: { price: number; size: number }[];
+  bids: [string, string][];
+  asks: [string, string][];
 }
 
 const POLLING_INTERVAL = 3000;
@@ -111,13 +111,19 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
       let askCumulativeTotal = 0;
       
       const sortedAsks = [...data.asks]
+        .map(([priceStr, sizeStr]) => ({
+          price: parseFloat(priceStr),
+          size: parseFloat(sizeStr)
+        }))
         .sort((a, b) => a.price - b.price)
         .slice(0, 20);
       
       for (const { price, size } of sortedAsks) {
         const total = price * size;
-        askCumulativeTotal += total;
-        processedAsks.push({ price, amount: size, total, depthPercent: 0 });
+        if (!isNaN(total) && isFinite(total)) {
+          askCumulativeTotal += total;
+          processedAsks.push({ price, amount: size, total, depthPercent: 0 });
+        }
       }
 
       processedAsks.reverse();
@@ -130,13 +136,19 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
       let bidCumulativeTotal = 0;
       
       const sortedBids = [...data.bids]
+        .map(([priceStr, sizeStr]) => ({
+          price: parseFloat(priceStr),
+          size: parseFloat(sizeStr)
+        }))
         .sort((a, b) => b.price - a.price)
         .slice(0, 20);
       
       for (const { price, size } of sortedBids) {
         const total = price * size;
-        bidCumulativeTotal += total;
-        processedBids.push({ price, amount: size, total, depthPercent: 0 });
+        if (!isNaN(total) && isFinite(total)) {
+          bidCumulativeTotal += total;
+          processedBids.push({ price, amount: size, total, depthPercent: 0 });
+        }
       }
 
       processedBids.forEach((bid, idx) => {
@@ -295,7 +307,7 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
                       {formatPrice(ask.price)}
                     </div>
                     <div className="text-right text-white">{formatAmount(ask.amount)}</div>
-                    <div className="text-right text-[#848e9c] text-[10px]">{ask.total.toFixed(2)}</div>
+                    <div className="text-right text-[#848e9c] text-[10px]">{(ask.total || 0).toFixed(2)}</div>
                   </div>
                 </div>
               ))
@@ -349,7 +361,7 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
                       {formatPrice(bid.price)}
                     </div>
                     <div className="text-right text-white">{formatAmount(bid.amount)}</div>
-                    <div className="text-right text-[#848e9c] text-[10px]">{bid.total.toFixed(2)}</div>
+                    <div className="text-right text-[#848e9c] text-[10px]">{(bid.total || 0).toFixed(2)}</div>
                   </div>
                 </div>
               ))
