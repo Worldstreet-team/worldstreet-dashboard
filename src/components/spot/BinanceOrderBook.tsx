@@ -38,45 +38,79 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
   const [viewMode, setViewMode] = useState<'both' | 'asks' | 'bids'>('both');
   const [connected, setConnected] = useState(false);
   
+  // Refs to avoid stale closures
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const lastSequenceRef = useRef<number>(0);
   const currentTopicRef = useRef<string | null>(null);
+  
+  // NEW: Track the active pair to avoid stale closure in reconnect
+  const activePairRef = useRef<string>(selectedPair);
+  
+  // NEW: Control whether reconnection should happen
+  // Set to false when intentionally switching pairs or unmounting
+  const shouldReconnectRef = useRef<boolean>(true);
 
   useEffect(() => {
-    // Close existing connection and clear state
+    console.log('[OrderBook] Pair changed to:', selectedPair);
+    
+    // Update active pair ref
+    activePairRef.current = selectedPair;
+    
+    // Disable reconnect during pair switch
+    shouldReconnectRef.current = false;
+    
+    // Close existing connection
     if (wsRef.current) {
-      console.log('Closing existing WebSocket connection for pair change');
+      console.log('[OrderBook] Closing existing WebSocket for pair switch');
       wsRef.current.close();
       wsRef.current = null;
-      currentTopicRef.current = null;
-      setConnected(false);
     }
 
+    // Clear any pending reconnect timers
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = undefined;
     }
 
-    // Connect to new pair
-    connectWebSocket();
+    // Reset order book state
+    setAsks([]);
+    setBids([]);
+    setLastPrice(0);
+    setPriceChange(0);
+    setConnected(false);
+    currentTopicRef.current = null;
+    lastSequenceRef.current = 0;
+    
+    // Re-enable reconnect for the new pair
+    shouldReconnectRef.current = true;
+
+    // Connect to new pair - pass pair explicitly to avoid stale closure
+    connectWebSocket(selectedPair);
     
     return () => {
+      console.log('[OrderBook] Cleanup - disabling reconnect');
+      
+      // Disable reconnect on unmount
+      shouldReconnectRef.current = false;
+      
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
+      
       if (wsRef.current) {
-        console.log('Cleaning up WebSocket connection');
         wsRef.current.close();
         wsRef.current = null;
       }
-      currentTopicRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPair]);
 
-  const connectWebSocket = async () => {
+  // REFACTORED: Accept pair as argument to avoid stale closure
+  const connectWebSocket = async (pair: string) => {
     try {
+      console.log('[OrderBook] Connecting WebSocket for pair:', pair);
+      
       // Get WebSocket token from our API
       const tokenResponse = await fetch('/api/kucoin/websocket-token');
       if (!tokenResponse.ok) {
@@ -96,11 +130,11 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log('KuCoin WebSocket connected for pair:', selectedPair);
+        console.log('[OrderBook] WebSocket connected for pair:', pair);
         setConnected(true);
         
-        // Subscribe to order book updates for the current pair
-        const newTopic = `/spotMarket/level2Depth50:${selectedPair}`;
+        // Subscribe to order book updates - use passed pair, not selectedPair
+        const newTopic = `/spotMarket/level2Depth50:${pair}`;
         const subscribeMessage = {
           id: Date.now().toString(),
           type: 'subscribe',
@@ -111,7 +145,7 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
         
         ws.send(JSON.stringify(subscribeMessage));
         currentTopicRef.current = newTopic;
-        console.log('Subscribed to:', newTopic);
+        console.log('[OrderBook] Subscribed to:', newTopic);
       };
 
       ws.onmessage = (event) => {
@@ -120,13 +154,7 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
           
           // Handle subscription confirmation
           if (data.type === 'ack') {
-            console.log('Subscription confirmed:', data.id);
-            return;
-          }
-
-          // Handle unsubscribe confirmation
-          if (data.type === 'ack' && data.topic) {
-            console.log('Unsubscribe confirmed:', data.topic);
+            console.log('[OrderBook] Subscription confirmed:', data.id);
             return;
           }
 
@@ -137,36 +165,48 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
               const orderBookData = data.data;
               processOrderBookUpdate(orderBookData);
             } else {
-              console.log('Ignoring update from old subscription:', data.topic);
+              console.log('[OrderBook] Ignoring update from old subscription:', data.topic);
             }
           }
         } catch (error) {
-          console.error('Error parsing WebSocket message:', error);
+          console.error('[OrderBook] Error parsing WebSocket message:', error);
         }
       };
 
       ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
+        console.error('[OrderBook] WebSocket error:', error);
         setConnected(false);
       };
 
       ws.onclose = () => {
-        console.log('WebSocket closed, reconnecting...');
+        console.log('[OrderBook] WebSocket closed');
         setConnected(false);
         
-        // Reconnect after 3 seconds
-        reconnectTimeoutRef.current = setTimeout(() => {
-          connectWebSocket();
-        }, 3000);
+        // FIXED: Only reconnect if shouldReconnectRef is true
+        // This prevents reconnect during intentional pair switches or unmount
+        if (shouldReconnectRef.current) {
+          console.log('[OrderBook] Reconnecting in 3s to pair:', activePairRef.current);
+          
+          // Reconnect after 3 seconds using activePairRef (not stale selectedPair)
+          reconnectTimeoutRef.current = setTimeout(() => {
+            connectWebSocket(activePairRef.current);
+          }, 3000);
+        } else {
+          console.log('[OrderBook] Reconnect disabled, not reconnecting');
+        }
       };
     } catch (error) {
-      console.error('Error connecting to WebSocket:', error);
+      console.error('[OrderBook] Error connecting to WebSocket:', error);
       setConnected(false);
       
-      // Retry connection after 3 seconds
-      reconnectTimeoutRef.current = setTimeout(() => {
-        connectWebSocket();
-      }, 3000);
+      // FIXED: Only retry if shouldReconnectRef is true
+      if (shouldReconnectRef.current) {
+        console.log('[OrderBook] Retrying connection in 3s to pair:', activePairRef.current);
+        
+        reconnectTimeoutRef.current = setTimeout(() => {
+          connectWebSocket(activePairRef.current);
+        }, 3000);
+      }
     }
   };
 
