@@ -31,6 +31,10 @@ export default function BinanceSpotPage() {
     takeProfit: string | null;
     stopLoss: string | null;
   } | null>(null);
+  
+  // Mobile state
+  const [mobileTab, setMobileTab] = useState<'chart' | 'orderbook' | 'trades' | 'info' | 'data'>('chart');
+  const [mobileBottomTab, setMobileBottomTab] = useState<'orders' | 'holdings'>('orders');
 
   const [tokenIn, tokenOut] = selectedPair.split('-');
 
@@ -83,8 +87,8 @@ export default function BinanceSpotPage() {
 
   return (
     <div className="flex flex-col bg-[#181a20] w-full min-h-screen">
-      {/* Top Header Bar */}
-      <div className="h-12 flex items-center justify-between px-4 border-b border-[#2b3139] bg-[#181a20] shrink-0">
+      {/* Top Header Bar - Desktop Only */}
+      <div className="hidden md:flex h-12 items-center justify-between px-4 border-b border-[#2b3139] bg-[#181a20] shrink-0">
         {/* Left: Logo + Nav */}
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-1.5">
@@ -118,10 +122,31 @@ export default function BinanceSpotPage() {
         </div>
       </div>
 
-      {/* Main Trading Grid */}
+      {/* Mobile Header */}
+      <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-[#2b3139] bg-[#181a20]">
+        <div className="flex items-center gap-2">
+          <Icon icon="cryptocurrency:btc" width={18} className="text-[#fcd535]" />
+          <span className="text-sm font-semibold text-white">WorldStreet</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <button className="p-2">
+            <Icon icon="ph:magnifying-glass" width={20} className="text-[#848e9c]" />
+          </button>
+          <button className="p-2">
+            <Icon icon="ph:list" width={20} className="text-[#848e9c]" />
+          </button>
+          <button className="p-2">
+            <Icon icon="ph:gear" width={20} className="text-[#848e9c]" />
+          </button>
+        </div>
+      </div>
+
+      {/* Main Content */}
       <div className="flex-1 flex flex-col">
-        {/* Top Section: 3 Columns */}
-        <div className="grid grid-cols-[280px_1fr_340px] flex-1 min-h-0">
+        {/* Desktop Layout */}
+        <div className="hidden md:grid md:grid-cols-[280px_1fr_340px] flex-1 min-h-0">
+        {/* Desktop Layout */}
+        <div className="hidden md:grid md:grid-cols-[280px_1fr_340px] flex-1 min-h-0">
           {/* LEFT: Order Book */}
           <div className="border-r border-[#2b3139] overflow-hidden">
             <BinanceOrderBook selectedPair={selectedPair} />
@@ -207,6 +232,199 @@ export default function BinanceSpotPage() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Mobile Layout */}
+        <div className="md:hidden flex flex-col flex-1 min-h-0">
+          {/* Pair Info Header */}
+          <div className="px-4 py-3 border-b border-[#2b3139] bg-[#181a20]">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Icon icon="cryptocurrency:btc" width={24} className="text-[#fcd535]" />
+                <div className="flex items-center gap-1">
+                  <span className="text-sm font-semibold text-white">{selectedPair.replace('-', '/')}</span>
+                  <Icon icon="ph:caret-down" width={12} className="text-[#848e9c]" />
+                </div>
+              </div>
+              <Icon icon="ph:star" width={18} className="text-[#848e9c]" />
+            </div>
+            
+            <div className="flex items-baseline gap-2 mb-2">
+              <span className={`text-2xl font-bold ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
+                {currentPrice.toFixed(2)}
+              </span>
+              <span className="text-sm text-[#848e9c]">
+                ${currentPrice.toFixed(2)}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-4 text-xs">
+              <div>
+                <span className="text-[#848e9c]">24h Change </span>
+                <span className={`font-medium ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
+                  {isPositive ? '+' : ''}{priceChange.toFixed(2)}%
+                </span>
+              </div>
+              <div>
+                <span className="text-[#848e9c]">24h High </span>
+                <span className="text-white">{(currentPrice * 1.02).toFixed(2)}</span>
+              </div>
+              <div>
+                <span className="text-[#848e9c]">24h Low </span>
+                <span className="text-white">{(currentPrice * 0.98).toFixed(2)}</span>
+              </div>
+            </div>
+
+            <div className="mt-2 text-xs">
+              <span className="text-[#848e9c]">24h Vol({tokenIn}) </span>
+              <span className="text-white">28,500.00</span>
+              <span className="text-[#848e9c] ml-3">24h Vol(USDT) </span>
+              <span className="text-white">3.12B</span>
+            </div>
+          </div>
+
+          {/* Tab Navigation */}
+          <div className="flex border-b border-[#2b3139] bg-[#181a20] overflow-x-auto scrollbar-hide">
+            {(['chart', 'orderbook', 'trades', 'info', 'data'] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setMobileTab(tab)}
+                className={`px-4 py-3 text-xs font-medium whitespace-nowrap border-b-2 transition-colors ${
+                  mobileTab === tab
+                    ? 'border-[#fcd535] text-white'
+                    : 'border-transparent text-[#848e9c]'
+                }`}
+              >
+                {tab === 'chart' && 'Chart'}
+                {tab === 'orderbook' && 'Order Book'}
+                {tab === 'trades' && 'Trades'}
+                {tab === 'info' && 'Info'}
+                {tab === 'data' && 'Trading Data'}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab Content */}
+          <div className="flex-1 min-h-0 overflow-hidden">
+            {mobileTab === 'chart' && (
+              <div className="h-full">
+                <LiveChart 
+                  symbol={selectedPair}
+                  stopLoss={chartStopLoss}
+                  takeProfit={chartTakeProfit}
+                  onUpdateLevels={handleUpdateLevels}
+                />
+              </div>
+            )}
+            
+            {mobileTab === 'orderbook' && (
+              <div className="h-full">
+                <BinanceOrderBook selectedPair={selectedPair} />
+              </div>
+            )}
+            
+            {mobileTab === 'trades' && (
+              <div className="h-full">
+                <MarketTrades selectedPair={selectedPair} />
+              </div>
+            )}
+            
+            {mobileTab === 'info' && (
+              <div className="h-full overflow-y-auto scrollbar-hide p-4">
+                <div className="text-white space-y-4">
+                  <h3 className="text-lg font-semibold">About Bitcoin (BTC)</h3>
+                  <p className="text-sm text-[#848e9c] leading-relaxed">
+                    Bitcoin (BTC) is a cryptocurrency, a virtual currency designed to act as money and a form of payment outside the control of any one person, group, or entity, removing the need for third-party involvement in financial transactions. It is rewarded to blockchain miners for verifying transactions and can be purchased on several exchanges.
+                  </p>
+                  <p className="text-sm text-[#848e9c] leading-relaxed">
+                    Bitcoin was introduced to the public in 2009 by an anonymous developer or group of developers using the name Satoshi Nakamoto. It has since become the most well-known cryptocurrency in the world. Its popularity has inspired the development of many other cryptocurrencies.
+                  </p>
+                  <button className="text-[#fcd535] text-sm font-medium">Unfold</button>
+                  
+                  <div className="pt-4 border-t border-[#2b3139] text-xs text-[#848e9c]">
+                    * Underlying data is sourced and provided by CMC and is for reference only. This information is presented on an 'as is' basis and does not serve as any form of representation or guarantee by Binance.
+                  </div>
+                  
+                  <div className="pt-4">
+                    <span className="text-[#848e9c] text-sm">Found an issue? </span>
+                    <button className="text-[#fcd535] text-sm font-medium">Submit FeedBack</button>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {mobileTab === 'data' && (
+              <div className="h-full overflow-y-auto scrollbar-hide p-4">
+                <div className="text-white space-y-3">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-[#848e9c]">Market Cap</span>
+                    <span>$1.42T</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-[#848e9c]">Circulating Supply</span>
+                    <span>19.5M BTC</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-[#848e9c]">Max Supply</span>
+                    <span>21M BTC</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Bottom Section */}
+          <div className="border-t border-[#2b3139] bg-[#181a20]">
+            {/* Bottom Tabs */}
+            <div className="flex border-b border-[#2b3139]">
+              <button
+                onClick={() => setMobileBottomTab('orders')}
+                className={`flex-1 px-4 py-3 text-xs font-medium border-b-2 transition-colors ${
+                  mobileBottomTab === 'orders'
+                    ? 'border-[#fcd535] text-white'
+                    : 'border-transparent text-[#848e9c]'
+                }`}
+              >
+                Open Orders(0)
+              </button>
+              <button
+                onClick={() => setMobileBottomTab('holdings')}
+                className={`flex-1 px-4 py-3 text-xs font-medium border-b-2 transition-colors ${
+                  mobileBottomTab === 'holdings'
+                    ? 'border-[#fcd535] text-white'
+                    : 'border-transparent text-[#848e9c]'
+                }`}
+              >
+                Holdings
+              </button>
+            </div>
+
+            {/* Bottom Content */}
+            <div className="h-32 flex items-center justify-center">
+              {mobileBottomTab === 'orders' && (
+                <div className="text-center">
+                  <Icon icon="ph:file-text" className="mx-auto mb-2 text-[#848e9c]" width={32} />
+                  <p className="text-xs text-[#848e9c]">No records</p>
+                </div>
+              )}
+              {mobileBottomTab === 'holdings' && (
+                <div className="text-center">
+                  <Icon icon="ph:wallet" className="mx-auto mb-2 text-[#848e9c]" width={32} />
+                  <p className="text-xs text-[#848e9c]">No holdings</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Buy/Sell Buttons - Fixed at bottom */}
+          <div className="grid grid-cols-2 gap-0 border-t border-[#2b3139] bg-[#181a20] safe-area-bottom">
+            <button className="py-4 bg-[#0ecb81] hover:bg-[#0ecb81]/90 text-white font-semibold text-base transition-colors">
+              Buy
+            </button>
+            <button className="py-4 bg-[#f6465d] hover:bg-[#f6465d]/90 text-white font-semibold text-base transition-colors">
+              Sell
+            </button>
           </div>
         </div>
       </div>
