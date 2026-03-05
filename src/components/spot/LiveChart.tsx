@@ -12,7 +12,7 @@ interface LiveChartProps {
 }
 
 interface CandleData {
-  time: number | string;
+  time: number;
   open: number;
   high: number;
   low: number;
@@ -23,229 +23,178 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
   const [showLevelsForm, setShowLevelsForm] = useState(false);
   const [tempStopLoss, setTempStopLoss] = useState(stopLoss || '');
   const [tempTakeProfit, setTempTakeProfit] = useState(takeProfit || '');
+  const [isLoading, setIsLoading] = useState(true);
   
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<any>(null);
   const seriesRef = useRef<any>(null);
-  const wsRef = useRef<WebSocket | null>(null);
-  const candlesRef = useRef<Map<number, CandleData>>(new Map());
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     setTempStopLoss(stopLoss || '');
     setTempTakeProfit(takeProfit || '');
   }, [stopLoss, takeProfit]);
 
-  // Initialize chart
+  // Initialize chart with a delay to ensure container has dimensions
   useEffect(() => {
     if (!containerRef.current) return;
 
-    // Ensure container has dimensions
-    const width = containerRef.current.clientWidth;
-    const height = containerRef.current.clientHeight;
+    // Use setTimeout to ensure the container is fully rendered
+    const initTimeout = setTimeout(() => {
+      if (!containerRef.current) return;
 
-    if (width === 0 || height === 0) {
-      console.warn('Chart container has no dimensions');
-      return;
-    }
+      const width = containerRef.current.clientWidth;
+      const height = containerRef.current.clientHeight;
 
-    try {
-      const chart = createChart(containerRef.current, {
-        layout: {
-          background: { type: ColorType.Solid, color: '#181a20' },
-          textColor: '#848e9c',
-          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        },
-        width: width,
-        height: height,
-        timeScale: {
-          timeVisible: true,
-          secondsVisible: false,
-          fixLeftEdge: true,
-          fixRightEdge: true,
-        },
-        crosshair: {
-          mode: 1,
-          vertLine: {
-            color: '#2b3139',
-            width: 1,
-            style: 2,
+      console.log('Chart container dimensions:', { width, height });
+
+      if (width === 0 || height === 0) {
+        console.warn('Chart container has no dimensions, retrying...');
+        return;
+      }
+
+      try {
+        const chart = createChart(containerRef.current, {
+          layout: {
+            background: { type: ColorType.Solid, color: '#181a20' },
+            textColor: '#848e9c',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
           },
-          horzLine: {
-            color: '#2b3139',
-            width: 1,
-            style: 2,
+          width: width,
+          height: height,
+          timeScale: {
+            timeVisible: true,
+            secondsVisible: false,
+            fixLeftEdge: true,
+            fixRightEdge: true,
           },
-        },
-        grid: {
-          vertLines: { color: '#2b3139', style: 2 },
-          horzLines: { color: '#2b3139', style: 2 },
-        },
-      });
+          crosshair: {
+            mode: 1,
+            vertLine: {
+              color: '#2b3139',
+              width: 1,
+              style: 2,
+            },
+            horzLine: {
+              color: '#2b3139',
+              width: 1,
+              style: 2,
+            },
+          },
+          grid: {
+            vertLines: { color: '#2b3139', style: 2 },
+            horzLines: { color: '#2b3139', style: 2 },
+          },
+        });
 
-      // Correct API: chart.addSeries(CandlestickSeries)
-      const candlestickSeries = chart.addSeries(CandlestickSeries, {
-        upColor: '#0ecb81',
-        downColor: '#f6465d',
-        borderUpColor: '#0ecb81',
-        borderDownColor: '#f6465d',
-        wickUpColor: '#0ecb81',
-        wickDownColor: '#f6465d',
-      });
+        const candlestickSeries = chart.addSeries(CandlestickSeries, {
+          upColor: '#0ecb81',
+          downColor: '#f6465d',
+          borderUpColor: '#0ecb81',
+          borderDownColor: '#f6465d',
+          wickUpColor: '#0ecb81',
+          wickDownColor: '#f6465d',
+        });
 
-      chartRef.current = chart;
-      seriesRef.current = candlestickSeries;
+        chartRef.current = chart;
+        seriesRef.current = candlestickSeries;
 
-      // Handle window resize
-      const handleResize = () => {
-        if (containerRef.current && chartRef.current) {
-          const newWidth = containerRef.current.clientWidth;
-          const newHeight = containerRef.current.clientHeight;
-          if (newWidth > 0 && newHeight > 0) {
-            chartRef.current.applyOptions({
-              width: newWidth,
-              height: newHeight,
-            });
+        console.log('Chart initialized successfully');
+
+        // Handle window resize
+        const handleResize = () => {
+          if (containerRef.current && chartRef.current) {
+            const newWidth = containerRef.current.clientWidth;
+            const newHeight = containerRef.current.clientHeight;
+            if (newWidth > 0 && newHeight > 0) {
+              chartRef.current.applyOptions({
+                width: newWidth,
+                height: newHeight,
+              });
+            }
           }
-        }
-      };
+        };
 
-      window.addEventListener('resize', handleResize);
+        window.addEventListener('resize', handleResize);
 
-      return () => {
-        window.removeEventListener('resize', handleResize);
-        if (chartRef.current) {
-          chartRef.current.remove();
-          chartRef.current = null;
-        }
-      };
-    } catch (error) {
-      console.error('Error initializing chart:', error);
-    }
+        return () => {
+          window.removeEventListener('resize', handleResize);
+        };
+      } catch (error) {
+        console.error('Error initializing chart:', error);
+      }
+    }, 100); // Small delay to ensure container is rendered
+
+    return () => {
+      clearTimeout(initTimeout);
+      if (chartRef.current) {
+        chartRef.current.remove();
+        chartRef.current = null;
+      }
+    };
   }, []);
 
-  // Fetch historical data from Next.js API route
-  const fetchHistoricalData = useCallback(async (pair: string) => {
+  // Fetch and update chart data
+  const fetchAndUpdateData = useCallback(async (pair: string) => {
     try {
-      // Kucoin expects format like BTC-USDT
-      const kucoinPair = pair; // Already in correct format
-      
-      const url = `/api/kucoin/candles?symbol=${encodeURIComponent(kucoinPair)}&type=1hour&limit=100`;
-      console.log('Fetching candles from:', url);
+      const url = `/api/kucoin/candles?symbol=${encodeURIComponent(pair)}&type=1hour&limit=100`;
       
       const response = await fetch(url);
       
       if (!response.ok) {
         console.error('API response not ok:', response.status, response.statusText);
-        throw new Error('Failed to fetch historical data');
+        return;
       }
       
       const data = await response.json();
-      console.log('Received candle data:', data);
       
       if (!data.data || !Array.isArray(data.data)) {
         console.error('Invalid response format:', data);
         return;
       }
 
-      // Data is already transformed by the API route
+      // Sort candles by time
       const candles: CandleData[] = data.data
-        .sort((a: CandleData, b: CandleData) => (typeof a.time === 'number' && typeof b.time === 'number' ? a.time - b.time : 0));
-
-      candlesRef.current.clear();
-      candles.forEach(candle => {
-        if (typeof candle.time === 'number') {
-          candlesRef.current.set(candle.time, candle);
-        }
-      });
+        .map((candle: any) => ({
+          time: candle.time,
+          open: candle.open,
+          high: candle.high,
+          low: candle.low,
+          close: candle.close,
+        }))
+        .sort((a: CandleData, b: CandleData) => a.time - b.time);
 
       if (seriesRef.current && candles.length > 0) {
-        console.log('Setting chart data with', candles.length, 'candles');
         seriesRef.current.setData(candles);
         chartRef.current?.timeScale().fitContent();
+        setIsLoading(false);
+        console.log('Chart updated with', candles.length, 'candles');
       }
     } catch (error) {
-      console.error('Error fetching historical data:', error);
+      console.error('Error fetching chart data:', error);
+      setIsLoading(false);
     }
   }, []);
 
-  // Subscribe to WebSocket for real-time updates
-  const subscribeToWebSocket = useCallback((pair: string) => {
-    if (wsRef.current) {
-      wsRef.current.close();
-    }
-
-    try {
-      const ws = new WebSocket('wss://ws-api.kucoin.com/socket.io/?transport=websocket');
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        const kucoinPair = pair.replace('-', '-');
-        const subscribeMessage = {
-          id: Date.now().toString(),
-          type: 'subscribe',
-          topic: `/market/candles:${kucoinPair}_1hour`,
-          privateChannel: false,
-          response: true,
-        };
-        ws.send(JSON.stringify(subscribeMessage));
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data);
-
-          if (message.type === 'message' && message.topic?.includes('candles')) {
-            const data = message.data;
-            if (data && data.candles && data.candles.length > 0) {
-              // Kucoin WebSocket format: [time, open, close, high, low, volume, turnover]
-              const kline = data.candles[0];
-              const candleTime = Math.floor(parseInt(kline[0]) / 1000);
-              const candle: CandleData = {
-                time: candleTime,
-                open: parseFloat(kline[1]),
-                close: parseFloat(kline[2]),
-                high: parseFloat(kline[3]),
-                low: parseFloat(kline[4]),
-              };
-
-              candlesRef.current.set(candleTime, candle);
-
-              if (seriesRef.current) {
-                seriesRef.current.update(candle);
-              }
-            }
-          }
-        } catch (error) {
-          console.error('Error processing WebSocket message:', error);
-        }
-      };
-
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-      };
-
-      ws.onclose = () => {
-        console.log('WebSocket closed');
-      };
-    } catch (error) {
-      console.error('Error connecting to WebSocket:', error);
-    }
-  }, []);
-
-  // Handle symbol changes
+  // Set up polling for data updates
   useEffect(() => {
-    if (!symbol) return;
+    if (!symbol || !seriesRef.current) return;
 
-    fetchHistoricalData(symbol);
-    subscribeToWebSocket(symbol);
+    // Initial fetch
+    fetchAndUpdateData(symbol);
+
+    // Set up polling every 3 seconds
+    pollingIntervalRef.current = setInterval(() => {
+      fetchAndUpdateData(symbol);
+    }, 3000);
 
     return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
       }
     };
-  }, [symbol, fetchHistoricalData, subscribeToWebSocket]);
+  }, [symbol, fetchAndUpdateData]);
 
   const handleUpdateLevels = () => {
     if (onUpdateLevels) {
@@ -342,7 +291,14 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
       )}
 
       {/* Chart Container */}
-      <div className="flex-1 min-h-0 w-full overflow-hidden" ref={containerRef}></div>
+      <div className="relative flex-1 min-h-0 w-full overflow-hidden">
+        {isLoading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-[#181a20]">
+            <div className="text-[#848e9c] text-sm">Loading chart...</div>
+          </div>
+        )}
+        <div ref={containerRef} className="w-full h-full"></div>
+      </div>
     </div>
   );
 };
