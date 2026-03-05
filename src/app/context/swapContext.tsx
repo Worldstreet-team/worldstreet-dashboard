@@ -11,6 +11,7 @@ import { useWallet } from "./walletContext";
 import { useSolana } from "./solanaContext";
 import { useEvm } from "./evmContext";
 import { decryptWithPIN } from "@/lib/wallet/encryption";
+import { pollTransactionConfirmation } from "@/lib/solana/pollTransactionConfirmation";
 
 // Li.Fi API endpoints
 const LIFI_API = "https://li.quest/v1";
@@ -436,16 +437,19 @@ export function SwapProvider({ children }: { children: ReactNode }) {
                 }
               );
 
-              // Wait for ATA creation to confirm with blockhash strategy
-              await connection.confirmTransaction(
-                {
-                  signature: ataSignature,
-                  blockhash,
-                  lastValidBlockHeight,
-                },
-                "confirmed"
+              // Wait for ATA creation via HTTP polling (no WebSocket needed)
+              const ataConfirm = await pollTransactionConfirmation(
+                connection,
+                ataSignature,
+                { commitment: "confirmed", timeoutMs: 60_000, intervalMs: 2000 }
               );
-              console.log(`[Swap] ATA created: ${ataSignature}`);
+              if (!ataConfirm.confirmed) {
+                console.warn(`[Swap] ATA confirmation timed out, proceeding anyway...`);
+              } else if (ataConfirm.err) {
+                throw new Error(`ATA creation failed on-chain: ${JSON.stringify(ataConfirm.err)}`);
+              } else {
+                console.log(`[Swap] ATA created: ${ataSignature}`);
+              }
             }
           }
 
@@ -480,9 +484,7 @@ export function SwapProvider({ children }: { children: ReactNode }) {
 
           transaction.sign([keypair]);
 
-          // Get a fresh blockhash for confirmation tracking
-          const { blockhash: sendBlockhash, lastValidBlockHeight: sendBlockHeight } =
-            await connection.getLatestBlockhash("confirmed");
+          // No need for blockhash for polling-based confirmation
 
           console.log('[Swap] Sending Solana transaction...', {
             fromToken: swapQuote.fromToken.symbol,
@@ -514,47 +516,29 @@ export function SwapProvider({ children }: { children: ReactNode }) {
 
           console.log(`[Swap] Solana TX sent: ${signature}`);
 
-          // Wait for on-chain confirmation (with timeout fallback)
-          // This ensures the token balance actually reflects before we report success.
-          try {
-            const confirmResult = await connection.confirmTransaction(
-              {
-                signature,
-                blockhash: sendBlockhash,
-                lastValidBlockHeight: sendBlockHeight,
-              },
-              "confirmed"
+          // Wait for on-chain confirmation via HTTP polling (no WebSocket needed)
+          const confirmResult = await pollTransactionConfirmation(
+            connection,
+            signature,
+            { commitment: "confirmed", timeoutMs: 90_000, intervalMs: 2000 }
+          );
+
+          if (confirmResult.confirmed && confirmResult.err) {
+            console.error(
+              "[Swap] Transaction confirmed but failed on-chain:",
+              confirmResult.err
             );
+            throw new Error(
+              `Transaction confirmed but failed on-chain: ${JSON.stringify(confirmResult.err)}`
+            );
+          }
 
-            if (confirmResult.value.err) {
-              console.error(
-                "[Swap] Transaction confirmed but failed on-chain:",
-                confirmResult.value.err
-              );
-              throw new Error(
-                `Transaction confirmed but failed on-chain: ${JSON.stringify(confirmResult.value.err)}`
-              );
-            }
-
+          if (!confirmResult.confirmed) {
+            console.warn(
+              `[Swap] Confirmation timed out for ${signature}, but TX was broadcast. Li.Fi will track it.`
+            );
+          } else {
             console.log(`[Swap] Solana TX confirmed: ${signature}`);
-          } catch (confirmErr: unknown) {
-            // If confirmation times out, the TX may still succeed.
-            // We return the signature and let Li.Fi polling track it.
-            const errMsg =
-              confirmErr instanceof Error ? confirmErr.message : String(confirmErr);
-            if (
-              errMsg.includes("TransactionExpiredTimeoutError") ||
-              errMsg.includes("TransactionExpiredBlockheightExceededError") ||
-              errMsg.includes("block height exceeded") ||
-              errMsg.includes("was not confirmed")
-            ) {
-              console.warn(
-                `[Swap] Confirmation timed out for ${signature}, but TX was broadcast. Li.Fi will track it.`
-              );
-            } else {
-              // Re-throw non-timeout errors
-              throw confirmErr;
-            }
           }
 
           return signature;

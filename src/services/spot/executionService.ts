@@ -8,6 +8,7 @@ import { ethers } from 'ethers';
 import type { QuoteResponse } from './quoteService';
 import { validateQuote } from './quoteService';
 import { validateQuoteFreshness, SLIPPAGE_CONFIG } from '@/lib/swap/slippage';
+import { pollTransactionConfirmation } from '@/lib/solana/pollTransactionConfirmation';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONFIGURATION
@@ -281,14 +282,7 @@ async function executeSolanaSwap(
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // STEP 4: Get fresh blockhash for confirmation
-  // ─────────────────────────────────────────────────────────────────────────
-
-  const { blockhash, lastValidBlockHeight } =
-    await connection.getLatestBlockhash('confirmed');
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // STEP 5: Send transaction
+  // STEP 4: Send transaction (blockhash no longer needed for polling)
   // ─────────────────────────────────────────────────────────────────────────
 
   const signature = await connection.sendTransaction(transaction, {
@@ -303,63 +297,39 @@ async function executeSolanaSwap(
   });
 
   // ─────────────────────────────────────────────────────────────────────────
-  // STEP 6: Confirm transaction
+  // STEP 5: Confirm transaction via HTTP polling (no WebSocket needed)
   // ─────────────────────────────────────────────────────────────────────────
 
-  try {
-    const confirmation = await connection.confirmTransaction(
-      {
-        signature,
-        blockhash,
-        lastValidBlockHeight,
-      },
-      'confirmed'
+  const confirmResult = await pollTransactionConfirmation(
+    connection,
+    signature,
+    { commitment: 'confirmed', timeoutMs: 90_000, intervalMs: 2000 }
+  );
+
+  if (confirmResult.confirmed && confirmResult.err) {
+    throw new Error(
+      `Transaction failed on-chain: ${JSON.stringify(confirmResult.err)}`
     );
+  }
 
-    if (confirmation.value.err) {
-      throw new Error(
-        `Transaction failed on-chain: ${JSON.stringify(confirmation.value.err)}`
-      );
-    }
-
+  if (!confirmResult.confirmed) {
+    console.warn('[ExecutionService] Confirmation timeout (TX may still succeed):', {
+      requestId: context.requestId,
+      signature,
+    });
+  } else {
     console.log('[ExecutionService] Solana transaction confirmed:', {
       requestId: context.requestId,
       signature,
     });
-
-    return {
-      success: true,
-      txHash: signature,
-      retried: false,
-      executionTime: 0, // Will be set by caller
-    };
-  } catch (confirmError) {
-    // Confirmation timeout - transaction may still succeed
-    const errMsg =
-      confirmError instanceof Error ? confirmError.message : String(confirmError);
-
-    if (
-      errMsg.includes('TransactionExpired') ||
-      errMsg.includes('block height exceeded') ||
-      errMsg.includes('was not confirmed')
-    ) {
-      console.warn('[ExecutionService] Confirmation timeout (TX may still succeed):', {
-        requestId: context.requestId,
-        signature,
-      });
-
-      // Return success with warning
-      return {
-        success: true,
-        txHash: signature,
-        retried: false,
-        executionTime: 0,
-      };
-    }
-
-    // Other confirmation errors
-    throw confirmError;
   }
+
+  return {
+    success: true,
+    txHash: signature,
+    retried: false,
+    executionTime: 0, // Will be set by caller
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
