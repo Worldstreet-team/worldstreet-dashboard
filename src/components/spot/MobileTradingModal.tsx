@@ -15,11 +15,12 @@ interface MobileTradingModalProps {
 
 export default function MobileTradingModal({ isOpen, onClose, side, selectedPair, chain }: MobileTradingModalProps) {
   const { user } = useAuth();
-  const [orderType, setOrderType] = useState<'market' | 'limit'>('market'); // Changed default to 'market'
+  const [orderType, setOrderType] = useState<'market' | 'limit'>('market');
   const [price, setPrice] = useState('');
   const [amount, setAmount] = useState('');
   const [total, setTotal] = useState('');
   const [sliderValue, setSliderValue] = useState(0);
+  const [currentMarketPrice, setCurrentMarketPrice] = useState<number>(0);
 
   const [tokenIn, tokenOut] = selectedPair.split('-');
 
@@ -29,28 +30,77 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
     const asset = baseAsset.toUpperCase();
     
     if (asset === 'ETH' || asset === 'BTC') {
-      return 'evm'; // Ethereum chain for ETH and BTC
+      return 'evm';
     } else if (asset === 'SOL') {
-      return 'sol'; // Solana chain for SOL
+      return 'sol';
     }
     
-    return 'tron'; // Default to Tron
+    return 'tron';
   };
 
   const effectiveChain = chain || getChainForPair(selectedPair);
 
   // Use the custom hook to fetch pair balances
   const { 
-    tokenIn: sellBalance, 
-    tokenOut: buyBalance, 
+    tokenIn: baseBalance,  // Balance of base asset (BTC, ETH, SOL)
+    tokenOut: quoteBalance, // Balance of quote asset (USDT)
     loading: loadingBalances,
     error: balanceError,
     refetch: refetchBalances 
   } = usePairBalances(user?.userId, selectedPair, effectiveChain);
 
   // Current balance based on buy/sell side
-  const currentBalance = side === 'buy' ? buyBalance : sellBalance;
+  // Buy: spend USDT (quoteBalance), get token
+  // Sell: spend token (baseBalance), get USDT
+  const currentBalance = side === 'buy' ? quoteBalance : baseBalance;
   const currentToken = side === 'buy' ? tokenOut : tokenIn;
+  const equivalentToken = side === 'buy' ? tokenIn : tokenOut;
+
+  // Fetch current market price
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    const fetchPrice = async () => {
+      try {
+        const response = await fetch(`/api/kucoin/ticker?symbol=${selectedPair}`);
+        if (response.ok) {
+          const result = await response.json();
+          if (result.code === '200000' && result.data) {
+            setCurrentMarketPrice(parseFloat(result.data.last) || 0);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching market price:', err);
+      }
+    };
+
+    fetchPrice();
+    const interval = setInterval(fetchPrice, 5000);
+    return () => clearInterval(interval);
+  }, [selectedPair, isOpen]);
+
+  // Auto-calculate total when amount or price changes
+  useEffect(() => {
+    if (orderType === 'market' && amount && currentMarketPrice > 0) {
+      if (side === 'buy') {
+        // Buying: amount is in USDT, calculate how much token you get
+        const tokenAmount = parseFloat(amount) / currentMarketPrice;
+        setTotal(tokenAmount.toFixed(6));
+      } else {
+        // Selling: amount is in token, calculate how much USDT you get
+        const usdtAmount = parseFloat(amount) * currentMarketPrice;
+        setTotal(usdtAmount.toFixed(6));
+      }
+    } else if (orderType === 'limit' && amount && price) {
+      const priceNum = parseFloat(price);
+      const amountNum = parseFloat(amount);
+      if (side === 'buy') {
+        setTotal((amountNum * priceNum).toFixed(6));
+      } else {
+        setTotal((amountNum * priceNum).toFixed(6));
+      }
+    }
+  }, [amount, price, currentMarketPrice, orderType, side]);
 
   // Debug logging
   useEffect(() => {
@@ -60,14 +110,14 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
         selectedPair,
         side,
         chain: effectiveChain,
-        sellBalance,
-        buyBalance,
+        baseBalance,
+        quoteBalance,
         currentBalance,
         loadingBalances,
         balanceError
       });
     }
-  }, [isOpen, user?.userId, selectedPair, side, effectiveChain, sellBalance, buyBalance, currentBalance, loadingBalances, balanceError]);
+  }, [isOpen, user?.userId, selectedPair, side, effectiveChain, baseBalance, quoteBalance, currentBalance, loadingBalances, balanceError]);
 
   const handlePercentage = (percent: number) => {
     const calculatedAmount = (currentBalance * percent) / 100;
@@ -78,13 +128,10 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
   if (!isOpen) return null;
 
   const handleSubmit = async () => {
-    // Handle order submission
     console.log('Order submitted:', { side, orderType, price, amount, total });
     
-    // Simulate trade execution
     await new Promise(resolve => setTimeout(resolve, 1000));
     
-    // Refetch balances after trade
     await refetchBalances();
     
     onClose();
@@ -178,7 +225,9 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
 
           {/* Amount Input */}
           <div>
-            <label className="block text-sm text-[#848e9c] mb-2">Amount</label>
+            <label className="block text-sm text-[#848e9c] mb-2">
+              {side === 'buy' ? `Amount (${tokenOut})` : `Amount (${tokenIn})`}
+            </label>
             <div className="relative">
               <input
                 type="number"
@@ -188,9 +237,15 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
                 className="w-full px-4 py-3 bg-[#2b3139] border border-[#2b3139] rounded-lg text-base text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#fcd535]"
               />
               <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[#848e9c]">
-                {tokenIn}
+                {currentToken}
               </span>
             </div>
+            {/* Show equivalent */}
+            {total && (
+              <div className="mt-2 text-xs text-[#848e9c]">
+                ≈ {total} {equivalentToken}
+              </div>
+            )}
           </div>
 
           {/* Percentage Buttons */}

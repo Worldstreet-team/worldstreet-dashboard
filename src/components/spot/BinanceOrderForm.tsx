@@ -13,7 +13,7 @@ interface BinanceOrderFormProps {
 export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain }: BinanceOrderFormProps) {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'buy' | 'sell'>('buy');
-  const [orderType, setOrderType] = useState<'market' | 'limit' | 'stop-limit'>('market'); // Changed default to 'market'
+  const [orderType, setOrderType] = useState<'market' | 'limit' | 'stop-limit'>('market');
   const [price, setPrice] = useState('');
   const [amount, setAmount] = useState('');
   const [total, setTotal] = useState('');
@@ -21,6 +21,7 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
   const [executing, setExecuting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [currentMarketPrice, setCurrentMarketPrice] = useState<number>(0);
 
   const [tokenIn, tokenOut] = selectedPair.split('-');
 
@@ -30,24 +31,70 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
     const asset = baseAsset.toUpperCase();
     
     if (asset === 'ETH' || asset === 'BTC') {
-      return 'evm'; // Ethereum chain for ETH and BTC
+      return 'evm';
     } else if (asset === 'SOL') {
-      return 'sol'; // Solana chain for SOL
+      return 'sol';
     }
     
-    return 'tron'; // Default to Tron
+    return 'tron';
   };
 
   const effectiveChain = chain || getChainForPair(selectedPair);
 
   // Use the custom hook to fetch pair balances
   const { 
-    tokenIn: sellBalance, 
-    tokenOut: buyBalance, 
+    tokenIn: baseBalance,  // Balance of base asset (BTC, ETH, SOL)
+    tokenOut: quoteBalance, // Balance of quote asset (USDT)
     loading: loadingBalances,
     error: balanceError,
     refetch: refetchBalances 
   } = usePairBalances(user?.userId, selectedPair, effectiveChain);
+
+  // Fetch current market price
+  useEffect(() => {
+    const fetchPrice = async () => {
+      try {
+        const response = await fetch(`/api/kucoin/ticker?symbol=${selectedPair}`);
+        if (response.ok) {
+          const result = await response.json();
+          if (result.code === '200000' && result.data) {
+            setCurrentMarketPrice(parseFloat(result.data.last) || 0);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching market price:', err);
+      }
+    };
+
+    fetchPrice();
+    const interval = setInterval(fetchPrice, 5000);
+    return () => clearInterval(interval);
+  }, [selectedPair]);
+
+  // Auto-calculate total when amount or price changes
+  useEffect(() => {
+    if (orderType === 'market' && amount && currentMarketPrice > 0) {
+      if (activeTab === 'buy') {
+        // Buying: amount is in USDT, calculate how much token you get
+        const tokenAmount = parseFloat(amount) / currentMarketPrice;
+        setTotal(tokenAmount.toFixed(6));
+      } else {
+        // Selling: amount is in token, calculate how much USDT you get
+        const usdtAmount = parseFloat(amount) * currentMarketPrice;
+        setTotal(usdtAmount.toFixed(6));
+      }
+    } else if (orderType !== 'market' && amount && price) {
+      const priceNum = parseFloat(price);
+      const amountNum = parseFloat(amount);
+      if (activeTab === 'buy') {
+        // Buying: calculate USDT needed
+        setTotal((amountNum * priceNum).toFixed(6));
+      } else {
+        // Selling: calculate USDT received
+        setTotal((amountNum * priceNum).toFixed(6));
+      }
+    }
+  }, [amount, price, currentMarketPrice, orderType, activeTab]);
 
   // Debug logging
   useEffect(() => {
@@ -55,17 +102,20 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
       userId: user?.userId,
       selectedPair,
       chain: effectiveChain,
-      sellBalance,
-      buyBalance,
+      baseBalance,
+      quoteBalance,
       loadingBalances,
       balanceError,
       tokenIn,
-      tokenOut
+      tokenOut,
+      activeTab
     });
-  }, [user?.userId, selectedPair, effectiveChain, sellBalance, buyBalance, loadingBalances, balanceError, tokenIn, tokenOut]);
+  }, [user?.userId, selectedPair, effectiveChain, baseBalance, quoteBalance, loadingBalances, balanceError, tokenIn, tokenOut, activeTab]);
 
   const handlePercentage = (percent: number) => {
-    const balance = activeTab === 'buy' ? buyBalance : sellBalance;
+    // When buying: use USDT balance (quoteBalance)
+    // When selling: use token balance (baseBalance)
+    const balance = activeTab === 'buy' ? quoteBalance : baseBalance;
     const calculatedAmount = (balance * percent) / 100;
     setAmount(calculatedAmount.toFixed(6));
     setSliderValue(percent);
@@ -99,8 +149,12 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
     }
   };
 
-  const currentBalance = activeTab === 'buy' ? buyBalance : sellBalance;
+  // Current balance and token based on buy/sell
+  // Buy: spend USDT (quoteBalance), get token (tokenIn)
+  // Sell: spend token (baseBalance), get USDT (tokenOut)
+  const currentBalance = activeTab === 'buy' ? quoteBalance : baseBalance;
   const currentToken = activeTab === 'buy' ? tokenOut : tokenIn;
+  const equivalentToken = activeTab === 'buy' ? tokenIn : tokenOut;
 
   return (
     <div className="flex flex-col bg-[#181a20] text-white overflow-hidden">
@@ -189,7 +243,9 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
 
         {/* Amount Input */}
         <div>
-          <label className="block text-xs text-[#848e9c] mb-2">Amount</label>
+          <label className="block text-xs text-[#848e9c] mb-2">
+            {activeTab === 'buy' ? `Amount (${tokenOut})` : `Amount (${tokenIn})`}
+          </label>
           <div className="relative">
             <input
               type="number"
@@ -199,9 +255,15 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
               className="w-full px-3 py-2 bg-[#2b3139] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#fcd535]"
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#848e9c]">
-              {tokenIn}
+              {currentToken}
             </span>
           </div>
+          {/* Show equivalent */}
+          {total && (
+            <div className="mt-1 text-[10px] text-[#848e9c]">
+              ≈ {total} {equivalentToken}
+            </div>
+          )}
         </div>
 
         {/* Percentage Slider */}
