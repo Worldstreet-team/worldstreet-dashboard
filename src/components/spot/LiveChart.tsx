@@ -39,6 +39,15 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
   useEffect(() => {
     if (!containerRef.current) return;
 
+    // Ensure container has dimensions
+    const width = containerRef.current.clientWidth;
+    const height = containerRef.current.clientHeight;
+
+    if (width === 0 || height === 0) {
+      console.warn('Chart container has no dimensions');
+      return;
+    }
+
     try {
       const chart = createChart(containerRef.current, {
         layout: {
@@ -46,8 +55,8 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
           textColor: '#848e9c',
           fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         },
-        width: containerRef.current.clientWidth,
-        height: containerRef.current.clientHeight,
+        width: width,
+        height: height,
         timeScale: {
           timeVisible: true,
           secondsVisible: false,
@@ -89,10 +98,14 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
       // Handle window resize
       const handleResize = () => {
         if (containerRef.current && chartRef.current) {
-          chartRef.current.applyOptions({
-            width: containerRef.current.clientWidth,
-            height: containerRef.current.clientHeight,
-          });
+          const newWidth = containerRef.current.clientWidth;
+          const newHeight = containerRef.current.clientHeight;
+          if (newWidth > 0 && newHeight > 0) {
+            chartRef.current.applyOptions({
+              width: newWidth,
+              height: newHeight,
+            });
+          }
         }
       };
 
@@ -113,15 +126,21 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
   // Fetch historical data from Next.js API route
   const fetchHistoricalData = useCallback(async (pair: string) => {
     try {
-      const kucoinPair = pair.replace('-', '-');
+      // Kucoin expects format like BTC-USDT
+      const kucoinPair = pair; // Already in correct format
       
-      const response = await fetch(
-        `/api/kucoin/candles?symbol=${kucoinPair}&type=1hour&limit=100`
-      );
+      const url = `/api/kucoin/candles?symbol=${encodeURIComponent(kucoinPair)}&type=1hour&limit=100`;
+      console.log('Fetching candles from:', url);
       
-      if (!response.ok) throw new Error('Failed to fetch historical data');
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        console.error('API response not ok:', response.status, response.statusText);
+        throw new Error('Failed to fetch historical data');
+      }
       
       const data = await response.json();
+      console.log('Received candle data:', data);
       
       if (!data.data || !Array.isArray(data.data)) {
         console.error('Invalid response format:', data);
@@ -139,7 +158,8 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
         }
       });
 
-      if (seriesRef.current) {
+      if (seriesRef.current && candles.length > 0) {
+        console.log('Setting chart data with', candles.length, 'candles');
         seriesRef.current.setData(candles);
         chartRef.current?.timeScale().fitContent();
       }
@@ -322,7 +342,7 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
       )}
 
       {/* Chart Container */}
-      <div className="flex-1 min-h-0 w-full" ref={containerRef}></div>
+      <div className="flex-1 min-h-0 w-full overflow-hidden" ref={containerRef}></div>
     </div>
   );
 };
