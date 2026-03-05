@@ -221,6 +221,7 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
       // Update last price (best bid)
       if (processedBids.length > 0) {
         const newLastPrice = processedBids[0].price;
+        console.log("New last Price: ", newLastPrice)
         const change = lastPrice > 0 ? ((newLastPrice - lastPrice) / lastPrice) * 100 : 0;
         setLastPrice(newLastPrice);
         setPriceChange(change);
