@@ -9,6 +9,7 @@ import BinanceOrderForm from '@/components/spot/BinanceOrderForm';
 import BinanceBottomPanel from '@/components/spot/BinanceBottomPanel';
 import LiveChart from '@/components/spot/LiveChart';
 import MarketTrades from '@/components/spot/MarketTrades';
+import MobileTradingModal from '@/components/spot/MobileTradingModal';
 
 const AVAILABLE_PAIRS = ['BTC-USDT', 'ETH-USDT', 'SOL-USDT'];
 
@@ -35,6 +36,9 @@ export default function BinanceSpotPage() {
   // Mobile state
   const [mobileTab, setMobileTab] = useState<'chart' | 'orderbook' | 'trades' | 'info' | 'data'>('chart');
   const [mobileBottomTab, setMobileBottomTab] = useState<'orders' | 'holdings'>('orders');
+  const [showTradingModal, setShowTradingModal] = useState(false);
+  const [tradingSide, setTradingSide] = useState<'buy' | 'sell'>('buy');
+  const [showPairSelector, setShowPairSelector] = useState(false);
 
   const [tokenIn, tokenOut] = selectedPair.split('-');
 
@@ -69,6 +73,17 @@ export default function BinanceSpotPage() {
 
   const handleSelectPair = (pair: string) => {
     setSelectedPair(pair);
+    setShowPairSelector(false);
+  };
+
+  const handleBuyClick = () => {
+    setTradingSide('buy');
+    setShowTradingModal(true);
+  };
+
+  const handleSellClick = () => {
+    setTradingSide('sell');
+    setShowTradingModal(true);
   };
 
   const chartStopLoss = activePositionTPSL?.symbol === selectedPair 
@@ -238,15 +253,38 @@ export default function BinanceSpotPage() {
           {/* Pair Info Header */}
           <div className="px-4 py-3 border-b border-[#2b3139] bg-[#181a20]">
             <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
+              <button 
+                onClick={() => setShowPairSelector(!showPairSelector)}
+                className="flex items-center gap-2 hover:bg-[#2b3139] px-2 py-1 rounded transition-colors"
+              >
                 <Icon icon="cryptocurrency:btc" width={24} className="text-[#fcd535]" />
                 <div className="flex items-center gap-1">
                   <span className="text-sm font-semibold text-white">{selectedPair.replace('-', '/')}</span>
                   <Icon icon="ph:caret-down" width={12} className="text-[#848e9c]" />
                 </div>
-              </div>
+              </button>
               <Icon icon="ph:star" width={18} className="text-[#848e9c]" />
             </div>
+            
+            {/* Pair Selector Dropdown */}
+            {showPairSelector && (
+              <div className="absolute left-4 right-4 mt-2 bg-[#2b3139] rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto scrollbar-hide">
+                {Object.keys(PAIR_DATA).map((pair) => (
+                  <button
+                    key={pair}
+                    onClick={() => handleSelectPair(pair)}
+                    className={`w-full px-4 py-3 text-left hover:bg-[#181a20] transition-colors ${
+                      selectedPair === pair ? 'bg-[#181a20]' : ''
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-white font-medium">{pair.replace('-', '/')}</span>
+                      <span className="text-[#848e9c] text-sm">${PAIR_DATA[pair].basePrice.toFixed(2)}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
             
             <div className="flex items-baseline gap-2 mb-2">
               <span className={`text-2xl font-bold ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
@@ -304,9 +342,9 @@ export default function BinanceSpotPage() {
           </div>
 
           {/* Tab Content */}
-          <div className="flex-1 min-h-0 overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-hidden bg-[#181a20]">
             {mobileTab === 'chart' && (
-              <div className="h-full">
+              <div className="w-full h-full">
                 <LiveChart 
                   symbol={selectedPair}
                   stopLoss={chartStopLoss}
@@ -417,15 +455,29 @@ export default function BinanceSpotPage() {
 
           {/* Buy/Sell Buttons - Fixed at bottom */}
           <div className="grid grid-cols-2 gap-0 border-t border-[#2b3139] bg-[#181a20] safe-area-bottom">
-            <button className="py-4 bg-[#0ecb81] hover:bg-[#0ecb81]/90 text-white font-semibold text-base transition-colors">
+            <button 
+              onClick={handleBuyClick}
+              className="py-4 bg-[#0ecb81] hover:bg-[#0ecb81]/90 text-white font-semibold text-base transition-colors"
+            >
               Buy
             </button>
-            <button className="py-4 bg-[#f6465d] hover:bg-[#f6465d]/90 text-white font-semibold text-base transition-colors">
+            <button 
+              onClick={handleSellClick}
+              className="py-4 bg-[#f6465d] hover:bg-[#f6465d]/90 text-white font-semibold text-base transition-colors"
+            >
               Sell
             </button>
           </div>
         </div>
       </div>
+
+      {/* Mobile Trading Modal */}
+      <MobileTradingModal
+        isOpen={showTradingModal}
+        onClose={() => setShowTradingModal(false)}
+        side={tradingSide}
+        selectedPair={selectedPair}
+      />
     </div>
   );
 }
