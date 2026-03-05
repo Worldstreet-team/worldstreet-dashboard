@@ -13,17 +13,20 @@ import MobileTradingModal from '@/components/spot/MobileTradingModal';
 
 const AVAILABLE_PAIRS = ['BTC-USDT', 'ETH-USDT', 'SOL-USDT'];
 
-const PAIR_DATA: Record<string, { name: string; basePrice: number }> = {
-  'BTC-USDT': { name: 'Bitcoin', basePrice: 69201.46 },
-  'ETH-USDT': { name: 'Ethereum', basePrice: 3842.15 },
-  'SOL-USDT': { name: 'Solana', basePrice: 198.73 }
-};
+interface PairData {
+  name: string;
+  price: number;
+  change24h: number;
+  high24h: number;
+  low24h: number;
+  volume24h: number;
+}
 
 export default function BinanceSpotPage() {
   const pathname = usePathname();
   const [selectedPair, setSelectedPair] = useState('BTC-USDT');
-  const [currentPrice, setCurrentPrice] = useState(PAIR_DATA['BTC-USDT'].basePrice);
-  const [priceChange, setPriceChange] = useState(3.34);
+  const [pairData, setPairData] = useState<Record<string, PairData>>({});
+  const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const [stopLoss, setStopLoss] = useState('');
   const [takeProfit, setTakeProfit] = useState('');
@@ -42,20 +45,70 @@ export default function BinanceSpotPage() {
 
   const [tokenIn, tokenOut] = selectedPair.split('-');
 
+  // Fetch real-time data from KuCoin
+  useEffect(() => {
+    const fetchPairData = async () => {
+      try {
+        const dataPromises = AVAILABLE_PAIRS.map(async (pair) => {
+          const response = await fetch(`/api/kucoin/ticker?symbol=${pair}`);
+          
+          if (!response.ok) {
+            throw new Error(`Failed to fetch ${pair}`);
+          }
+
+          const result = await response.json();
+          
+          if (result.code !== '200000' || !result.data) {
+            throw new Error(`Invalid response for ${pair}`);
+          }
+
+          const data = result.data;
+          const pairName = pair.split('-')[0];
+          const fullName = pairName === 'BTC' ? 'Bitcoin' : 
+                          pairName === 'ETH' ? 'Ethereum' : 
+                          pairName === 'SOL' ? 'Solana' : pairName;
+
+          return {
+            pair,
+            data: {
+              name: fullName,
+              price: parseFloat(data.last) || 0,
+              change24h: parseFloat(data.changeRate) * 100 || 0,
+              high24h: parseFloat(data.high) || 0,
+              low24h: parseFloat(data.low) || 0,
+              volume24h: parseFloat(data.vol) || 0
+            }
+          };
+        });
+
+        const results = await Promise.all(dataPromises);
+        const newPairData: Record<string, PairData> = {};
+        
+        results.forEach(({ pair, data }) => {
+          newPairData[pair] = data;
+        });
+
+        setPairData(newPairData);
+        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching pair data:', error);
+        setLoading(false);
+      }
+    };
+
+    fetchPairData();
+    const interval = setInterval(fetchPairData, 10000); // Update every 10 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
   // Update price when pair changes
   useEffect(() => {
-    const pairData = PAIR_DATA[selectedPair];
-    if (pairData) {
-      setCurrentPrice(pairData.basePrice);
-      const interval = setInterval(() => {
-        const variation = (Math.random() - 0.5) * pairData.basePrice * 0.001;
-        const newPrice = pairData.basePrice + variation;
-        setCurrentPrice(newPrice);
-        setPriceChange(((newPrice - pairData.basePrice) / pairData.basePrice) * 100);
-      }, 2000);
-      return () => clearInterval(interval);
+    const currentPairData = pairData[selectedPair];
+    if (currentPairData) {
+      // Data is already being updated by the fetch interval
     }
-  }, [selectedPair]);
+  }, [selectedPair, pairData]);
 
   const handleUpdateLevels = (sl: string, tp: string) => {
     setStopLoss(sl);
@@ -94,11 +147,25 @@ export default function BinanceSpotPage() {
     ? activePositionTPSL.takeProfit || takeProfit 
     : takeProfit;
 
-  const currentPairData = PAIR_DATA[selectedPair];
+  const currentPairData = pairData[selectedPair];
+  const currentPrice = currentPairData?.price || 0;
+  const priceChange = currentPairData?.change24h || 0;
   const isPositive = priceChange >= 0;
 
   // Check if we're on the spot page
   const isSpotPage = pathname === '/spot';
+
+  // Show loading state while fetching initial data
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-[#181a20]">
+        <div className="text-center">
+          <Icon icon="ph:spinner" className="mx-auto mb-4 text-[#fcd535] animate-spin" width={48} />
+          <p className="text-white text-sm">Loading market data...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col bg-[#181a20] w-full min-h-screen">
@@ -192,15 +259,15 @@ export default function BinanceSpotPage() {
                 </div>
                 <div className="flex flex-col">
                   <span className="text-[#848e9c]">24h High</span>
-                  <span className="text-white">{(currentPrice * 1.02).toFixed(2)}</span>
+                  <span className="text-white">{currentPairData?.high24h.toFixed(2) || '0.00'}</span>
                 </div>
                 <div className="flex flex-col">
                   <span className="text-[#848e9c]">24h Low</span>
-                  <span className="text-white">{(currentPrice * 0.98).toFixed(2)}</span>
+                  <span className="text-white">{currentPairData?.low24h.toFixed(2) || '0.00'}</span>
                 </div>
                 <div className="flex flex-col">
                   <span className="text-[#848e9c]">24h Volume({tokenIn})</span>
-                  <span className="text-white">28,500.00</span>
+                  <span className="text-white">{currentPairData?.volume24h.toFixed(2) || '0.00'}</span>
                 </div>
               </div>
             </div>
@@ -269,7 +336,7 @@ export default function BinanceSpotPage() {
             {/* Pair Selector Dropdown */}
             {showPairSelector && (
               <div className="absolute left-4 right-4 mt-2 bg-[#2b3139] rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto scrollbar-hide">
-                {Object.keys(PAIR_DATA).map((pair) => (
+                {Object.keys(pairData).map((pair) => (
                   <button
                     key={pair}
                     onClick={() => handleSelectPair(pair)}
@@ -279,7 +346,7 @@ export default function BinanceSpotPage() {
                   >
                     <div className="flex items-center justify-between">
                       <span className="text-white font-medium">{pair.replace('-', '/')}</span>
-                      <span className="text-[#848e9c] text-sm">${PAIR_DATA[pair].basePrice.toFixed(2)}</span>
+                      <span className="text-[#848e9c] text-sm">${pairData[pair]?.price.toFixed(2) || '0.00'}</span>
                     </div>
                   </button>
                 ))}
@@ -304,19 +371,21 @@ export default function BinanceSpotPage() {
               </div>
               <div>
                 <span className="text-[#848e9c]">24h High </span>
-                <span className="text-white">{(currentPrice * 1.02).toFixed(2)}</span>
+                <span className="text-white">{currentPairData?.high24h.toFixed(2) || '0.00'}</span>
               </div>
               <div>
                 <span className="text-[#848e9c]">24h Low </span>
-                <span className="text-white">{(currentPrice * 0.98).toFixed(2)}</span>
+                <span className="text-white">{currentPairData?.low24h.toFixed(2) || '0.00'}</span>
               </div>
             </div>
 
             <div className="mt-2 text-xs">
               <span className="text-[#848e9c]">24h Vol({tokenIn}) </span>
-              <span className="text-white">28,500.00</span>
+              <span className="text-white">{currentPairData?.volume24h.toFixed(2) || '0.00'}</span>
               <span className="text-[#848e9c] ml-3">24h Vol(USDT) </span>
-              <span className="text-white">3.12B</span>
+              <span className="text-white">
+                {currentPairData ? (currentPairData.volume24h * currentPairData.price / 1000000).toFixed(2) + 'M' : '0.00'}
+              </span>
             </div>
           </div>
 
