@@ -1,17 +1,21 @@
 import { NextResponse } from 'next/server';
 
+const KUCOIN_API_BASE = 'https://api.kucoin.com';
+
 /**
- * Get KuCoin WebSocket connection token
- * This endpoint fetches a token required for WebSocket connections
+ * GET /api/kucoin/websocket-token
+ * 
+ * Fetches WebSocket connection token from KuCoin
+ * Required for establishing WebSocket connections
  */
 export async function GET() {
   try {
     const response = await fetch(
-      'https://api.kucoin.com/api/v1/bullet-public',
+      `${KUCOIN_API_BASE}/api/v1/bullet-public`,
       {
         method: 'POST',
         headers: {
-          'Accept': 'application/json',
+          'Content-Type': 'application/json',
         },
       }
     );
@@ -24,9 +28,12 @@ export async function GET() {
 
     return NextResponse.json(data);
   } catch (error) {
-    console.error('Error fetching KuCoin WebSocket token:', error);
+    console.error('[WebSocket Token API] Error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch WebSocket token' },
+      { 
+        error: 'Failed to fetch WebSocket token',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     );
   }

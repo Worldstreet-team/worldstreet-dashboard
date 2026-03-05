@@ -3,14 +3,14 @@
 /**
  * BinanceOrderBook Component
  * 
- * Real-time order book display using Binance REST API with polling
- * - Polls /api/binance/orderbook every 3 seconds
- * - Fetches order book data from Binance
+ * Real-time order book display using KuCoin WebSocket API
+ * - Connects to wss://ws-api-spot.kucoin.com/
+ * - Subscribes to /spotMarket/level2Depth50 for 50-level order book
  * - Displays top 15 bids and asks with depth visualization
- * - Handles errors and connection status
+ * - Auto-reconnects on connection loss
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Icon } from '@iconify/react';
 
 interface OrderBookEntry {
@@ -24,15 +24,11 @@ interface BinanceOrderBookProps {
   selectedPair: string;
 }
 
-interface BinanceOrderBookData {
-  lastUpdateId: number;
+interface KuCoinOrderBookData {
   bids: [string, string][];
   asks: [string, string][];
-  error?: string;
+  sequence: number;
 }
-
-// Polling configuration
-const POLLING_INTERVAL = 3000; // 3 seconds
 
 export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps) {
   const [asks, setAsks] = useState<OrderBookEntry[]>([]);
@@ -44,145 +40,34 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // Refs for polling management
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // Refs to avoid stale closures
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const activePairRef = useRef<string>(selectedPair);
-  const isMountedRef = useRef<boolean>(true);
-
-  // Convert pair format (BTC-USDT -> BTCUSDT)
-  const formatSymbol = (pair: string): string => {
-    return pair.replace('-', '');
-  };
-
-  // Fetch order book data from API
-  const fetchOrderBook = useCallback(async (pair: string) => {
-    try {
-      const symbol = formatSymbol(pair);
-      const response = await fetch(`/api/binance/orderbook?symbol=${symbol}&limit=20`);
-      
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
-      }
-
-      const data: BinanceOrderBookData = await response.json();
-      
-      if (data.error) {
-        throw new Error(data.error);
-      }
-
-      // Only update if still mounted and pair hasn't changed
-      if (!isMountedRef.current || activePairRef.current !== pair) {
-        return;
-      }
-
-      // Process bids (buy orders) - take top 15, sorted highest to lowest
-      const processedBids: OrderBookEntry[] = [];
-      let bidCumulativeTotal = 0;
-      
-      const sortedBids = [...data.bids]
-        .sort((a, b) => parseFloat(b[0]) - parseFloat(a[0]))
-        .slice(0, 15);
-      
-      for (const [priceStr, amountStr] of sortedBids) {
-        const price = parseFloat(priceStr);
-        const amount = parseFloat(amountStr);
-        const total = price * amount;
-        bidCumulativeTotal += total;
-        processedBids.push({ price, amount, total, depthPercent: 0 });
-      }
-      
-      // Calculate depth percentages for bids
-      processedBids.forEach((bid, idx) => {
-        const cumulativeToThis = processedBids.slice(0, idx + 1).reduce((sum, b) => sum + b.total, 0);
-        bid.depthPercent = bidCumulativeTotal > 0 ? (cumulativeToThis / bidCumulativeTotal) * 100 : 0;
-      });
-      
-      // Process asks (sell orders) - take top 15, sorted lowest to highest
-      const processedAsks: OrderBookEntry[] = [];
-      let askCumulativeTotal = 0;
-      
-      const sortedAsks = [...data.asks]
-        .sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]))
-        .slice(0, 15);
-      
-      for (const [priceStr, amountStr] of sortedAsks) {
-        const price = parseFloat(priceStr);
-        const amount = parseFloat(amountStr);
-        const total = price * amount;
-        askCumulativeTotal += total;
-        processedAsks.push({ price, amount, total, depthPercent: 0 });
-      }
-      
-      // Reverse asks for display and calculate depth
-      processedAsks.reverse();
-      processedAsks.forEach((ask, idx) => {
-        const cumulativeToThis = processedAsks.slice(idx).reduce((sum, a) => sum + a.total, 0);
-        ask.depthPercent = askCumulativeTotal > 0 ? (cumulativeToThis / askCumulativeTotal) * 100 : 0;
-      });
-      
-      setAsks(processedAsks);
-      setBids(processedBids);
-      
-      // Update last price (best bid)
-      if (processedBids.length > 0) {
-        setLastPrice(prev => {
-          const newLastPrice = processedBids[0].price;
-          const change = prev > 0 ? ((newLastPrice - prev) / prev) * 100 : 0;
-          setPriceChange(change);
-          return newLastPrice;
-        });
-      }
-      
-      setConnected(true);
-      setLoading(false);
-      setError(null);
-    } catch (err) {
-      console.error('[OrderBook] Error fetching data:', err);
-      
-      if (isMountedRef.current && activePairRef.current === pair) {
-        setConnected(false);
-        setError(err instanceof Error ? err.message : 'Failed to fetch order book');
-        setLoading(false);
-      }
-    }
-  }, []);
-
-  // Start polling
-  const startPolling = useCallback((pair: string) => {
-    console.log('[OrderBook] Starting polling for pair:', pair);
-    
-    // Clear any existing interval
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-    }
-
-    // Fetch immediately
-    fetchOrderBook(pair);
-
-    // Set up polling interval
-    pollingIntervalRef.current = setInterval(() => {
-      fetchOrderBook(pair);
-    }, POLLING_INTERVAL);
-  }, [fetchOrderBook]);
-
-  // Stop polling
-  const stopPolling = useCallback(() => {
-    console.log('[OrderBook] Stopping polling');
-    
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-      pollingIntervalRef.current = null;
-    }
-  }, []);
+  const shouldReconnectRef = useRef<boolean>(true);
+  const currentTopicRef = useRef<string | null>(null);
 
   useEffect(() => {
     console.log('[OrderBook] Pair changed to:', selectedPair);
     
     // Update active pair ref
     activePairRef.current = selectedPair;
-    isMountedRef.current = true;
+    shouldReconnectRef.current = false;
+    
+    // Close existing connection
+    if (wsRef.current) {
+      console.log('[OrderBook] Closing existing WebSocket for pair switch');
+      wsRef.current.close();
+      wsRef.current = null;
+    }
 
-    // Reset state
+    // Clear any pending reconnect timers
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = undefined;
+    }
+
+    // Reset order book state
     setAsks([]);
     setBids([]);
     setLastPrice(0);
@@ -190,16 +75,191 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
     setConnected(false);
     setLoading(true);
     setError(null);
+    currentTopicRef.current = null;
+    
+    // Re-enable reconnect for the new pair
+    shouldReconnectRef.current = true;
 
-    // Start polling for new pair
-    startPolling(selectedPair);
+    // Connect to new pair
+    connectWebSocket(selectedPair);
     
     return () => {
-      console.log('[OrderBook] Cleanup');
-      isMountedRef.current = false;
-      stopPolling();
+      console.log('[OrderBook] Cleanup - disabling reconnect');
+      shouldReconnectRef.current = false;
+      
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
     };
-  }, [selectedPair, startPolling, stopPolling]);
+  }, [selectedPair]);
+
+  const connectWebSocket = async (pair: string) => {
+    try {
+      console.log('[OrderBook] Connecting WebSocket for pair:', pair);
+      
+      // Get WebSocket token from our API
+      const tokenResponse = await fetch('/api/kucoin/websocket-token');
+      if (!tokenResponse.ok) {
+        throw new Error('Failed to get WebSocket token');
+      }
+
+      const tokenResult = await tokenResponse.json();
+      if (tokenResult.code !== '200000' || !tokenResult.data) {
+        throw new Error('Invalid token response');
+      }
+
+      const { token, instanceServers } = tokenResult.data;
+      const server = instanceServers[0];
+      const wsUrl = `${server.endpoint}?token=${token}`;
+
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log('[OrderBook] WebSocket connected for pair:', pair);
+        setConnected(true);
+        setError(null);
+        
+        // Subscribe to order book updates
+        const newTopic = `/spotMarket/level2Depth50:${pair}`;
+        const subscribeMessage = {
+          id: Date.now().toString(),
+          type: 'subscribe',
+          topic: newTopic,
+          privateChannel: false,
+          response: true
+        };
+        
+        ws.send(JSON.stringify(subscribeMessage));
+        currentTopicRef.current = newTopic;
+        console.log('[OrderBook] Subscribed to:', newTopic);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          // Handle subscription confirmation
+          if (data.type === 'ack') {
+            console.log('[OrderBook] Subscription confirmed:', data.id);
+            return;
+          }
+
+          // Handle order book updates
+          if (data.type === 'message' && data.topic?.includes('level2Depth50')) {
+            // Verify this is for the current selected pair
+            if (data.topic === currentTopicRef.current) {
+              const orderBookData = data.data;
+              processOrderBookUpdate(orderBookData);
+              setLoading(false);
+            }
+          }
+        } catch (error) {
+          console.error('[OrderBook] Error parsing WebSocket message:', error);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('[OrderBook] WebSocket error:', error);
+        setConnected(false);
+        setError('Connection error');
+      };
+
+      ws.onclose = () => {
+        console.log('[OrderBook] WebSocket closed');
+        setConnected(false);
+        
+        // Only reconnect if shouldReconnectRef is true
+        if (shouldReconnectRef.current) {
+          console.log('[OrderBook] Reconnecting in 3s to pair:', activePairRef.current);
+          
+          reconnectTimeoutRef.current = setTimeout(() => {
+            connectWebSocket(activePairRef.current);
+          }, 3000);
+        } else {
+          console.log('[OrderBook] Reconnect disabled, not reconnecting');
+        }
+      };
+    } catch (error) {
+      console.error('[OrderBook] Error connecting to WebSocket:', error);
+      setConnected(false);
+      setError('Failed to connect');
+      
+      // Only retry if shouldReconnectRef is true
+      if (shouldReconnectRef.current) {
+        console.log('[OrderBook] Retrying connection in 3s to pair:', activePairRef.current);
+        
+        reconnectTimeoutRef.current = setTimeout(() => {
+          connectWebSocket(activePairRef.current);
+        }, 3000);
+      }
+    }
+  };
+
+  const processOrderBookUpdate = (data: KuCoinOrderBookData) => {
+    try {
+      // Process asks (sell orders) - sorted from lowest to highest
+      const processedAsks: OrderBookEntry[] = [];
+      let askCumulativeTotal = 0;
+      
+      const sortedAsks = [...data.asks].sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]));
+      
+      for (let i = 0; i < Math.min(15, sortedAsks.length); i++) {
+        const [priceStr, amountStr] = sortedAsks[i];
+        const price = parseFloat(priceStr);
+        const amount = parseFloat(amountStr);
+        const total = price * amount;
+        askCumulativeTotal += total;
+        processedAsks.push({ price, amount, total, depthPercent: 0 });
+      }
+
+      // Calculate depth percentages for asks (reverse order for display)
+      processedAsks.reverse();
+      processedAsks.forEach((ask, idx) => {
+        const cumulativeToThis = processedAsks.slice(idx).reduce((sum, a) => sum + a.total, 0);
+        ask.depthPercent = askCumulativeTotal > 0 ? (cumulativeToThis / askCumulativeTotal) * 100 : 0;
+      });
+
+      // Process bids (buy orders) - sorted from highest to lowest
+      const processedBids: OrderBookEntry[] = [];
+      let bidCumulativeTotal = 0;
+      
+      const sortedBids = [...data.bids].sort((a, b) => parseFloat(b[0]) - parseFloat(a[0]));
+      
+      for (let i = 0; i < Math.min(15, sortedBids.length); i++) {
+        const [priceStr, amountStr] = sortedBids[i];
+        const price = parseFloat(priceStr);
+        const amount = parseFloat(amountStr);
+        const total = price * amount;
+        bidCumulativeTotal += total;
+        processedBids.push({ price, amount, total, depthPercent: 0 });
+      }
+
+      // Calculate depth percentages for bids
+      processedBids.forEach((bid, idx) => {
+        const cumulativeToThis = processedBids.slice(0, idx + 1).reduce((sum, b) => sum + b.total, 0);
+        bid.depthPercent = bidCumulativeTotal > 0 ? (cumulativeToThis / bidCumulativeTotal) * 100 : 0;
+      });
+
+      setAsks(processedAsks);
+      setBids(processedBids);
+
+      // Update last price (best bid)
+      if (processedBids.length > 0) {
+        const newLastPrice = processedBids[0].price;
+        const change = lastPrice > 0 ? ((newLastPrice - lastPrice) / lastPrice) * 100 : 0;
+        setLastPrice(newLastPrice);
+        setPriceChange(change);
+      }
+    } catch (error) {
+      console.error('Error processing order book update:', error);
+    }
+  };
 
   const formatPrice = (price: number): string => {
     if (price >= 1000) return price.toFixed(2);
@@ -294,7 +354,7 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
             ) : (
               asks.map((ask, index) => (
                 <div
-                  key={`ask-${ask.price}-${index}`}
+                  key={`ask-${index}`}
                   className="relative px-3 py-0.5 hover:bg-[#1e2329] cursor-pointer group"
                 >
                   {/* Depth bar */}
@@ -346,7 +406,7 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
             ) : (
               bids.map((bid, index) => (
                 <div
-                  key={`bid-${bid.price}-${index}`}
+                  key={`bid-${index}`}
                   className="relative px-3 py-0.5 hover:bg-[#1e2329] cursor-pointer group"
                 >
                   {/* Depth bar */}
