@@ -644,12 +644,51 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       // Then deposit net amount to Drift
       // Import BN for proper amount encoding
       const BN = (await import('bn.js')).default;
+      const { getAssociatedTokenAddress, createAssociatedTokenAccountInstruction } = await import('@solana/spl-token');
+      const { Transaction } = await import('@solana/web3.js');
+      
       const depositAmount = new BN(Math.floor(netAmount * 1e6)); // Convert to USDC base units (6 decimals)
+      
+      // USDC mint address on Solana mainnet
+      const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+      
+      // Get user's USDC associated token account
+      const userTokenAccount = await getAssociatedTokenAddress(
+        USDC_MINT,
+        client.wallet.publicKey
+      );
+      
+      // Check if the token account exists, if not create it
+      const accountInfo = await client.connection.getAccountInfo(userTokenAccount);
+      if (!accountInfo) {
+        console.log('[DriftContext] Creating USDC token account...');
+        const createAtaIx = createAssociatedTokenAccountInstruction(
+          client.wallet.publicKey, // payer
+          userTokenAccount, // ata
+          client.wallet.publicKey, // owner
+          USDC_MINT // mint
+        );
+        
+        const createAtaTx = new Transaction().add(createAtaIx);
+        const { blockhash } = await client.connection.getLatestBlockhash('finalized');
+        createAtaTx.recentBlockhash = blockhash;
+        createAtaTx.feePayer = client.wallet.publicKey;
+        
+        createAtaTx.sign(client.wallet.payer);
+        const createAtaSig = await client.connection.sendRawTransaction(createAtaTx.serialize(), {
+          skipPreflight: false,
+          preflightCommitment: 'confirmed',
+        });
+        
+        await pollTransactionStatus(client.connection, createAtaSig, 30, 2000);
+        console.log('[DriftContext] USDC token account created:', createAtaSig);
+      }
       
       const txSignature = await client.deposit(
         depositAmount,
         0, // USDC market index
-        client.getUser().getUserAccountPublicKey()
+        client.getUser().getUserAccountPublicKey(),
+        userTokenAccount // Pass the user's token account explicitly
       );
       
       console.log('[DriftContext] Deposit transaction sent:', txSignature);
@@ -689,12 +728,25 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       // Withdraw USDC
       // Import BN for proper amount encoding
       const BN = (await import('bn.js')).default;
+      const { getAssociatedTokenAddress } = await import('@solana/spl-token');
+      const { PublicKey } = await import('@solana/web3.js');
+      
       const withdrawAmount = new BN(Math.floor(amount * 1e6)); // Convert to USDC base units (6 decimals)
+      
+      // USDC mint address on Solana mainnet
+      const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+      
+      // Get user's USDC associated token account
+      const userTokenAccount = await getAssociatedTokenAddress(
+        USDC_MINT,
+        client.wallet.publicKey
+      );
       
       const txSignature = await client.withdraw(
         withdrawAmount,
         0, // USDC market index
-        client.getUser().getUserAccountPublicKey()
+        client.getUser().getUserAccountPublicKey(),
+        userTokenAccount // Pass the user's token account explicitly
       );
       
       console.log('[DriftContext] Withdrawal transaction sent:', txSignature);
