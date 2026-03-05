@@ -39,6 +39,7 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
 
   // Use the chain prop directly - it's now required and set by parent
   const effectiveChain = chain;
+  console.log("CHAIN: ", effectiveChain, chain)
 
   // Use the custom hook to fetch pair balances
   const { 
