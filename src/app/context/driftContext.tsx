@@ -605,7 +605,55 @@ const depositCollateral = useCallback(
         await client.subscribe();
       }
 
-      console.log(`[DriftContext] Depositing ${amount} USDC to Drift`);
+      // Calculate fee (5%) and net amount
+      const { calculateFee } = await import('@/config/drift');
+      const { fee, netAmount } = calculateFee(amount);
+
+      console.log(`[DriftContext] Depositing ${amount} USDC: ${fee} USDC fee + ${netAmount} USDC net`);
+
+      // Send fee to master wallet if configured
+      const { DRIFT_CONFIG } = await import('@/config/drift');
+      if (DRIFT_CONFIG.MASTER_WALLET_ADDRESS && fee > 0) {
+        const { PublicKey, Transaction } = await import('@solana/web3.js');
+        const { TOKEN_PROGRAM_ID, getAssociatedTokenAddress, createTransferInstruction } = await import('@solana/spl-token');
+
+        const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+        
+        // Get token accounts
+        const fromTokenAccount = await getAssociatedTokenAddress(USDC_MINT, client.wallet.publicKey);
+        const toTokenAccount = await getAssociatedTokenAddress(USDC_MINT, new PublicKey(DRIFT_CONFIG.MASTER_WALLET_ADDRESS));
+
+        // Create fee transfer transaction
+        const feeTx = new Transaction().add(
+          createTransferInstruction(
+            fromTokenAccount,
+            toTokenAccount,
+            client.wallet.publicKey,
+            Math.floor(fee * 1e6), // Convert to USDC base units
+            [],
+            TOKEN_PROGRAM_ID
+          )
+        );
+
+        const { blockhash } = await client.connection.getLatestBlockhash('finalized');
+        feeTx.recentBlockhash = blockhash;
+        feeTx.feePayer = client.wallet.publicKey;
+
+        feeTx.sign(client.wallet.payer);
+        const feeTxSig = await client.connection.sendRawTransaction(feeTx.serialize(), {
+          skipPreflight: false,
+          preflightCommitment: 'confirmed',
+        });
+
+        console.log('[DriftContext] Fee transaction sent:', feeTxSig);
+
+        // Wait for fee transaction confirmation
+        await pollTransactionStatus(client.connection, feeTxSig, 30, 2000);
+        console.log('[DriftContext] Fee transaction confirmed:', feeTxSig);
+      }
+
+      // Now deposit net amount to Drift
+      console.log(`[DriftContext] Depositing ${netAmount} USDC to Drift (after ${fee} USDC fee)`);
 
       // Spot market index for USDC
       const marketIndex = 0;
@@ -615,13 +663,13 @@ const depositCollateral = useCallback(
 
       console.log('[DriftContext] User USDC token account:', userTokenAccount.toBase58());
 
-      // Convert human amount to on‑chain BN using client method
-      const depositAmountBN = client.convertToSpotPrecision(marketIndex, amount);
+      // Convert net amount to on‑chain BN using client method
+      const depositAmountBN = client.convertToSpotPrecision(marketIndex, netAmount);
 
       console.log('[DriftContext] Deposit amount (BN):', depositAmountBN.toString());
+      console.log('[DriftContext] Deposit amount (human):', netAmount);
 
-      // Perform the deposit.  
-      // Arguments: (amountBN, marketIndex, userAssociatedTokenAccount, optional subAccountId)
+      // Perform the deposit
       const txSignature = await client.deposit(
         depositAmountBN,
         marketIndex,
@@ -635,6 +683,9 @@ const depositCollateral = useCallback(
       await pollTransactionStatus(client.connection, txSignature, 30, 2000);
       console.log('[DriftContext] Deposit confirmed:', txSignature);
 
+      // Refresh accounts after deposit
+      await refreshAccounts();
+      
       // Refresh summary after success
       await refreshSummary();
 
@@ -659,70 +710,84 @@ const depositCollateral = useCallback(
       setIsLoading(false);
     }
   },
-  [user?.userId, requestPin, initializeDriftClient, refreshSummary]
+  [user?.userId, requestPin, initializeDriftClient, refreshAccounts, refreshSummary]
 );
   // Withdraw collateral
-  const withdrawCollateral = useCallback(async (amount: number): Promise<{ success: boolean; txSignature?: string; error?: string }> => {
+const withdrawCollateral = useCallback(
+  async (amount: number): Promise<{ success: boolean; txSignature?: string; error?: string }> => {
     if (!user?.userId) {
-      return { success: false, error: 'User not authenticated' };
+      return { success: false, error: "User not authenticated" };
     }
-    
+
     try {
       setIsLoading(true);
+
+      // 1. Ensure wallet is unlocked / PIN provided
       const pin = await requestPin();
-      
+
+      // 2. Initialize or get existing Drift client
       let client = driftClientRef.current;
       if (!client) {
         client = await initializeDriftClient(pin);
       }
-      
+
+      // Subscribe client if not already
+      if (!client.isSubscribed) {
+        await client.subscribe();
+      }
+
       console.log(`[DriftContext] Withdrawing ${amount} USDC from Drift`);
-      
-      // Withdraw USDC
-      // Import BN for proper amount encoding
-      const BN = (await import('bn.js')).default;
-      const { getAssociatedTokenAddress } = await import('@solana/spl-token');
-      const { PublicKey: SolanaPublicKey } = await import('@solana/web3.js');
-      
-      const withdrawAmount = new BN(Math.floor(amount * 1e6)); // Convert to USDC base units (6 decimals)
-      
-      // USDC mint address on Solana mainnet
-      const USDC_MINT = new SolanaPublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
-      
-      // Get user's USDC associated token account
-      const userTokenAccount = await getAssociatedTokenAddress(
-        USDC_MINT,
-        client.wallet.publicKey
+
+      // 3. Convert amount to on-chain BN precision
+      // Drift uses 6 decimals for USDC
+      const BN = (await import("bn.js")).default;
+      const withdrawAmountBN = new BN(Math.floor(amount * 1e6)); // USDC has 6 decimals
+
+      // 4. Get the user's USDC associated token account (ATA) via the SDK
+      const marketIndex = 0; // USDC spot collateral market index
+      const userTokenAccount = await client.getAssociatedTokenAccount(marketIndex);
+
+      console.log(
+        "[DriftContext] User USDC token account for withdrawal:",
+        userTokenAccount.toBase58()
       );
-      
-      // Get the user account public key from the client
-      const driftUser = client.getUser();
-      const userAccountPublicKey = driftUser.getUserAccountPublicKey();
-      
+
+      // 5. Call driftClient.withdraw with correct args:
+      //   withdraw(amountBN, marketIndex, associatedTokenAccount)
       const txSignature = await client.withdraw(
-        withdrawAmount,
-        0, // USDC market index
-        userAccountPublicKey,
-        userTokenAccount // Pass the user's token account explicitly
+        withdrawAmountBN,
+        marketIndex,
+        userTokenAccount
       );
-      
-      console.log('[DriftContext] Withdrawal transaction sent:', txSignature);
-      
-      // Poll for withdrawal transaction confirmation
+
+      console.log("[DriftContext] Withdrawal transaction sent:", txSignature);
+
+      // 6. Poll for confirmation
       await pollTransactionStatus(client.connection, txSignature, 30, 2000);
-      console.log('[DriftContext] Withdrawal confirmed:', txSignature);
-      
+      console.log("[DriftContext] Withdrawal confirmed:", txSignature);
+
+      // 7. Refresh summary after success
       await refreshSummary();
+
       return { success: true, txSignature };
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to withdraw collateral';
-      console.error('[DriftContext] Withdraw error:', err);
-      return { success: false, error: errorMessage };
+      const errorMessage = err instanceof Error ? err.message : "Failed to withdraw collateral";
+      console.error("[DriftContext] Withdraw error:", err);
+
+      let friendlyError = errorMessage;
+      if (errorMessage.toLowerCase().includes("insufficient")) {
+        friendlyError = "Insufficient free collateral to withdraw that amount";
+      }
+      if (errorMessage.toLowerCase().includes("not initialized")) {
+        friendlyError = "Drift account not initialized — please initialize first.";
+      }
+      return { success: false, error: friendlyError };
     } finally {
       setIsLoading(false);
     }
-  }, [user?.userId, requestPin, initializeDriftClient, refreshSummary]);
-
+  },
+  [user?.userId, requestPin, initializeDriftClient, refreshSummary]
+);
   // Open position
   const openPosition = useCallback(async (
     marketIndex: number,

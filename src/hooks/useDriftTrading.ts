@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
-import { useAuth } from '@/app/context/authContext';
+import { useCallback } from 'react';
+import { useDrift } from '@/app/context/driftContext';
 
 export interface DriftPosition {
   marketIndex: number;
@@ -35,13 +35,9 @@ export interface DriftAccountSummary {
 }
 
 export function useDriftTrading() {
-  const { user } = useAuth();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const drift = useDrift();
 
-  const userId = user?.userId || '';
-
-  // Open position
+  // Open position - use client-side implementation
   const openPosition = useCallback(async (
     marketIndex: number,
     direction: 'long' | 'short',
@@ -50,80 +46,30 @@ export function useDriftTrading() {
     orderType: 'market' | 'limit' = 'market',
     price?: number
   ) => {
-    if (!userId) throw new Error('User not authenticated');
+    const result = await drift.openPosition(marketIndex, direction, baseAmount, leverage);
     
-    setLoading(true);
-    setError(null);
-
-    try {
-      const response = await fetch('/api/drift/position/open', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId, // Add userId to the payload
-          marketIndex,
-          direction,
-          baseAmount,
-          leverage,
-          orderType,
-          price,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to open position');
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to open position';
-      setError(message);
-      throw err;
-    } finally {
-      setLoading(false);
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to open position');
     }
-  }, [userId]);
+    
+    return result;
+  }, [drift]);
 
-  // Close position
+  // Close position - use client-side implementation
   const closePosition = useCallback(async (
     marketIndex: number,
     baseAmount?: number
   ) => {
-    if (!userId) throw new Error('User not authenticated');
+    const result = await drift.closePosition(marketIndex);
     
-    setLoading(true);
-    setError(null);
-
-    try {
-      const response = await fetch('/api/drift/position/close', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId,
-          marketIndex,
-          baseAmount: baseAmount || null,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to close position');
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to close position';
-      setError(message);
-      throw err;
-    } finally {
-      setLoading(false);
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to close position');
     }
-  }, [userId]);
+    
+    return result;
+  }, [drift]);
 
-  // Place limit order
+  // Place limit order - not yet implemented in client-side
   const placeLimitOrder = useCallback(async (
     marketIndex: number,
     direction: 'long' | 'short',
@@ -132,231 +78,62 @@ export function useDriftTrading() {
     postOnly: boolean = false,
     reduceOnly: boolean = false
   ) => {
-    if (!userId) throw new Error('User not authenticated');
-    
-    setLoading(true);
-    setError(null);
+    throw new Error('Limit orders not yet implemented in client-side SDK');
+  }, []);
 
-    try {
-      const response = await fetch('/api/drift/order/place', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId,
-          marketIndex,
-          direction,
-          baseAmount,
-          price,
-          postOnly,
-          reduceOnly,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to place order');
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to place order';
-      setError(message);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, [userId]);
-
-  // Cancel order
+  // Cancel order - not yet implemented in client-side
   const cancelOrder = useCallback(async (orderId: number) => {
-    if (!userId) throw new Error('User not authenticated');
-    
-    setLoading(true);
-    setError(null);
+    throw new Error('Cancel order not yet implemented in client-side SDK');
+  }, []);
 
-    try {
-      const response = await fetch('/api/drift/order/cancel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          userId,
-          orderId 
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to cancel order');
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to cancel order';
-      setError(message);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, [userId]);
-
-  // Cancel all orders
+  // Cancel all orders - not yet implemented in client-side
   const cancelAllOrders = useCallback(async (marketIndex?: number) => {
-    if (!userId) throw new Error('User not authenticated');
-    
-    setLoading(true);
-    setError(null);
+    throw new Error('Cancel all orders not yet implemented in client-side SDK');
+  }, []);
 
-    try {
-      const response = await fetch('/api/drift/order/cancel-all', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          userId,
-          marketIndex: marketIndex || null 
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to cancel orders');
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to cancel orders';
-      setError(message);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, [userId]);
-
-  // Deposit collateral
+  // Deposit collateral - use client-side implementation
   const depositCollateral = useCallback(async (amount: number) => {
-    if (!userId) throw new Error('User not authenticated');
+    const result = await drift.depositCollateral(amount);
     
-    setLoading(true);
-    setError(null);
-
-    try {
-      const response = await fetch('/api/drift/collateral/deposit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          userId,
-          amount 
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to deposit collateral');
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to deposit collateral';
-      setError(message);
-      throw err;
-    } finally {
-      setLoading(false);
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to deposit collateral');
     }
-  }, [userId]);
+    
+    return result;
+  }, [drift]);
 
-  // Withdraw collateral
+  // Withdraw collateral - use client-side implementation
   const withdrawCollateral = useCallback(async (amount: number) => {
-    if (!userId) throw new Error('User not authenticated');
+    const result = await drift.withdrawCollateral(amount);
     
-    setLoading(true);
-    setError(null);
-
-    try {
-      const response = await fetch('/api/drift/collateral/withdraw', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          userId,
-          amount 
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to withdraw collateral');
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to withdraw collateral';
-      setError(message);
-      throw err;
-    } finally {
-      setLoading(false);
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to withdraw collateral');
     }
-  }, [userId]);
+    
+    return result;
+  }, [drift]);
 
-  // Fetch positions
+  // Fetch positions - use client-side data
   const fetchPositions = useCallback(async (): Promise<DriftPosition[]> => {
-    if (!userId) return [];
+    await drift.refreshPositions();
+    return drift.positions;
+  }, [drift]);
 
-    try {
-      const response = await fetch(`/api/drift/positions?userId=${userId}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch positions');
-      }
-
-      const data = await response.json();
-      return data.positions || [];
-    } catch (err) {
-      console.error('Failed to fetch positions:', err);
-      return [];
-    }
-  }, [userId]);
-
-  // Fetch orders
+  // Fetch orders - not yet implemented
   const fetchOrders = useCallback(async (): Promise<DriftOrder[]> => {
-    if (!userId) return [];
+    // Orders not yet implemented in client-side
+    return [];
+  }, []);
 
-    try {
-      const response = await fetch(`/api/drift/orders?userId=${userId}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch orders');
-      }
-
-      const data = await response.json();
-      return data.orders || [];
-    } catch (err) {
-      console.error('Failed to fetch orders:', err);
-      return [];
-    }
-  }, [userId]);
-
-  // Fetch account summary
+  // Fetch account summary - use client-side data
   const fetchAccountSummary = useCallback(async (): Promise<DriftAccountSummary | null> => {
-    if (!userId) return null;
-
-    try {
-      const response = await fetch(`/api/drift/account/summary?userId=${userId}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch account summary');
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (err) {
-      console.error('Failed to fetch account summary:', err);
-      return null;
-    }
-  }, [userId]);
+    await drift.refreshSummary();
+    return drift.summary;
+  }, [drift]);
 
   return {
-    loading,
-    error,
+    loading: drift.isLoading,
+    error: drift.error,
     openPosition,
     closePosition,
     placeLimitOrder,
