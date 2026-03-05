@@ -59,9 +59,6 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
   // Fetch market data from KuCoin
   useEffect(() => {
     const fetchMarketData = async () => {
