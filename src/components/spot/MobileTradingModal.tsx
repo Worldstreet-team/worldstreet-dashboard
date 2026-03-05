@@ -1,28 +1,75 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
+import { useAuth } from '@/app/context/authContext';
+import { usePairBalances } from '@/hooks/usePairBalances';
 
 interface MobileTradingModalProps {
   isOpen: boolean;
   onClose: () => void;
   side: 'buy' | 'sell';
   selectedPair: string;
+  chain?: string;
 }
 
-export default function MobileTradingModal({ isOpen, onClose, side, selectedPair }: MobileTradingModalProps) {
-  const [orderType, setOrderType] = useState<'limit' | 'market'>('limit');
+export default function MobileTradingModal({ isOpen, onClose, side, selectedPair, chain }: MobileTradingModalProps) {
+  const { user } = useAuth();
+  const [orderType, setOrderType] = useState<'market' | 'limit'>('market'); // Changed default to 'market'
   const [price, setPrice] = useState('');
   const [amount, setAmount] = useState('');
   const [total, setTotal] = useState('');
+  const [sliderValue, setSliderValue] = useState(0);
+
+  // Use the custom hook to fetch pair balances
+  const { 
+    tokenIn: sellBalance, 
+    tokenOut: buyBalance, 
+    loading: loadingBalances,
+    error: balanceError,
+    refetch: refetchBalances 
+  } = usePairBalances(user?.userId, selectedPair, chain);
 
   const [tokenIn, tokenOut] = selectedPair.split('-');
 
+  // Current balance based on buy/sell side
+  const currentBalance = side === 'buy' ? buyBalance : sellBalance;
+  const currentToken = side === 'buy' ? tokenOut : tokenIn;
+
+  // Debug logging
+  useEffect(() => {
+    if (isOpen) {
+      console.log('[MobileTradingModal] Balance Debug:', {
+        userId: user?.userId,
+        selectedPair,
+        side,
+        sellBalance,
+        buyBalance,
+        currentBalance,
+        loadingBalances,
+        balanceError
+      });
+    }
+  }, [isOpen, user?.userId, selectedPair, side, sellBalance, buyBalance, currentBalance, loadingBalances, balanceError]);
+
+  const handlePercentage = (percent: number) => {
+    const calculatedAmount = (currentBalance * percent) / 100;
+    setAmount(calculatedAmount.toFixed(6));
+    setSliderValue(percent);
+  };
+
   if (!isOpen) return null;
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     // Handle order submission
     console.log('Order submitted:', { side, orderType, price, amount, total });
+    
+    // Simulate trade execution
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Refetch balances after trade
+    await refetchBalances();
+    
     onClose();
   };
 
@@ -51,16 +98,6 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
           {/* Order Type Tabs */}
           <div className="flex gap-2 p-1 bg-[#2b3139] rounded-lg">
             <button
-              onClick={() => setOrderType('limit')}
-              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
-                orderType === 'limit'
-                  ? 'bg-[#181a20] text-white'
-                  : 'text-[#848e9c]'
-              }`}
-            >
-              Limit
-            </button>
-            <button
               onClick={() => setOrderType('market')}
               className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
                 orderType === 'market'
@@ -70,15 +107,38 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
             >
               Market
             </button>
+            <button
+              onClick={() => setOrderType('limit')}
+              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
+                orderType === 'limit'
+                  ? 'bg-[#181a20] text-white'
+                  : 'text-[#848e9c]'
+              }`}
+            >
+              Limit
+            </button>
           </div>
 
           {/* Available Balance */}
           <div className="flex items-center justify-between text-sm">
             <span className="text-[#848e9c]">Available</span>
             <span className="text-white font-mono">
-              0.00000 {side === 'buy' ? tokenOut : tokenIn}
+              {loadingBalances ? (
+                <span className="text-[#848e9c]">Loading...</span>
+              ) : balanceError ? (
+                <span className="text-[#f6465d]">Error</span>
+              ) : (
+                `${currentBalance.toFixed(6)} ${currentToken}`
+              )}
             </span>
           </div>
+
+          {/* Balance Error Alert */}
+          {balanceError && (
+            <div className="p-3 bg-[rgba(246,70,93,0.12)] border border-[#f6465d] rounded-lg text-xs text-[#f6465d]">
+              {balanceError}
+            </div>
+          )}
 
           {/* Price Input (for limit orders) */}
           {orderType === 'limit' && (
@@ -121,7 +181,7 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
             {[25, 50, 75, 100].map((percent) => (
               <button
                 key={percent}
-                onClick={() => {/* Handle percentage */}}
+                onClick={() => handlePercentage(percent)}
                 className="py-2 bg-[#2b3139] hover:bg-[#2b3139]/80 text-white text-sm font-medium rounded-lg transition-colors"
               >
                 {percent}%

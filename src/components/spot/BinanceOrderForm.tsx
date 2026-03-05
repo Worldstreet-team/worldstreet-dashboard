@@ -13,7 +13,7 @@ interface BinanceOrderFormProps {
 export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain }: BinanceOrderFormProps) {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'buy' | 'sell'>('buy');
-  const [orderType, setOrderType] = useState<'limit' | 'market' | 'stop-limit'>('limit');
+  const [orderType, setOrderType] = useState<'market' | 'limit' | 'stop-limit'>('market'); // Changed default to 'market'
   const [price, setPrice] = useState('');
   const [amount, setAmount] = useState('');
   const [total, setTotal] = useState('');
@@ -114,7 +114,7 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
 
       {/* Order Type Tabs */}
       <div className="flex gap-4 px-4 py-3 border-b border-[#2b3139]">
-        {(['limit', 'market', 'stop-limit'] as const).map((type) => (
+        {(['market', 'limit', 'stop-limit'] as const).map((type) => (
           <button
             key={type}
             onClick={() => setOrderType(type)}
