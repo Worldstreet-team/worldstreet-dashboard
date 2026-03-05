@@ -531,6 +531,43 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     }
   }, [user?.userId, requestPin, initializeDriftClient, refreshAccounts]);
 
+  // Poll transaction status using getSignatureStatus
+  const pollTransactionStatus = async (
+    connection: any,
+    signature: string,
+    maxAttempts: number = 60,
+    intervalMs: number = 2000
+  ): Promise<boolean> => {
+    console.log(`[DriftContext] Polling transaction status: ${signature}`);
+    
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        const status = await connection.getSignatureStatus(signature);
+        
+        if (status?.value?.confirmationStatus === 'confirmed' || status?.value?.confirmationStatus === 'finalized') {
+          console.log(`[DriftContext] Transaction confirmed: ${signature}`);
+          return true;
+        }
+        
+        if (status?.value?.err) {
+          console.error(`[DriftContext] Transaction failed: ${signature}`, status.value.err);
+          throw new Error(`Transaction failed: ${JSON.stringify(status.value.err)}`);
+        }
+        
+        console.log(`[DriftContext] Attempt ${attempt + 1}/${maxAttempts}: Transaction pending...`);
+        await new Promise(resolve => setTimeout(resolve, intervalMs));
+      } catch (err) {
+        console.error(`[DriftContext] Error polling transaction:`, err);
+        if (attempt === maxAttempts - 1) {
+          throw err;
+        }
+        await new Promise(resolve => setTimeout(resolve, intervalMs));
+      }
+    }
+    
+    throw new Error('Transaction confirmation timeout');
+  };
+
   // Deposit collateral with fee
   const depositCollateral = useCallback(async (amount: number): Promise<{ success: boolean; txSignature?: string; error?: string }> => {
     if (!user?.userId) {
@@ -585,9 +622,23 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
           )
         );
         
-        const feeTxSignature = await client.connection.sendTransaction(feeTransaction, [client.wallet.payer]);
-        await client.connection.confirmTransaction(feeTxSignature, 'confirmed');
-        console.log('[DriftContext] Fee sent to master wallet:', feeTxSignature);
+        // Get recent blockhash
+        const { blockhash } = await client.connection.getLatestBlockhash('finalized');
+        feeTransaction.recentBlockhash = blockhash;
+        feeTransaction.feePayer = client.wallet.publicKey;
+        
+        // Sign and send fee transaction
+        feeTransaction.sign(client.wallet.payer);
+        const feeTxSignature = await client.connection.sendRawTransaction(feeTransaction.serialize(), {
+          skipPreflight: false,
+          preflightCommitment: 'confirmed',
+        });
+        
+        console.log('[DriftContext] Fee transaction sent:', feeTxSignature);
+        
+        // Poll for fee transaction confirmation
+        await pollTransactionStatus(client.connection, feeTxSignature, 30, 2000);
+        console.log('[DriftContext] Fee sent to master wallet confirmed:', feeTxSignature);
       }
       
       // Then deposit net amount to Drift
@@ -597,9 +648,11 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         client.getUser().getUserAccountPublicKey()
       );
       
-      // Wait for confirmation
-      await client.connection.confirmTransaction(txSignature, 'confirmed');
-      console.log('[DriftContext] Collateral deposited to Drift:', txSignature);
+      console.log('[DriftContext] Deposit transaction sent:', txSignature);
+      
+      // Poll for deposit transaction confirmation
+      await pollTransactionStatus(client.connection, txSignature, 30, 2000);
+      console.log('[DriftContext] Collateral deposited to Drift confirmed:', txSignature);
       
       await refreshSummary();
       return { success: true, txSignature };
@@ -636,9 +689,11 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         client.getUser().getUserAccountPublicKey()
       );
       
-      // Wait for confirmation
-      await client.connection.confirmTransaction(txSignature, 'confirmed');
-      console.log('[DriftContext] Withdrawal successful:', txSignature);
+      console.log('[DriftContext] Withdrawal transaction sent:', txSignature);
+      
+      // Poll for withdrawal transaction confirmation
+      await pollTransactionStatus(client.connection, txSignature, 30, 2000);
+      console.log('[DriftContext] Withdrawal confirmed:', txSignature);
       
       await refreshSummary();
       return { success: true, txSignature };
@@ -683,8 +738,11 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       
       const txSignature = await client.placePerpOrder(orderParams);
       
-      // Wait for confirmation
-      await client.connection.confirmTransaction(txSignature, 'confirmed');
+      console.log('[DriftContext] Order transaction sent:', txSignature);
+      
+      // Poll for order transaction confirmation
+      await pollTransactionStatus(client.connection, txSignature, 30, 2000);
+      console.log('[DriftContext] Order confirmed:', txSignature);
       
       await refreshSummary();
       await refreshPositions();
@@ -736,8 +794,11 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       
       const txSignature = await client.placePerpOrder(orderParams);
       
-      // Wait for confirmation
-      await client.connection.confirmTransaction(txSignature, 'confirmed');
+      console.log('[DriftContext] Close position transaction sent:', txSignature);
+      
+      // Poll for close position transaction confirmation
+      await pollTransactionStatus(client.connection, txSignature, 30, 2000);
+      console.log('[DriftContext] Close position confirmed:', txSignature);
       
       await refreshSummary();
       await refreshPositions();
