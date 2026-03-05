@@ -3,15 +3,16 @@
 /**
  * BinanceOrderBook Component
  * 
- * Real-time order book display using WebSocket proxy
- * - Connects to wss://kucoin.watchup.site
- * - Subscribes to order book updates with configurable depth
+ * Real-time order book display using Socket.IO backend
+ * - Connects to Socket.IO server at http://localhost:3000
+ * - Subscribes to order book updates via 'orderbook' event
  * - Displays top 15 bids and asks with depth visualization
- * - Auto-reconnects with exponential backoff
+ * - Auto-reconnects on disconnect
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Icon } from '@iconify/react';
+import { io, Socket } from 'socket.io-client';
 
 interface OrderBookEntry {
   price: number;
@@ -24,24 +25,14 @@ interface BinanceOrderBookProps {
   selectedPair: string;
 }
 
-interface OrderBookData {
-  b: [string, string][]; // bids
-  a: [string, string][]; // asks
-  O?: number; // sequenceStart
-  C?: number; // sequenceEnd
+interface OrderBookMessage {
+  symbol: string;
+  bids: [string, string][];
+  asks: [string, string][];
 }
 
-interface WebSocketMessage {
-  t: 'snapshot' | 'delta'; // type
-  d: OrderBookData; // data
-}
-
-// WebSocket configuration
-const WS_URL = 'wss://kucoin.watchup.site';
-const DEPTH = '50'; // Can be "1", "5", "50", or "increment"
-const TRADE_TYPE = 'SPOT';
-const INITIAL_RECONNECT_DELAY = 1000; // 1 second
-const MAX_RECONNECT_DELAY = 30000; // 30 seconds
+// Socket.IO configuration
+const SOCKET_URL = 'http://localhost:3000';
 
 export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps) {
   const [asks, setAsks] = useState<OrderBookEntry[]>([]);
@@ -53,239 +44,156 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // Refs for WebSocket management
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const reconnectDelayRef = useRef<number>(INITIAL_RECONNECT_DELAY);
-  const activePairRef = useRef<string>(selectedPair);
-  const shouldReconnectRef = useRef<boolean>(true);
-  
-  // Local order book state for incremental updates
-  const localOrderBookRef = useRef<{ bids: Map<string, string>, asks: Map<string, string> }>({
-    bids: new Map(),
-    asks: new Map()
-  });
+  // Refs for Socket.IO management
+  const socketRef = useRef<Socket | null>(null);
+  const currentSymbolRef = useRef<string>('');
 
-  // Connect to WebSocket
-  const connectWebSocket = (pair: string) => {
+  // Convert pair format (BTC-USDT -> BTCUSDT)
+  const formatSymbol = (pair: string): string => {
+    return pair.replace('-', '');
+  };
+
+  // Process order book data
+  const processOrderBook = useCallback((data: OrderBookMessage) => {
     try {
-      console.log('[OrderBook] Connecting to WebSocket for pair:', pair);
+      // Process bids (buy orders) - take top 15, sorted highest to lowest
+      const processedBids: OrderBookEntry[] = [];
+      let bidCumulativeTotal = 0;
       
-      const ws = new WebSocket(WS_URL);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        console.log('[OrderBook] WebSocket connected');
-        setConnected(true);
-        setError(null);
-        reconnectDelayRef.current = INITIAL_RECONNECT_DELAY; // Reset backoff
-        
-        // Subscribe to order book updates
-        const subscribeMessage = {
-          type: 'subscribe',
-          symbol: pair,
-          depth: DEPTH,
-          tradeType: TRADE_TYPE
-        };
-        
-        ws.send(JSON.stringify(subscribeMessage));
-        console.log('[OrderBook] Subscribed to:', pair);
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const message: WebSocketMessage = JSON.parse(event.data);
-          
-          if (message.t === 'snapshot') {
-            // Replace entire order book
-            console.log('[OrderBook] Received snapshot');
-            processSnapshot(message.d);
-            setLoading(false);
-          } else if (message.t === 'delta') {
-            // Apply incremental updates
-            processDelta(message.d);
-          }
-        } catch (err) {
-          console.error('[OrderBook] Error parsing message:', err);
-        }
-      };
-
-      ws.onerror = (err) => {
-        console.error('[OrderBook] WebSocket error:', err);
-        setConnected(false);
-        setError('Connection error');
-      };
-
-      ws.onclose = () => {
-        console.log('[OrderBook] WebSocket closed');
-        setConnected(false);
-        
-        // Reconnect with exponential backoff if allowed
-        if (shouldReconnectRef.current) {
-          const delay = reconnectDelayRef.current;
-          console.log(`[OrderBook] Reconnecting in ${delay}ms...`);
-          
-          reconnectTimeoutRef.current = setTimeout(() => {
-            connectWebSocket(activePairRef.current);
-          }, delay);
-          
-          // Increase delay for next reconnect (exponential backoff)
-          reconnectDelayRef.current = Math.min(delay * 2, MAX_RECONNECT_DELAY);
-        }
-      };
+      const sortedBids = [...data.bids]
+        .sort((a, b) => parseFloat(b[0]) - parseFloat(a[0]))
+        .slice(0, 15);
+      
+      for (const [priceStr, amountStr] of sortedBids) {
+        const price = parseFloat(priceStr);
+        const amount = parseFloat(amountStr);
+        const total = price * amount;
+        bidCumulativeTotal += total;
+        processedBids.push({ price, amount, total, depthPercent: 0 });
+      }
+      
+      // Calculate depth percentages for bids
+      processedBids.forEach((bid, idx) => {
+        const cumulativeToThis = processedBids.slice(0, idx + 1).reduce((sum, b) => sum + b.total, 0);
+        bid.depthPercent = bidCumulativeTotal > 0 ? (cumulativeToThis / bidCumulativeTotal) * 100 : 0;
+      });
+      
+      // Process asks (sell orders) - take top 15, sorted lowest to highest
+      const processedAsks: OrderBookEntry[] = [];
+      let askCumulativeTotal = 0;
+      
+      const sortedAsks = [...data.asks]
+        .sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]))
+        .slice(0, 15);
+      
+      for (const [priceStr, amountStr] of sortedAsks) {
+        const price = parseFloat(priceStr);
+        const amount = parseFloat(amountStr);
+        const total = price * amount;
+        askCumulativeTotal += total;
+        processedAsks.push({ price, amount, total, depthPercent: 0 });
+      }
+      
+      // Reverse asks for display and calculate depth
+      processedAsks.reverse();
+      processedAsks.forEach((ask, idx) => {
+        const cumulativeToThis = processedAsks.slice(idx).reduce((sum, a) => sum + a.total, 0);
+        ask.depthPercent = askCumulativeTotal > 0 ? (cumulativeToThis / askCumulativeTotal) * 100 : 0;
+      });
+      
+      setAsks(processedAsks);
+      setBids(processedBids);
+      
+      // Update last price (best bid)
+      if (processedBids.length > 0) {
+        setLastPrice(prev => {
+          const newLastPrice = processedBids[0].price;
+          const change = prev > 0 ? ((newLastPrice - prev) / prev) * 100 : 0;
+          setPriceChange(change);
+          return newLastPrice;
+        });
+      }
+      
+      setLoading(false);
+      setError(null);
     } catch (err) {
-      console.error('[OrderBook] Error connecting:', err);
-      setConnected(false);
-      setError('Failed to connect');
-      
-      // Retry connection
-      if (shouldReconnectRef.current) {
-        const delay = reconnectDelayRef.current;
-        reconnectTimeoutRef.current = setTimeout(() => {
-          connectWebSocket(activePairRef.current);
-        }, delay);
-        reconnectDelayRef.current = Math.min(delay * 2, MAX_RECONNECT_DELAY);
-      }
+      console.error('[OrderBook] Error processing data:', err);
+      setError('Failed to process order book data');
     }
-  };
-
-  // Unsubscribe from current pair
-  const unsubscribe = (pair: string) => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      const unsubscribeMessage = {
-        type: 'unsubscribe',
-        symbol: pair,
-        depth: DEPTH,
-        tradeType: TRADE_TYPE
-      };
-      wsRef.current.send(JSON.stringify(unsubscribeMessage));
-      console.log('[OrderBook] Unsubscribed from:', pair);
-    }
-  };
-
-  // Process snapshot (full order book replacement)
-  const processSnapshot = (data: OrderBookData) => {
-    // Clear local order book
-    localOrderBookRef.current.bids.clear();
-    localOrderBookRef.current.asks.clear();
-    
-    // Populate with snapshot data
-    data.b.forEach(([price, size]) => {
-      if (parseFloat(size) > 0) {
-        localOrderBookRef.current.bids.set(price, size);
-      }
-    });
-    
-    data.a.forEach(([price, size]) => {
-      if (parseFloat(size) > 0) {
-        localOrderBookRef.current.asks.set(price, size);
-      }
-    });
-    
-    // Update UI
-    updateOrderBookDisplay();
-  };
-
-  // Process delta (incremental updates)
-  const processDelta = (data: OrderBookData) => {
-    // Update bids
-    data.b.forEach(([price, size]) => {
-      const sizeNum = parseFloat(size);
-      if (sizeNum === 0) {
-        localOrderBookRef.current.bids.delete(price);
-      } else {
-        localOrderBookRef.current.bids.set(price, size);
-      }
-    });
-    
-    // Update asks
-    data.a.forEach(([price, size]) => {
-      const sizeNum = parseFloat(size);
-      if (sizeNum === 0) {
-        localOrderBookRef.current.asks.delete(price);
-      } else {
-        localOrderBookRef.current.asks.set(price, size);
-      }
-    });
-    
-    // Update UI
-    updateOrderBookDisplay();
-  };
-
-  // Update the displayed order book
-  const updateOrderBookDisplay = () => {
-    // Convert bids map to array and sort (highest to lowest)
-    const bidsArray = Array.from(localOrderBookRef.current.bids.entries())
-      .map(([price, size]) => [price, size] as [string, string])
-      .sort((a, b) => parseFloat(b[0]) - parseFloat(a[0]))
-      .slice(0, 15);
-    
-    // Convert asks map to array and sort (lowest to highest)
-    const asksArray = Array.from(localOrderBookRef.current.asks.entries())
-      .map(([price, size]) => [price, size] as [string, string])
-      .sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]))
-      .slice(0, 15);
-    
-    // Process bids
-    const processedBids: OrderBookEntry[] = [];
-    let bidCumulativeTotal = 0;
-    
-    for (const [priceStr, amountStr] of bidsArray) {
-      const price = parseFloat(priceStr);
-      const amount = parseFloat(amountStr);
-      const total = price * amount;
-      bidCumulativeTotal += total;
-      processedBids.push({ price, amount, total, depthPercent: 0 });
-    }
-    
-    // Calculate depth percentages for bids
-    processedBids.forEach((bid, idx) => {
-      const cumulativeToThis = processedBids.slice(0, idx + 1).reduce((sum, b) => sum + b.total, 0);
-      bid.depthPercent = bidCumulativeTotal > 0 ? (cumulativeToThis / bidCumulativeTotal) * 100 : 0;
-    });
-    
-    // Process asks (reverse for display)
-    const processedAsks: OrderBookEntry[] = [];
-    let askCumulativeTotal = 0;
-    
-    for (const [priceStr, amountStr] of asksArray) {
-      const price = parseFloat(priceStr);
-      const amount = parseFloat(amountStr);
-      const total = price * amount;
-      askCumulativeTotal += total;
-      processedAsks.push({ price, amount, total, depthPercent: 0 });
-    }
-    
-    // Reverse asks for display and calculate depth
-    processedAsks.reverse();
-    processedAsks.forEach((ask, idx) => {
-      const cumulativeToThis = processedAsks.slice(idx).reduce((sum, a) => sum + a.total, 0);
-      ask.depthPercent = askCumulativeTotal > 0 ? (cumulativeToThis / askCumulativeTotal) * 100 : 0;
-    });
-    
-    setAsks(processedAsks);
-    setBids(processedBids);
-    
-    // Update last price (best bid)
-    if (processedBids.length > 0) {
-      const newLastPrice = processedBids[0].price;
-      const change = lastPrice > 0 ? ((newLastPrice - lastPrice) / lastPrice) * 100 : 0;
-      setLastPrice(newLastPrice);
-      setPriceChange(change);
-    }
-  };
+  }, []);
 
   useEffect(() => {
-    console.log('[OrderBook] Pair changed to:', selectedPair);
+    // Initialize Socket.IO connection
+    const socket = io(SOCKET_URL, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      reconnectionAttempts: Infinity
+    });
+
+    socketRef.current = socket;
+
+    // Connection event handlers
+    socket.on('connect', () => {
+      console.log('[OrderBook] Socket.IO connected');
+      setConnected(true);
+      setError(null);
+      
+      // Subscribe to initial pair
+      const symbol = formatSymbol(selectedPair);
+      socket.emit('subscribe', symbol);
+      currentSymbolRef.current = symbol;
+      console.log('[OrderBook] Subscribed to:', symbol);
+    });
+
+    socket.on('disconnect', () => {
+      console.log('[OrderBook] Socket.IO disconnected');
+      setConnected(false);
+      setError('Disconnected from server');
+    });
+
+    socket.on('connect_error', (err) => {
+      console.error('[OrderBook] Connection error:', err);
+      setConnected(false);
+      setError('Connection error');
+    });
+
+    // Order book data handler
+    socket.on('orderbook', (data: OrderBookMessage) => {
+      // Only process if it's for the current symbol
+      if (data.symbol === currentSymbolRef.current) {
+        processOrderBook(data);
+      }
+    });
+
+    // Cleanup on unmount
+    return () => {
+      console.log('[OrderBook] Cleaning up Socket.IO connection');
+      if (currentSymbolRef.current) {
+        socket.emit('unsubscribe', currentSymbolRef.current);
+      }
+      socket.disconnect();
+    };
+  }, [processOrderBook]);
+
+  // Handle pair changes
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket || !socket.connected) return;
+
+    const newSymbol = formatSymbol(selectedPair);
     
-    // Unsubscribe from old pair if connected
-    if (activePairRef.current !== selectedPair) {
-      unsubscribe(activePairRef.current);
+    // Skip if same symbol
+    if (newSymbol === currentSymbolRef.current) return;
+
+    console.log('[OrderBook] Switching pair from', currentSymbolRef.current, 'to', newSymbol);
+
+    // Unsubscribe from old symbol
+    if (currentSymbolRef.current) {
+      socket.emit('unsubscribe', currentSymbolRef.current);
+      console.log('[OrderBook] Unsubscribed from:', currentSymbolRef.current);
     }
-    
-    // Update active pair ref
-    activePairRef.current = selectedPair;
-    shouldReconnectRef.current = true;
 
     // Reset state
     setAsks([]);
@@ -294,44 +202,11 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
     setPriceChange(0);
     setLoading(true);
     setError(null);
-    localOrderBookRef.current.bids.clear();
-    localOrderBookRef.current.asks.clear();
 
-    // Clear any pending reconnect
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = null;
-    }
-
-    // If WebSocket is already connected, just subscribe to new pair
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      const subscribeMessage = {
-        type: 'subscribe',
-        symbol: selectedPair,
-        depth: DEPTH,
-        tradeType: TRADE_TYPE
-      };
-      wsRef.current.send(JSON.stringify(subscribeMessage));
-      console.log('[OrderBook] Subscribed to new pair:', selectedPair);
-    } else {
-      // Otherwise, establish new connection
-      connectWebSocket(selectedPair);
-    }
-    
-    return () => {
-      console.log('[OrderBook] Cleanup');
-      shouldReconnectRef.current = false;
-      
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-      
-      if (wsRef.current) {
-        unsubscribe(selectedPair);
-        wsRef.current.close();
-        wsRef.current = null;
-      }
-    };
+    // Subscribe to new symbol
+    socket.emit('subscribe', newSymbol);
+    currentSymbolRef.current = newSymbol;
+    console.log('[OrderBook] Subscribed to:', newSymbol);
   }, [selectedPair]);
 
   const formatPrice = (price: number): string => {
@@ -426,23 +301,23 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
               </div>
             ) : (
               asks.map((ask, index) => (
-              <div
-                key={`ask-${index}`}
-                className="relative px-3 py-0.5 hover:bg-[#1e2329] cursor-pointer group"
-              >
-                {/* Depth bar */}
                 <div
-                  className="absolute right-0 top-0 bottom-0 bg-[rgba(246,70,93,0.12)]"
-                  style={{ width: `${ask.depthPercent}%` }}
-                />
-                
-                {/* Content */}
-                <div className="relative grid grid-cols-3 gap-2 text-[11px] font-mono">
-                  <div className="text-[#f6465d] font-medium">{formatPrice(ask.price)}</div>
-                  <div className="text-right text-white">{formatAmount(ask.amount)}</div>
-                  <div className="text-right text-[#848e9c] text-[10px]">{ask.total.toFixed(2)}</div>
+                  key={`ask-${ask.price}-${index}`}
+                  className="relative px-3 py-0.5 hover:bg-[#1e2329] cursor-pointer group"
+                >
+                  {/* Depth bar */}
+                  <div
+                    className="absolute right-0 top-0 bottom-0 bg-[rgba(246,70,93,0.12)]"
+                    style={{ width: `${ask.depthPercent}%` }}
+                  />
+                  
+                  {/* Content */}
+                  <div className="relative grid grid-cols-3 gap-2 text-[11px] font-mono">
+                    <div className="text-[#f6465d] font-medium">{formatPrice(ask.price)}</div>
+                    <div className="text-right text-white">{formatAmount(ask.amount)}</div>
+                    <div className="text-right text-[#848e9c] text-[10px]">{ask.total.toFixed(2)}</div>
+                  </div>
                 </div>
-              </div>
               ))
             )}
           </div>
@@ -478,23 +353,23 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
               </div>
             ) : (
               bids.map((bid, index) => (
-              <div
-                key={`bid-${index}`}
-                className="relative px-3 py-0.5 hover:bg-[#1e2329] cursor-pointer group"
-              >
-                {/* Depth bar */}
                 <div
-                  className="absolute right-0 top-0 bottom-0 bg-[rgba(14,203,129,0.12)]"
-                  style={{ width: `${bid.depthPercent}%` }}
-                />
-                
-                {/* Content */}
-                <div className="relative grid grid-cols-3 gap-2 text-[11px] font-mono">
-                  <div className="text-[#0ecb81] font-medium">{formatPrice(bid.price)}</div>
-                  <div className="text-right text-white">{formatAmount(bid.amount)}</div>
-                  <div className="text-right text-[#848e9c] text-[10px]">{bid.total.toFixed(2)}</div>
+                  key={`bid-${bid.price}-${index}`}
+                  className="relative px-3 py-0.5 hover:bg-[#1e2329] cursor-pointer group"
+                >
+                  {/* Depth bar */}
+                  <div
+                    className="absolute right-0 top-0 bottom-0 bg-[rgba(14,203,129,0.12)]"
+                    style={{ width: `${bid.depthPercent}%` }}
+                  />
+                  
+                  {/* Content */}
+                  <div className="relative grid grid-cols-3 gap-2 text-[11px] font-mono">
+                    <div className="text-[#0ecb81] font-medium">{formatPrice(bid.price)}</div>
+                    <div className="text-right text-white">{formatAmount(bid.amount)}</div>
+                    <div className="text-right text-[#848e9c] text-[10px]">{bid.total.toFixed(2)}</div>
+                  </div>
                 </div>
-              </div>
               ))
             )}
           </div>
