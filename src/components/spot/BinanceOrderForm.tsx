@@ -28,6 +28,7 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
   const [success, setSuccess] = useState<string | null>(null);
   const [currentMarketPrice, setCurrentMarketPrice] = useState<number>(0);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [transformedQuote, setTransformedQuote] = useState<any>(null);
 
   // Token metadata removed - now handled by backend
 
@@ -155,14 +156,36 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
       });
       
       // Fetch quote from backend
-      const quoteResult = await fetchQuote({
+      const backendQuote = await fetchQuote({
         pair: selectedPair,
         side: activeTab,
         amount,
         chain: effectiveChain,
       });
 
-      if (quoteResult) {
+      if (backendQuote) {
+        // Transform BackendQuote to SpotSwapQuote format for the modal
+        const transformed: any = {
+          id: `quote-${Date.now()}`,
+          fromAmount: amount,
+          toAmount: backendQuote.toAmount,
+          toAmountMin: backendQuote.toAmountMin,
+          executionPrice: currentMarketPrice.toString(),
+          estimatedDuration: 30, // Default 30 seconds
+          priceImpact: backendQuote.priceImpact,
+          gasEstimate: backendQuote.gasEstimate,
+          route: backendQuote.route || backendQuote.tool,
+          // Add required arrays for SpotQuoteDetails component
+          feeCosts: [],
+          gasCosts: backendQuote.gasEstimate ? [{
+            token: { symbol: effectiveChain === 'sol' ? 'SOL' : 'ETH' },
+            amount: backendQuote.gasEstimate,
+            amountUSD: '0.00'
+          }] : [],
+          _raw: backendQuote,
+        };
+        
+        setTransformedQuote(transformed);
         setShowConfirmModal(true);
       } else {
         setError(backendError || 'Failed to get quote from backend');
@@ -173,7 +196,7 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
   };
 
   const handleConfirmSwap = async (pin: string) => {
-    if (!quote) {
+    if (!transformedQuote) {
       setError('No quote available');
       throw new Error('No quote available');
     }
@@ -439,7 +462,7 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
       <SpotSwapConfirmModal
         isOpen={showConfirmModal}
         onClose={() => setShowConfirmModal(false)}
-        quote={quote}
+        quote={transformedQuote}
         pair={selectedPair}
         side={activeTab}
         onConfirm={handleConfirmSwap}
