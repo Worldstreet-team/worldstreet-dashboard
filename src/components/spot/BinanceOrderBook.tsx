@@ -32,7 +32,7 @@ interface OrderBookMessage {
 }
 
 // Socket.IO configuration
-const SOCKET_URL = 'http://localhost:3000';
+const SOCKET_URL = 'wss://kucoin.watchup.site';
 
 export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps) {
   const [asks, setAsks] = useState<OrderBookEntry[]>([]);
