@@ -110,13 +110,13 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
     }
   }, []);
 
-  // Fetch historical data
+  // Fetch historical data from Next.js API route
   const fetchHistoricalData = useCallback(async (pair: string) => {
     try {
       const kucoinPair = pair.replace('-', '-');
       
       const response = await fetch(
-        `https://api.kucoin.com/api/v1/market/candles?symbol=${kucoinPair}&type=1hour&limit=100`
+        `/api/kucoin/candles?symbol=${kucoinPair}&type=1hour&limit=100`
       );
       
       if (!response.ok) throw new Error('Failed to fetch historical data');
@@ -128,14 +128,8 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
         return;
       }
 
+      // Data is already transformed by the API route
       const candles: CandleData[] = data.data
-        .map((kline: string[]) => ({
-          time: Math.floor(parseInt(kline[0]) / 1000),
-          open: parseFloat(kline[1]),
-          high: parseFloat(kline[3]),
-          low: parseFloat(kline[4]),
-          close: parseFloat(kline[2]),
-        }))
         .sort((a: CandleData, b: CandleData) => (typeof a.time === 'number' && typeof b.time === 'number' ? a.time - b.time : 0));
 
       candlesRef.current.clear();
@@ -183,14 +177,15 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
           if (message.type === 'message' && message.topic?.includes('candles')) {
             const data = message.data;
             if (data && data.candles && data.candles.length > 0) {
+              // Kucoin WebSocket format: [time, open, close, high, low, volume, turnover]
               const kline = data.candles[0];
               const candleTime = Math.floor(parseInt(kline[0]) / 1000);
               const candle: CandleData = {
                 time: candleTime,
                 open: parseFloat(kline[1]),
+                close: parseFloat(kline[2]),
                 high: parseFloat(kline[3]),
                 low: parseFloat(kline[4]),
-                close: parseFloat(kline[2]),
               };
 
               candlesRef.current.set(candleTime, candle);
