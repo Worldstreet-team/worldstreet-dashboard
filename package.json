@@ -59,6 +59,7 @@
     "tailwind-scrollbar-hide": "^4.0.0",
     "tiny-secp256k1": "^2.2.4",
     "tronweb": "^5.3.4",
+    "viem": "^2.47.0",
     "zustand": "^5.0.11"
   },
   "devDependencies": {
