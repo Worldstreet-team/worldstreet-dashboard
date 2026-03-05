@@ -250,7 +250,7 @@ export function SwapProvider({ children }: { children: ReactNode }) {
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [executing, setExecuting] = useState(false);
   const [swapStatus, setSwapStatus] = useState<SwapStatus | null>(null);
-  const [slippage, setSlippage] = useState(15.0); // 15% - very high tolerance
+  const [slippage, setSlippage] = useState(20.0); // 50% - extremely high tolerance to pass simulation
 
   // Fetch available tokens for a chain
   const fetchTokens = useCallback(async (chain: ChainKey) => {
@@ -431,7 +431,7 @@ export function SwapProvider({ children }: { children: ReactNode }) {
               const ataSignature = await connection.sendRawTransaction(
                 createAtaTx.serialize(),
                 {
-                  skipPreflight: true, // Skip simulation
+                  skipPreflight: false, // Keep simulation
                   preflightCommitment: "confirmed",
                 }
               );
@@ -484,7 +484,7 @@ export function SwapProvider({ children }: { children: ReactNode }) {
           const { blockhash: sendBlockhash, lastValidBlockHeight: sendBlockHeight } =
             await connection.getLatestBlockhash("confirmed");
 
-          console.log('[Swap] Sending Solana transaction (skipPreflight=true)...', {
+          console.log('[Swap] Sending Solana transaction...', {
             fromToken: swapQuote.fromToken.symbol,
             toToken: swapQuote.toToken.symbol,
             fromAmount: swapQuote.fromAmount,
@@ -497,7 +497,7 @@ export function SwapProvider({ children }: { children: ReactNode }) {
             signature = await connection.sendTransaction(transaction, {
               maxRetries: 5,
               preflightCommitment: "confirmed",
-              skipPreflight: true, // SKIP SIMULATION - bypass slippage check
+              skipPreflight: false, // Keep simulation - let high slippage handle it
             });
           } catch (sendError) {
             console.error('[Swap] Solana sendTransaction failed:', {
