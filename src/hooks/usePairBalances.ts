@@ -50,6 +50,7 @@ interface UsePairBalancesReturn {
  * @param userId - User ID to fetch balances for
  * @param selectedPair - Trading pair in format "BTC-USDT"
  * @param chain - Blockchain network (e.g., "ethereum", "solana", "bitcoin")
+ * @param tokenAddress - Optional: mint/contract address for custom tokens
  * @returns Object containing tokenIn balance, tokenOut balance, loading state, error, and refetch function
  * 
  * @example
@@ -57,14 +58,16 @@ interface UsePairBalancesReturn {
  * const { tokenIn, tokenOut, loading, refetch } = usePairBalances(
  *   user?.userId,
  *   'BTC-USDT',
- *   'ethereum'
+ *   'ethereum',
+ *   '0x...' // Optional: for custom tokens
  * );
  * ```
  */
 export function usePairBalances(
   userId: string | undefined,
   selectedPair: string,
-  chain?: string
+  chain?: string,
+  tokenAddress?: string
 ): UsePairBalancesReturn {
   const [tokenIn, setTokenIn] = useState<number>(0);
   const [tokenOut, setTokenOut] = useState<number>(0);
@@ -73,6 +76,48 @@ export function usePairBalances(
 
   // Parse the trading pair
   const [baseAsset, quoteAsset] = selectedPair.split('-');
+
+  /**
+   * Check if an asset is a standard/known token
+   */
+  const isStandardToken = (asset: string): boolean => {
+    const standardTokens = ['SOL', 'SOLANA', 'ETH', 'ETHEREUM', 'BTC', 'BITCOIN', 'USDT', 'USDC', 'TRX', 'TRON'];
+    return standardTokens.includes(asset.toUpperCase());
+  };
+
+  /**
+   * Fetch custom token balance directly from blockchain using RPC
+   */
+  const fetchCustomTokenBalance = async (mintAddress: string, chainType: string): Promise<number> => {
+    try {
+      console.log('[usePairBalances] Fetching custom token balance:', { mintAddress, chainType });
+      
+      // Call the balance API with the token address
+      const params = new URLSearchParams({
+        tokenAddress: mintAddress,
+        chain: chainType,
+      });
+      
+      const response = await fetch(`/api/users/${userId}/token-balance?${params.toString()}`);
+      
+      if (!response.ok) {
+        console.error('[usePairBalances] Custom token balance API error:', response.status);
+        return 0;
+      }
+
+      const data = await response.json();
+      
+      if (data.success && typeof data.balance === 'number') {
+        console.log('[usePairBalances] Custom token balance:', data.balance);
+        return data.balance;
+      }
+
+      return 0;
+    } catch (err) {
+      console.error('[usePairBalances] Error fetching custom token balance:', err);
+      return 0;
+    }
+  };
 
   /**
    * Determine which chain to use for USDT based on the base asset
@@ -179,7 +224,7 @@ export function usePairBalances(
 
       // Find balance for base asset (tokenIn - what you're selling/trading)
       // Match by asset name and chain
-      const baseBalance = balances.find(
+      let baseBalance = balances.find(
         (b: AssetBalance) => {
           const matchesAsset = b.asset.toUpperCase() === baseAsset.toUpperCase();
           const matchesChain = chain ? b.chain.toLowerCase() === chain.toLowerCase() : true;
@@ -187,12 +232,21 @@ export function usePairBalances(
           return matchesAsset && matchesChain;
         }
       );
-      const tokenInValue = baseBalance ? parseFloat(baseBalance.available_balance || '0') : 0;
+      
+      let tokenInValue = baseBalance ? parseFloat(baseBalance.available_balance || '0') : 0;
+      
+      // If base asset is not found and it's not a standard token, try fetching using tokenAddress
+      if (tokenInValue === 0 && !isStandardToken(baseAsset) && tokenAddress && chain) {
+        console.log('[usePairBalances] Base asset not found in backend, fetching custom token balance...');
+        tokenInValue = await fetchCustomTokenBalance(tokenAddress, chain);
+      }
+      
       console.log('[usePairBalances] Base asset balance:', { 
         baseAsset, 
         chain,
         balance: baseBalance, 
         value: tokenInValue,
+        isCustomToken: !isStandardToken(baseAsset),
         allAssets: balances.map((b: AssetBalance) => `${b.asset}(${b.chain})`)
       });
       setTokenIn(isNaN(tokenInValue) ? 0 : tokenInValue);
@@ -254,7 +308,7 @@ export function usePairBalances(
     } finally {
       setLoading(false);
     }
-  }, [userId, baseAsset, quoteAsset, chain]);
+  }, [userId, baseAsset, quoteAsset, chain, tokenAddress]);
 
   // Fetch balances when dependencies change
   useEffect(() => {

@@ -33,7 +33,7 @@ export default function MobileTradingForm({ selectedPair, chain, tokenAddress }:
     loading: loadingBalances,
     error: balanceError,
     refetch: refetchBalances 
-  } = usePairBalances(user?.userId, selectedPair, chain);
+  } = usePairBalances(user?.userId, selectedPair, chain, tokenAddress);
 
   // Current balance based on buy/sell side
   const balance = side === 'buy' ? quoteBalance : baseBalance;

@@ -37,7 +37,8 @@ async function fetchPairBalances(
   userId: string,
   baseAsset: string,
   quoteAsset: string,
-  chain?: string
+  chain?: string,
+  tokenAddress?: string
 ): Promise<{ tokenIn: number; tokenOut: number }> {
   const params = new URLSearchParams({
     assets: `${baseAsset},${quoteAsset}`,
@@ -60,7 +61,21 @@ async function fetchPairBalances(
   const baseBalance = balances.find(
     (b: AssetBalance) => b.asset.toUpperCase() === baseAsset.toUpperCase()
   );
-  const tokenIn = baseBalance ? parseFloat(baseBalance.available_balance) : 0;
+  let tokenIn = baseBalance ? parseFloat(baseBalance.available_balance) : 0;
+  
+  // If base asset not found and tokenAddress provided, fetch from blockchain
+  const standardTokens = ['SOL', 'SOLANA', 'ETH', 'ETHEREUM', 'BTC', 'BITCOIN', 'USDT', 'USDC', 'TRX', 'TRON'];
+  if (tokenIn === 0 && !standardTokens.includes(baseAsset.toUpperCase()) && tokenAddress && chain) {
+    const tokenBalanceResponse = await fetch(
+      `/api/users/${userId}/token-balance?tokenAddress=${tokenAddress}&chain=${chain}`
+    );
+    if (tokenBalanceResponse.ok) {
+      const tokenData = await tokenBalanceResponse.json();
+      if (tokenData.success) {
+        tokenIn = tokenData.balance;
+      }
+    }
+  }
 
   // Find balance for quote asset (tokenOut)
   const quoteBalance = balances.find(
@@ -82,10 +97,12 @@ async function fetchPairBalances(
  * - Auto-refetch on window focus
  * - Auto-refetch every 60s
  * - Optimistic updates support
+ * - Custom token support via tokenAddress
  * 
  * @param userId - User ID to fetch balances for
  * @param selectedPair - Trading pair in format "BTC-USDT"
  * @param chain - Blockchain network (e.g., "ethereum", "solana", "bitcoin")
+ * @param tokenAddress - Optional: mint/contract address for custom tokens
  * @returns Object containing tokenIn balance, tokenOut balance, loading state, error, and refetch function
  * 
  * @example
@@ -93,7 +110,8 @@ async function fetchPairBalances(
  * const { tokenIn, tokenOut, loading, refetch } = usePairBalancesQuery(
  *   user?.userId,
  *   'BTC-USDT',
- *   'ethereum'
+ *   'ethereum',
+ *   '0x...' // Optional: for custom tokens
  * );
  * 
  * // Refetch after trade execution
@@ -104,7 +122,8 @@ async function fetchPairBalances(
 export function usePairBalancesQuery(
   userId: string | undefined,
   selectedPair: string,
-  chain?: string
+  chain?: string,
+  tokenAddress?: string
 ): UsePairBalancesQueryReturn {
   // Parse the trading pair
   const [baseAsset, quoteAsset] = selectedPair.split('-');
@@ -116,8 +135,8 @@ export function usePairBalancesQuery(
     refetch,
     isRefetching,
   } = useQuery({
-    queryKey: ['pairBalances', userId, baseAsset, quoteAsset, chain],
-    queryFn: () => fetchPairBalances(userId!, baseAsset, quoteAsset, chain),
+    queryKey: ['pairBalances', userId, baseAsset, quoteAsset, chain, tokenAddress],
+    queryFn: () => fetchPairBalances(userId!, baseAsset, quoteAsset, chain, tokenAddress),
     enabled: !!userId, // Only fetch if userId exists
     staleTime: 30000, // Consider data fresh for 30 seconds
     refetchInterval: 60000, // Auto-refetch every 60 seconds

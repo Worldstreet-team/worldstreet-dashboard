@@ -60,7 +60,7 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
     loading: loadingBalances,
     error: balanceError,
     refetch: refetchBalances 
-  } = usePairBalances(user?.userId, selectedPair, effectiveChain);
+  } = usePairBalances(user?.userId, selectedPair, effectiveChain, tokenAddress);
 
   // Current balance based on buy/sell side
   // Buy: spend USDT (quoteBalance), get token

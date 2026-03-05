@@ -42,7 +42,7 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
     loading: loadingBalances,
     error: balanceError,
     refetch: refetchBalances 
-  } = usePairBalances(user?.userId, selectedPair, effectiveChain);
+  } = usePairBalances(user?.userId, selectedPair, effectiveChain, tokenAddress);
 
   // Fetch current market price
   useEffect(() => {
