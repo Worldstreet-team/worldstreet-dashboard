@@ -247,18 +247,32 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
       
       // Save to trade history
       try {
+        const chainType = effectiveChain === 'sol' ? 'solana' : 'ethereum';
+        const chainMeta = effectiveChain === 'sol' ? TOKEN_META.solana : TOKEN_META.ethereum;
+        const chainId = chainType === 'solana' ? 1151111081099710 : 1;
+        
+        // Get token metadata for history
+        const fromTokenMeta = activeTab === 'buy' ? chainMeta[tokenOut] : chainMeta[tokenIn];
+        const toTokenMeta = activeTab === 'buy' ? chainMeta[tokenIn] : chainMeta[tokenOut];
+        
         await fetch('/api/spot/trades', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             userId: user?.userId,
-            pair: selectedPair,
-            side: activeTab,
             txHash,
-            chain: effectiveChain,
+            chainId,
+            pair: selectedPair,
+            side: activeTab.toUpperCase(),
+            fromTokenAddress: fromTokenMeta.address,
+            fromTokenSymbol: activeTab === 'buy' ? tokenOut : tokenIn,
             fromAmount: amount,
+            toTokenAddress: toTokenMeta.address,
+            toTokenSymbol: activeTab === 'buy' ? tokenIn : tokenOut,
             toAmount: total,
-            status: 'COMPLETED',
+            executionPrice: currentMarketPrice.toString(),
+            slippagePercent: 0.5,
+            status: 'CONFIRMED',
           }),
         });
       } catch (historyErr) {

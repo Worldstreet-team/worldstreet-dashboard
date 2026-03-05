@@ -258,19 +258,31 @@ export function useSpotSwap() {
       const txHash = await contextExecuteSwap(mappedQuote, pin);
 
       // 4. Update local history/state
+      const chain = getChainFromPair(params.pair);
+      const chainId = getChainLabel(params.pair);
+      const tokens = getTokenMeta(params.pair, chain);
+      const fromTokenAddr = params.side === 'buy' ? tokens.quote : tokens.base;
+      const toTokenAddr = params.side === 'buy' ? tokens.base : tokens.quote;
+      const [baseToken, quoteToken] = params.pair.split('-');
+      
       fetch('/api/spot/trades', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: user?.userId,
-          pair: params.pair,
-          side: params.side,
           txHash,
-          chain,
+          chainId: typeof chainId === 'number' ? chainId : 1,
+          pair: params.pair,
+          side: params.side.toUpperCase(),
+          fromTokenAddress: fromTokenAddr,
+          fromTokenSymbol: params.side === 'buy' ? quoteToken : baseToken,
           fromAmount: quote.fromAmount,
+          toTokenAddress: toTokenAddr,
+          toTokenSymbol: params.side === 'buy' ? baseToken : quoteToken,
           toAmount: quote.toAmount,
           executionPrice: quote.executionPrice,
-          status: 'COMPLETED',
+          slippagePercent: params.slippage || 3,
+          status: 'CONFIRMED',
         }),
       }).catch(err => console.warn('[useSpotSwap] Backend tracking failed (TX still went through):', err));
 
