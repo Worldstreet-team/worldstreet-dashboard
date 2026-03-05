@@ -2,19 +2,17 @@
 
 import { useState } from 'react';
 import { Icon } from '@iconify/react';
-import { useSolana } from '@/app/context/solanaContext';
-import { useEvm } from '@/app/context/evmContext';
-import { useWallet } from '@/app/context/walletContext';
+import { useAuth } from '@/app/context/authContext';
+import { usePairBalances } from '@/hooks/usePairBalances';
 
 interface MobileTradingFormProps {
   selectedPair: string;
-  balance: number;
+  chain: string; // Required: specify blockchain network ('sol' or 'evm')
 }
 
-export default function MobileTradingForm({ selectedPair, balance }: MobileTradingFormProps) {
-  const { address: solAddress, fetchBalance: fetchSolBalance, refreshCustomTokens: refreshSolCustom } = useSolana();
-  const { address: evmAddress, fetchBalance: fetchEvmBalance, refreshCustomTokens: refreshEvmCustom } = useEvm();
-  const { walletsGenerated } = useWallet();
+export default function MobileTradingForm({ selectedPair, chain }: MobileTradingFormProps) {
+  const { user } = useAuth();
+  
   const [side, setSide] = useState<'buy' | 'sell'>('buy');
   const [amount, setAmount] = useState('');
   const [total, setTotal] = useState('');
@@ -26,6 +24,18 @@ export default function MobileTradingForm({ selectedPair, balance }: MobileTradi
 
   const [tokenIn, tokenOut] = selectedPair.split('-');
   const currentToken = side === 'buy' ? tokenOut : tokenIn;
+
+  // Use the custom hook to fetch pair balances from backend
+  const { 
+    tokenIn: baseBalance,
+    tokenOut: quoteBalance,
+    loading: loadingBalances,
+    error: balanceError,
+    refetch: refetchBalances 
+  } = usePairBalances(user?.userId, selectedPair, chain);
+
+  // Current balance based on buy/sell side
+  const balance = side === 'buy' ? quoteBalance : baseBalance;
 
   const handleSetMax = () => {
     setAmount(balance.toString());
@@ -44,8 +54,8 @@ export default function MobileTradingForm({ selectedPair, balance }: MobileTradi
     setSuccess(null);
     
     // Validation
-    if (!walletsGenerated) {
-      setError('Please set up your wallet PIN first');
+    if (!user?.userId) {
+      setError('Please sign in to trade');
       return;
     }
     
@@ -65,16 +75,14 @@ export default function MobileTradingForm({ selectedPair, balance }: MobileTradi
     try {
       console.log('Order submitted:', { side, total, slippageTolerance });
       
-      // Simulate trade execution (replace with actual API call)
+      // TODO: Implement actual trade execution via backend API
+      // This should call the backend spot trading API
       await new Promise(resolve => setTimeout(resolve, 1500));
       
       setSuccess(`${side === 'buy' ? 'Buy' : 'Sell'} order placed successfully!`);
       
-      // Refetch balances from wallet contexts
-      fetchSolBalance();
-      fetchEvmBalance();
-      refreshSolCustom();
-      refreshEvmCustom();
+      // Refetch balances from backend
+      await refetchBalances();
       
       // Reset form
       setAmount('');

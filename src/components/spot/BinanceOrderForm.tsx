@@ -2,8 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/app/context/authContext';
-import { useSolana } from '@/app/context/solanaContext';
-import { useEvm } from '@/app/context/evmContext';
 import { usePairBalances } from '@/hooks/usePairBalances';
 import { useBackendSpotTrading } from '@/hooks/useBackendSpotTrading';
 import SpotSwapConfirmModal from './SpotSwapConfirmModal';
@@ -16,8 +14,6 @@ interface BinanceOrderFormProps {
 
 export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain }: BinanceOrderFormProps) {
   const { user } = useAuth();
-  const { fetchBalance: fetchSolBalance, refreshCustomTokens: refreshSolCustom } = useSolana();
-  const { fetchBalance: fetchEvmBalance, refreshCustomTokens: refreshEvmCustom } = useEvm();
   
   // Use backend spot trading hook
   const { quote, fetchQuote, executeSwap, loading: quoteLoading, executing: swapExecuting, error: backendError } = useBackendSpotTrading();
@@ -234,12 +230,8 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
       setTotal('');
       setSliderValue(0);
       
-      // Refetch balances
+      // Refetch balances from backend (spot wallets)
       await refetchBalances();
-      fetchSolBalance();
-      fetchEvmBalance();
-      refreshSolCustom();
-      refreshEvmCustom();
       
       if (onTradeExecuted) {
         onTradeExecuted();

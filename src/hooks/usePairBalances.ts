@@ -80,8 +80,12 @@ export function usePairBalances(
    * SOL -> Use Solana USDT
    * Default -> Use Tron USDT
    */
-  const getUSDTChain = (chain: string): 'tron' | 'evm' | 'sol' => {
-    const asset = chain.toUpperCase();
+  const getUSDTChain = (chainParam?: string): 'tron' | 'evm' | 'sol' => {
+    if (!chainParam) {
+      return 'tron'; // Default to Tron USDT if no chain specified
+    }
+    
+    const asset = chainParam.toUpperCase();
     
     // Map assets to their preferred USDT chain
     if (asset === 'EVM' || asset === 'BTC') {

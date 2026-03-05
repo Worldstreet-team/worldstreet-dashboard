@@ -3,12 +3,9 @@
 import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { useAuth } from '@/app/context/authContext';
-import { useSolana } from '@/app/context/solanaContext';
-import { useEvm } from '@/app/context/evmContext';
-import { useWallet } from '@/app/context/walletContext';
 import { usePairBalances } from '@/hooks/usePairBalances';
+import { useSpotWallets } from '@/hooks/useSpotWallets';
 import { useSwap, SwapQuote } from '@/app/context/swapContext';
-import SpotQuoteDetails from './SpotQuoteDetails';
 
 interface MobileTradingModalProps {
   isOpen: boolean;
@@ -20,12 +17,12 @@ interface MobileTradingModalProps {
 
 export default function MobileTradingModal({ isOpen, onClose, side, selectedPair, chain }: MobileTradingModalProps) {
   const { user } = useAuth();
-  const { address: solAddress, balance: solBalance, fetchBalance: fetchSolBalance, refreshCustomTokens: refreshSolCustom } = useSolana();
-  const { address: evmAddress, balance: ethBalance, fetchBalance: fetchEvmBalance, refreshCustomTokens: refreshEvmCustom } = useEvm();
-  const { walletsGenerated } = useWallet();
   
   // Use swapContext directly
-  const { getQuote, executeSwap, quoteLoading, executing } = useSwap();
+  const { getQuote, executeSwap, executing } = useSwap();
+  
+  // Fetch spot wallet addresses from backend
+  const { getWalletAddress, loading: loadingWallets } = useSpotWallets(user?.userId);
   
   const [orderType, setOrderType] = useState<'market' | 'limit'>('market');
   const [price, setPrice] = useState('');
@@ -197,12 +194,17 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
         throw new Error('Token not supported');
       }
       
-      // Get wallet address
-      const walletAddress = chainType === 'solana' ? solAddress : evmAddress;
+      // Get spot wallet address from backend for the current chain
+      const walletAddress = getWalletAddress(effectiveChain);
       
       if (!walletAddress) {
-        throw new Error(`${chainType === 'solana' ? 'Solana' : 'Ethereum'} wallet not available`);
+        throw new Error(`No spot wallet found for ${chainType} chain. Please set up your spot wallet first.`);
       }
+      
+      console.log('[MobileTradingModal] Using spot wallet:', {
+        chain: effectiveChain,
+        address: walletAddress
+      });
       
       // Convert amount to smallest unit
       const decimals = fromTokenMeta.decimals;
@@ -217,7 +219,7 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
         fromToken: fromTokenMeta.address,
         toToken: toTokenMeta.address,
         rawAmount,
-        walletAddress
+        spotWalletAddress: walletAddress
       });
       
       // Call swapContext.getQuote
@@ -297,12 +299,8 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
         console.warn('[MobileTradingModal] Failed to save trade history:', historyErr);
       }
       
-      // Refetch balances from wallet contexts
+      // Refetch balances from backend (spot wallets)
       await refetchBalances();
-      fetchSolBalance();
-      fetchEvmBalance();
-      refreshSolCustom();
-      refreshEvmCustom();
       
       // Reset form
       setAmount('');
@@ -533,7 +531,7 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
           {!showQuote ? (
             <button
               onClick={handleGetQuote}
-              disabled={fetchingQuote || !amount || loadingBalances}
+              disabled={fetchingQuote || !amount || loadingBalances || loadingWallets}
               className={`w-full py-4 rounded-lg font-semibold text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                 side === 'buy'
                   ? 'bg-[#0ecb81] hover:bg-[#0ecb81]/90 text-white'
@@ -545,6 +543,8 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
                   <Icon icon="ph:circle-notch" className="animate-spin" width={20} />
                   Getting Quote...
                 </span>
+              ) : loadingWallets ? (
+                'Loading Wallet...'
               ) : (
                 `Get Quote`
               )}
