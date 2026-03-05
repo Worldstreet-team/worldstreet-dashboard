@@ -3,14 +3,14 @@
 /**
  * BinanceOrderBook Component
  * 
- * Real-time order book display using KuCoin WebSocket API
- * - Connects to wss://ws-api-spot.kucoin.com/
- * - Subscribes to /spotMarket/level2Depth50 for 50-level order book
- * - Displays top 15 bids and asks with depth visualization
- * - Auto-reconnects on connection loss
+ * Real-time order book display using Gate.io REST API with polling
+ * - Polls /api/orderbook every 3 seconds
+ * - Fetches order book data from Gate.io
+ * - Displays top 20 bids and asks with depth visualization
+ * - Shows spread and last update time
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Icon } from '@iconify/react';
 
 interface OrderBookEntry {
@@ -24,11 +24,14 @@ interface BinanceOrderBookProps {
   selectedPair: string;
 }
 
-interface KuCoinOrderBookData {
-  bids: [string, string][];
-  asks: [string, string][];
+interface GateIOOrderBookData {
   sequence: number;
+  timestamp: number;
+  bids: { price: number; size: number }[];
+  asks: { price: number; size: number }[];
 }
+
+const POLLING_INTERVAL = 3000;
 
 export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps) {
   const [asks, setAsks] = useState<OrderBookEntry[]>([]);
@@ -39,35 +42,47 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
   const [connected, setConnected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<number>(0);
   
-  // Refs to avoid stale closures
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
-  const activePairRef = useRef<string>(selectedPair);
-  const shouldReconnectRef = useRef<boolean>(true);
-  const currentTopicRef = useRef<string | null>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isMountedRef = useRef<boolean>(true);
+
+  const formatSymbol = (pair: string): string => {
+    return pair.replace('-', '_');
+  };
+
+  const fetchOrderBook = async (pair: string) => {
+    try {
+      const symbol = formatSymbol(pair);
+      const response = await fetch(`/api/orderbook?symbol=${symbol}`);
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data: GateIOOrderBookData = await response.json();
+      
+      if (!isMountedRef.current) return;
+
+      processOrderBookUpdate(data);
+      setConnected(true);
+      setLoading(false);
+      setError(null);
+      setLastUpdate(data.timestamp || Date.now());
+    } catch (err) {
+      console.error('[OrderBook] Error fetching data:', err);
+      
+      if (isMountedRef.current) {
+        setConnected(false);
+        setError(err instanceof Error ? err.message : 'Failed to fetch order book');
+        setLoading(false);
+      }
+    }
+  };
 
   useEffect(() => {
-    console.log('[OrderBook] Pair changed to:', selectedPair);
+    isMountedRef.current = true;
     
-    // Update active pair ref
-    activePairRef.current = selectedPair;
-    shouldReconnectRef.current = false;
-    
-    // Close existing connection
-    if (wsRef.current) {
-      console.log('[OrderBook] Closing existing WebSocket for pair switch');
-      wsRef.current.close();
-      wsRef.current = null;
-    }
-
-    // Clear any pending reconnect timers
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = undefined;
-    }
-
-    // Reset order book state
     setAsks([]);
     setBids([]);
     setLastPrice(0);
@@ -75,172 +90,55 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
     setConnected(false);
     setLoading(true);
     setError(null);
-    currentTopicRef.current = null;
-    
-    // Re-enable reconnect for the new pair
-    shouldReconnectRef.current = true;
 
-    // Connect to new pair
-    connectWebSocket(selectedPair);
+    fetchOrderBook(selectedPair);
+
+    intervalRef.current = setInterval(() => {
+      fetchOrderBook(selectedPair);
+    }, POLLING_INTERVAL);
     
     return () => {
-      console.log('[OrderBook] Cleanup - disabling reconnect');
-      shouldReconnectRef.current = false;
-      
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-      
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
+      isMountedRef.current = false;
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
       }
     };
   }, [selectedPair]);
 
-  const connectWebSocket = async (pair: string) => {
+  const processOrderBookUpdate = (data: GateIOOrderBookData) => {
     try {
-      console.log('[OrderBook] Connecting WebSocket for pair:', pair);
-      
-      // Get WebSocket token from our API
-      const tokenResponse = await fetch('/api/kucoin/websocket-token');
-      if (!tokenResponse.ok) {
-        throw new Error('Failed to get WebSocket token');
-      }
-
-      const tokenResult = await tokenResponse.json();
-      if (tokenResult.code !== '200000' || !tokenResult.data) {
-        throw new Error('Invalid token response');
-      }
-
-      const { token, instanceServers } = tokenResult.data;
-      const server = instanceServers[0];
-      const wsUrl = `${server.endpoint}?token=${token}`;
-
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        console.log('[OrderBook] WebSocket connected for pair:', pair);
-        setConnected(true);
-        setError(null);
-        
-        // Subscribe to order book updates
-        const newTopic = `/spotMarket/level2Depth50:${pair}`;
-        const subscribeMessage = {
-          id: Date.now().toString(),
-          type: 'subscribe',
-          topic: newTopic,
-          privateChannel: false,
-          response: true
-        };
-        
-        ws.send(JSON.stringify(subscribeMessage));
-        currentTopicRef.current = newTopic;
-        console.log('[OrderBook] Subscribed to:', newTopic);
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          
-          // Handle subscription confirmation
-          if (data.type === 'ack') {
-            console.log('[OrderBook] Subscription confirmed:', data.id);
-            return;
-          }
-
-          // Handle order book updates
-          if (data.type === 'message' && data.topic?.includes('level2Depth50')) {
-            // Verify this is for the current selected pair
-            if (data.topic === currentTopicRef.current) {
-              const orderBookData = data.data;
-              processOrderBookUpdate(orderBookData);
-              setLoading(false);
-            }
-          }
-        } catch (error) {
-          console.error('[OrderBook] Error parsing WebSocket message:', error);
-        }
-      };
-
-      ws.onerror = (error) => {
-        console.error('[OrderBook] WebSocket error:', error);
-        setConnected(false);
-        setError('Connection error');
-      };
-
-      ws.onclose = () => {
-        console.log('[OrderBook] WebSocket closed');
-        setConnected(false);
-        
-        // Only reconnect if shouldReconnectRef is true
-        if (shouldReconnectRef.current) {
-          console.log('[OrderBook] Reconnecting in 3s to pair:', activePairRef.current);
-          
-          reconnectTimeoutRef.current = setTimeout(() => {
-            connectWebSocket(activePairRef.current);
-          }, 3000);
-        } else {
-          console.log('[OrderBook] Reconnect disabled, not reconnecting');
-        }
-      };
-    } catch (error) {
-      console.error('[OrderBook] Error connecting to WebSocket:', error);
-      setConnected(false);
-      setError('Failed to connect');
-      
-      // Only retry if shouldReconnectRef is true
-      if (shouldReconnectRef.current) {
-        console.log('[OrderBook] Retrying connection in 3s to pair:', activePairRef.current);
-        
-        reconnectTimeoutRef.current = setTimeout(() => {
-          connectWebSocket(activePairRef.current);
-        }, 3000);
-      }
-    }
-  };
-
-  const processOrderBookUpdate = (data: KuCoinOrderBookData) => {
-    try {
-      // Process asks (sell orders) - sorted from lowest to highest
       const processedAsks: OrderBookEntry[] = [];
       let askCumulativeTotal = 0;
       
-      const sortedAsks = [...data.asks].sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]));
+      const sortedAsks = [...data.asks]
+        .sort((a, b) => a.price - b.price)
+        .slice(0, 20);
       
-      for (let i = 0; i < Math.min(15, sortedAsks.length); i++) {
-        const [priceStr, amountStr] = sortedAsks[i];
-        const price = parseFloat(priceStr);
-        const amount = parseFloat(amountStr);
-        const total = price * amount;
+      for (const { price, size } of sortedAsks) {
+        const total = price * size;
         askCumulativeTotal += total;
-        processedAsks.push({ price, amount, total, depthPercent: 0 });
+        processedAsks.push({ price, amount: size, total, depthPercent: 0 });
       }
 
-      // Calculate depth percentages for asks (reverse order for display)
       processedAsks.reverse();
       processedAsks.forEach((ask, idx) => {
         const cumulativeToThis = processedAsks.slice(idx).reduce((sum, a) => sum + a.total, 0);
         ask.depthPercent = askCumulativeTotal > 0 ? (cumulativeToThis / askCumulativeTotal) * 100 : 0;
       });
 
-      // Process bids (buy orders) - sorted from highest to lowest
       const processedBids: OrderBookEntry[] = [];
       let bidCumulativeTotal = 0;
       
-      const sortedBids = [...data.bids].sort((a, b) => parseFloat(b[0]) - parseFloat(a[0]));
+      const sortedBids = [...data.bids]
+        .sort((a, b) => b.price - a.price)
+        .slice(0, 20);
       
-      for (let i = 0; i < Math.min(15, sortedBids.length); i++) {
-        const [priceStr, amountStr] = sortedBids[i];
-        const price = parseFloat(priceStr);
-        const amount = parseFloat(amountStr);
-        const total = price * amount;
+      for (const { price, size } of sortedBids) {
+        const total = price * size;
         bidCumulativeTotal += total;
-        processedBids.push({ price, amount, total, depthPercent: 0 });
+        processedBids.push({ price, amount: size, total, depthPercent: 0 });
       }
 
-      // Calculate depth percentages for bids
       processedBids.forEach((bid, idx) => {
         const cumulativeToThis = processedBids.slice(0, idx + 1).reduce((sum, b) => sum + b.total, 0);
         bid.depthPercent = bidCumulativeTotal > 0 ? (cumulativeToThis / bidCumulativeTotal) * 100 : 0;
@@ -249,7 +147,6 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
       setAsks(processedAsks);
       setBids(processedBids);
 
-      // Update last price (best bid)
       if (processedBids.length > 0) {
         const newLastPrice = processedBids[0].price;
         const change = lastPrice > 0 ? ((newLastPrice - lastPrice) / lastPrice) * 100 : 0;
@@ -261,6 +158,16 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
     }
   };
 
+  const spread = useMemo(() => {
+    if (asks.length > 0 && bids.length > 0) {
+      return asks[asks.length - 1].price - bids[0].price;
+    }
+    return 0;
+  }, [asks, bids]);
+
+  const bestBid = useMemo(() => bids.length > 0 ? bids[0].price : 0, [bids]);
+  const bestAsk = useMemo(() => asks.length > 0 ? asks[asks.length - 1].price : 0, [asks]);
+
   const formatPrice = (price: number): string => {
     if (price >= 1000) return price.toFixed(2);
     if (price >= 1) return price.toFixed(4);
@@ -269,6 +176,11 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
 
   const formatAmount = (amount: number): string => {
     return amount.toFixed(4);
+  };
+
+  const formatTime = (timestamp: number): string => {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString();
   };
 
   return (
@@ -321,6 +233,20 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
         </div>
       </div>
 
+      {/* Spread & Update Time */}
+      {spread > 0 && (
+        <div className="px-3 py-1 border-b border-[#1e2329] flex items-center justify-between text-[10px]">
+          <div className="text-[#848e9c]">
+            Spread: <span className="text-white">{formatPrice(spread)}</span>
+          </div>
+          {lastUpdate > 0 && (
+            <div className="text-[#848e9c]">
+              Updated: {formatTime(lastUpdate)}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Column Headers */}
       <div className="px-3 py-1 grid grid-cols-3 gap-2 text-[10px] text-[#848e9c] font-medium">
         <div className="text-left">Price(USDT)</div>
@@ -355,17 +281,19 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
               asks.map((ask, index) => (
                 <div
                   key={`ask-${index}`}
-                  className="relative px-3 py-0.5 hover:bg-[#1e2329] cursor-pointer group"
+                  className={`relative px-3 py-0.5 hover:bg-[#1e2329] cursor-pointer group ${
+                    ask.price === bestAsk ? 'bg-[rgba(246,70,93,0.15)]' : ''
+                  }`}
                 >
-                  {/* Depth bar */}
                   <div
                     className="absolute right-0 top-0 bottom-0 bg-[rgba(246,70,93,0.12)]"
                     style={{ width: `${ask.depthPercent}%` }}
                   />
                   
-                  {/* Content */}
                   <div className="relative grid grid-cols-3 gap-2 text-[11px] font-mono">
-                    <div className="text-[#f6465d] font-medium">{formatPrice(ask.price)}</div>
+                    <div className={`font-medium ${ask.price === bestAsk ? 'text-[#f6465d] font-bold' : 'text-[#f6465d]'}`}>
+                      {formatPrice(ask.price)}
+                    </div>
                     <div className="text-right text-white">{formatAmount(ask.amount)}</div>
                     <div className="text-right text-[#848e9c] text-[10px]">{ask.total.toFixed(2)}</div>
                   </div>
@@ -407,17 +335,19 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
               bids.map((bid, index) => (
                 <div
                   key={`bid-${index}`}
-                  className="relative px-3 py-0.5 hover:bg-[#1e2329] cursor-pointer group"
+                  className={`relative px-3 py-0.5 hover:bg-[#1e2329] cursor-pointer group ${
+                    bid.price === bestBid ? 'bg-[rgba(14,203,129,0.15)]' : ''
+                  }`}
                 >
-                  {/* Depth bar */}
                   <div
                     className="absolute right-0 top-0 bottom-0 bg-[rgba(14,203,129,0.12)]"
                     style={{ width: `${bid.depthPercent}%` }}
                   />
                   
-                  {/* Content */}
                   <div className="relative grid grid-cols-3 gap-2 text-[11px] font-mono">
-                    <div className="text-[#0ecb81] font-medium">{formatPrice(bid.price)}</div>
+                    <div className={`font-medium ${bid.price === bestBid ? 'text-[#0ecb81] font-bold' : 'text-[#0ecb81]'}`}>
+                      {formatPrice(bid.price)}
+                    </div>
                     <div className="text-right text-white">{formatAmount(bid.amount)}</div>
                     <div className="text-right text-[#848e9c] text-[10px]">{bid.total.toFixed(2)}</div>
                   </div>
