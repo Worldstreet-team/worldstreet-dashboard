@@ -68,24 +68,24 @@ export interface SpotTrade {
   chainId: number;
   pair: string;
   side: 'BUY' | 'SELL';
-  
+
   fromTokenAddress: string;
   fromTokenSymbol: string;
   fromAmount: string;
-  
+
   toTokenAddress: string;
   toTokenSymbol: string;
   toAmount: string;
-  
+
   executionPrice: string;
   slippagePercent: number;
-  
+
   gasUsed?: string;
   gasPriceGwei?: string;
   totalFeeUsd?: string;
-  
+
   status: 'PENDING' | 'CONFIRMED' | 'FAILED';
-  
+
   createdAt: Date;
   confirmedAt?: Date;
 }
@@ -95,23 +95,23 @@ export interface SpotPosition {
   userId: string;
   pair: string;
   chainId: number;
-  
+
   baseTokenAddress: string;
   baseTokenSymbol: string;
   quoteTokenAddress: string;
   quoteTokenSymbol: string;
-  
+
   totalAmount: string; // In smallest unit
   averageEntryPrice: string;
   totalCost: string; // In smallest unit
-  
+
   realizedPnl: string;
-  
+
   takeProfitPrice?: string;
   stopLossPrice?: string;
-  
+
   status: 'OPEN' | 'CLOSED';
-  
+
   openedAt: Date;
   closedAt?: Date;
   updatedAt: Date;
@@ -132,6 +132,9 @@ export interface SwapExecutionParams {
   slippage: number; // Percentage
   baseToken: TokenMetadata;
   quoteToken: TokenMetadata;
+  fromAddress?: string;
+  toAddress?: string;
+  privateKey?: string;
 }
 
 export interface SwapExecutionResult {

@@ -25,8 +25,8 @@ const INTEGRATOR = 'worldstreet';
 // ═══════════════════════════════════════════════════════════════════════════
 
 export interface QuoteRequest {
-  fromChain: number;
-  toChain: number;
+  fromChain: number | string;
+  toChain: number | string;
   fromToken: string;
   toToken: string;
   fromAmount: string;
@@ -269,9 +269,16 @@ async function fetchQuoteFromLiFi(
   slippage: number,
   abortSignal?: AbortSignal
 ): Promise<LiFiQuote> {
+  const normalizeChain = (id: any): string => {
+    const val = String(id).toLowerCase();
+    if (val === '1151111081099710' || val === 'solana' || val === 'sol') return '1151111081099710';
+    if (val === '1' || val === 'ethereum' || val === 'eth') return '1';
+    return String(id);
+  };
+
   const params = new URLSearchParams({
-    fromChain: request.fromChain.toString(),
-    toChain: request.toChain.toString(),
+    fromChain: normalizeChain(request.fromChain),
+    toChain: normalizeChain(request.toChain),
     fromToken: request.fromToken,
     toToken: request.toToken,
     fromAmount: request.fromAmount,

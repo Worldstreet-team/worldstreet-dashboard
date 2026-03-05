@@ -313,11 +313,13 @@ export function SwapProvider({ children }: { children: ReactNode }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             userId: authUser?.userId || "unknown",
-            fromChain: chainLabel,
-            toChain: toChainLabel,
+            fromChain: SWAP_CHAINS[params.fromChain].id,
+            toChain: SWAP_CHAINS[params.toChain].id,
             tokenIn: params.fromToken,
             tokenOut: params.toToken,
             amountIn: params.fromAmount,
+            fromAddress: params.fromAddress,
+            toAddress: params.toAddress,
             slippage: slippage / 100, // percentage → decimal (3% → 0.03)
           }),
         });

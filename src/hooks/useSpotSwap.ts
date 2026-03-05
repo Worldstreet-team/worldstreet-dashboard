@@ -70,9 +70,9 @@ function getChainFromPair(pair: string): 'ethereum' | 'solana' {
   return 'ethereum';
 }
 
-function getChainLabel(pair: string): string {
+function getChainLabel(pair: string): string | number {
   const chain = getChainFromPair(pair);
-  return chain === 'solana' ? 'SOL' : 'ETH';
+  return chain === 'solana' ? 1151111081099710 : 1;
 }
 
 function getTokenMeta(pair: string, chain: string) {
@@ -144,6 +144,8 @@ export function useSpotSwap() {
           tokenIn: fromTokenAddr,
           tokenOut: toTokenAddr,
           amountIn,
+          fromAddress: chain === 'solana' ? solAddress : evmAddress,
+          toAddress: chain === 'solana' ? solAddress : evmAddress,
           slippage,
         }),
       });

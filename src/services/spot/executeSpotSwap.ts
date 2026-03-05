@@ -74,47 +74,49 @@ export class SpotSwapExecutor {
         chain,
       });
 
-      // Step 2: Call backend execute-trade API
-      const res = await fetch(`${BACKEND_BASE}/api/execute-trade`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: params.userId,
-          fromChain: chain,
-          toChain: chain,
-          tokenIn: fromToken.address,
-          tokenOut: toToken.address,
-          amountIn,
-          slippage,
-        }),
+      // Step 2: Use local services instead of external backend
+      const { fetchQuote } = await import('./quoteService');
+      const { executeSwap } = await import('./executionService');
+
+      // 1. Fetch quote locally
+      const quoteResponse = await fetchQuote({
+        fromChain: chain === 'SOL' ? 1151111081099710 : 1,
+        toChain: chain === 'SOL' ? 1151111081099710 : 1,
+        fromToken: fromToken.address,
+        toToken: toToken.address,
+        fromAmount: amountIn,
+        fromAddress: params.fromAddress || '',
+        toAddress: params.toAddress || params.fromAddress,
+        slippageOverride: slippage
       });
 
-      const data = await res.json();
-      console.log('[SpotSwapExecutor] Backend response:', { status: res.status, data });
-
-      if (!res.ok) {
-        const errMsg = data.error || data.message || 'Trade execution failed';
-        return {
-          success: false,
-          error: errMsg,
-          errorCode: 'EXECUTION_FAILED',
-        };
+      // 2. Execute locally (Server-side execution assumes we have the private key)
+      // This is primarily for automated trading features
+      if (!params.privateKey) {
+        throw new Error('Private key required for server-side execution');
       }
 
-      const txHash = data.txHash || data.transactionHash || data.signature;
-      if (!txHash) {
+      const result = await executeSwap({
+        quote: quoteResponse,
+        userAddress: params.fromAddress || '',
+        privateKey: params.privateKey,
+        chainType: chain === 'SOL' ? 'solana' : 'evm',
+        rpcUrl: chain === 'SOL'
+          ? (process.env.NEXT_PUBLIC_SOL_RPC || 'https://api.mainnet-beta.solana.com')
+          : (process.env.NEXT_PUBLIC_ETH_RPC || 'https://cloudflare-eth.com')
+      });
+
+      if (!result.success) {
         return {
           success: false,
-          error: 'No transaction hash returned from backend',
-          errorCode: 'NO_TX_HASH',
+          error: result.error || 'Execution failed',
+          errorCode: 'EXECUTION_FAILED',
         };
       }
 
       return {
         success: true,
-        txHash,
-        trade: data.trade,
-        position: data.position,
+        txHash: result.txHash!,
       };
     } catch (error) {
       console.error('[SpotSwapExecutor] Error:', error);
