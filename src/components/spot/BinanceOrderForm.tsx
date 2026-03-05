@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/app/context/authContext';
+import { useSolana } from '@/app/context/solanaContext';
+import { useEvm } from '@/app/context/evmContext';
+import { useWallet } from '@/app/context/walletContext';
 import { usePairBalances } from '@/hooks/usePairBalances';
 import { useSpotSwap } from '@/hooks/useSpotSwap';
 import SpotSwapConfirmModal from './SpotSwapConfirmModal';
@@ -14,6 +17,9 @@ interface BinanceOrderFormProps {
 
 export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain }: BinanceOrderFormProps) {
   const { user } = useAuth();
+  const { address: solAddress, balance: solBalance, fetchBalance: fetchSolBalance, refreshCustomTokens: refreshSolCustom } = useSolana();
+  const { address: evmAddress, balance: ethBalance, fetchBalance: fetchEvmBalance, refreshCustomTokens: refreshEvmCustom } = useEvm();
+  const { walletsGenerated } = useWallet();
   const [activeTab, setActiveTab] = useState<'buy' | 'sell'>('buy');
   const [orderType, setOrderType] = useState<'market' | 'limit' | 'stop-limit'>('market');
   const [price, setPrice] = useState('');
@@ -189,8 +195,12 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
         setTotal('');
         setSliderValue(0);
         
-        // Refetch balances
+        // Refetch balances from wallet contexts
         await refetchBalances();
+        fetchSolBalance();
+        fetchEvmBalance();
+        refreshSolCustom();
+        refreshEvmCustom();
         
         if (onTradeExecuted) {
           onTradeExecuted();

@@ -2,6 +2,9 @@
 
 import { useState } from 'react';
 import { Icon } from '@iconify/react';
+import { useSolana } from '@/app/context/solanaContext';
+import { useEvm } from '@/app/context/evmContext';
+import { useWallet } from '@/app/context/walletContext';
 
 interface MobileTradingFormProps {
   selectedPair: string;
@@ -9,6 +12,9 @@ interface MobileTradingFormProps {
 }
 
 export default function MobileTradingForm({ selectedPair, balance }: MobileTradingFormProps) {
+  const { address: solAddress, fetchBalance: fetchSolBalance, refreshCustomTokens: refreshSolCustom } = useSolana();
+  const { address: evmAddress, fetchBalance: fetchEvmBalance, refreshCustomTokens: refreshEvmCustom } = useEvm();
+  const { walletsGenerated } = useWallet();
   const [side, setSide] = useState<'buy' | 'sell'>('buy');
   const [amount, setAmount] = useState('');
   const [total, setTotal] = useState('');
@@ -38,6 +44,11 @@ export default function MobileTradingForm({ selectedPair, balance }: MobileTradi
     setSuccess(null);
     
     // Validation
+    if (!walletsGenerated) {
+      setError('Please set up your wallet PIN first');
+      return;
+    }
+    
     if (!total || parseFloat(total) <= 0) {
       setError('Please enter a valid amount');
       return;
@@ -58,6 +69,12 @@ export default function MobileTradingForm({ selectedPair, balance }: MobileTradi
       await new Promise(resolve => setTimeout(resolve, 1500));
       
       setSuccess(`${side === 'buy' ? 'Buy' : 'Sell'} order placed successfully!`);
+      
+      // Refetch balances from wallet contexts
+      fetchSolBalance();
+      fetchEvmBalance();
+      refreshSolCustom();
+      refreshEvmCustom();
       
       // Reset form
       setAmount('');

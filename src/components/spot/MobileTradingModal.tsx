@@ -3,6 +3,9 @@
 import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { useAuth } from '@/app/context/authContext';
+import { useSolana } from '@/app/context/solanaContext';
+import { useEvm } from '@/app/context/evmContext';
+import { useWallet } from '@/app/context/walletContext';
 import { usePairBalances } from '@/hooks/usePairBalances';
 import { useSpotSwap } from '@/hooks/useSpotSwap';
 import SpotQuoteDetails from './SpotQuoteDetails';
@@ -17,6 +20,9 @@ interface MobileTradingModalProps {
 
 export default function MobileTradingModal({ isOpen, onClose, side, selectedPair, chain }: MobileTradingModalProps) {
   const { user } = useAuth();
+  const { address: solAddress, balance: solBalance, fetchBalance: fetchSolBalance, refreshCustomTokens: refreshSolCustom } = useSolana();
+  const { address: evmAddress, balance: ethBalance, fetchBalance: fetchEvmBalance, refreshCustomTokens: refreshEvmCustom } = useEvm();
+  const { walletsGenerated } = useWallet();
   const [orderType, setOrderType] = useState<'market' | 'limit'>('market');
   const [price, setPrice] = useState('');
   const [amount, setAmount] = useState('');
@@ -201,8 +207,12 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
       if (result.success) {
         setSuccess(`${side === 'buy' ? 'Buy' : 'Sell'} order executed! TX: ${result.txHash?.slice(0, 10)}...`);
         
-        // Refetch balances
+        // Refetch balances from wallet contexts
         await refetchBalances();
+        fetchSolBalance();
+        fetchEvmBalance();
+        refreshSolCustom();
+        refreshEvmCustom();
         
         // Reset form
         setAmount('');
