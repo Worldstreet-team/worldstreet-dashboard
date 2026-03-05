@@ -20,9 +20,11 @@ interface ErrorState {
 }
 
 export const OrderPanel: React.FC = () => {
-  const { selectedMarket, selectedChain, setPreviewData, previewData, markets } = useFuturesStore();
-  const { openPosition: openPositionClient, refreshPositions, refreshSummary } = useDrift();
+  const { selectedMarket, markets } = useFuturesStore();
+  const { openPosition: openPositionClient, refreshPositions, refreshSummary, previewTrade } = useDrift();
   const { isPolling: isConfirmingOrder, startPostActionPolling } = usePostActionPolling();
+  
+  const [previewData, setPreviewData] = useState<any>(null);
   
   const [side, setSide] = useState<OrderSide>('long');
   const [orderType, setOrderType] = useState<OrderType>('market');
@@ -48,43 +50,31 @@ export const OrderPanel: React.FC = () => {
 
     const fetchPreview = async () => {
       try {
-        const response = await fetch('/api/futures/preview', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chain: selectedChain,
-            market: selectedMarket.symbol,
-            side,
-            size: parseFloat(debouncedSize),
-            leverage,
-            orderType,
-            limitPrice: debouncedLimitPrice ? parseFloat(debouncedLimitPrice) : undefined,
-          }),
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-          setPreviewData(data);
-          setError({ type: null, message: '' });
-        } else {
-          // Handle preview errors
-          setPreviewData(null);
-          const parsedError = parseError(data.error || '', data.message || data.error || '');
-          setError(parsedError);
+        const marketIndex = markets.findIndex(m => m.id === selectedMarket.id);
+        if (marketIndex < 0) {
+          throw new Error('Market not found');
         }
+
+        const preview = await previewTrade(
+          marketIndex,
+          side,
+          parseFloat(debouncedSize),
+          leverage
+        );
+
+        setPreviewData(preview);
+        setError({ type: null, message: '' });
       } catch (error) {
         console.error('Preview error:', error);
         setPreviewData(null);
-        setError({
-          type: 'generic',
-          message: 'Failed to calculate preview. Please try again.',
-        });
+        const errorMessage = error instanceof Error ? error.message : 'Failed to calculate preview. Please try again.';
+        const parsedError = parseError('', errorMessage);
+        setError(parsedError);
       }
     };
 
     fetchPreview();
-  }, [selectedMarket, debouncedSize, leverage, side, orderType, debouncedLimitPrice, selectedChain, setPreviewData]);
+  }, [selectedMarket, debouncedSize, leverage, side, markets, previewTrade]);
 
   // Retry countdown effect
   useEffect(() => {

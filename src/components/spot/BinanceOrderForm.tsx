@@ -7,12 +7,13 @@ import { useEvm } from '@/app/context/evmContext';
 import { useWallet } from '@/app/context/walletContext';
 import { usePairBalances } from '@/hooks/usePairBalances';
 import { useSwap, SwapQuote } from '@/app/context/swapContext';
+import { toSmallestUnit } from '@/lib/swap/decimals';
 import SpotSwapConfirmModal from './SpotSwapConfirmModal';
 
 interface BinanceOrderFormProps {
   selectedPair: string;
   onTradeExecuted?: () => void;
-  chain?: string; // Optional: specify blockchain network
+  chain: string; // Required: specify blockchain network ('sol' or 'evm')
 }
 
 export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain }: BinanceOrderFormProps) {
@@ -57,21 +58,8 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
 
   const [tokenIn, tokenOut] = selectedPair.split('-');
 
-  // Determine chain based on the base asset if not explicitly provided
-  const getChainForPair = (pair: string): string => {
-    const [baseAsset] = pair.split('-');
-    const asset = baseAsset.toUpperCase();
-    
-    if (asset === 'ETH' || asset === 'BTC') {
-      return 'evm';
-    } else if (asset === 'SOL') {
-      return 'sol';
-    }
-    
-    return 'tron';
-  };
-
-  const effectiveChain = chain || getChainForPair(selectedPair);
+  // Use the chain prop directly - it's now required and set by parent
+  const effectiveChain = chain;
 
   // Use the custom hook to fetch pair balances
   const { 
@@ -142,6 +130,14 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
       tokenOut,
       activeTab
     });
+    
+    // Log which USDT is being used
+    console.log('[BinanceOrderForm] Chain Mapping:', {
+      selectedPair,
+      effectiveChain,
+      usdtChain: effectiveChain === 'sol' ? 'Solana USDT' : 'Ethereum USDT',
+      tokenInChain: effectiveChain === 'sol' ? 'Solana' : 'Ethereum'
+    });
   }, [user?.userId, selectedPair, effectiveChain, baseBalance, quoteBalance, loadingBalances, balanceError, tokenIn, tokenOut, activeTab]);
 
   const handlePercentage = (percent: number) => {
@@ -196,11 +192,9 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
         throw new Error(`${chainType === 'solana' ? 'Solana' : 'Ethereum'} wallet not available`);
       }
       
-      // Convert amount to smallest unit
+      // Convert amount to smallest unit using proper decimal handling
       const decimals = fromTokenMeta.decimals;
-      const [intPart = '0', fracPart = ''] = amount.split('.');
-      const paddedFrac = fracPart.padEnd(decimals, '0').slice(0, decimals);
-      const rawAmount = (intPart + paddedFrac).replace(/^0+/, '') || '0';
+      const rawAmount = toSmallestUnit(amount, decimals);
       
       console.log('[BinanceOrderForm] Fetching quote:', {
         pair: selectedPair,
@@ -208,6 +202,8 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
         chainType,
         fromToken: fromTokenMeta.address,
         toToken: toTokenMeta.address,
+        amount,
+        decimals,
         rawAmount,
         walletAddress
       });

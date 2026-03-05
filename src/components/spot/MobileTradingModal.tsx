@@ -15,7 +15,7 @@ interface MobileTradingModalProps {
   onClose: () => void;
   side: 'buy' | 'sell';
   selectedPair: string;
-  chain?: string;
+  chain: string; // Required: specify blockchain network ('sol' or 'evm')
 }
 
 export default function MobileTradingModal({ isOpen, onClose, side, selectedPair, chain }: MobileTradingModalProps) {
@@ -61,21 +61,8 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
 
   const [tokenIn, tokenOut] = selectedPair.split('-');
 
-  // Determine chain based on the base asset if not explicitly provided
-  const getChainForPair = (pair: string): string => {
-    const [baseAsset] = pair.split('-');
-    const asset = baseAsset.toUpperCase();
-    
-    if (asset === 'ETH' || asset === 'BTC') {
-      return 'evm';
-    } else if (asset === 'SOL') {
-      return 'sol';
-    }
-    
-    return 'tron';
-  };
-
-  const effectiveChain = chain || getChainForPair(selectedPair);
+  // Use the chain prop directly - it's now required and set by parent
+  const effectiveChain = chain;
 
   // Use the custom hook to fetch pair balances
   const { 
@@ -152,6 +139,14 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
         currentBalance,
         loadingBalances,
         balanceError
+      });
+      
+      // Log which USDT is being used
+      console.log('[MobileTradingModal] Chain Mapping:', {
+        selectedPair,
+        effectiveChain,
+        usdtChain: effectiveChain === 'sol' ? 'Solana USDT' : 'Ethereum USDT',
+        tokenInChain: effectiveChain === 'sol' ? 'Solana' : 'Ethereum'
       });
     }
   }, [isOpen, user?.userId, selectedPair, side, effectiveChain, baseBalance, quoteBalance, currentBalance, loadingBalances, balanceError]);

@@ -27,6 +27,7 @@ interface PairData {
 export default function BinanceSpotPage() {
   const pathname = usePathname();
   const [selectedPair, setSelectedPair] = useState('BTC-USDT');
+  const [selectedChain, setSelectedChain] = useState<string>('evm'); // Track the chain for selected pair
   const [pairData, setPairData] = useState<Record<string, PairData>>({});
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -184,9 +185,69 @@ export default function BinanceSpotPage() {
     setActivePositionTPSL({ symbol: normalizedSymbol, takeProfit: tp, stopLoss: sl });
   }, []);
 
-  const handleSelectPair = (pair: string) => {
+  const handleSelectPair = (pair: string, chain?: 'solana' | 'ethereum' | 'bitcoin') => {
     setSelectedPair(pair);
     setShowPairSelector(false);
+    
+    // Map chain to the format expected by trading components
+    if (chain === 'solana') {
+      setSelectedChain('sol');
+    } else if (chain === 'ethereum') {
+      setSelectedChain('evm');
+    } else if (chain === 'bitcoin') {
+      setSelectedChain('evm'); // Bitcoin uses EVM chain (wrapped BTC on Ethereum)
+    } else {
+      // Fallback: determine chain from pair name
+      const [baseAsset] = pair.split('-');
+      const asset = baseAsset.toUpperCase();
+      
+      if (asset === 'SOL') {
+        setSelectedChain('sol');
+      } else if (asset === 'ETH' || asset === 'BTC') {
+        setSelectedChain('evm');
+      } else {
+        setSelectedChain('evm'); // Default to EVM
+      }
+    }
+    
+    // Immediately fetch the new pair's data to avoid showing 0.00
+    const fetchNewPairData = async () => {
+      try {
+        const response = await fetch(`/api/kucoin/ticker?symbol=${pair}`);
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch ${pair}`);
+        }
+
+        const result = await response.json();
+        
+        if (result.code !== '200000' || !result.data) {
+          throw new Error(`Invalid response for ${pair}`);
+        }
+
+        const data = result.data;
+        const pairName = pair.split('-')[0];
+        const fullName = pairName === 'BTC' ? 'Bitcoin' : 
+                        pairName === 'ETH' ? 'Ethereum' : 
+                        pairName === 'SOL' ? 'Solana' : pairName;
+
+        setPairData(prev => ({
+          ...prev,
+          [pair]: {
+            name: fullName,
+            price: parseFloat(data.last) || 0,
+            change24h: parseFloat(data.changeRate) * 100 || 0,
+            high24h: parseFloat(data.high) || 0,
+            low24h: parseFloat(data.low) || 0,
+            volume24h: parseFloat(data.vol) || 0
+          }
+        }));
+      } catch (error) {
+        console.error('Error fetching new pair data:', error);
+      }
+    };
+    
+    fetchNewPairData();
   };
 
   const handleBuyClick = () => {
@@ -375,6 +436,7 @@ export default function BinanceSpotPage() {
             <div className="border-t border-[#2b3139] shrink-0">
               <BinanceOrderForm 
                 selectedPair={selectedPair}
+                chain={selectedChain}
                 onTradeExecuted={handleTradeExecuted}
               />
             </div>
@@ -637,6 +699,7 @@ export default function BinanceSpotPage() {
         onClose={() => setShowTradingModal(false)}
         side={tradingSide}
         selectedPair={selectedPair}
+        chain={selectedChain}
       />
     </div>
   );

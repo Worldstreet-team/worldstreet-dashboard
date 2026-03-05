@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { useFuturesStore, OrderSide, OrderType } from '@/store/futuresStore';
 import { useDebounce } from '@/hooks/useFuturesPolling';
-import { useDriftTrading } from '@/hooks/useDriftTrading';
+import { useDrift } from '@/app/context/driftContext';
 
 interface FuturesOrderModalProps {
   isOpen: boolean;
@@ -19,8 +19,10 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
   side,
   onSuccess,
 }) => {
-  const { selectedMarket, selectedChain, setPreviewData, previewData, markets } = useFuturesStore();
-  const { openPosition, loading: driftLoading } = useDriftTrading();
+  const { selectedMarket, markets } = useFuturesStore();
+  const { openPosition, loading: driftLoading, previewTrade } = useDrift();
+  
+  const [previewData, setPreviewData] = useState<any>(null);
   
   const [orderType, setOrderType] = useState<OrderType>('market');
   const [size, setSize] = useState('');
@@ -42,38 +44,34 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
 
     const fetchPreview = async () => {
       try {
-        const response = await fetch('/api/futures/preview', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chain: selectedChain,
-            market: selectedMarket.symbol,
-            side,
-            size: parseFloat(debouncedSize),
-            leverage,
-            orderType,
-            limitPrice: debouncedLimitPrice ? parseFloat(debouncedLimitPrice) : undefined,
-          }),
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-          setPreviewData(data);
-          setError(null);
-        } else {
-          setPreviewData(null);
-          setError(data.message || 'Failed to calculate preview');
+        const marketIndex = markets.findIndex(m => m.id === selectedMarket.id);
+        if (marketIndex < 0) {
+          throw new Error('Market not found');
         }
+
+        const preview = await previewTrade(
+          marketIndex,
+          side,
+          parseFloat(debouncedSize),
+          leverage
+        );
+
+        setPreviewData(preview);
+        setError(null);
       } catch (error) {
         console.error('Preview error:', error);
         setPreviewData(null);
-        setError('Failed to calculate preview');
+        const errorMessage = error instanceof Error ? error.message : 'Failed to calculate preview';
+        if (errorMessage.includes('subscribe') || errorMessage.includes('not authenticated')) {
+          setError('Please unlock your wallet to preview trades');
+        } else {
+          setError(errorMessage);
+        }
       }
     };
 
     fetchPreview();
-  }, [selectedMarket, debouncedSize, leverage, side, orderType, debouncedLimitPrice, selectedChain, setPreviewData]);
+  }, [selectedMarket, debouncedSize, leverage, side, markets, previewTrade]);
 
   const handleSubmit = async () => {
     if (!selectedMarket || !size || !previewData || !previewData.marginCheckPassed) return;
@@ -88,9 +86,7 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
         marketIndex >= 0 ? marketIndex : 0,
         side,
         parseFloat(size),
-        leverage,
-        orderType,
-        limitPrice ? parseFloat(limitPrice) : undefined
+        leverage
       );
 
       setSuccessMessage(`Position opened! TX: ${result.txSignature?.slice(0, 8)}...`);

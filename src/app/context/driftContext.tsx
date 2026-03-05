@@ -84,6 +84,7 @@ interface DriftContextValue {
   withdrawCollateral: (amount: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
   openPosition: (marketIndex: number, direction: 'long' | 'short', size: number, leverage: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
   closePosition: (marketIndex: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
+  previewTrade: (marketIndex: number, direction: 'long' | 'short', size: number, leverage: number) => Promise<any>;
   
   // Auto-refresh control
   startAutoRefresh: (intervalMs?: number) => void;
@@ -899,6 +900,131 @@ const withdrawCollateral = useCallback(
     }
   }, [user?.userId, requestPin, initializeDriftClient, refreshSummary, refreshPositions]);
 
+  // Preview trade locally using Drift SDK
+  const previewTrade = useCallback(async (
+    marketIndex: number,
+    direction: 'long' | 'short',
+    size: number,
+    leverage: number
+  ): Promise<any> => {
+    if (!user?.userId) {
+      throw new Error('User not authenticated');
+    }
+    
+    try {
+      const pin = await requestPin();
+      
+      let client = driftClientRef.current;
+      if (!client) {
+        client = await initializeDriftClient(pin);
+      }
+      
+      // Ensure client is subscribed
+      if (!client.isSubscribed) {
+        await client.subscribe();
+      }
+      
+      // Refresh accounts to get latest data
+      await refreshAccounts();
+      
+      // Get user and market data
+      const driftUser = client.getUser();
+      const perpMarket = client.getPerpMarketAccount(marketIndex);
+      const oracleData = client.getOracleDataForPerpMarket(marketIndex);
+      
+      // Calculate position size in base units (9 decimals for most perp markets)
+      const BN = (await import('bn.js')).default;
+      const baseAssetAmount = new BN(Math.floor(size * 1e9));
+      
+      // Get current oracle price
+      const oraclePrice = oracleData.price.toNumber() / 1e6; // Convert from 6 decimals
+      
+      // Calculate notional value
+      const notionalValue = size * oraclePrice;
+      
+      // Calculate required margin based on leverage
+      const requiredMargin = notionalValue / leverage;
+      
+      // Estimate trading fee (0.1% for taker)
+      const estimatedFee = notionalValue * 0.001;
+      
+      // Total required = margin + fee
+      const totalRequired = requiredMargin + estimatedFee;
+      
+      // Get user's free collateral
+      let freeCollateral = 0;
+      let totalCollateral = 0;
+      
+      try {
+        freeCollateral = driftUser.getFreeCollateral ? Number(driftUser.getFreeCollateral()) / 1e6 : 0;
+        const spotPosition = driftUser.getSpotPosition(0); // USDC
+        totalCollateral = spotPosition ? Number(spotPosition.scaledBalance) / 1e6 : 0;
+      } catch (err) {
+        console.log('[DriftContext] Could not get collateral info:', err);
+      }
+      
+      // Check if user has enough margin
+      const marginCheckPassed = freeCollateral >= totalRequired;
+      
+      // Calculate estimated liquidation price
+      // For long: liq price = entry - (margin / size)
+      // For short: liq price = entry + (margin / size)
+      const maintenanceMarginRatio = 0.05; // 5% maintenance margin
+      const maintenanceMargin = notionalValue * maintenanceMarginRatio;
+      const buffer = (requiredMargin - maintenanceMargin) / size;
+      
+      let estimatedLiquidationPrice;
+      if (direction === 'long') {
+        estimatedLiquidationPrice = oraclePrice - buffer;
+      } else {
+        estimatedLiquidationPrice = oraclePrice + buffer;
+      }
+      
+      // Get funding rate
+      let fundingRate = 0;
+      try {
+        if (perpMarket.amm?.lastFundingRate) {
+          fundingRate = perpMarket.amm.lastFundingRate.toNumber() / 1e9;
+        }
+      } catch (err) {
+        console.log('[DriftContext] Could not get funding rate');
+      }
+      
+      // Estimate funding impact (funding rate * position size * 8 hours)
+      const estimatedFundingImpact = fundingRate * notionalValue * (8 / 24);
+      
+      // Get max leverage for this market
+      const maxLeverageAllowed = perpMarket.marginRatioInitial 
+        ? Math.floor(10000 / perpMarket.marginRatioInitial.toNumber())
+        : 10;
+      
+      return {
+        market: perpMarket.name || `Market ${marketIndex}`,
+        side: direction.toUpperCase(),
+        size,
+        leverage,
+        entryPrice: oraclePrice,
+        notionalValue,
+        requiredMargin,
+        estimatedFee,
+        totalRequired,
+        userCollateral: totalCollateral,
+        freeCollateral,
+        marginCheckPassed,
+        liquidationPrice: estimatedLiquidationPrice,
+        estimatedLiquidationPrice,
+        maintenanceMargin,
+        fundingImpact: estimatedFundingImpact,
+        estimatedFundingImpact,
+        maxLeverageAllowed,
+        isPlaceholder: false,
+      };
+    } catch (err) {
+      console.error('[DriftContext] Preview trade error:', err);
+      throw err;
+    }
+  }, [user?.userId, requestPin, initializeDriftClient, refreshAccounts]);
+
   // Auto-refresh with polling (every 5 seconds)
   const startAutoRefresh = useCallback((intervalMs: number = 5000) => {
     stopAutoRefresh();
@@ -973,6 +1099,7 @@ const withdrawCollateral = useCallback(
     withdrawCollateral,
     openPosition,
     closePosition,
+    previewTrade,
     startAutoRefresh,
     stopAutoRefresh,
   };
