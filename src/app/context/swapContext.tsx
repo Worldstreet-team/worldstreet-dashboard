@@ -10,6 +10,7 @@ import React, {
 import { useWallet } from "./walletContext";
 import { useSolana } from "./solanaContext";
 import { useEvm } from "./evmContext";
+import { useAuth } from "./authContext";
 import { decryptWithPIN } from "@/lib/wallet/encryption";
 import { pollTransactionConfirmation } from "@/lib/solana/pollTransactionConfirmation";
 
@@ -237,6 +238,7 @@ const SwapContext = createContext<SwapContextType | undefined>(undefined);
 
 export function SwapProvider({ children }: { children: ReactNode }) {
   const { getEncryptedKeys } = useWallet();
+  const { user: authUser } = useAuth();
   const { address: solAddress } = useSolana();
   const { address: evmAddress } = useEvm();
 
@@ -310,7 +312,7 @@ export function SwapProvider({ children }: { children: ReactNode }) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            userId: (params.fromChain === "solana" ? solAddress : evmAddress) || "unknown",
+            userId: authUser?.userId || "unknown",
             fromChain: chainLabel,
             toChain: toChainLabel,
             tokenIn: params.fromToken,
@@ -397,7 +399,7 @@ export function SwapProvider({ children }: { children: ReactNode }) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            userId: userAddress || "unknown",
+            userId: authUser?.userId || "unknown",
             fromChain: chainLabel,
             toChain: toChainLabel,
             tokenIn: swapQuote.fromToken.address,

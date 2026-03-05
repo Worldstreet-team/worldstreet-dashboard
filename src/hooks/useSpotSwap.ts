@@ -121,8 +121,8 @@ export function useSpotSwap() {
     try {
       const chain = getChainFromPair(params.pair);
       const tokens = getTokenMeta(params.pair, chain);
-      const userAddress = chain === 'solana' ? solAddress : evmAddress;
-      if (!userAddress) throw new Error(`${chain === 'solana' ? 'Solana' : 'Ethereum'} wallet not connected`);
+
+      if (!user?.userId) throw new Error("User not authenticated");
 
       // Determine from/to token based on buy/sell
       const fromTokenAddr = params.side === 'buy' ? tokens.quote : tokens.base;
@@ -137,7 +137,7 @@ export function useSpotSwap() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: user?.userId || userAddress,
+          userId: user.userId,
           fromChain: getChainLabel(params.pair),
           toChain: getChainLabel(params.pair),
           tokenIn: fromTokenAddr,
@@ -194,7 +194,7 @@ export function useSpotSwap() {
     } finally {
       setLoading(false);
     }
-  }, [solAddress, evmAddress, user]);
+  }, [user]);
 
   // ── executeSpotSwap ──────────────────────────────────────────────────────
 
@@ -207,11 +207,10 @@ export function useSpotSwap() {
 
     try {
       if (!quote) throw new Error('No quote available. Please fetch a quote first.');
+      if (!user?.userId) throw new Error("User not authenticated");
 
       const chain = getChainFromPair(params.pair);
       const tokens = getTokenMeta(params.pair, chain);
-      const userAddress = chain === 'solana' ? solAddress : evmAddress;
-      if (!userAddress) throw new Error(`Wallet not connected`);
 
       const fromTokenAddr = params.side === 'buy' ? tokens.quote : tokens.base;
       const toTokenAddr = params.side === 'buy' ? tokens.base : tokens.quote;
@@ -225,7 +224,7 @@ export function useSpotSwap() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: user?.userId || userAddress,
+          userId: user.userId,
           fromChain: getChainLabel(params.pair),
           toChain: getChainLabel(params.pair),
           tokenIn: fromTokenAddr,
