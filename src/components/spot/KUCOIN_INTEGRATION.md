@@ -60,29 +60,28 @@ All components now call our Next.js API routes instead of KuCoin directly.
 
 ## Symbol Format
 
-Our application uses the standard format with dashes:
+Both our application and KuCoin use the same format with dashes:
 - **Our format**: `BTC-USDT`, `ETH-USDT`, etc.
-- **KuCoin format**: `BTCUSDT`, `ETHUSDT`, etc.
+- **KuCoin format**: `BTC-USDT`, `ETH-USDT`, etc. (same!)
 
-**Conversion is handled automatically in the API routes**, so frontend components always use our format (`BTC-USDT`).
-
-### API Route Conversion
-
-All API routes automatically convert symbols:
-```typescript
-// In API route (src/app/api/kucoin/*/route.ts)
-const kucoinSymbol = symbol.replace('-', ''); // BTC-USDT → BTCUSDT
-```
+**No conversion needed** - symbols are passed through directly to KuCoin.
 
 ### Frontend Usage
 
-Frontend components always send symbols with dashes:
+Frontend components send symbols with dashes:
 ```typescript
 // ✅ Correct - send with dash
 fetch(`/api/kucoin/ticker?symbol=BTC-USDT`)
+```
 
-// ❌ Wrong - don't convert in frontend
-fetch(`/api/kucoin/ticker?symbol=BTCUSDT`)
+### API Route Usage
+
+API routes pass the symbol directly to KuCoin:
+```typescript
+// In API route (src/app/api/kucoin/*/route.ts)
+const symbol = searchParams.get('symbol'); // BTC-USDT
+// Pass directly to KuCoin - no conversion needed
+fetch(`https://api.kucoin.com/api/v1/market/stats?symbol=${symbol}`)
 ```
 
 ## WebSocket Connection Flow

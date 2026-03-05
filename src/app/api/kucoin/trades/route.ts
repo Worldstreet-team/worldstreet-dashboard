@@ -12,11 +12,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Convert from our format (BTC-USDT) to KuCoin format (BTCUSDT)
-    const kucoinSymbol = symbol.replace('-', '');
-
+    // KuCoin expects the symbol with dash (BTC-USDT)
     const response = await fetch(
-      `https://api.kucoin.com/api/v1/market/histories?symbol=${kucoinSymbol}`,
+      `https://api.kucoin.com/api/v1/market/histories?symbol=${symbol}`,
       {
         headers: {
           'Accept': 'application/json',

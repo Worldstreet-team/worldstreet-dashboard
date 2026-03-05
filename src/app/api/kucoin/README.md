@@ -9,9 +9,9 @@ Backend proxy routes for KuCoin exchange API integration.
 Fetches market statistics for a trading pair.
 
 **Query Parameters:**
-- `symbol` (required): Trading pair symbol in our format (e.g., `BTC-USDT`)
+- `symbol` (required): Trading pair symbol (e.g., `BTC-USDT`)
 
-**Note:** The API route automatically converts the symbol from our format (`BTC-USDT`) to KuCoin format (`BTCUSDT`).
+**Note:** KuCoin uses the same format with dashes, so no conversion is needed.
 
 **Response:**
 ```json
@@ -43,9 +43,9 @@ const data = await response.json();
 Fetches recent trade history for a trading pair.
 
 **Query Parameters:**
-- `symbol` (required): Trading pair symbol in our format (e.g., `BTC-USDT`)
+- `symbol` (required): Trading pair symbol (e.g., `BTC-USDT`)
 
-**Note:** The API route automatically converts the symbol from our format (`BTC-USDT`) to KuCoin format (`BTCUSDT`).
+**Note:** KuCoin uses the same format with dashes, so no conversion is needed.
 
 **Response:**
 ```json
@@ -130,7 +130,7 @@ All routes return consistent error responses:
 ### REST API Example (MarketTicker)
 
 ```typescript
-// Frontend sends symbol in our format (BTC-USDT)
+// Frontend sends symbol with dash (BTC-USDT)
 const response = await fetch(`/api/kucoin/ticker?symbol=BTC-USDT`);
 const result = await response.json();
 
@@ -140,7 +140,7 @@ if (result.code === '200000' && result.data) {
 }
 ```
 
-**Note:** The API route handles the conversion from `BTC-USDT` to `BTCUSDT` internally.
+**Note:** KuCoin uses the same format, so the symbol is passed through directly.
 
 ### WebSocket Example (OrderBook)
 
