@@ -22,6 +22,24 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const [tokenIn, tokenOut] = selectedPair.split('-');
+
+  // Determine chain based on the base asset if not explicitly provided
+  const getChainForPair = (pair: string): string => {
+    const [baseAsset] = pair.split('-');
+    const asset = baseAsset.toUpperCase();
+    
+    if (asset === 'ETH' || asset === 'BTC') {
+      return 'evm'; // Ethereum chain for ETH and BTC
+    } else if (asset === 'SOL') {
+      return 'sol'; // Solana chain for SOL
+    }
+    
+    return 'tron'; // Default to Tron
+  };
+
+  const effectiveChain = chain || getChainForPair(selectedPair);
+
   // Use the custom hook to fetch pair balances
   const { 
     tokenIn: sellBalance, 
@@ -29,16 +47,14 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
     loading: loadingBalances,
     error: balanceError,
     refetch: refetchBalances 
-  } = usePairBalances(user?.userId, selectedPair, chain);
-
-  const [tokenIn, tokenOut] = selectedPair.split('-');
+  } = usePairBalances(user?.userId, selectedPair, effectiveChain);
 
   // Debug logging
   useEffect(() => {
     console.log('[BinanceOrderForm] Balance Debug:', {
       userId: user?.userId,
       selectedPair,
-      chain,
+      chain: effectiveChain,
       sellBalance,
       buyBalance,
       loadingBalances,
@@ -46,7 +62,7 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
       tokenIn,
       tokenOut
     });
-  }, [user?.userId, selectedPair, chain, sellBalance, buyBalance, loadingBalances, balanceError, tokenIn, tokenOut]);
+  }, [user?.userId, selectedPair, effectiveChain, sellBalance, buyBalance, loadingBalances, balanceError, tokenIn, tokenOut]);
 
   const handlePercentage = (percent: number) => {
     const balance = activeTab === 'buy' ? buyBalance : sellBalance;

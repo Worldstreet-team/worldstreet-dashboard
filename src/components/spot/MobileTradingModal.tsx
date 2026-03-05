@@ -21,6 +21,24 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
   const [total, setTotal] = useState('');
   const [sliderValue, setSliderValue] = useState(0);
 
+  const [tokenIn, tokenOut] = selectedPair.split('-');
+
+  // Determine chain based on the base asset if not explicitly provided
+  const getChainForPair = (pair: string): string => {
+    const [baseAsset] = pair.split('-');
+    const asset = baseAsset.toUpperCase();
+    
+    if (asset === 'ETH' || asset === 'BTC') {
+      return 'evm'; // Ethereum chain for ETH and BTC
+    } else if (asset === 'SOL') {
+      return 'sol'; // Solana chain for SOL
+    }
+    
+    return 'tron'; // Default to Tron
+  };
+
+  const effectiveChain = chain || getChainForPair(selectedPair);
+
   // Use the custom hook to fetch pair balances
   const { 
     tokenIn: sellBalance, 
@@ -28,9 +46,7 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
     loading: loadingBalances,
     error: balanceError,
     refetch: refetchBalances 
-  } = usePairBalances(user?.userId, selectedPair, chain);
-
-  const [tokenIn, tokenOut] = selectedPair.split('-');
+  } = usePairBalances(user?.userId, selectedPair, effectiveChain);
 
   // Current balance based on buy/sell side
   const currentBalance = side === 'buy' ? buyBalance : sellBalance;
@@ -43,6 +59,7 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
         userId: user?.userId,
         selectedPair,
         side,
+        chain: effectiveChain,
         sellBalance,
         buyBalance,
         currentBalance,
@@ -50,7 +67,7 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
         balanceError
       });
     }
-  }, [isOpen, user?.userId, selectedPair, side, sellBalance, buyBalance, currentBalance, loadingBalances, balanceError]);
+  }, [isOpen, user?.userId, selectedPair, side, effectiveChain, sellBalance, buyBalance, currentBalance, loadingBalances, balanceError]);
 
   const handlePercentage = (percent: number) => {
     const calculatedAmount = (currentBalance * percent) / 100;

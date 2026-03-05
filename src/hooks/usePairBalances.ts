@@ -75,6 +75,25 @@ export function usePairBalances(
   const [baseAsset, quoteAsset] = selectedPair.split('-');
 
   /**
+   * Determine which chain to use for USDT based on the base asset
+   * BTC, ETH -> Use EVM USDT (Ethereum)
+   * SOL -> Use Solana USDT
+   * Default -> Use Tron USDT
+   */
+  const getUSDTChain = (baseAsset: string): 'tron' | 'evm' | 'sol' => {
+    const asset = baseAsset.toUpperCase();
+    
+    // Map assets to their preferred USDT chain
+    if (asset === 'ETH' || asset === 'BTC') {
+      return 'evm'; // Ethereum USDT for ETH and BTC pairs
+    } else if (asset === 'SOL') {
+      return 'sol'; // Solana USDT for SOL pairs
+    }
+    
+    return 'tron'; // Default to Tron USDT
+  };
+
+  /**
    * Fetch USDT balance from Tron wallet
    */
   const fetchTronUSDT = async (): Promise<number> => {
@@ -184,13 +203,42 @@ export function usePairBalances(
       );
       let tokenOutValue = quoteBalance ? parseFloat(quoteBalance.available_balance || '0') : 0;
       
-      // If quote asset is USDT and we didn't find it in spot balances, check Tron wallet
+      // If quote asset is USDT and we didn't find it in spot balances, check appropriate chain
       if (quoteAsset.toUpperCase() === 'USDT' && tokenOutValue === 0) {
-        console.log('[usePairBalances] USDT not found in spot balances, checking Tron wallet...');
-        const tronUSDT = await fetchTronUSDT();
-        if (tronUSDT > 0) {
-          tokenOutValue = tronUSDT;
-          console.log('[usePairBalances] Using USDT from Tron wallet:', tronUSDT);
+        const usdtChain = getUSDTChain(baseAsset);
+        console.log(`[usePairBalances] USDT not found in spot balances, checking ${usdtChain} wallet for ${baseAsset}-USDT pair...`);
+        
+        if (usdtChain === 'tron') {
+          const tronUSDT = await fetchTronUSDT();
+          if (tronUSDT > 0) {
+            tokenOutValue = tronUSDT;
+            console.log('[usePairBalances] Using USDT from Tron wallet:', tronUSDT);
+          }
+        } else if (usdtChain === 'evm' || usdtChain === 'sol') {
+          // Try to fetch from the specific chain's balance
+          console.log(`[usePairBalances] Fetching USDT from ${usdtChain} chain...`);
+          const chainResponse = await fetch(`/api/users/${userId}/balances?assets=USDT&chain=${usdtChain}`);
+          
+          if (chainResponse.ok) {
+            const chainData: BalancesResponse = await chainResponse.json();
+            const chainBalances = Array.isArray(chainData) ? chainData : chainData.balances || [];
+            const chainUSDT = chainBalances.find(b => b.asset.toUpperCase() === 'USDT');
+            
+            if (chainUSDT) {
+              tokenOutValue = parseFloat(chainUSDT.available_balance || '0');
+              console.log(`[usePairBalances] Using USDT from ${usdtChain} chain:`, tokenOutValue);
+            }
+          }
+          
+          // If still 0, fallback to Tron as last resort
+          if (tokenOutValue === 0) {
+            console.log('[usePairBalances] No USDT found on preferred chain, falling back to Tron...');
+            const tronUSDT = await fetchTronUSDT();
+            if (tronUSDT > 0) {
+              tokenOutValue = tronUSDT;
+              console.log('[usePairBalances] Using USDT from Tron wallet (fallback):', tronUSDT);
+            }
+          }
         }
       }
       
