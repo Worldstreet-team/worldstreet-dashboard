@@ -17,7 +17,7 @@ const EXECUTION_CONFIG = {
   // Retry configuration
   MAX_RETRIES: 1, // Only retry once for slippage errors
   RETRY_DELAY_MS: 1000,
-  
+
   // Slippage error codes
   SLIPPAGE_ERROR_CODES: [
     '0x1788', // Slippage exceeded (common)
@@ -25,10 +25,10 @@ const EXECUTION_CONFIG = {
     'INSUFFICIENT_OUTPUT_AMOUNT',
     'PRICE_SLIPPAGE_CHECK',
   ],
-  
+
   // Simulation configuration - re-enabled
   SIMULATE_BEFORE_EXECUTE: true,
-  
+
   // Transaction deadlines
   SOLANA_BLOCKHASH_LIFETIME_SECONDS: 150,
   EVM_DEADLINE_SECONDS: 120,
@@ -119,7 +119,7 @@ export async function executeSwap(
 
       try {
         const result = await executeSwapAttempt(request, context);
-        
+
         // Success!
         return {
           ...result,
@@ -294,7 +294,7 @@ async function executeSolanaSwap(
   const signature = await connection.sendTransaction(transaction, {
     maxRetries: 3,
     preflightCommitment: 'confirmed',
-    skipPreflight: false, // Always preflight for safety
+    skipPreflight: true, // Skip preflight; we already simulated above
   });
 
   console.log('[ExecutionService] Solana transaction sent:', {

@@ -6,10 +6,10 @@
 import { parseUnits, formatUnits, isAddress } from 'viem';
 import { lifiService } from '@/services/lifi/LiFiService';
 import { swapLock } from '@/lib/swap/SwapExecutionLock';
-import { 
-  SwapExecutionParams, 
+import {
+  SwapExecutionParams,
   SwapExecutionResult,
-  TokenMetadata 
+  TokenMetadata
 } from '@/types/spot-trading';
 import { sanitizeError, ERROR_MESSAGES } from '@/lib/errors/swapErrors';
 
@@ -25,7 +25,7 @@ export class SpotSwapExecutor {
       () => this.executeInternal(params)
     );
   }
-  
+
   private async executeInternal(
     params: SwapExecutionParams
   ): Promise<SwapExecutionResult> {
@@ -39,10 +39,10 @@ export class SpotSwapExecutor {
           errorCode: validation.code,
         };
       }
-      
+
       // Step 2: Determine token direction
       const { fromToken, toToken, fromAmount } = this.getSwapDirection(params);
-      
+
       // Step 3: Get LI.FI quote
       const quote = await lifiService.getQuote({
         fromChain: fromToken.chainId,
@@ -51,39 +51,39 @@ export class SpotSwapExecutor {
         toToken: toToken.address,
         fromAmount: fromAmount.toString(),
         fromAddress: params.userId, // Wallet address
-        slippage: params.slippage * 100, // Convert to basis points
+        slippage: params.slippage / 100, // Convert percentage to decimal (e.g. 3% → 0.03)
       });
-      
+
       // Step 4: Check allowance and approve if needed
       await this.handleApproval(fromToken, fromAmount, quote.estimate.approvalAddress);
-      
+
       // Step 5: Execute swap
       const txHash = await this.executeTransaction(quote);
-      
+
       // Step 6: Wait for confirmation
       await this.waitForConfirmation(txHash, fromToken.chainId);
-      
+
       // Step 7: Create trade record
       const trade = await this.createTradeRecord({
         ...params,
         txHash,
         quote,
       });
-      
+
       // Step 8: Update position
       const position = await this.updatePosition({
         ...params,
         trade,
         executionPrice: this.calculatePrice(quote),
       });
-      
+
       return {
         success: true,
         txHash,
         trade,
         position,
       };
-      
+
     } catch (error) {
       console.error('[SpotSwapExecutor] Error:', error);
       return {
@@ -93,7 +93,7 @@ export class SpotSwapExecutor {
       };
     }
   }
-  
+
   /**
    * Validate swap parameters
    */
@@ -101,18 +101,18 @@ export class SpotSwapExecutor {
     // Implementation from LIFI_SPOT_ARCHITECTURE.md section 4
     return { valid: true };
   }
-  
+
   /**
    * Determine swap direction based on BUY/SELL
    */
   private getSwapDirection(params: SwapExecutionParams) {
     const fromAmount = parseUnits(
       params.amount,
-      params.side === 'BUY' 
-        ? params.quoteToken.decimals 
+      params.side === 'BUY'
+        ? params.quoteToken.decimals
         : params.baseToken.decimals
     );
-    
+
     if (params.side === 'BUY') {
       return {
         fromToken: params.quoteToken, // USDT
@@ -127,7 +127,7 @@ export class SpotSwapExecutor {
       };
     }
   }
-  
+
   private async handleApproval(
     token: TokenMetadata,
     amount: bigint,
@@ -135,30 +135,30 @@ export class SpotSwapExecutor {
   ) {
     // Check and handle token approval
   }
-  
+
   private async executeTransaction(quote: any): Promise<string> {
     // Execute via wallet
     return '';
   }
-  
+
   private async waitForConfirmation(txHash: string, chainId: number) {
     // Wait for blockchain confirmation
   }
-  
+
   private async createTradeRecord(data: any) {
     // Create trade in database
     return null;
   }
-  
+
   private async updatePosition(data: any) {
     // Update position in database
     return null;
   }
-  
+
   private calculatePrice(quote: any): string {
     return '0';
   }
-  
+
   private getErrorCode(error: unknown): string {
     return 'UNKNOWN_ERROR';
   }

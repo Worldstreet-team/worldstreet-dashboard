@@ -57,28 +57,35 @@ export function useSpotSwap() {
   /**
    * Get token addresses for a trading pair
    */
+  /**
+   * Token metadata: address + decimals for each token on each chain
+   */
+  const TOKEN_META: Record<string, Record<string, { address: string; decimals: number }>> = {
+    ethereum: {
+      ETH: { address: '0x0000000000000000000000000000000000000000', decimals: 18 },
+      BTC: { address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', decimals: 8 }, // WBTC
+      WBTC: { address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', decimals: 8 },
+      USDT: { address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', decimals: 6 },
+      USDC: { address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', decimals: 6 },
+    },
+    solana: {
+      SOL: { address: '11111111111111111111111111111111', decimals: 9 },
+      WSOL: { address: 'So11111111111111111111111111111111111111112', decimals: 9 },
+      USDT: { address: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', decimals: 6 },
+      USDC: { address: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', decimals: 6 },
+    },
+  };
+
   const getTokenAddresses = useCallback((pair: string, chain: 'ethereum' | 'solana') => {
     const [base, quote] = pair.split('-');
-    
-    // Token address mappings
-    const TOKEN_ADDRESSES = {
-      ethereum: {
-        ETH: '0x0000000000000000000000000000000000000000',
-        WBTC: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599',
-        USDT: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
-        USDC: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
-      },
-      solana: {
-        SOL: '11111111111111111111111111111111',
-        WSOL: 'So11111111111111111111111111111111111111112',
-        USDT: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
-        USDC: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
-      },
-    };
+    const baseMeta = TOKEN_META[chain]?.[base];
+    const quoteMeta = TOKEN_META[chain]?.[quote];
 
     return {
-      base: TOKEN_ADDRESSES[chain][base as keyof typeof TOKEN_ADDRESSES[typeof chain]] || '',
-      quote: TOKEN_ADDRESSES[chain][quote as keyof typeof TOKEN_ADDRESSES[typeof chain]] || '',
+      base: baseMeta?.address || '',
+      quote: quoteMeta?.address || '',
+      baseDecimals: baseMeta?.decimals ?? 18,
+      quoteDecimals: quoteMeta?.decimals ?? 6,
     };
   }, []);
 
@@ -93,6 +100,33 @@ export function useSpotSwap() {
   }, []);
 
   /**
+   * Convert a human-readable amount to the smallest unit string
+   * Uses string manipulation to avoid floating-point precision issues.
+   * e.g. toSmallestUnit("0.1", 18) → "100000000000000000"
+   */
+  const toSmallestUnit = useCallback((amount: string, decimals: number): string => {
+    // Remove trailing/leading whitespace
+    let value = amount.trim();
+    if (!value || value === '.' || isNaN(Number(value))) return '0';
+
+    // Handle negative values
+    const negative = value.startsWith('-');
+    if (negative) value = value.slice(1);
+
+    // Split on decimal point
+    const [intPart = '0', fracPart = ''] = value.split('.');
+
+    // Pad or truncate fractional part to exactly `decimals` digits
+    const paddedFrac = fracPart.padEnd(decimals, '0').slice(0, decimals);
+
+    // Combine and strip leading zeros
+    let result = (intPart + paddedFrac).replace(/^0+/, '') || '0';
+    if (negative && result !== '0') result = '-' + result;
+
+    return result;
+  }, []);
+
+  /**
    * Fetch swap quote
    */
   const fetchQuote = useCallback(async (params: SpotSwapParams): Promise<SpotSwapQuote | null> => {
@@ -100,7 +134,6 @@ export function useSpotSwap() {
     setQuote(null);
 
     try {
-      const [base, quote] = params.pair.split('-');
       const chain = getChainFromPair(params.pair);
       const tokens = getTokenAddresses(params.pair, chain);
 
@@ -108,16 +141,31 @@ export function useSpotSwap() {
       const fromToken = params.side === 'buy' ? tokens.quote : tokens.base;
       const toToken = params.side === 'buy' ? tokens.base : tokens.quote;
 
+      // Use correct decimals for the from-token
+      // Buy: user enters quote-token amount (e.g. 10 USDT) → use quoteDecimals
+      // Sell: user enters base-token amount (e.g. 1 SOL) → use baseDecimals
+      const fromDecimals = params.side === 'buy' ? tokens.quoteDecimals : tokens.baseDecimals;
+
       // Get user address for the chain
       const userAddress = chain === 'solana' ? solAddress : evmAddress;
-      
+
       if (!userAddress) {
         throw new Error(`${chain === 'solana' ? 'Solana' : 'Ethereum'} wallet not connected`);
       }
 
-      // Convert amount to smallest unit (assuming 6 decimals for USDT, 18 for others)
-      const decimals = quote === 'USDT' ? 6 : 18;
-      const amountInSmallestUnit = (parseFloat(params.amount) * Math.pow(10, decimals)).toString();
+      // Convert amount to smallest unit using precise string math
+      const amountInSmallestUnit = toSmallestUnit(params.amount, fromDecimals);
+
+      console.log('[useSpotSwap] Quote request:', {
+        pair: params.pair,
+        side: params.side,
+        humanAmount: params.amount,
+        fromDecimals,
+        amountInSmallestUnit,
+        fromToken,
+        toToken,
+        chain,
+      });
 
       // Fetch quote from LI.FI
       const lifiQuote = await getQuote({
@@ -185,7 +233,6 @@ export function useSpotSwap() {
         throw new Error('No quote available. Please fetch a quote first.');
       }
 
-      const [base, quoteToken] = params.pair.split('-');
       const chain = getChainFromPair(params.pair);
       const tokens = getTokenAddresses(params.pair, chain);
 
@@ -197,8 +244,16 @@ export function useSpotSwap() {
 
       const fromToken = params.side === 'buy' ? tokens.quote : tokens.base;
       const toToken = params.side === 'buy' ? tokens.base : tokens.quote;
-      const decimals = quoteToken === 'USDT' ? 6 : 18;
-      const amountInSmallestUnit = (parseFloat(params.amount) * Math.pow(10, decimals)).toString();
+      const fromDecimals = params.side === 'buy' ? tokens.quoteDecimals : tokens.baseDecimals;
+      const amountInSmallestUnit = toSmallestUnit(params.amount, fromDecimals);
+
+      console.log('[useSpotSwap] Execute request:', {
+        pair: params.pair,
+        side: params.side,
+        humanAmount: params.amount,
+        fromDecimals,
+        amountInSmallestUnit,
+      });
 
       const lifiQuote = await getQuote({
         fromChain: chain,
@@ -266,7 +321,7 @@ export function useSpotSwap() {
         error: errorMessage,
       };
     }
-  }, [quote, getQuote, executeSwap, getChainFromPair, getTokenAddresses, solAddress, evmAddress, user]);
+  }, [quote, getQuote, executeSwap, getChainFromPair, getTokenAddresses, toSmallestUnit, solAddress, evmAddress, user]);
 
   return {
     quote,

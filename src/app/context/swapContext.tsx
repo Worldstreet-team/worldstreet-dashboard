@@ -250,7 +250,7 @@ export function SwapProvider({ children }: { children: ReactNode }) {
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [executing, setExecuting] = useState(false);
   const [swapStatus, setSwapStatus] = useState<SwapStatus | null>(null);
-  const [slippage, setSlippage] = useState(0.5); // 50% - extremely high tolerance to pass simulation
+  const [slippage, setSlippage] = useState(3); // 3% default — reasonable for DeFi swaps
 
   // Fetch available tokens for a chain
   const fetchTokens = useCallback(async (chain: ChainKey) => {
@@ -431,7 +431,7 @@ export function SwapProvider({ children }: { children: ReactNode }) {
               const ataSignature = await connection.sendRawTransaction(
                 createAtaTx.serialize(),
                 {
-                  skipPreflight: false, // Keep simulation
+                  skipPreflight: true, // Skip to avoid stale-state simulation failures
                   preflightCommitment: "confirmed",
                 }
               );
@@ -497,7 +497,7 @@ export function SwapProvider({ children }: { children: ReactNode }) {
             signature = await connection.sendTransaction(transaction, {
               maxRetries: 5,
               preflightCommitment: "confirmed",
-              skipPreflight: false, // Keep simulation - let high slippage handle it
+              skipPreflight: true, // Skip preflight to avoid stale simulation failures
             });
           } catch (sendError) {
             console.error('[Swap] Solana sendTransaction failed:', {
