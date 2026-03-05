@@ -3,6 +3,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Icon } from '@iconify/react';
 
+type Chain = 'solana' | 'ethereum' | 'bitcoin';
+
 interface MarketData {
   symbol: string;
   baseAsset: string;
@@ -12,6 +14,9 @@ interface MarketData {
   volume24h: number;
   high24h: number;
   low24h: number;
+  chain?: Chain;
+  mintAddress?: string;
+  logoURI?: string;
 }
 
 interface BinanceMarketListProps {
@@ -19,43 +24,159 @@ interface BinanceMarketListProps {
   onSelectPair: (pair: string) => void;
 }
 
-// Mock market data
-const MARKET_DATA: MarketData[] = [
-  { symbol: 'BTC-USDT', baseAsset: 'BTC', quoteAsset: 'USDT', price: 69201.46, change24h: 3.34, volume24h: 28500000000, high24h: 70000, low24h: 68000 },
-  { symbol: 'ETH-USDT', baseAsset: 'ETH', quoteAsset: 'USDT', price: 3842.15, change24h: 2.18, volume24h: 15200000000, high24h: 3900, low24h: 3750 },
-  { symbol: 'SOL-USDT', baseAsset: 'SOL', quoteAsset: 'USDT', price: 198.73, change24h: -1.25, volume24h: 1200000000, high24h: 205, low24h: 195 },
-  { symbol: 'BNB-USDT', baseAsset: 'BNB', quoteAsset: 'USDT', price: 615.20, change24h: 1.85, volume24h: 850000000, high24h: 625, low24h: 605 },
-  { symbol: 'XRP-USDT', baseAsset: 'XRP', quoteAsset: 'USDT', price: 2.42, change24h: -2.12, volume24h: 620000000, high24h: 2.50, low24h: 2.35 },
-  { symbol: 'ADA-USDT', baseAsset: 'ADA', quoteAsset: 'USDT', price: 1.08, change24h: 4.21, volume24h: 450000000, high24h: 1.12, low24h: 1.02 },
-];
+interface KuCoinSymbol {
+  symbol: string;
+  baseCurrency: string;
+  quoteCurrency: string;
+  enableTrading: boolean;
+}
+
+interface SolanaToken {
+  symbol: string;
+  name: string;
+  address: string;
+  decimals: number;
+  logoURI: string;
+}
+
+interface KuCoinTicker {
+  symbol: string;
+  last: string;
+  changeRate: string;
+  volValue: string;
+  high: string;
+  low: string;
+}
 
 export default function BinanceMarketList({ selectedPair, onSelectPair }: BinanceMarketListProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTab, setSelectedTab] = useState<'favorites' | 'spot' | 'margin'>('spot');
   const [selectedQuote, setSelectedQuote] = useState<'USDT' | 'BTC' | 'ETH'>('USDT');
+  const [selectedChain, setSelectedChain] = useState<Chain | 'all'>('all');
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [sortBy, setSortBy] = useState<'pair' | 'price' | 'change'>('change');
+  const [markets, setMarkets] = useState<MarketData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch market data from KuCoin
+  useEffect(() => {
+    const fetchMarketData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Fetch KuCoin symbols
+        const symbolsRes = await fetch('https://api.kucoin.com/api/v2/symbols');
+        const symbolsData = await symbolsRes.json();
+        
+        if (symbolsData.code !== '200000') {
+          throw new Error('Failed to fetch symbols');
+        }
+
+        const kucoinSymbols: KuCoinSymbol[] = symbolsData.data;
+        
+        // Filter for USDT pairs that are tradable
+        const usdtSymbols = kucoinSymbols.filter(
+          (s) => s.quoteCurrency === 'USDT' && s.enableTrading
+        );
+
+        // Fetch Solana token list
+        const solanaRes = await fetch('https://tokens.coingecko.com/solana/all.json');
+        const solanaData = await solanaRes.json();
+        const solanaTokens: SolanaToken[] = solanaData.tokens;
+
+        // Create a map of Solana tokens by symbol
+        const solanaTokenMap = new Map(
+          solanaTokens.map((token) => [token.symbol.toUpperCase(), token])
+        );
+
+        // Fetch 24hr stats for all symbols
+        const tickersRes = await fetch('https://api.kucoin.com/api/v1/market/allTickers');
+        const tickersData = await tickersRes.json();
+        
+        if (tickersData.code !== '200000') {
+          throw new Error('Failed to fetch tickers');
+        }
+
+        const tickers: KuCoinTicker[] = tickersData.data.ticker;
+        const tickerMap = new Map(tickers.map((t) => [t.symbol, t]));
+
+        // Map symbols to market data with chain detection
+        const marketData: MarketData[] = usdtSymbols
+          .map((symbol) => {
+            const ticker = tickerMap.get(symbol.symbol);
+            if (!ticker) return null;
+
+            const baseAsset = symbol.baseCurrency.toUpperCase();
+            const solanaToken = solanaTokenMap.get(baseAsset);
+            
+            // Determine chain
+            let chain: Chain | undefined;
+            if (solanaToken) {
+              chain = 'solana';
+            } else if (['BTC', 'BCH', 'BSV', 'BTG'].includes(baseAsset)) {
+              chain = 'bitcoin';
+            } else if (['ETH', 'USDT', 'USDC', 'DAI', 'LINK', 'UNI', 'AAVE', 'MKR'].includes(baseAsset)) {
+              chain = 'ethereum';
+            }
+
+            return {
+              symbol: `${baseAsset}-USDT`,
+              baseAsset,
+              quoteAsset: 'USDT',
+              price: parseFloat(ticker.last),
+              change24h: parseFloat(ticker.changeRate) * 100,
+              volume24h: parseFloat(ticker.volValue),
+              high24h: parseFloat(ticker.high),
+              low24h: parseFloat(ticker.low),
+              chain,
+              mintAddress: solanaToken?.address,
+              logoURI: solanaToken?.logoURI,
+            };
+          })
+          .filter((m): m is MarketData => m !== null && !isNaN(m.price));
+
+        setMarkets(marketData);
+      } catch (err) {
+        console.error('Error fetching market data:', err);
+        setError(err instanceof Error ? err.message : 'Failed to fetch market data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMarketData();
+    
+    // Refresh every 10 seconds
+    const interval = setInterval(fetchMarketData, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   const filteredMarkets = useMemo(() => {
-    let markets = MARKET_DATA.filter(market => {
+    let filtered = markets.filter(market => {
       const matchesSearch = searchQuery === '' || 
         market.baseAsset.toLowerCase().includes(searchQuery.toLowerCase()) ||
         market.symbol.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesQuote = market.quoteAsset === selectedQuote;
       const matchesFavorites = selectedTab !== 'favorites' || favorites.has(market.symbol);
+      const matchesChain = selectedChain === 'all' || market.chain === selectedChain;
       
-      return matchesSearch && matchesQuote && matchesFavorites;
+      return matchesSearch && matchesQuote && matchesFavorites && matchesChain;
     });
 
     // Sort markets
-    markets.sort((a, b) => {
+    filtered.sort((a, b) => {
       if (sortBy === 'change') return Math.abs(b.change24h) - Math.abs(a.change24h);
       if (sortBy === 'price') return b.price - a.price;
       return a.baseAsset.localeCompare(b.baseAsset);
     });
 
-    return markets;
-  }, [searchQuery, selectedQuote, selectedTab, favorites, sortBy]);
+    return filtered;
+  }, [markets, searchQuery, selectedQuote, selectedTab, selectedChain, favorites, sortBy]);
 
   const toggleFavorite = (symbol: string) => {
     setFavorites(prev => {
@@ -136,6 +257,36 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
         ))}
       </div>
 
+      {/* Chain Filter */}
+      <div className="flex border-b border-[#1e2329] px-3 gap-2 py-2 overflow-x-auto scrollbar-hide">
+        <button
+          onClick={() => setSelectedChain('all')}
+          className={`px-2 py-1 text-[10px] font-medium rounded transition-colors whitespace-nowrap ${
+            selectedChain === 'all'
+              ? 'bg-[#1e2329] text-white'
+              : 'text-[#848e9c] hover:text-white'
+          }`}
+        >
+          All Chains
+        </button>
+        {(['solana', 'ethereum', 'bitcoin'] as const).map((chain) => (
+          <button
+            key={chain}
+            onClick={() => setSelectedChain(chain)}
+            className={`px-2 py-1 text-[10px] font-medium rounded transition-colors whitespace-nowrap flex items-center gap-1 ${
+              selectedChain === chain
+                ? 'bg-[#1e2329] text-white'
+                : 'text-[#848e9c] hover:text-white'
+            }`}
+          >
+            {chain === 'solana' && <Icon icon="cryptocurrency:sol" width={12} />}
+            {chain === 'ethereum' && <Icon icon="cryptocurrency:eth" width={12} />}
+            {chain === 'bitcoin' && <Icon icon="cryptocurrency:btc" width={12} />}
+            {chain.charAt(0).toUpperCase() + chain.slice(1)}
+          </button>
+        ))}
+      </div>
+
       {/* Column Headers */}
       <div className="px-3 py-2 border-b border-[#1e2329] grid grid-cols-[1fr_auto_auto] gap-2 text-[10px] text-[#848e9c] font-medium">
         <button onClick={() => setSortBy('pair')} className="text-left hover:text-white flex items-center gap-1">
@@ -154,7 +305,23 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
 
       {/* Market List */}
       <div className="flex-1 overflow-y-auto scrollbar-hide">
-        {filteredMarkets.length === 0 ? (
+        {loading ? (
+          <div className="p-6 text-center">
+            <Icon icon="ph:spinner" className="mx-auto mb-2 text-[#848e9c] animate-spin" width={32} />
+            <p className="text-xs text-[#848e9c]">Loading markets...</p>
+          </div>
+        ) : error ? (
+          <div className="p-6 text-center">
+            <Icon icon="ph:warning-circle" className="mx-auto mb-2 text-[#f6465d]" width={32} />
+            <p className="text-xs text-[#f6465d] mb-2">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="text-xs text-[#f0b90b] hover:underline"
+            >
+              Retry
+            </button>
+          </div>
+        ) : filteredMarkets.length === 0 ? (
           <div className="p-6 text-center">
             <Icon icon="ph:magnifying-glass" className="mx-auto mb-2 text-[#848e9c]" width={32} />
             <p className="text-xs text-[#848e9c]">No markets found</p>
@@ -192,7 +359,20 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
                       />
                     </button>
                     <div className="min-w-0 flex-1">
-                      <div className="text-xs font-medium text-white">
+                      <div className="text-xs font-medium text-white flex items-center gap-1">
+                        {market.chain && (
+                          <Icon
+                            icon={
+                              market.chain === 'solana'
+                                ? 'cryptocurrency:sol'
+                                : market.chain === 'ethereum'
+                                ? 'cryptocurrency:eth'
+                                : 'cryptocurrency:btc'
+                            }
+                            width={10}
+                            className="flex-shrink-0"
+                          />
+                        )}
                         {market.baseAsset}<span className="text-[#848e9c]">/{market.quoteAsset}</span>
                       </div>
                       <div className="text-[9px] text-[#848e9c]">
