@@ -280,7 +280,7 @@ export function SwapProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Get swap quote
+  // ── Get swap quote via backend API ──────────────────────────────────────
   const getQuote = useCallback(
     async (params: {
       fromChain: ChainKey;
@@ -296,354 +296,177 @@ export function SwapProvider({ children }: { children: ReactNode }) {
       setQuote(null);
 
       try {
-        const fromChainId = SWAP_CHAINS[params.fromChain].id;
-        const toChainId = SWAP_CHAINS[params.toChain].id;
+        const chainLabel = params.fromChain === "solana" ? "SOL" : "ETH";
+        const toChainLabel = params.toChain === "solana" ? "SOL" : "ETH";
 
-        const queryParams = new URLSearchParams({
-          fromChain: fromChainId.toString(),
-          toChain: toChainId.toString(),
-          fromToken: params.fromToken,
-          toToken: params.toToken,
-          fromAmount: params.fromAmount,
-          fromAddress: params.fromAddress,
-          toAddress: params.toAddress,
-          slippage: (slippage / 100).toString(),
-          integrator: "worldstreet",
+        console.log("[SwapContext] Fetching quote via /api/quote:", {
+          fromChain: chainLabel,
+          tokenIn: params.fromToken,
+          tokenOut: params.toToken,
+          amountIn: params.fromAmount,
         });
 
-        const res = await fetch(`${LIFI_API}/quote?${queryParams}`);
-        const data = await res.json();
+        const res = await fetch("/api/quote", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: (params.fromChain === "solana" ? solAddress : evmAddress) || "unknown",
+            fromChain: chainLabel,
+            toChain: toChainLabel,
+            tokenIn: params.fromToken,
+            tokenOut: params.toToken,
+            amountIn: params.fromAmount,
+            slippage: slippage / 100, // percentage → decimal (3% → 0.03)
+          }),
+        });
 
-        if (data.message) {
-          setQuoteError(data.message);
+        const data = await res.json();
+        console.log("[SwapContext] Quote response:", data);
+
+        if (!res.ok || data.message) {
+          const errMsg = data.message || data.error || "Failed to get quote";
+          setQuoteError(errMsg);
           return null;
         }
 
+        // Build SwapQuote from backend response
+        // The backend returns: expectedOutput, priceImpact, gasEstimate, route, executionData, toAmountMin
         const parsedQuote: SwapQuote = {
-          id: data.id || `${Date.now()}`,
+          id: `quote-${Date.now()}`,
           fromChain: params.fromChain,
           toChain: params.toChain,
-          fromToken: data.action?.fromToken || data.estimate?.fromToken,
-          toToken: data.action?.toToken || data.estimate?.toToken,
-          fromAmount: data.action?.fromAmount || params.fromAmount,
-          toAmount: data.estimate?.toAmount || "0",
-          toAmountMin: data.estimate?.toAmountMin || "0",
-          estimatedDuration: data.estimate?.executionDuration || 0,
-          gasCosts: data.estimate?.gasCosts || [],
-          feeCosts: data.estimate?.feeCosts || [],
-          transactionRequest: data.transactionRequest,
-          toolDetails: data.toolDetails,
+          fromToken: {
+            chainId: SWAP_CHAINS[params.fromChain].id,
+            address: params.fromToken,
+            symbol: params.fromToken.length > 20 ? "TOKEN" : params.fromToken,
+            name: "",
+            decimals: 18,
+          } as SwapToken,
+          toToken: {
+            chainId: SWAP_CHAINS[params.toChain].id,
+            address: params.toToken,
+            symbol: params.toToken.length > 20 ? "TOKEN" : params.toToken,
+            name: "",
+            decimals: 18,
+          } as SwapToken,
+          fromAmount: params.fromAmount,
+          toAmount: data.expectedOutput || data.expectedOut || "0",
+          toAmountMin: data.toAmountMin || data.expectedOutput || "0",
+          estimatedDuration: 30,
+          gasCosts: [],
+          feeCosts: [],
+          transactionRequest: data.executionData || undefined,
+          toolDetails: data.route ? { name: data.route, logoURI: "" } : undefined,
         };
 
         setQuote(parsedQuote);
         return parsedQuote;
       } catch (error) {
         console.error("Failed to get quote:", error);
-        setQuoteError(formatSwapError(error, "Li.Fi"));
+        setQuoteError(formatSwapError(error, "Backend"));
         return null;
       } finally {
         setQuoteLoading(false);
       }
     },
-    [slippage]
+    [slippage, solAddress, evmAddress]
   );
 
-  // ── Execute the swap ─────────────────────────────────────────────────────
+  // ── Execute the swap via backend API ────────────────────────────────────
+  // The backend handles: LI.FI call, signing, submitting the transaction.
+  // We just POST the trade params and get back a txHash.
   const executeSwap = useCallback(
     async (swapQuote: SwapQuote, pin: string): Promise<string> => {
-      if (!swapQuote.transactionRequest) {
-        throw new Error("No transaction data available");
-      }
-
       setExecuting(true);
       setSwapStatus({ status: "PENDING" });
 
       try {
-        // First, get the encrypted keys using the PIN
-        const encryptedKeys = await getEncryptedKeys(pin);
-        if (!encryptedKeys) {
-          throw new Error("Failed to retrieve wallet keys");
-        }
+        // We still need the PIN to verify user identity / unlock wallet on backend
+        const chainLabel = swapQuote.fromChain === "solana" ? "SOL" : "ETH";
+        const toChainLabel = swapQuote.toChain === "solana" ? "SOL" : "ETH";
+        const userAddress = swapQuote.fromChain === "solana" ? solAddress : evmAddress;
 
-        const isFromSolana = swapQuote.fromChain === "solana";
-
-        if (isFromSolana) {
-          if (!encryptedKeys.solana?.encryptedPrivateKey) {
-            throw new Error("Solana wallet not available");
-          }
-
-          const {
-            Connection,
-            VersionedTransaction,
-            Keypair,
-            PublicKey,
-            Transaction,
-          } = await import("@solana/web3.js");
-          const {
-            getAssociatedTokenAddress,
-            createAssociatedTokenAccountInstruction,
-          } = await import("@solana/spl-token");
-
-          const privateKeyBase64 = decryptWithPIN(
-            encryptedKeys.solana.encryptedPrivateKey,
-            pin
-          );
-          const secretKey = new Uint8Array(
-            Buffer.from(privateKeyBase64, "base64")
-          );
-          const keypair = Keypair.fromSecretKey(secretKey);
-
-          const connection = new Connection(SOL_RPC, "confirmed");
-
-          // Native SOL address — skip ATA creation for native SOL only
-          const NATIVE_SOL = "11111111111111111111111111111111";
-
-          // Create destination ATA if the to-chain is also Solana and the token isn't native SOL.
-          // For cross-chain swaps (SOL → ETH), the destination is on EVM so no ATA needed.
-          if (
-            swapQuote.toChain === "solana" &&
-            swapQuote.toToken.address !== NATIVE_SOL
-          ) {
-            const mint = new PublicKey(swapQuote.toToken.address);
-            const ata = await getAssociatedTokenAddress(
-              mint,
-              keypair.publicKey
-            );
-            const ataInfo = await connection.getAccountInfo(ata);
-
-            if (!ataInfo) {
-              console.log(
-                `[Swap] Creating ATA for ${swapQuote.toToken.symbol}...`
-              );
-              const ataIx = createAssociatedTokenAccountInstruction(
-                keypair.publicKey, // payer
-                ata, // ata address
-                keypair.publicKey, // owner
-                mint // mint
-              );
-
-              const createAtaTx = new Transaction().add(ataIx);
-              const { blockhash, lastValidBlockHeight } =
-                await connection.getLatestBlockhash("confirmed");
-              createAtaTx.recentBlockhash = blockhash;
-              createAtaTx.feePayer = keypair.publicKey;
-              createAtaTx.sign(keypair);
-
-              const ataSignature = await connection.sendRawTransaction(
-                createAtaTx.serialize(),
-                {
-                  skipPreflight: true, // Skip to avoid stale-state simulation failures
-                  preflightCommitment: "confirmed",
-                }
-              );
-
-              // Wait for ATA creation via HTTP polling (no WebSocket needed)
-              const ataConfirm = await pollTransactionConfirmation(
-                connection,
-                ataSignature,
-                { commitment: "confirmed", timeoutMs: 60_000, intervalMs: 2000 }
-              );
-              if (!ataConfirm.confirmed) {
-                console.warn(`[Swap] ATA confirmation timed out, proceeding anyway...`);
-              } else if (ataConfirm.err) {
-                throw new Error(`ATA creation failed on-chain: ${JSON.stringify(ataConfirm.err)}`);
-              } else {
-                console.log(`[Swap] ATA created: ${ataSignature}`);
-              }
-            }
-          }
-
-          // Detect transaction data format:
-          // Li.Fi returns base64 for Solana transactions, but cross-chain routes
-          // might vary. We detect by checking if data starts with "0x" (hex/EVM format).
-          const txDataRaw = swapQuote.transactionRequest.data;
-          let txData: Uint8Array;
-
-          if (txDataRaw.startsWith("0x")) {
-            // Hex-encoded data — convert from hex
-            txData = new Uint8Array(
-              Buffer.from(txDataRaw.slice(2), "hex")
-            );
-          } else {
-            // Base64-encoded (standard Li.Fi Solana format)
-            txData = new Uint8Array(Buffer.from(txDataRaw, "base64"));
-          }
-
-          let transaction: InstanceType<typeof VersionedTransaction>;
-          try {
-            transaction = VersionedTransaction.deserialize(txData);
-          } catch (deserializeErr) {
-            console.error(
-              "[Swap] Failed to deserialize Solana transaction:",
-              deserializeErr
-            );
-            throw new Error(
-              "Failed to process swap transaction. The route may have changed — try refreshing the quote."
-            );
-          }
-
-          transaction.sign([keypair]);
-
-          // No need for blockhash for polling-based confirmation
-
-          console.log('[Swap] Sending Solana transaction...', {
-            fromToken: swapQuote.fromToken.symbol,
-            toToken: swapQuote.toToken.symbol,
-            fromAmount: swapQuote.fromAmount,
-            signer: keypair.publicKey.toString(),
-          });
-
-          // Send the transaction with detailed error catching
-          let signature: string;
-          try {
-            signature = await connection.sendTransaction(transaction, {
-              maxRetries: 5,
-              preflightCommitment: "confirmed",
-              skipPreflight: true, // Skip preflight to avoid stale simulation failures
-            });
-          } catch (sendError) {
-            console.error('[Swap] Solana sendTransaction failed:', {
-              error: sendError,
-              errorMessage: sendError instanceof Error ? sendError.message : String(sendError),
-              errorName: sendError instanceof Error ? sendError.name : undefined,
-              errorStack: sendError instanceof Error ? sendError.stack : undefined,
-              // Try to extract Solana-specific error details
-              logs: (sendError as any)?.logs,
-              err: (sendError as any)?.err,
-            });
-            throw sendError; // Re-throw to be caught by outer catch
-          }
-
-          console.log(`[Swap] Solana TX sent: ${signature}`);
-
-          // Wait for on-chain confirmation via HTTP polling (no WebSocket needed)
-          const confirmResult = await pollTransactionConfirmation(
-            connection,
-            signature,
-            { commitment: "confirmed", timeoutMs: 90_000, intervalMs: 2000 }
-          );
-
-          if (confirmResult.confirmed && confirmResult.err) {
-            console.error(
-              "[Swap] Transaction confirmed but failed on-chain:",
-              confirmResult.err
-            );
-            throw new Error(
-              `Transaction confirmed but failed on-chain: ${JSON.stringify(confirmResult.err)}`
-            );
-          }
-
-          if (!confirmResult.confirmed) {
-            console.warn(
-              `[Swap] Confirmation timed out for ${signature}, but TX was broadcast. Li.Fi will track it.`
-            );
-          } else {
-            console.log(`[Swap] Solana TX confirmed: ${signature}`);
-          }
-
-          return signature;
-        } else {
-          // ── EVM transaction path ──────────────────────────────────────
-          if (!encryptedKeys.ethereum?.encryptedPrivateKey) {
-            throw new Error("Ethereum wallet not available");
-          }
-
-          const { ethers } = await import("ethers");
-
-          const privateKey = decryptWithPIN(
-            encryptedKeys.ethereum.encryptedPrivateKey,
-            pin
-          );
-          const provider = new ethers.JsonRpcProvider(ETH_RPC);
-          const wallet = new ethers.Wallet(privateKey, provider);
-
-          // Check if we need to approve the token (skip for native ETH)
-          if (
-            swapQuote.fromToken.address !==
-            "0x0000000000000000000000000000000000000000"
-          ) {
-            const ERC20_ABI = [
-              "function allowance(address owner, address spender) view returns (uint256)",
-              "function approve(address spender, uint256 amount) returns (bool)",
-            ];
-
-            const tokenContract = new ethers.Contract(
-              swapQuote.fromToken.address,
-              ERC20_ABI,
-              wallet
-            );
-
-            const allowance = await tokenContract.allowance(
-              wallet.address,
-              swapQuote.transactionRequest.to
-            );
-
-            const fromAmountBN = BigInt(swapQuote.fromAmount);
-
-            if (allowance < fromAmountBN) {
-              console.log("[Swap] Approving ERC20 token spend...");
-              const approveTx = await tokenContract.approve(
-                swapQuote.transactionRequest.to,
-                ethers.MaxUint256
-              );
-              await approveTx.wait();
-              console.log("[Swap] ERC20 approval confirmed");
-            }
-          }
-
-          // Execute the swap transaction
-          const tx = await wallet.sendTransaction({
-            to: swapQuote.transactionRequest.to,
-            data: swapQuote.transactionRequest.data,
-            value: BigInt(swapQuote.transactionRequest.value || "0"),
-            gasLimit: BigInt(
-              swapQuote.transactionRequest.gasLimit || "500000"
-            ),
-          });
-
-          console.log(`[Swap] EVM TX sent: ${tx.hash}`);
-
-          // Wait for 1 confirmation
-          const receipt = await tx.wait(1);
-          if (receipt && receipt.status === 0) {
-            throw new Error("Transaction reverted on-chain");
-          }
-          console.log(`[Swap] EVM TX confirmed: ${tx.hash}`);
-
-          return tx.hash;
-        }
-      } catch (err) {
-        // Log the full error details for debugging
-        console.error('[Swap] Transaction execution failed:', {
-          error: err,
-          errorMessage: err instanceof Error ? err.message : String(err),
-          errorStack: err instanceof Error ? err.stack : undefined,
-          chain: swapQuote.fromChain,
-          fromToken: swapQuote.fromToken.symbol,
-          toToken: swapQuote.toToken.symbol,
-          fromAmount: swapQuote.fromAmount,
+        console.log("[SwapContext] Executing trade via /api/execute-trade:", {
+          fromChain: chainLabel,
+          tokenIn: swapQuote.fromToken.address,
+          tokenOut: swapQuote.toToken.address,
+          amountIn: swapQuote.fromAmount,
         });
 
-        // TEMPORARY: Show raw error for debugging (comment out formatting)
-        // Re-throw the raw error without formatting
-        if (err instanceof Error) {
-          throw err; // Preserve the original Error object
-        } else {
-          throw new Error(String(err)); // Convert to Error if it's not already
+        const res = await fetch("/api/execute-trade", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: userAddress || "unknown",
+            fromChain: chainLabel,
+            toChain: toChainLabel,
+            tokenIn: swapQuote.fromToken.address,
+            tokenOut: swapQuote.toToken.address,
+            amountIn: swapQuote.fromAmount,
+            slippage: slippage / 100,
+          }),
+        });
+
+        const data = await res.json();
+        console.log("[SwapContext] Execute-trade response:", data);
+
+        if (!res.ok) {
+          const errMsg = data.message || data.error || "Trade execution failed";
+          throw new Error(errMsg);
         }
 
-        // ORIGINAL CODE (commented out for debugging):
-        // throw new Error(
-        //   formatSwapError(
-        //     err,
-        //     swapQuote.fromChain === "solana" ? "Solana" : "Ethereum"
-        //   )
-        // );
+        const txHash = data.txHash || data.transactionHash || data.signature;
+        if (!txHash) {
+          throw new Error("No transaction hash returned from backend");
+        }
+
+        console.log(`[SwapContext] Trade submitted, txHash: ${txHash}`);
+
+        // Poll blockchain for confirmation (Solana only — EVM backend already confirms)
+        if (swapQuote.fromChain === "solana") {
+          try {
+            const { Connection } = await import("@solana/web3.js");
+            const connection = new Connection(SOL_RPC, "confirmed");
+
+            console.log("[SwapContext] Polling Solana blockchain for confirmation...");
+            const confirmResult = await pollTransactionConfirmation(
+              connection,
+              txHash,
+              { commitment: "confirmed", timeoutMs: 90_000, intervalMs: 2000 }
+            );
+
+            if (confirmResult.confirmed && confirmResult.err) {
+              console.error("[SwapContext] TX confirmed but FAILED:", confirmResult.err);
+              throw new Error(`Transaction failed on-chain: ${JSON.stringify(confirmResult.err)}`);
+            }
+
+            if (!confirmResult.confirmed) {
+              console.warn(`[SwapContext] Confirmation timed out for ${txHash}, TX may still land.`);
+            } else {
+              console.log(`[SwapContext] Solana TX confirmed: ${txHash}`);
+            }
+          } catch (pollErr) {
+            // Don't fail the whole swap if polling fails — the TX was already submitted
+            console.warn("[SwapContext] Polling failed (TX may still succeed):", pollErr);
+          }
+        }
+
+        setSwapStatus({ status: "DONE", txHash });
+        return txHash;
+      } catch (err) {
+        console.error("[SwapContext] Execute-trade failed:", err);
+        setSwapStatus({ status: "FAILED" });
+
+        if (err instanceof Error) {
+          throw err;
+        } else {
+          throw new Error(String(err));
+        }
       } finally {
         setExecuting(false);
       }
     },
-    [getEncryptedKeys]
+    [solAddress, evmAddress, slippage]
   );
 
   // ── Poll swap status via Li.Fi ───────────────────────────────────────────

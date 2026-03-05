@@ -1,24 +1,28 @@
 /**
- * Production-Grade Spot Swap Execution Service
- * Handles LI.FI-based decentralized spot trading with position tracking
+ * Spot Swap Execution Service
+ *
+ * Calls the backend API routes (/api/quote and /api/execute-trade) to
+ * perform swaps. The backend handles LI.FI interaction, signing, and
+ * transaction submission.
+ *
+ * This class is used server-side or in API route handlers — NOT from
+ * React components (use the useSpotSwap hook for that).
  */
 
-import { parseUnits, formatUnits, isAddress } from 'viem';
-import { lifiService } from '@/services/lifi/LiFiService';
 import { swapLock } from '@/lib/swap/SwapExecutionLock';
 import {
   SwapExecutionParams,
   SwapExecutionResult,
-  TokenMetadata
 } from '@/types/spot-trading';
-import { sanitizeError, ERROR_MESSAGES } from '@/lib/errors/swapErrors';
+import { sanitizeError } from '@/lib/errors/swapErrors';
+
+const BACKEND_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://trading.watchup.site';
 
 export class SpotSwapExecutor {
   /**
-   * Main execution function
+   * Main execution function — uses a lock to prevent double-click
    */
   async execute(params: SwapExecutionParams): Promise<SwapExecutionResult> {
-    // Use execution lock to prevent double-click
     return await swapLock.execute(
       params.userId,
       params.pair,
@@ -31,136 +35,139 @@ export class SpotSwapExecutor {
   ): Promise<SwapExecutionResult> {
     try {
       // Step 1: Validate inputs
-      const validation = await this.validate(params);
-      if (!validation.valid) {
+      if (!params.userId || !params.pair || !params.amount) {
         return {
           success: false,
-          error: validation.error,
-          errorCode: validation.code,
+          error: 'Missing required fields (userId, pair, amount)',
+          errorCode: 'VALIDATION_ERROR',
         };
       }
 
-      // Step 2: Determine token direction
-      const { fromToken, toToken, fromAmount } = this.getSwapDirection(params);
+      const [base, quote] = params.pair.split('-');
+      const chain = base === 'SOL' ? 'SOL' : 'ETH';
 
-      // Step 3: Get LI.FI quote
-      const quote = await lifiService.getQuote({
-        fromChain: fromToken.chainId,
-        toChain: toToken.chainId,
+      // Determine from / to token addresses
+      const fromToken = params.side === 'BUY'
+        ? params.quoteToken  // Buying base → spending quote (e.g. USDT)
+        : params.baseToken;  // Selling base → spending base (e.g. SOL)
+
+      const toToken = params.side === 'BUY'
+        ? params.baseToken   // Buying base → receiving base (e.g. SOL)
+        : params.quoteToken; // Selling base → receiving quote (e.g. USDT)
+
+      const slippage = (params.slippage ?? 3) / 100; // percentage → decimal
+
+      // Convert human amount to smallest unit via string math
+      const decimals = params.side === 'BUY'
+        ? params.quoteToken.decimals
+        : params.baseToken.decimals;
+
+      const amountIn = this.toSmallestUnit(params.amount, decimals);
+
+      console.log('[SpotSwapExecutor] Executing trade:', {
+        userId: params.userId,
+        pair: params.pair,
+        side: params.side,
+        amountIn,
         fromToken: fromToken.address,
         toToken: toToken.address,
-        fromAmount: fromAmount.toString(),
-        fromAddress: params.userId, // Wallet address
-        slippage: params.slippage / 100, // Convert percentage to decimal (e.g. 3% → 0.03)
+        chain,
       });
 
-      // Step 4: Check allowance and approve if needed
-      await this.handleApproval(fromToken, fromAmount, quote.estimate.approvalAddress);
-
-      // Step 5: Execute swap
-      const txHash = await this.executeTransaction(quote);
-
-      // Step 6: Wait for confirmation
-      await this.waitForConfirmation(txHash, fromToken.chainId);
-
-      // Step 7: Create trade record
-      const trade = await this.createTradeRecord({
-        ...params,
-        txHash,
-        quote,
+      // Step 2: Call backend execute-trade API
+      const res = await fetch(`${BACKEND_BASE}/api/execute-trade`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: params.userId,
+          fromChain: chain,
+          toChain: chain,
+          tokenIn: fromToken.address,
+          tokenOut: toToken.address,
+          amountIn,
+          slippage,
+        }),
       });
 
-      // Step 8: Update position
-      const position = await this.updatePosition({
-        ...params,
-        trade,
-        executionPrice: this.calculatePrice(quote),
-      });
+      const data = await res.json();
+      console.log('[SpotSwapExecutor] Backend response:', { status: res.status, data });
+
+      if (!res.ok) {
+        const errMsg = data.error || data.message || 'Trade execution failed';
+        return {
+          success: false,
+          error: errMsg,
+          errorCode: 'EXECUTION_FAILED',
+        };
+      }
+
+      const txHash = data.txHash || data.transactionHash || data.signature;
+      if (!txHash) {
+        return {
+          success: false,
+          error: 'No transaction hash returned from backend',
+          errorCode: 'NO_TX_HASH',
+        };
+      }
 
       return {
         success: true,
         txHash,
-        trade,
-        position,
+        trade: data.trade,
+        position: data.position,
       };
-
     } catch (error) {
       console.error('[SpotSwapExecutor] Error:', error);
       return {
         success: false,
         error: sanitizeError(error),
-        errorCode: this.getErrorCode(error),
+        errorCode: 'UNKNOWN_ERROR',
       };
     }
   }
 
   /**
-   * Validate swap parameters
+   * Fetch a quote from the backend
    */
-  private async validate(params: SwapExecutionParams) {
-    // Implementation from LIFI_SPOT_ARCHITECTURE.md section 4
-    return { valid: true };
+  async getQuote(params: {
+    userId: string;
+    fromChain: string;
+    toChain: string;
+    tokenIn: string;
+    tokenOut: string;
+    amountIn: string;
+    slippage?: number;
+  }) {
+    const res = await fetch(`${BACKEND_BASE}/api/quote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...params,
+        slippage: params.slippage ?? 0.03,
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || data.message || 'Quote failed');
+    }
+    return data;
   }
 
   /**
-   * Determine swap direction based on BUY/SELL
+   * Convert a human-readable amount to the smallest unit string.
+   * Uses string manipulation to avoid floating-point precision issues.
    */
-  private getSwapDirection(params: SwapExecutionParams) {
-    const fromAmount = parseUnits(
-      params.amount,
-      params.side === 'BUY'
-        ? params.quoteToken.decimals
-        : params.baseToken.decimals
-    );
-
-    if (params.side === 'BUY') {
-      return {
-        fromToken: params.quoteToken, // USDT
-        toToken: params.baseToken,     // BTC
-        fromAmount,
-      };
-    } else {
-      return {
-        fromToken: params.baseToken,   // BTC
-        toToken: params.quoteToken,    // USDT
-        fromAmount,
-      };
-    }
-  }
-
-  private async handleApproval(
-    token: TokenMetadata,
-    amount: bigint,
-    spender: string
-  ) {
-    // Check and handle token approval
-  }
-
-  private async executeTransaction(quote: any): Promise<string> {
-    // Execute via wallet
-    return '';
-  }
-
-  private async waitForConfirmation(txHash: string, chainId: number) {
-    // Wait for blockchain confirmation
-  }
-
-  private async createTradeRecord(data: any) {
-    // Create trade in database
-    return null;
-  }
-
-  private async updatePosition(data: any) {
-    // Update position in database
-    return null;
-  }
-
-  private calculatePrice(quote: any): string {
-    return '0';
-  }
-
-  private getErrorCode(error: unknown): string {
-    return 'UNKNOWN_ERROR';
+  private toSmallestUnit(amount: string, decimals: number): string {
+    let value = amount.trim();
+    if (!value || value === '.' || isNaN(Number(value))) return '0';
+    const negative = value.startsWith('-');
+    if (negative) value = value.slice(1);
+    const [intPart = '0', fracPart = ''] = value.split('.');
+    const paddedFrac = fracPart.padEnd(decimals, '0').slice(0, decimals);
+    let result = (intPart + paddedFrac).replace(/^0+/, '') || '0';
+    if (negative && result !== '0') result = '-' + result;
+    return result;
   }
 }
 

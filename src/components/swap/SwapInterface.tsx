@@ -35,7 +35,7 @@ export function SwapInterface() {
   const [fromToken, setFromToken] = useState<SwapToken | null>(null);
   const [toToken, setToToken] = useState<SwapToken | null>(null);
   const [fromAmount, setFromAmount] = useState("");
-  
+
   // UI state
   const [showFromTokenModal, setShowFromTokenModal] = useState(false);
   const [showToTokenModal, setShowToTokenModal] = useState(false);
@@ -51,34 +51,34 @@ export function SwapInterface() {
   // Get balance for the selected from token
   const fromBalance = useMemo(() => {
     if (!fromToken) return 0;
-    
+
     if (fromChain === "solana") {
       // Handle both native SOL and wrapped SOL
-      const isSOL = 
+      const isSOL =
         fromToken.symbol === "SOL" ||
         fromToken.address === "So11111111111111111111111111111111111111112" ||
         fromToken.address === "11111111111111111111111111111111";
-      
+
       if (isSOL) {
         return solBalance;
       }
-      
+
       // For other tokens, check token balances
-      const found = solTokens.find(t => 
+      const found = solTokens.find(t =>
         t.mint.toLowerCase() === fromToken.address.toLowerCase() ||
         t.address.toLowerCase() === fromToken.address.toLowerCase()
       );
       return found?.amount ?? 0;
     } else {
       // Ethereum chain
-      const isETH = 
+      const isETH =
         fromToken.symbol === "ETH" ||
         fromToken.address === "0x0000000000000000000000000000000000000000";
-      
+
       if (isETH) {
         return ethBalance;
       }
-      
+
       const found = evmTokens.find(t => t.address.toLowerCase() === fromToken.address.toLowerCase());
       return found?.amount ?? 0;
     }
@@ -98,9 +98,9 @@ export function SwapInterface() {
   useEffect(() => {
     if (!fromToken && tokens[fromChain].length > 0) {
       // Try to select native token or USDT/USDC
-      const native = tokens[fromChain].find(t => 
+      const native = tokens[fromChain].find(t =>
         t.symbol === (fromChain === "solana" ? "SOL" : "ETH") ||
-        t.address === (fromChain === "solana" 
+        t.address === (fromChain === "solana"
           ? "So11111111111111111111111111111111111111112"
           : "0x0000000000000000000000000000000000000000")
       );
@@ -121,7 +121,13 @@ export function SwapInterface() {
   useEffect(() => {
     const timer = setTimeout(() => {
       if (fromToken && toToken && fromAmount && parseFloat(fromAmount) > 0 && fromAddress && toAddress) {
-        const rawAmount = (parseFloat(fromAmount) * Math.pow(10, fromToken.decimals)).toFixed(0);
+        // Convert human amount to smallest unit using string math (no floating-point)
+        const value = fromAmount.trim();
+        const decimals = fromToken.decimals;
+        const [intPart = '0', fracPart = ''] = value.split('.');
+        const paddedFrac = fracPart.padEnd(decimals, '0').slice(0, decimals);
+        const rawAmount = (intPart + paddedFrac).replace(/^0+/, '') || '0';
+
         getQuote({
           fromChain,
           toChain,
@@ -141,7 +147,7 @@ export function SwapInterface() {
   const handleSwapChains = () => {
     const tempChain = fromChain;
     const tempToken = fromToken;
-    
+
     setFromChain(toChain);
     setToChain(tempChain);
     setFromToken(toToken);
@@ -153,13 +159,13 @@ export function SwapInterface() {
   const handleSetMax = () => {
     if (fromBalance > 0) {
       // Leave some for gas if native token
-      const isNative = fromChain === "solana" 
-        ? (fromToken?.symbol === "SOL" || 
-           fromToken?.address === "So11111111111111111111111111111111111111112" ||
-           fromToken?.address === "11111111111111111111111111111111")
+      const isNative = fromChain === "solana"
+        ? (fromToken?.symbol === "SOL" ||
+          fromToken?.address === "So11111111111111111111111111111111111111112" ||
+          fromToken?.address === "11111111111111111111111111111111")
         : (fromToken?.symbol === "ETH" ||
-           fromToken?.address === "0x0000000000000000000000000000000000000000");
-      
+          fromToken?.address === "0x0000000000000000000000000000000000000000");
+
       const maxAmount = isNative ? Math.max(0, fromBalance - 0.01) : fromBalance;
       setFromAmount(maxAmount.toString());
     }
@@ -168,10 +174,10 @@ export function SwapInterface() {
   // Execute the swap
   const handleSwap = useCallback(async (pin: string) => {
     if (!quote) return;
-    
+
     setError(null);
     setShowPinModal(false);
-    
+
     try {
       const txHash = await executeSwap(quote, pin);
       setCurrentTxHash(txHash);
@@ -265,7 +271,7 @@ export function SwapInterface() {
               placeholder="0.00"
               className="flex-1 bg-transparent border-0 text-2xl font-semibold text-dark dark:text-white placeholder:text-muted focus:ring-0 p-0"
             />
-            
+
             <button
               onClick={() => setShowFromTokenModal(true)}
               className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-black rounded-xl hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
@@ -333,7 +339,7 @@ export function SwapInterface() {
                 <span className="text-muted">0.00</span>
               )}
             </div>
-            
+
             <button
               onClick={() => setShowToTokenModal(true)}
               className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-black rounded-xl hover:bg-gray-100 dark:hover:bg-gray-900 transition-colors"
@@ -393,11 +399,10 @@ export function SwapInterface() {
         <button
           onClick={() => setShowPinModal(true)}
           disabled={!canSwap}
-          className={`w-full py-4 rounded-xl font-semibold text-lg transition-all ${
-            canSwap
+          className={`w-full py-4 rounded-xl font-semibold text-lg transition-all ${canSwap
               ? "bg-primary text-white hover:bg-primary/90"
               : "bg-lightgray dark:bg-darkborder text-muted cursor-not-allowed"
-          }`}
+            }`}
         >
           {executing ? (
             <span className="flex items-center justify-center gap-2">
