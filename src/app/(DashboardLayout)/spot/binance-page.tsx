@@ -12,7 +12,6 @@ import BinanceBottomPanel from '@/components/spot/BinanceBottomPanel';
 import LiveChart from '@/components/spot/LiveChart';
 import MarketTrades from '@/components/spot/MarketTrades';
 import MobileTradingModal from '@/components/spot/MobileTradingModal';
-import Logo from '@/app/(DashboardLayout)/layout/shared/logo/Logo';
 
 const AVAILABLE_PAIRS = ['BTC-USDT', 'ETH-USDT', 'SOL-USDT'];
 
@@ -235,7 +234,12 @@ export default function BinanceSpotPage() {
         {/* Left: Logo + Nav */}
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
-            <Logo />
+            <Image
+              src="/worldstreet-logo/WorldStreet4x.png"
+              alt="WorldStreet"
+              width={28}
+              height={28}
+            />
             <span className="text-base font-semibold text-white">WorldStreet</span>
           </div>
           <nav className="flex items-center gap-5">
@@ -265,19 +269,21 @@ export default function BinanceSpotPage() {
       {/* Mobile Header */}
       <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-[#2b3139] bg-[#181a20]">
         <div className="flex items-center gap-2">
-          <Icon icon="cryptocurrency:btc" width={18} className="text-[#fcd535]" />
+          <Image
+            src="/worldstreet-logo/WorldStreet4x.png"
+            alt="WorldStreet"
+            width={24}
+            height={24}
+          />
           <span className="text-sm font-semibold text-white">WorldStreet</span>
         </div>
         <div className="flex items-center gap-3">
-          <button className="p-2">
-            <Icon icon="ph:magnifying-glass" width={20} className="text-[#848e9c]" />
-          </button>
-          <button className="p-2">
-            <Icon icon="ph:list" width={20} className="text-[#848e9c]" />
-          </button>
-          <button className="p-2">
-            <Icon icon="ph:gear" width={20} className="text-[#848e9c]" />
-          </button>
+          <Link href="/assets" className="p-2">
+            <Icon icon="ph:wallet" width={20} className="text-[#848e9c] hover:text-white transition-colors" />
+          </Link>
+          <Link href="/futures" className="p-2">
+            <Icon icon="ph:chart-line" width={20} className="text-[#848e9c] hover:text-white transition-colors" />
+          </Link>
         </div>
       </div>
 
