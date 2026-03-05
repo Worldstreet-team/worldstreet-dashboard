@@ -14,11 +14,11 @@ import { formatUnits } from 'viem';
 // ═══════════════════════════════════════════════════════════════════════════
 
 export const SLIPPAGE_CONFIG = {
-  // Base slippage in basis points (50 BPS = 0.5%)
-  BASE_BPS: 50,
+  // Base slippage in basis points (100 BPS = 1.0%)
+  BASE_BPS: 100,
   
-  // Minimum allowed slippage (10 BPS = 0.1%)
-  MIN_BPS: 10,
+  // Minimum allowed slippage (50 BPS = 0.5%)
+  MIN_BPS: 50,
   
   // Maximum allowed slippage (500 BPS = 5%)
   MAX_BPS: 500,

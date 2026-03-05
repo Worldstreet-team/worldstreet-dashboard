@@ -16,11 +16,11 @@ export interface ValidationResult {
 export const SLIPPAGE_CONFIG = {
   MIN: 0.1, // 0.1%
   MAX: 5.0, // 5%
-  DEFAULT: 0.5, // 0.5%
+  DEFAULT: 1.0, // 1.0% - realistic for DEX swaps
   RECOMMENDED: {
-    STABLE: 0.1, // Stablecoin swaps
-    MAJOR: 0.5, // BTC, ETH
-    VOLATILE: 1.0, // Altcoins
+    STABLE: 0.5, // Stablecoin swaps (increased from 0.1%)
+    MAJOR: 1.0, // BTC, ETH (increased from 0.5%)
+    VOLATILE: 2.0, // Altcoins (increased from 1.0%)
   }
 } as const;
 
