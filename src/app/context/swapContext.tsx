@@ -250,7 +250,7 @@ export function SwapProvider({ children }: { children: ReactNode }) {
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [executing, setExecuting] = useState(false);
   const [swapStatus, setSwapStatus] = useState<SwapStatus | null>(null);
-  const [slippage, setSlippage] = useState(1.0); // 1.0% default - more realistic for DEX swaps
+  const [slippage, setSlippage] = useState(5.0); // 5.0% - high tolerance for all market conditions
 
   // Fetch available tokens for a chain
   const fetchTokens = useCallback(async (chain: ChainKey) => {

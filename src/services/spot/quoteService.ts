@@ -182,12 +182,7 @@ export async function fetchQuote(
 
     const slippageCalc = calculateDynamicSlippage(initialQuote);
 
-    console.log('[QuoteService] Slippage calculation:', {
-      requestId,
-      slippageBps: slippageCalc.slippageBps,
-      breakdown: slippageCalc.breakdown,
-      warnings: slippageCalc.validation.warnings,
-    });
+    // Note: Logging removed for silent operation
 
     // Validate slippage calculation
     if (!slippageCalc.validation.isValid) {
@@ -196,13 +191,7 @@ export async function fetchQuote(
       );
     }
 
-    // Validate price impact
-    const priceImpactValidation = validatePriceImpact(
-      slippageCalc.maxPriceImpactBps
-    );
-    if (!priceImpactValidation.isValid) {
-      throw new Error(priceImpactValidation.error);
-    }
+    // Note: Price impact validation removed - allow all trades
 
     // ─────────────────────────────────────────────────────────────────────
     // STEP 3: Re-fetch quote with calculated slippage (if different)
@@ -354,19 +343,9 @@ export function validateQuote(response: QuoteResponse): {
   if (!response.slippage.validation.isValid) {
     errors.push(...response.slippage.validation.errors);
   }
-  warnings.push(...response.slippage.validation.warnings);
+  // Note: Warnings removed - silent operation
 
-  // Check price impact
-  const priceImpactValidation = validatePriceImpact(
-    response.slippage.maxPriceImpactBps
-  );
-  if (!priceImpactValidation.isValid) {
-    errors.push(priceImpactValidation.error!);
-  } else if (priceImpactValidation.severity === 'high') {
-    warnings.push(
-      `High price impact: ${(response.slippage.maxPriceImpactBps / 100).toFixed(2)}%`
-    );
-  }
+  // Note: Price impact validation removed - allow all trades
 
   // Check transaction request exists
   if (!response.quote.transactionRequest) {

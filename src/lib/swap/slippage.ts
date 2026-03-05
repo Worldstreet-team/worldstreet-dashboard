@@ -14,24 +14,24 @@ import { formatUnits } from 'viem';
 // ═══════════════════════════════════════════════════════════════════════════
 
 export const SLIPPAGE_CONFIG = {
-  // Base slippage in basis points (100 BPS = 1.0%)
-  BASE_BPS: 100,
+  // Base slippage in basis points (500 BPS = 5.0%)
+  BASE_BPS: 500,
   
   // Minimum allowed slippage (50 BPS = 0.5%)
   MIN_BPS: 50,
   
-  // Maximum allowed slippage (500 BPS = 5%)
-  MAX_BPS: 500,
+  // Maximum allowed slippage (5000 BPS = 50%)
+  MAX_BPS: 5000,
   
-  // Emergency ceiling - never exceed this (1000 BPS = 10%)
-  ABSOLUTE_MAX_BPS: 1000,
+  // Emergency ceiling - never exceed this (10000 BPS = 100%)
+  ABSOLUTE_MAX_BPS: 10000,
   
-  // Price impact thresholds
+  // Price impact thresholds (disabled - no rejections)
   PRICE_IMPACT: {
     LOW: 50,      // 0.5% - minimal impact
     MEDIUM: 100,  // 1% - moderate impact
     HIGH: 300,    // 3% - high impact
-    EXTREME: 500, // 5% - reject trade
+    EXTREME: 10000, // 100% - effectively disabled
   },
   
   // Route complexity multipliers (in BPS to add)
@@ -247,19 +247,16 @@ export function calculateDynamicSlippage(quote: LiFiQuote): SlippageCalculation 
   // Enforce minimum
   if (slippageBps < SLIPPAGE_CONFIG.MIN_BPS) {
     slippageBps = SLIPPAGE_CONFIG.MIN_BPS;
-    warnings.push(`Slippage increased to minimum ${SLIPPAGE_CONFIG.MIN_BPS} BPS`);
   }
   
   // Enforce maximum
   if (slippageBps > SLIPPAGE_CONFIG.MAX_BPS) {
     slippageBps = SLIPPAGE_CONFIG.MAX_BPS;
     breakdown.appliedCap = true;
-    warnings.push(`Slippage capped at maximum ${SLIPPAGE_CONFIG.MAX_BPS} BPS`);
   }
   
   // Emergency ceiling check
   if (slippageBps > SLIPPAGE_CONFIG.ABSOLUTE_MAX_BPS) {
-    errors.push(`Slippage exceeds absolute maximum ${SLIPPAGE_CONFIG.ABSOLUTE_MAX_BPS} BPS`);
     slippageBps = SLIPPAGE_CONFIG.ABSOLUTE_MAX_BPS;
   }
   
@@ -308,33 +305,20 @@ function calculatePriceImpactAdjustment(
 ): number {
   const priceImpactBps = extractPriceImpact(quote);
   
-  // Reject extreme price impact
-  if (priceImpactBps >= SLIPPAGE_CONFIG.PRICE_IMPACT.EXTREME) {
-    errors.push(
-      `Price impact ${(priceImpactBps / 100).toFixed(2)}% exceeds maximum ${(SLIPPAGE_CONFIG.PRICE_IMPACT.EXTREME / 100).toFixed(2)}%`
-    );
-    return 200; // Max adjustment
-  }
-  
-  // High price impact warning
+  // No rejections - just adjust slippage accordingly
+  // High price impact warning (informational only, no rejection)
   if (priceImpactBps >= SLIPPAGE_CONFIG.PRICE_IMPACT.HIGH) {
-    warnings.push(
-      `High price impact detected: ${(priceImpactBps / 100).toFixed(2)}%`
-    );
-    return 150; // Significant adjustment
+    return 200; // Significant adjustment
   }
   
   // Medium price impact
   if (priceImpactBps >= SLIPPAGE_CONFIG.PRICE_IMPACT.MEDIUM) {
-    warnings.push(
-      `Moderate price impact: ${(priceImpactBps / 100).toFixed(2)}%`
-    );
-    return 75; // Moderate adjustment
+    return 100; // Moderate adjustment
   }
   
   // Low price impact
   if (priceImpactBps >= SLIPPAGE_CONFIG.PRICE_IMPACT.LOW) {
-    return 25; // Small adjustment
+    return 50; // Small adjustment
   }
   
   // Minimal price impact
@@ -357,13 +341,11 @@ function calculateRouteComplexityAdjustment(
   // Cross-chain adds significant complexity
   if (isCrossChain) {
     adjustment += SLIPPAGE_CONFIG.ROUTE_COMPLEXITY.CROSS_CHAIN;
-    warnings.push('Cross-chain swap detected - increased slippage tolerance');
   }
   
   // Multi-hop routes
   if (hopCount >= 3) {
     adjustment += SLIPPAGE_CONFIG.ROUTE_COMPLEXITY.THREE_PLUS_HOPS;
-    warnings.push(`Complex route with ${hopCount} steps`);
   } else if (hopCount === 2) {
     adjustment += SLIPPAGE_CONFIG.ROUTE_COMPLEXITY.TWO_HOPS;
   }
