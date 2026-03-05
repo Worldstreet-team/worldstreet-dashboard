@@ -63,69 +63,11 @@ export default function BinanceSpotPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showPairSelector]);
 
-  // Fetch real-time data from KuCoin
+  // Fetch real-time data from KuCoin - only fetch selected pair
   useEffect(() => {
     const fetchPairData = async () => {
       try {
-        const dataPromises = AVAILABLE_PAIRS.map(async (pair) => {
-          const response = await fetch(`/api/kucoin/ticker?symbol=${pair}`);
-          
-          if (!response.ok) {
-            throw new Error(`Failed to fetch ${pair}`);
-          }
-
-          const result = await response.json();
-          
-          if (result.code !== '200000' || !result.data) {
-            throw new Error(`Invalid response for ${pair}`);
-          }
-
-          const data = result.data;
-          const pairName = pair.split('-')[0];
-          const fullName = pairName === 'BTC' ? 'Bitcoin' : 
-                          pairName === 'ETH' ? 'Ethereum' : 
-                          pairName === 'SOL' ? 'Solana' : pairName;
-
-          return {
-            pair,
-            data: {
-              name: fullName,
-              price: parseFloat(data.last) || 0,
-              change24h: parseFloat(data.changeRate) * 100 || 0,
-              high24h: parseFloat(data.high) || 0,
-              low24h: parseFloat(data.low) || 0,
-              volume24h: parseFloat(data.vol) || 0
-            }
-          };
-        });
-
-        const results = await Promise.all(dataPromises);
-        const newPairData: Record<string, PairData> = {};
-        
-        results.forEach(({ pair, data }) => {
-          newPairData[pair] = data;
-        });
-
-        setPairData(newPairData);
-        setLoading(false);
-      } catch (error) {
-        console.error('Error fetching pair data:', error);
-        setLoading(false);
-      }
-    };
-
-    fetchPairData();
-    const interval = setInterval(fetchPairData, 10000); // Update every 10 seconds
-
-    return () => clearInterval(interval);
-  }, []);
-
-  // Fetch specific pair data when selectedPair changes
-  useEffect(() => {
-    const fetchSelectedPairData = async () => {
-      if (!selectedPair) return;
-      
-      try {
+        // Always fetch the currently selected pair
         const response = await fetch(`/api/kucoin/ticker?symbol=${selectedPair}`);
         
         if (!response.ok) {
@@ -155,21 +97,21 @@ export default function BinanceSpotPage() {
             volume24h: parseFloat(data.vol) || 0
           }
         }));
+        
+        setLoading(false);
       } catch (error) {
-        console.error('Error fetching selected pair data:', error);
+        console.error('Error fetching pair data:', error);
+        setLoading(false);
       }
     };
 
-    fetchSelectedPairData();
-  }, [selectedPair]);
+    fetchPairData();
+    const interval = setInterval(fetchPairData, 10000); // Update every 10 seconds
 
-  // Update price when pair changes
-  useEffect(() => {
-    const currentPairData = pairData[selectedPair];
-    if (currentPairData) {
-      // Data is already being updated by the fetch interval
-    }
-  }, [selectedPair, pairData]);
+    return () => clearInterval(interval);
+  }, [selectedPair]); // Re-fetch when selectedPair changes
+
+  // Removed duplicate fetch effect - now handled by main effect above
 
   const handleUpdateLevels = (sl: string, tp: string) => {
     setStopLoss(sl);
@@ -185,32 +127,37 @@ export default function BinanceSpotPage() {
     setActivePositionTPSL({ symbol: normalizedSymbol, takeProfit: tp, stopLoss: sl });
   }, []);
 
-  const handleSelectPair = (pair: string, chain?: 'solana' | 'ethereum' | 'bitcoin') => {
+  const handleSelectPair = useCallback((pair: string, chain?: 'solana' | 'ethereum' | 'bitcoin') => {
+    console.log('[BinanceSpotPage] Pair selected:', pair, 'Chain:', chain);
+    
     setSelectedPair(pair);
     setShowPairSelector(false);
     
     // Map chain to the format expected by trading components
+    let newChain = 'evm'; // Default
+    
     if (chain === 'solana') {
-      setSelectedChain('sol');
+      newChain = 'sol';
     } else if (chain === 'ethereum') {
-      setSelectedChain('evm');
+      newChain = 'evm';
     } else if (chain === 'bitcoin') {
-      setSelectedChain('evm'); // Bitcoin uses EVM chain (wrapped BTC on Ethereum)
+      newChain = 'evm'; // Bitcoin uses EVM chain (wrapped BTC on Ethereum)
     } else {
       // Fallback: determine chain from pair name
       const [baseAsset] = pair.split('-');
       const asset = baseAsset.toUpperCase();
       
-      if (asset === 'SOL') {
-        setSelectedChain('sol');
-      } else if (asset === 'ETH' || asset === 'BTC') {
-        setSelectedChain('evm');
-      } else {
-        setSelectedChain('evm'); // Default to EVM
+      if (asset === 'SOL' || asset === 'SOLANA') {
+        newChain = 'sol';
+      } else if (asset === 'ETH' || asset === 'BTC' || asset === 'ETHEREUM' || asset === 'BITCOIN') {
+        newChain = 'evm';
       }
     }
     
-    // Immediately fetch the new pair's data to avoid showing 0.00
+    console.log('[BinanceSpotPage] Setting chain to:', newChain);
+    setSelectedChain(newChain);
+    
+    // Immediately fetch the new pair's data
     const fetchNewPairData = async () => {
       try {
         const response = await fetch(`/api/kucoin/ticker?symbol=${pair}`);
@@ -248,7 +195,7 @@ export default function BinanceSpotPage() {
     };
     
     fetchNewPairData();
-  };
+  }, []);
 
   const handleBuyClick = () => {
     setTradingSide('buy');
@@ -374,20 +321,28 @@ export default function BinanceSpotPage() {
                   {/* Desktop Pair Selector Dropdown */}
                   {showPairSelector && (
                     <div className="absolute left-0 top-full mt-1 bg-[#2b3139] rounded-lg shadow-lg z-50 min-w-[200px]">
-                      {Object.keys(pairData).map((pair) => (
-                        <button
-                          key={pair}
-                          onClick={() => handleSelectPair(pair)}
-                          className={`w-full px-4 py-3 text-left hover:bg-[#1e2329] transition-colors first:rounded-t-lg last:rounded-b-lg ${
-                            selectedPair === pair ? 'bg-[#1e2329]' : ''
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-white font-medium text-sm">{pair.replace('-', '/')}</span>
-                            <span className="text-[#848e9c] text-xs">${pairData[pair]?.price.toFixed(2) || '0.00'}</span>
-                          </div>
-                        </button>
-                      ))}
+                      {AVAILABLE_PAIRS.map((pair) => {
+                        // Determine chain for each pair
+                        const [baseAsset] = pair.split('-');
+                        const chain = baseAsset === 'SOL' ? 'solana' : 
+                                     baseAsset === 'ETH' ? 'ethereum' : 
+                                     baseAsset === 'BTC' ? 'bitcoin' : 'ethereum';
+                        
+                        return (
+                          <button
+                            key={pair}
+                            onClick={() => handleSelectPair(pair, chain as 'solana' | 'ethereum' | 'bitcoin')}
+                            className={`w-full px-4 py-3 text-left hover:bg-[#1e2329] transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                              selectedPair === pair ? 'bg-[#1e2329]' : ''
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-white font-medium text-sm">{pair.replace('-', '/')}</span>
+                              <span className="text-[#848e9c] text-xs">${pairData[pair]?.price.toFixed(2) || '0.00'}</span>
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -486,20 +441,28 @@ export default function BinanceSpotPage() {
                 {/* Pair Selector Dropdown */}
                 {showPairSelector && (
                   <div className="absolute left-0 top-full mt-2 bg-[#2b3139] rounded-lg shadow-lg z-10 min-w-[200px] max-h-60 overflow-y-auto scrollbar-hide">
-                    {Object.keys(pairData).map((pair) => (
-                      <button
-                        key={pair}
-                        onClick={() => handleSelectPair(pair)}
-                        className={`w-full px-4 py-3 text-left hover:bg-[#181a20] transition-colors ${
-                          selectedPair === pair ? 'bg-[#181a20]' : ''
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-white font-medium">{pair.replace('-', '/')}</span>
-                          <span className="text-[#848e9c] text-sm">${pairData[pair]?.price.toFixed(2) || '0.00'}</span>
-                        </div>
-                      </button>
-                    ))}
+                    {AVAILABLE_PAIRS.map((pair) => {
+                      // Determine chain for each pair
+                      const [baseAsset] = pair.split('-');
+                      const chain = baseAsset === 'SOL' ? 'solana' : 
+                                   baseAsset === 'ETH' ? 'ethereum' : 
+                                   baseAsset === 'BTC' ? 'bitcoin' : 'ethereum';
+                      
+                      return (
+                        <button
+                          key={pair}
+                          onClick={() => handleSelectPair(pair, chain as 'solana' | 'ethereum' | 'bitcoin')}
+                          className={`w-full px-4 py-3 text-left hover:bg-[#181a20] transition-colors ${
+                            selectedPair === pair ? 'bg-[#181a20]' : ''
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-white font-medium">{pair.replace('-', '/')}</span>
+                            <span className="text-[#848e9c] text-sm">${pairData[pair]?.price.toFixed(2) || '0.00'}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
