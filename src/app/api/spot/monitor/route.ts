@@ -4,15 +4,14 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { getAuthUser } from '@/lib/auth';
 import { transactionMonitor } from '@/services/spot/TransactionMonitor';
 
 // POST - Start monitoring a transaction
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const authUser = await getAuthUser();
+    if (!authUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -31,7 +30,7 @@ export async function POST(request: NextRequest) {
       txHash,
       fromChainId,
       toChainId,
-      session.user.email
+      authUser.userId
     );
 
     return NextResponse.json({ success: true, monitoring: txHash });
@@ -45,10 +44,10 @@ export async function POST(request: NextRequest) {
 }
 
 // GET - Get monitored transactions
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const authUser = await getAuthUser();
+    if (!authUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

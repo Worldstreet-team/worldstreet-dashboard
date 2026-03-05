@@ -4,27 +4,26 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import dbConnect from '@/lib/mongodb';
+import { getAuthUser } from '@/lib/auth';
+import { connectDB } from '@/lib/mongodb';
 import SpotPosition from '@/models/SpotPosition';
 import PositionHistory from '@/models/PositionHistory';
 
 // GET - Fetch positions
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const authUser = await getAuthUser();
+    if (!authUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await dbConnect();
+    await connectDB();
 
     const { searchParams } = new URL(request.url);
     const pair = searchParams.get('pair');
     const status = searchParams.get('status') || 'OPEN';
 
-    const query: any = { userId: session.user.email };
+    const query: any = { userId: authUser.userId };
     if (pair) {
       query.pair = pair;
     }
@@ -49,12 +48,12 @@ export async function GET(request: NextRequest) {
 // PATCH - Update position (TP/SL)
 export async function PATCH(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const authUser = await getAuthUser();
+    if (!authUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await dbConnect();
+    await connectDB();
 
     const body = await request.json();
     const { positionId, takeProfitPrice, stopLossPrice } = body;
@@ -68,7 +67,7 @@ export async function PATCH(request: NextRequest) {
 
     const position = await SpotPosition.findOne({
       _id: positionId,
-      userId: session.user.email,
+      userId: authUser.userId,
     });
 
     if (!position) {

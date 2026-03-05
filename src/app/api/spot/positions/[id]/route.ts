@@ -4,9 +4,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import dbConnect from '@/lib/mongodb';
+import { getAuthUser } from '@/lib/auth';
+import { connectDB } from '@/lib/mongodb';
 import SpotPosition from '@/models/SpotPosition';
 import PositionHistory from '@/models/PositionHistory';
 
@@ -16,16 +15,16 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const authUser = await getAuthUser();
+    if (!authUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await dbConnect();
+    await connectDB();
 
     const position = await SpotPosition.findOne({
       _id: params.id,
-      userId: session.user.email,
+      userId: authUser.userId,
     }).lean();
 
     if (!position) {
@@ -58,16 +57,16 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const authUser = await getAuthUser();
+    if (!authUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await dbConnect();
+    await connectDB();
 
     const position = await SpotPosition.findOne({
       _id: params.id,
-      userId: session.user.email,
+      userId: authUser.userId,
       status: 'OPEN',
     });
 

@@ -4,9 +4,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import dbConnect from '@/lib/mongodb';
+import { getAuthUser } from '@/lib/auth';
+import { connectDB } from '@/lib/mongodb';
 import SpotTrade from '@/models/SpotTrade';
 import SpotPosition from '@/models/SpotPosition';
 import PositionHistory from '@/models/PositionHistory';
@@ -14,18 +13,18 @@ import PositionHistory from '@/models/PositionHistory';
 // GET - Fetch trade history
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const authUser = await getAuthUser();
+    if (!authUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await dbConnect();
+    await connectDB();
 
     const { searchParams } = new URL(request.url);
     const pair = searchParams.get('pair');
     const limit = parseInt(searchParams.get('limit') || '50');
 
-    const query: any = { userId: session.user.email };
+    const query: any = { userId: authUser.userId };
     if (pair) {
       query.pair = pair;
     }
@@ -48,12 +47,12 @@ export async function GET(request: NextRequest) {
 // POST - Save new trade and update position
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const authUser = await getAuthUser();
+    if (!authUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await dbConnect();
+    await connectDB();
 
     const body = await request.json();
     const {
@@ -82,7 +81,7 @@ export async function POST(request: NextRequest) {
 
     // Create trade record
     const trade = await SpotTrade.create({
-      userId: session.user.email,
+      userId: authUser.userId,
       txHash,
       chainId: chain === 'ethereum' ? 1 : 1151111081099710, // ETH or SOL
       pair,
@@ -102,7 +101,7 @@ export async function POST(request: NextRequest) {
 
     // Update or create position
     const position = await updatePosition({
-      userId: session.user.email,
+      userId: authUser.userId,
       pair,
       side: side.toUpperCase(),
       chainId: chain === 'ethereum' ? 1 : 1151111081099710,
