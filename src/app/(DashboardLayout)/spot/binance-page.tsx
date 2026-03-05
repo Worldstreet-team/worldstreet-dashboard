@@ -3,6 +3,8 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { usePathname } from 'next/navigation';
+import Link from 'next/link';
+import Image from 'next/image';
 import BinanceOrderBook from '@/components/spot/BinanceOrderBook';
 import BinanceMarketList from '@/components/spot/BinanceMarketList';
 import BinanceOrderForm from '@/components/spot/BinanceOrderForm';
@@ -10,6 +12,7 @@ import BinanceBottomPanel from '@/components/spot/BinanceBottomPanel';
 import LiveChart from '@/components/spot/LiveChart';
 import MarketTrades from '@/components/spot/MarketTrades';
 import MobileTradingModal from '@/components/spot/MobileTradingModal';
+import Logo from '@/app/(DashboardLayout)/layout/shared/logo/Logo';
 
 const AVAILABLE_PAIRS = ['BTC-USDT', 'ETH-USDT', 'SOL-USDT'];
 
@@ -231,34 +234,31 @@ export default function BinanceSpotPage() {
       <div className="hidden md:flex h-12 items-center justify-between px-4 border-b border-[#2b3139] bg-[#181a20] shrink-0">
         {/* Left: Logo + Nav */}
         <div className="flex items-center gap-6">
-          <div className="flex items-center gap-1.5">
-            <Icon icon="cryptocurrency:btc" width={20} className="text-[#fcd535]" />
+          <div className="flex items-center gap-2">
+            <Logo />
             <span className="text-base font-semibold text-white">WorldStreet</span>
           </div>
           <nav className="flex items-center gap-5">
-            <button className="text-[13px] text-[#848e9c] hover:text-white transition-colors">Markets</button>
-            <button className="text-[13px] text-[#fcd535] font-medium">Trade</button>
-            <button className="text-[13px] text-[#848e9c] hover:text-white transition-colors">Futures</button>
-            <button className="text-[13px] text-[#848e9c] hover:text-white transition-colors">Earn</button>
+            <Link href="/assets" className="text-[13px] text-[#848e9c] hover:text-white transition-colors">
+              Assets
+            </Link>
+            <Link href="/spot" className="text-[13px] text-[#fcd535] font-medium">
+              Spot
+            </Link>
+            <Link href="/futures" className="text-[13px] text-[#848e9c] hover:text-white transition-colors">
+              Futures
+            </Link>
           </nav>
         </div>
 
-        {/* Right: Search + Account */}
+        {/* Right: Account */}
         <div className="flex items-center gap-3">
-          <div className="relative">
-            <Icon icon="ph:magnifying-glass" width={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#848e9c]" />
-            <input
-              type="text"
-              placeholder="Search"
-              className="pl-8 pr-3 py-1.5 bg-[#2b3139] border-none rounded text-[13px] text-white placeholder:text-[#5e6673] focus:outline-none focus:bg-[#2b3139] w-52"
-            />
-          </div>
-          <button className="px-3.5 py-1.5 bg-[#fcd535] hover:bg-[#fcd535]/90 text-[#181a20] rounded text-[13px] font-semibold transition-colors">
-            Log In
-          </button>
-          <button className="px-3.5 py-1.5 bg-transparent hover:bg-[#2b3139] text-[#fcd535] rounded text-[13px] font-semibold transition-colors">
-            Sign Up
-          </button>
+          <Link href="/" className="px-3.5 py-1.5 bg-transparent hover:bg-[#2b3139] text-white rounded text-[13px] font-semibold transition-colors">
+            Dashboard
+          </Link>
+          <Link href="/tron-swap" className="px-3.5 py-1.5 bg-[#fcd535] hover:bg-[#fcd535]/90 text-[#181a20] rounded text-[13px] font-semibold transition-colors">
+            Tron-swap
+          </Link>
         </div>
       </div>
 
