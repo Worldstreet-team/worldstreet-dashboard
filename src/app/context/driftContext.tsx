@@ -642,8 +642,12 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       }
       
       // Then deposit net amount to Drift
+      // Import BN for proper amount encoding
+      const BN = (await import('bn.js')).default;
+      const depositAmount = new BN(Math.floor(netAmount * 1e6)); // Convert to USDC base units (6 decimals)
+      
       const txSignature = await client.deposit(
-        Math.floor(netAmount * 1e6), // Convert to USDC base units (6 decimals)
+        depositAmount,
         0, // USDC market index
         client.getUser().getUserAccountPublicKey()
       );
@@ -683,8 +687,12 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       console.log(`[DriftContext] Withdrawing ${amount} USDC from Drift`);
       
       // Withdraw USDC
+      // Import BN for proper amount encoding
+      const BN = (await import('bn.js')).default;
+      const withdrawAmount = new BN(Math.floor(amount * 1e6)); // Convert to USDC base units (6 decimals)
+      
       const txSignature = await client.withdraw(
-        Math.floor(amount * 1e6), // Convert to USDC base units (6 decimals)
+        withdrawAmount,
         0, // USDC market index
         client.getUser().getUserAccountPublicKey()
       );
@@ -727,13 +735,16 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       }
       
       // Place order
-      const baseAmount = size * 1e9;
+      // Import BN for proper amount encoding
+      const BN = (await import('bn.js')).default;
+      const baseAmount = new BN(Math.floor(size * 1e9));
+      
       const orderParams = {
         orderType: 'market',
         marketIndex,
         direction,
         baseAssetAmount: baseAmount,
-        price: 0,
+        price: new BN(0),
       };
       
       const txSignature = await client.placePerpOrder(orderParams);
@@ -780,7 +791,9 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       }
       
       // Close position by placing opposite order
-      const baseAmount = Math.abs(position.baseAssetAmount.toNumber());
+      // Import BN for proper amount encoding
+      const BN = (await import('bn.js')).default;
+      const baseAmount = new BN(Math.abs(position.baseAssetAmount.toNumber()));
       const direction = position.baseAssetAmount.toNumber() > 0 ? 'short' : 'long';
       
       const orderParams = {
@@ -788,7 +801,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         marketIndex,
         direction,
         baseAssetAmount: baseAmount,
-        price: 0,
+        price: new BN(0),
         reduceOnly: true,
       };
       
