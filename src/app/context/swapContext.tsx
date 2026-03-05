@@ -119,11 +119,16 @@ export function formatSwapError(err: unknown, chainName?: string): string {
   const msg = err instanceof Error ? err.message : typeof err === "string" ? err : String(err);
   const chain = chainName || "Swap";
 
+  // Log the raw error for debugging
+  console.error(`[formatSwapError] Raw error for ${chain}:`, err);
+
   if (msg.includes("insufficient") || msg.includes("Attempt to debit an account")) {
     return `Insufficient ${chain} balance. Your wallet might be empty or missing funds for gas.`;
   }
   if (msg.includes("Simulation failed")) {
-    return `Transaction simulation failed on ${chain}. This usually means insufficient funds or an invalid transaction state.`;
+    // Include more details from the original error
+    const errorDetails = err instanceof Error && err.stack ? `\n\nDetails: ${err.stack.split('\n')[0]}` : '';
+    return `Transaction simulation failed on ${chain}. This usually means insufficient funds or an invalid transaction state.${errorDetails}`;
   }
   if (msg.includes("Could not find token")) {
     return `Asset identification error: Li.Fi could not locate the token on the destination chain.`;
@@ -479,6 +484,13 @@ export function SwapProvider({ children }: { children: ReactNode }) {
           const { blockhash: sendBlockhash, lastValidBlockHeight: sendBlockHeight } =
             await connection.getLatestBlockhash("confirmed");
 
+          console.log('[Swap] Sending Solana transaction...', {
+            fromToken: swapQuote.fromToken.symbol,
+            toToken: swapQuote.toToken.symbol,
+            fromAmount: swapQuote.fromAmount,
+            signer: keypair.publicKey.toString(),
+          });
+
           // Send the transaction
           const signature = await connection.sendTransaction(transaction, {
             maxRetries: 5,
@@ -602,6 +614,17 @@ export function SwapProvider({ children }: { children: ReactNode }) {
           return tx.hash;
         }
       } catch (err) {
+        // Log the full error details for debugging
+        console.error('[Swap] Transaction execution failed:', {
+          error: err,
+          errorMessage: err instanceof Error ? err.message : String(err),
+          errorStack: err instanceof Error ? err.stack : undefined,
+          chain: swapQuote.fromChain,
+          fromToken: swapQuote.fromToken.symbol,
+          toToken: swapQuote.toToken.symbol,
+          fromAmount: swapQuote.fromAmount,
+        });
+
         // Re-throw with formatted message
         throw new Error(
           formatSwapError(
