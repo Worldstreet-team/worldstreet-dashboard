@@ -41,6 +41,7 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const lastSequenceRef = useRef<number>(0);
+  const currentTopicRef = useRef<string | null>(null);
 
   useEffect(() => {
     connectWebSocket();
@@ -50,6 +51,17 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
         clearTimeout(reconnectTimeoutRef.current);
       }
       if (wsRef.current) {
+        // Unsubscribe from current topic before closing
+        if (currentTopicRef.current) {
+          const unsubscribeMessage = {
+            id: Date.now().toString(),
+            type: 'unsubscribe',
+            topic: currentTopicRef.current,
+            privateChannel: false,
+            response: true
+          };
+          wsRef.current.send(JSON.stringify(unsubscribeMessage));
+        }
         wsRef.current.close();
       }
     };
@@ -80,16 +92,32 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
         console.log('KuCoin WebSocket connected');
         setConnected(true);
         
-        // Subscribe to order book updates (depth 50 for better visualization)
+        // Unsubscribe from previous topic if exists
+        if (currentTopicRef.current && currentTopicRef.current !== `/spotMarket/level2Depth50:${selectedPair}`) {
+          const unsubscribeMessage = {
+            id: Date.now().toString(),
+            type: 'unsubscribe',
+            topic: currentTopicRef.current,
+            privateChannel: false,
+            response: true
+          };
+          ws.send(JSON.stringify(unsubscribeMessage));
+          console.log('Unsubscribed from:', currentTopicRef.current);
+        }
+        
+        // Subscribe to new order book updates
+        const newTopic = `/spotMarket/level2Depth50:${selectedPair}`;
         const subscribeMessage = {
           id: Date.now().toString(),
           type: 'subscribe',
-          topic: `/spotMarket/level2Depth50:${selectedPair}`,
+          topic: newTopic,
           privateChannel: false,
           response: true
         };
         
         ws.send(JSON.stringify(subscribeMessage));
+        currentTopicRef.current = newTopic;
+        console.log('Subscribed to:', newTopic);
       };
 
       ws.onmessage = (event) => {
@@ -98,14 +126,25 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
           
           // Handle subscription confirmation
           if (data.type === 'ack') {
-            console.log('Subscription confirmed');
+            console.log('Subscription confirmed:', data.id);
             return;
           }
 
-          // Handle order book updates
+          // Handle unsubscribe confirmation
+          if (data.type === 'ack' && data.topic) {
+            console.log('Unsubscribe confirmed:', data.topic);
+            return;
+          }
+
+          // Handle order book updates - only process if it's for the current pair
           if (data.type === 'message' && data.topic?.includes('level2Depth50')) {
-            const orderBookData = data.data;
-            processOrderBookUpdate(orderBookData);
+            // Verify this is for the current selected pair
+            if (data.topic === currentTopicRef.current) {
+              const orderBookData = data.data;
+              processOrderBookUpdate(orderBookData);
+            } else {
+              console.log('Ignoring update from old subscription:', data.topic);
+            }
           }
         } catch (error) {
           console.error('Error parsing WebSocket message:', error);
