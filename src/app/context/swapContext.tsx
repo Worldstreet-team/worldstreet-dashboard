@@ -491,11 +491,25 @@ export function SwapProvider({ children }: { children: ReactNode }) {
             signer: keypair.publicKey.toString(),
           });
 
-          // Send the transaction
-          const signature = await connection.sendTransaction(transaction, {
-            maxRetries: 5,
-            preflightCommitment: "confirmed",
-          });
+          // Send the transaction with detailed error catching
+          let signature: string;
+          try {
+            signature = await connection.sendTransaction(transaction, {
+              maxRetries: 5,
+              preflightCommitment: "confirmed",
+            });
+          } catch (sendError) {
+            console.error('[Swap] Solana sendTransaction failed:', {
+              error: sendError,
+              errorMessage: sendError instanceof Error ? sendError.message : String(sendError),
+              errorName: sendError instanceof Error ? sendError.name : undefined,
+              errorStack: sendError instanceof Error ? sendError.stack : undefined,
+              // Try to extract Solana-specific error details
+              logs: (sendError as any)?.logs,
+              err: (sendError as any)?.err,
+            });
+            throw sendError; // Re-throw to be caught by outer catch
+          }
 
           console.log(`[Swap] Solana TX sent: ${signature}`);
 
@@ -625,13 +639,21 @@ export function SwapProvider({ children }: { children: ReactNode }) {
           fromAmount: swapQuote.fromAmount,
         });
 
-        // Re-throw with formatted message
-        throw new Error(
-          formatSwapError(
-            err,
-            swapQuote.fromChain === "solana" ? "Solana" : "Ethereum"
-          )
-        );
+        // TEMPORARY: Show raw error for debugging (comment out formatting)
+        // Re-throw the raw error without formatting
+        if (err instanceof Error) {
+          throw err; // Preserve the original Error object
+        } else {
+          throw new Error(String(err)); // Convert to Error if it's not already
+        }
+
+        // ORIGINAL CODE (commented out for debugging):
+        // throw new Error(
+        //   formatSwapError(
+        //     err,
+        //     swapQuote.fromChain === "solana" ? "Solana" : "Ethereum"
+        //   )
+        // );
       } finally {
         setExecuting(false);
       }
