@@ -127,6 +127,7 @@ export function useSpotSwap() {
       const walletAddress = chain === 'solana' ? addresses?.solana : addresses?.ethereum;
       
       // Validate wallet address exists
+      console.log("Wallets: ", addresses)
       if (!walletAddress) {
         throw new Error(`Wallet not set up for ${chain === 'solana' ? 'Solana' : 'Ethereum'}. Please set up your wallet first.`);
       }
