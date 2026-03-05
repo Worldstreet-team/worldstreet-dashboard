@@ -13,6 +13,7 @@ import { useState, useCallback } from 'react';
 import { useAuth } from '@/app/context/authContext';
 import { useSolana } from '@/app/context/solanaContext';
 import { useEvm } from '@/app/context/evmContext';
+import { useSwap } from '@/app/context/swapContext';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -201,7 +202,8 @@ export function useSpotSwap() {
     }
   }, [user]);
 
-  // ── executeSpotSwap ──────────────────────────────────────────────────────
+  // ── executeSpotSwap (Redirect to Client-Side Signing) ────────────────────
+  const { executeSwap: contextExecuteSwap } = useSwap();
 
   const executeSpotSwap = useCallback(async (
     params: SpotSwapParams,
@@ -214,44 +216,39 @@ export function useSpotSwap() {
       if (!quote) throw new Error('No quote available. Please fetch a quote first.');
       if (!user?.userId) throw new Error("User not authenticated");
 
+      // 1. Prepare the execution parameters
       const chain = getChainFromPair(params.pair);
+      const chainLabel = getChainLabel(params.pair);
       const tokens = getTokenMeta(params.pair, chain);
-
       const fromTokenAddr = params.side === 'buy' ? tokens.quote : tokens.base;
       const toTokenAddr = params.side === 'buy' ? tokens.base : tokens.quote;
-      const fromDecimals = params.side === 'buy' ? tokens.quoteDecimals : tokens.baseDecimals;
-      const amountIn = toSmallestUnit(params.amount, fromDecimals);
-      const slippage = (params.slippage ?? 3) / 100;
 
-      console.log('[useSpotSwap] Executing trade:', { pair: params.pair, side: params.side, amountIn, chain });
-
-      const res = await fetch('/api/execute-trade', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user.userId,
-          fromChain: getChainLabel(params.pair),
-          toChain: getChainLabel(params.pair),
-          tokenIn: fromTokenAddr,
-          tokenOut: toTokenAddr,
-          amountIn,
-          slippage,
-        }),
+      console.log('[useSpotSwap] Redirecting execution to SwapContext for client-side signing...', {
+        pair: params.pair,
+        side: params.side
       });
 
-      const data = await res.json();
-      console.log('[useSpotSwap] Execute response:', data);
+      // 2. Map the spot quote to a SwapQuote format that contextExecuteSwap expects
+      // Note: We need to ensure the quote from fetchQuote (which has _raw.executionData) 
+      // is passed correctly.
+      const mappedQuote = {
+        fromChain: chain === 'solana' ? 'solana' : 'ethereum',
+        toChain: chain === 'solana' ? 'solana' : 'ethereum',
+        fromToken: { address: fromTokenAddr, decimals: 18 } as any, // Simplify for execution
+        toToken: { address: toTokenAddr, decimals: 18 } as any,
+        fromAmount: quote._raw?.amountIn || quote.fromAmount,
+        toAmount: quote.toAmount,
+        transactionRequest: quote._raw?.executionData || quote._raw?.transactionRequest,
+      } as any;
 
-      if (!res.ok) {
-        throw new Error(data.message || data.error || 'Trade execution failed');
+      if (!mappedQuote.transactionRequest) {
+        throw new Error("Execution data still missing from quote. Please try fetching a new quote.");
       }
 
-      const txHash = data.txHash || data.transactionHash || data.signature;
-      if (!txHash) {
-        throw new Error('No transaction hash returned from backend');
-      }
+      // 3. Call the perfected context execution (Simulate -> Sign -> Send)
+      const txHash = await contextExecuteSwap(mappedQuote, pin);
 
-      // Fire-and-forget: save trade history
+      // 4. Update local history/state
       fetch('/api/spot/trades', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -261,23 +258,23 @@ export function useSpotSwap() {
           side: params.side,
           txHash,
           chain,
-          fromAmount: amountIn,
+          fromAmount: quote.fromAmount,
           toAmount: quote.toAmount,
           executionPrice: quote.executionPrice,
-          status: 'PENDING',
+          status: 'COMPLETED',
         }),
-      }).catch(err => console.warn('[useSpotSwap] Failed to save trade:', err));
+      }).catch(err => console.warn('[useSpotSwap] Backend tracking failed (TX still went through):', err));
 
       return { success: true, txHash };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to execute swap';
-      console.error('[useSpotSwap] Execute error:', msg);
+      console.error('[useSpotSwap] Execution Error:', msg);
       setError(msg);
       return { success: false, error: msg };
     } finally {
       setExecuting(false);
     }
-  }, [quote, solAddress, evmAddress, user]);
+  }, [quote, user, contextExecuteSwap]);
 
   return {
     quote,

@@ -377,101 +377,209 @@ export function SwapProvider({ children }: { children: ReactNode }) {
     [slippage, solAddress, evmAddress]
   );
 
-  // ── Execute the swap via backend API ────────────────────────────────────
-  // The backend handles: LI.FI call, signing, submitting the transaction.
-  // We just POST the trade params and get back a txHash.
+  // ── Execute the swap via Client-Side Signing ────────────────────────────
+  // We fetch a quote (which contains the raw transaction data), then
+  // simulate, sign, and submit it directly from the client.
   const executeSwap = useCallback(
     async (swapQuote: SwapQuote, pin: string): Promise<string> => {
       setExecuting(true);
       setSwapStatus({ status: "PENDING" });
 
       try {
-        // We still need the PIN to verify user identity / unlock wallet on backend
-        const chainLabel = swapQuote.fromChain === "solana" ? "SOL" : "ETH";
-        const toChainLabel = swapQuote.toChain === "solana" ? "SOL" : "ETH";
-        const userAddress = swapQuote.fromChain === "solana" ? solAddress : evmAddress;
-
-        console.log("[SwapContext] Executing trade via /api/execute-trade:", {
-          fromChain: chainLabel,
-          tokenIn: swapQuote.fromToken.address,
-          tokenOut: swapQuote.toToken.address,
-          amountIn: swapQuote.fromAmount,
-        });
-
-        const res = await fetch("/api/execute-trade", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userId: authUser?.userId || "unknown",
-            fromChain: chainLabel,
-            toChain: toChainLabel,
-            tokenIn: swapQuote.fromToken.address,
-            tokenOut: swapQuote.toToken.address,
-            amountIn: swapQuote.fromAmount,
-            slippage: slippage / 100,
-          }),
-        });
-
-        const data = await res.json();
-        console.log("[SwapContext] Execute-trade response:", data);
-
-        if (!res.ok) {
-          const errMsg = data.message || data.error || "Trade execution failed";
-          throw new Error(errMsg);
+        // 1. Get transaction request data from the quote
+        if (!swapQuote.transactionRequest) {
+          throw new Error("No transaction data available from this quote. Try refreshing.");
         }
 
-        const txHash = data.txHash || data.transactionHash || data.signature;
-        if (!txHash) {
-          throw new Error("No transaction hash returned from backend");
+        // 2. Resolve wallet keys
+        const encryptedKeys = await getEncryptedKeys(pin);
+        if (!encryptedKeys) {
+          throw new Error("Failed to retrieve wallet keys — check your PIN");
         }
 
-        console.log(`[SwapContext] Trade submitted, txHash: ${txHash}`);
+        const isFromSolana = swapQuote.fromChain === "solana";
 
-        // Poll blockchain for confirmation (Solana only — EVM backend already confirms)
-        if (swapQuote.fromChain === "solana") {
-          try {
-            const { Connection } = await import("@solana/web3.js");
-            const connection = new Connection(SOL_RPC, "confirmed");
-
-            console.log("[SwapContext] Polling Solana blockchain for confirmation...");
-            const confirmResult = await pollTransactionConfirmation(
-              connection,
-              txHash,
-              { commitment: "confirmed", timeoutMs: 90_000, intervalMs: 2000 }
-            );
-
-            if (confirmResult.confirmed && confirmResult.err) {
-              console.error("[SwapContext] TX confirmed but FAILED:", confirmResult.err);
-              throw new Error(`Transaction failed on-chain: ${JSON.stringify(confirmResult.err)}`);
-            }
-
-            if (!confirmResult.confirmed) {
-              console.warn(`[SwapContext] Confirmation timed out for ${txHash}, TX may still land.`);
-            } else {
-              console.log(`[SwapContext] Solana TX confirmed: ${txHash}`);
-            }
-          } catch (pollErr) {
-            // Don't fail the whole swap if polling fails — the TX was already submitted
-            console.warn("[SwapContext] Polling failed (TX may still succeed):", pollErr);
+        if (isFromSolana) {
+          // ── Solana Execution Logic ──
+          if (!encryptedKeys.solana?.encryptedPrivateKey) {
+            throw new Error("Solana wallet not available in this profile");
           }
-        }
 
-        setSwapStatus({ status: "DONE", txHash });
-        return txHash;
-      } catch (err) {
-        console.error("[SwapContext] Execute-trade failed:", err);
-        setSwapStatus({ status: "FAILED" });
+          const {
+            Connection,
+            VersionedTransaction,
+            Keypair,
+            PublicKey,
+            Transaction,
+          } = await import("@solana/web3.js");
 
-        if (err instanceof Error) {
-          throw err;
+          const connection = new Connection(SOL_RPC, "confirmed");
+
+          // Decrypt key
+          const privateKeyBase64 = decryptWithPIN(
+            encryptedKeys.solana.encryptedPrivateKey,
+            pin
+          );
+          const secretKey = new Uint8Array(Buffer.from(privateKeyBase64, "base64"));
+          const keypair = Keypair.fromSecretKey(secretKey);
+
+          // Deserialize transaction
+          const txDataRaw = swapQuote.transactionRequest.data;
+          let txData: Uint8Array;
+          if (txDataRaw.startsWith("0x")) {
+            txData = new Uint8Array(Buffer.from(txDataRaw.slice(2), "hex"));
+          } else {
+            txData = new Uint8Array(Buffer.from(txDataRaw, "base64"));
+          }
+
+          let transaction: any;
+          try {
+            transaction = VersionedTransaction.deserialize(txData);
+          } catch (err) {
+            console.error("[Swap] Deserialization error:", err);
+            throw new Error("Failed to process transaction data from backend. The route might be stale. Try refreshing the quote.");
+          }
+
+          // ── STEP 3: SIMULATION ──
+          console.log("[Swap] Simulating Solana transaction...");
+
+          let simulation;
+          try {
+            simulation = await connection.simulateTransaction(transaction, {
+              commitment: "confirmed",
+              replaceRecentBlockhash: true, // Use a fresh blockhash for simulation
+            });
+          } catch (simErr) {
+            console.error("[Swap] Connection-level simulation failure:", simErr);
+            throw new Error(`Simulation request failed: ${simErr instanceof Error ? simErr.message : String(simErr)}`);
+          }
+
+          if (simulation.value.err) {
+            console.error("[Swap] Simulation REJECTED:", {
+              error: simulation.value.err,
+              logs: simulation.value.logs,
+            });
+            const logLines = simulation.value.logs?.join("\n") || "No logs available";
+            throw new Error(`On-chain simulation failed. This usually means insufficient funds or invalid input.\n\nSim Error: ${JSON.stringify(simulation.value.err)}\n\nLogs:\n${logLines.slice(0, 1000)}`);
+          }
+          console.log("[Swap] Simulation successful:", { unitsConsumed: simulation.value.unitsConsumed });
+
+          // ── STEP 4: SIGNING ──
+          transaction.sign([keypair]);
+
+          // ── STEP 5: SENDING ──
+          console.log("[Swap] Sending transaction to blockchain...");
+          const signature = await connection.sendRawTransaction(transaction.serialize(), {
+            skipPreflight: true, // We already simulated
+            maxRetries: 5,
+          });
+
+          console.log(`[Swap] TX Sent: ${signature}`);
+
+          // ── STEP 6: POLLING ──
+          const confirmResult = await pollTransactionConfirmation(
+            connection,
+            signature,
+            { commitment: "confirmed", timeoutMs: 90_000, intervalMs: 2000 }
+          );
+
+          if (confirmResult.confirmed && confirmResult.err) {
+            throw new Error(`Transaction confirmed but failed on-chain: ${JSON.stringify(confirmResult.err)}`);
+          }
+
+          if (!confirmResult.confirmed) {
+            console.warn(`[Swap] Confirmation timed out for ${signature}`);
+          } else {
+            console.log(`[Swap] Transaction confirmed: ${signature}`);
+          }
+
+          // Optional: Track on backend AFTER success
+          fetch("/api/execute-trade", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId: authUser?.userId || "unknown",
+              txHash: signature,
+              fromChain: "SOL",
+              tokenIn: swapQuote.fromToken.address,
+              tokenOut: swapQuote.toToken.address,
+              amountIn: swapQuote.fromAmount,
+              status: "COMPLETED",
+            }),
+          }).catch(console.warn);
+
+          setSwapStatus({ status: "DONE", txHash: signature });
+          return signature;
+
         } else {
-          throw new Error(String(err));
+          // ── EVM Execution Logic ──
+          if (!encryptedKeys.ethereum?.encryptedPrivateKey) {
+            throw new Error("Ethereum wallet not available");
+          }
+
+          const { ethers } = await import("ethers");
+          const privateKey = decryptWithPIN(
+            encryptedKeys.ethereum.encryptedPrivateKey,
+            pin
+          );
+          const provider = new ethers.JsonRpcProvider(ETH_RPC);
+          const wallet = new ethers.Wallet(privateKey, provider);
+
+          const txRequest = {
+            to: swapQuote.transactionRequest.to,
+            data: swapQuote.transactionRequest.data,
+            value: BigInt(swapQuote.transactionRequest.value || "0"),
+            gasLimit: BigInt(swapQuote.transactionRequest.gasLimit || "500000"),
+          };
+
+          // ── STEP 3: SIMULATION (Gas Estimation) ──
+          console.log("[Swap] Simulating EVM transaction (Estimate Gas)...");
+          try {
+            const estimatedGas = await wallet.estimateGas(txRequest);
+            txRequest.gasLimit = (estimatedGas * BigInt(120)) / BigInt(100); // 20% buffer
+            console.log("[Swap] EVM simulation successful:", { estimatedGas: estimatedGas.toString() });
+          } catch (err) {
+            console.error("[Swap] EVM simulation failed:", err);
+            throw new Error(`EVM Simulation/Estimation Failed: ${err instanceof Error ? err.message : String(err)}`);
+          }
+
+          // ── STEP 4 & 5: SENDING ──
+          console.log("[Swap] Sending EVM transaction...");
+          const tx = await wallet.sendTransaction(txRequest);
+          console.log(`[Swap] EVM TX Sent: ${tx.hash}`);
+
+          const receipt = await tx.wait(1);
+          if (receipt && receipt.status === 0) {
+            throw new Error("Transaction reverted on-chain");
+          }
+
+          // Optional: Track on backend
+          fetch("/api/execute-trade", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId: authUser?.userId || "unknown",
+              txHash: tx.hash,
+              fromChain: "ETH",
+              tokenIn: swapQuote.fromToken.address,
+              tokenOut: swapQuote.toToken.address,
+              amountIn: swapQuote.fromAmount,
+              status: "COMPLETED",
+            }),
+          }).catch(console.warn);
+
+          setSwapStatus({ status: "DONE", txHash: tx.hash });
+          return tx.hash;
         }
+      } catch (err) {
+        console.error("[SwapContext] Execution failed:", err);
+        setSwapStatus({ status: "FAILED" });
+        throw err;
       } finally {
         setExecuting(false);
       }
     },
-    [solAddress, evmAddress, slippage]
+    [getEncryptedKeys, authUser, solAddress, evmAddress]
   );
 
   // ── Poll swap status via Li.Fi ───────────────────────────────────────────
