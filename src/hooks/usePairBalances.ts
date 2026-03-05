@@ -19,6 +19,21 @@ interface BalancesResponse {
 }
 
 /**
+ * Tron balance response structure
+ */
+interface TronBalanceResponse {
+  success: boolean;
+  balance: {
+    trx: number;
+    tokens: Array<{
+      symbol: string;
+      balance: number;
+      decimals: number;
+    }>;
+  };
+}
+
+/**
  * Hook return type
  */
 interface UsePairBalancesReturn {
@@ -58,6 +73,42 @@ export function usePairBalances(
 
   // Parse the trading pair
   const [baseAsset, quoteAsset] = selectedPair.split('-');
+
+  /**
+   * Fetch USDT balance from Tron wallet
+   */
+  const fetchTronUSDT = async (): Promise<number> => {
+    try {
+      const response = await fetch('/api/tron/balance');
+      
+      if (!response.ok) {
+        console.log('[usePairBalances] Tron balance API error:', response.status);
+        return 0;
+      }
+
+      const data: TronBalanceResponse = await response.json();
+      
+      if (!data.success) {
+        console.log('[usePairBalances] Tron balance API returned error');
+        return 0;
+      }
+
+      // Find USDT token in the balance
+      const usdtToken = data.balance.tokens.find(
+        token => token.symbol.toUpperCase() === 'USDT'
+      );
+
+      if (usdtToken) {
+        console.log('[usePairBalances] Found USDT in Tron wallet:', usdtToken.balance);
+        return usdtToken.balance;
+      }
+
+      return 0;
+    } catch (err) {
+      console.error('[usePairBalances] Error fetching Tron USDT:', err);
+      return 0;
+    }
+  };
 
   /**
    * Fetch balances from the API
@@ -102,21 +153,54 @@ export function usePairBalances(
       const balances = Array.isArray(data) ? data : data.balances || [];
       console.log('[usePairBalances] Parsed balances:', balances);
 
+      if (balances.length === 0) {
+        console.warn('[usePairBalances] No balances returned from API');
+      }
+
       // Find balance for base asset (tokenIn - what you're selling/trading)
       const baseBalance = balances.find(
-        (b: AssetBalance) => b.asset.toUpperCase() === baseAsset.toUpperCase()
+        (b: AssetBalance) => {
+          const match = b.asset.toUpperCase() === baseAsset.toUpperCase();
+          console.log(`[usePairBalances] Checking base asset: ${b.asset} === ${baseAsset}? ${match}`);
+          return match;
+        }
       );
-      const tokenInValue = baseBalance ? parseFloat(baseBalance.available_balance) : 0;
-      console.log('[usePairBalances] Base asset balance:', { baseAsset, balance: baseBalance, value: tokenInValue });
-      setTokenIn(tokenInValue);
+      const tokenInValue = baseBalance ? parseFloat(baseBalance.available_balance || '0') : 0;
+      console.log('[usePairBalances] Base asset balance:', { 
+        baseAsset, 
+        balance: baseBalance, 
+        value: tokenInValue,
+        allAssets: balances.map((b: AssetBalance) => b.asset)
+      });
+      setTokenIn(isNaN(tokenInValue) ? 0 : tokenInValue);
 
-      // Find balance for quote asset (tokenOut - what you're buying with)
+      // Find balance for quote asset (tokenOut - what you're buying with, typically USDT)
       const quoteBalance = balances.find(
-        (b: AssetBalance) => b.asset.toUpperCase() === quoteAsset.toUpperCase()
+        (b: AssetBalance) => {
+          const match = b.asset.toUpperCase() === quoteAsset.toUpperCase();
+          console.log(`[usePairBalances] Checking quote asset: ${b.asset} === ${quoteAsset}? ${match}`);
+          return match;
+        }
       );
-      const tokenOutValue = quoteBalance ? parseFloat(quoteBalance.available_balance) : 0;
-      console.log('[usePairBalances] Quote asset balance:', { quoteAsset, balance: quoteBalance, value: tokenOutValue });
-      setTokenOut(tokenOutValue);
+      let tokenOutValue = quoteBalance ? parseFloat(quoteBalance.available_balance || '0') : 0;
+      
+      // If quote asset is USDT and we didn't find it in spot balances, check Tron wallet
+      if (quoteAsset.toUpperCase() === 'USDT' && tokenOutValue === 0) {
+        console.log('[usePairBalances] USDT not found in spot balances, checking Tron wallet...');
+        const tronUSDT = await fetchTronUSDT();
+        if (tronUSDT > 0) {
+          tokenOutValue = tronUSDT;
+          console.log('[usePairBalances] Using USDT from Tron wallet:', tronUSDT);
+        }
+      }
+      
+      console.log('[usePairBalances] Quote asset balance:', { 
+        quoteAsset, 
+        balance: quoteBalance, 
+        value: tokenOutValue,
+        allAssets: balances.map((b: AssetBalance) => b.asset)
+      });
+      setTokenOut(isNaN(tokenOutValue) ? 0 : tokenOutValue);
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch balances';
