@@ -1,7 +1,9 @@
-"use client";
+'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
+import Image from 'next/image';
+import Link from 'next/link';
 import { useFuturesStore } from '@/store/futuresStore';
 import { useDrift } from '@/app/context/driftContext';
 import { useFuturesData } from '@/hooks/useFuturesData';
@@ -17,7 +19,7 @@ import { PinUnlockModal } from '@/components/wallet/PinUnlockModal';
 import { InsufficientSolModal } from '@/components/futures/InsufficientSolModal';
 import type { OrderSide } from '@/store/futuresStore';
 
-export default function FuturesPage() {
+export default function BinanceFuturesPage() {
   const { selectedMarket, markets, setSelectedMarket } = useFuturesStore();
   const { 
     isInitialized, 
@@ -42,16 +44,7 @@ export default function FuturesPage() {
   const [walletChecked, setWalletChecked] = useState(false);
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [orderSide, setOrderSide] = useState<OrderSide>('long');
-  const [selectedTimeframe, setSelectedTimeframe] = useState('1H');
-  const [refreshing, setRefreshing] = useState(false);
   const [initializing, setInitializing] = useState(false);
-
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    resetInitializationFailure();
-    await refreshSummary();
-    setRefreshing(false);
-  };
 
   const handleInitialize = async () => {
     setInitializing(true);
@@ -106,10 +99,10 @@ export default function FuturesPage() {
 
   if (!walletChecked) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen bg-[#181a20]">
         <div className="text-center">
-          <Icon icon="svg-spinners:ring-resize" className="mx-auto mb-4 text-primary" height={48} />
-          <p className="text-muted dark:text-darklink">Loading futures trading...</p>
+          <Icon icon="svg-spinners:ring-resize" className="mx-auto mb-4 text-[#fcd535]" height={48} />
+          <p className="text-white text-sm">Loading futures trading...</p>
         </div>
       </div>
     );
@@ -118,295 +111,302 @@ export default function FuturesPage() {
   const currentPrice = selectedMarket?.markPrice || 0;
   const priceChange = 0;
   const isPositive = priceChange >= 0;
-  const formatPrice = (price: number | undefined | null) => (Number(price) || 0).toFixed(2);
-  const formatPercentage = (percent: number | undefined | null) => (Number(percent) || 0).toFixed(2);
-  
-  const timeframes = ['1m', '5m', '15m', '1H', '4H', '1D'];
 
   return (
-    <>
-      {/* MOBILE LAYOUT */}
-      <div className="md:hidden flex flex-col h-screen bg-white dark:bg-darkgray">
-        {/* Mobile Header */}
-        <div className="flex-shrink-0 px-3 py-2 bg-gradient-to-r from-primary/10 to-warning/10 border-b border-border dark:border-darkborder">
-          <div className="flex items-center justify-between">
-            <h1 className="text-xs font-bold text-dark dark:text-white">WorldStreet Futures</h1>
-            {isInitialized && (
-              <div className="flex items-center gap-1 px-2 py-0.5 bg-success/10 rounded-full">
-                <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-                <span className="text-[9px] font-medium text-success">Active</span>
-              </div>
-            )}
+    <div className="flex flex-col bg-[#181a20] w-full min-h-screen">
+      {/* Top Header Bar - Desktop Only */}
+      <div className="hidden md:flex h-12 items-center justify-between px-4 border-b border-[#2b3139] bg-[#181a20] shrink-0">
+        {/* Left: Logo + Nav */}
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2">
+            <Image
+              src="/worldstreet-logo/WorldStreet4x.png"
+              alt="WorldStreet"
+              width={28}
+              height={28}
+            />
+            <span className="text-base font-semibold text-white">WorldStreet</span>
           </div>
-        </div>
-        
-        {/* Market Info Bar */}
-        <div className="flex-shrink-0 px-3 py-2 bg-white dark:bg-darkgray border-b border-border dark:border-darkborder">
-          <div className="flex items-center justify-between">
-            <div className="relative z-30">
-              <button 
-                onClick={() => setShowMarketDropdown(!showMarketDropdown)}
-                className="flex items-center gap-1 px-2 py-1 rounded active:bg-muted/20"
-              >
-                <span className="text-sm font-bold text-dark dark:text-white">
-                  {selectedMarket?.symbol || 'Select'}
-                </span>
-                <Icon icon="ph:caret-down" width={12} className="text-muted" />
-              </button>
-              
-              {showMarketDropdown && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowMarketDropdown(false)} />
-                  <div className="absolute top-full left-0 mt-1 bg-white dark:bg-darkgray border border-border dark:border-darkborder rounded-lg shadow-xl z-50 min-w-[120px] max-h-[250px] overflow-y-auto">
-                    {markets.map((market) => (
-                      <button
-                        key={market.id}
-                        onClick={() => handleSelectMarket(market)}
-                        className={`w-full text-left px-3 py-2 text-xs ${
-                          selectedMarket?.id === market.id ? 'bg-primary/10 text-primary font-medium' : 'text-dark dark:text-white'
-                        }`}
-                      >
-                        {market.symbol}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-            
-            <div className="flex items-baseline gap-1.5">
-              <span className={`text-sm font-bold ${isPositive ? 'text-success' : 'text-error'}`}>
-                ${formatPrice(currentPrice)}
-              </span>
-              <span className={`text-[10px] ${isPositive ? 'text-success' : 'text-error'}`}>
-                {isPositive ? '+' : ''}{formatPercentage(priceChange)}%
-              </span>
-            </div>
-          </div>
+          <nav className="flex items-center gap-5">
+            <Link href="/assets" className="text-[13px] text-[#848e9c] hover:text-white transition-colors">
+              Assets
+            </Link>
+            <Link href="/spot" className="text-[13px] text-[#848e9c] hover:text-white transition-colors">
+              Spot
+            </Link>
+            <Link href="/futures" className="text-[13px] text-[#fcd535] font-medium">
+              Futures
+            </Link>
+          </nav>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="flex-shrink-0 flex items-center gap-4 px-3 py-2 border-b border-border dark:border-darkborder bg-white dark:bg-darkgray">
-          {['chart', 'positions', 'info'].map((tab) => (
-            <button 
-              key={tab}
-              onClick={() => setMobileActiveTab(tab as any)}
-              className={`pb-1 text-xs font-medium capitalize ${
-                mobileActiveTab === tab 
-                  ? 'text-dark dark:text-white border-b-2 border-warning' 
-                  : 'text-muted'
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
-
-        {/* Scrollable Content Area */}
-        <div className="flex-1 overflow-y-auto">
-          {mobileActiveTab === 'chart' && (
-            <div className="h-[400px] bg-white dark:bg-darkgray">
-              <FuturesChart symbol={selectedMarket?.symbol} isDarkMode={true} />
-            </div>
-          )}
-
-          {mobileActiveTab === 'positions' && (
-            <div className="p-3 space-y-3">
-              <PositionPanel />
-            </div>
-          )}
-
-          {mobileActiveTab === 'info' && (
-            <div className="p-3 space-y-3 pb-24">
-              {/* Drift Account Status */}
-              <div className="bg-white dark:bg-darkgray rounded-xl border border-border dark:border-darkborder p-3">
-                <h3 className="text-xs font-bold text-dark dark:text-white mb-2 uppercase">Drift Account</h3>
-                {needsInitialization ? (
-                  <div className="space-y-2">
-                    <p className="text-xs text-muted dark:text-gray-400">Account not initialized</p>
-                    <button
-                      onClick={handleInitialize}
-                      disabled={initializing}
-                      className="w-full py-2 bg-warning hover:bg-warning/90 text-white rounded-lg text-xs font-bold disabled:opacity-50"
-                    >
-                      {initializing ? 'Initializing...' : 'Initialize Account'}
-                    </button>
-                  </div>
-                ) : isInitialized && summary ? (
-                  <div className="space-y-2">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="bg-muted/10 dark:bg-white/5 rounded-lg p-2">
-                        <p className="text-[9px] text-muted dark:text-gray-400 mb-0.5">Total Collateral</p>
-                        <p className="text-xs font-bold text-dark dark:text-white">${summary.totalCollateral.toFixed(2)}</p>
-                      </div>
-                      <div className="bg-muted/10 dark:bg-white/5 rounded-lg p-2">
-                        <p className="text-[9px] text-muted dark:text-gray-400 mb-0.5">Available</p>
-                        <p className="text-xs font-bold text-success">${summary.freeCollateral.toFixed(2)}</p>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="bg-muted/10 dark:bg-white/5 rounded-lg p-2">
-                        <p className="text-[9px] text-muted dark:text-gray-400 mb-0.5">Unrealized PnL</p>
-                        <p className={`text-xs font-bold ${summary.unrealizedPnl >= 0 ? 'text-success' : 'text-error'}`}>
-                          {summary.unrealizedPnl >= 0 ? '+' : ''}${summary.unrealizedPnl.toFixed(2)}
-                        </p>
-                      </div>
-                      <div className="bg-muted/10 dark:bg-white/5 rounded-lg p-2">
-                        <p className="text-[9px] text-muted dark:text-gray-400 mb-0.5">Open Positions</p>
-                        <p className="text-xs font-bold text-dark dark:text-white">{summary.openPositions}</p>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center py-4">
-                    <Icon icon="svg-spinners:ring-resize" className="text-primary" height={20} />
-                  </div>
-                )}
-              </div>
-
-              {/* Futures Wallet Balance */}
-              <FuturesWalletBalance />
-              
-              {/* Collateral Panel */}
-              <CollateralPanel />
-              
-              {/* Risk Panel */}
-              <RiskPanel />
-            </div>
-          )}
-        </div>
-
-        {/* Fixed Bottom Action Buttons */}
-        <div className="flex-shrink-0 flex gap-2 p-3 bg-white dark:bg-darkgray border-t border-border dark:border-darkborder">
-          <button 
-            onClick={() => handleOpenOrderModal('long')}
-            disabled={!isInitialized}
-            className="flex-1 py-3 bg-success hover:bg-success/90 active:bg-success/80 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Long
-          </button>
-          <button 
-            onClick={() => handleOpenOrderModal('short')}
-            disabled={!isInitialized}
-            className="flex-1 py-3 bg-error hover:bg-error/90 active:bg-error/80 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Short
-          </button>
+        {/* Right: Account */}
+        <div className="flex items-center gap-3">
+          <Link href="/" className="px-3.5 py-1.5 bg-transparent hover:bg-[#2b3139] text-white rounded text-[13px] font-semibold transition-colors">
+            Dashboard
+          </Link>
+          <Link href="/tron-swap" className="px-3.5 py-1.5 bg-[#fcd535] hover:bg-[#fcd535]/90 text-[#181a20] rounded text-[13px] font-semibold transition-colors">
+            Tron-swap
+          </Link>
         </div>
       </div>
 
-      {/* DESKTOP LAYOUT - Professional Two-Column Trading Interface */}
-      <div className="hidden md:block fixed inset-0 top-[64px] left-0 xl:left-[260px] bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-[#0a0a0a] dark:via-[#111111] dark:to-[#0a0a0a]">
-        
-        {/* Premium Header Bar - Market Info Only */}
-        <div className="h-20 px-8 py-4 bg-white/80 dark:bg-black/40 backdrop-blur-xl border-b border-gray-200/50 dark:border-white/5">
-          <div className="flex items-center gap-6 h-full">
-            {/* Market Selector */}
-            <div className="relative">
-              <button 
-                onClick={() => setShowMarketDropdown(!showMarketDropdown)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200/50 dark:border-white/10 transition-all duration-200 group"
-              >
-                <span className="text-xl font-bold text-dark dark:text-white tracking-tight">
-                  {selectedMarket?.symbol || 'Select Market'}
-                </span>
-                <Icon 
-                  icon="ph:caret-down" 
-                  width={18} 
-                  className="text-muted dark:text-gray-400 group-hover:text-dark dark:group-hover:text-white transition-colors" 
-                />
-              </button>
-              
-              {showMarketDropdown && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowMarketDropdown(false)} />
-                  <div className="absolute top-full left-0 mt-2 bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl shadow-black/10 dark:shadow-black/50 z-50 min-w-[200px] max-h-[400px] overflow-y-auto backdrop-blur-xl">
-                    <div className="p-2">
+      {/* Mobile Header */}
+      <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-[#2b3139] bg-[#181a20]">
+        <div className="flex items-center gap-2">
+          <Image
+            src="/worldstreet-logo/WorldStreet4x.png"
+            alt="WorldStreet"
+            width={24}
+            height={24}
+          />
+          <span className="text-sm font-semibold text-white">WorldStreet</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <Link href="/assets" className="p-2">
+            <Icon icon="ph:wallet" width={20} className="text-[#848e9c] hover:text-white transition-colors" />
+          </Link>
+          <Link href="/spot" className="p-2">
+            <Icon icon="ph:chart-line" width={20} className="text-[#848e9c] hover:text-white transition-colors" />
+          </Link>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col">
+        {/* Desktop Layout */}
+        <div className="hidden md:grid md:grid-cols-[280px_1fr_340px] flex-1 min-h-0">
+          {/* LEFT: Position Panel */}
+          <div className="border-r border-[#2b3139] overflow-hidden">
+            <div className="h-full overflow-y-auto scrollbar-hide">
+              <PositionPanel />
+            </div>
+          </div>
+
+          {/* CENTER: Chart + Order Form */}
+          <div className="border-r border-[#2b3139] flex flex-col min-h-0">
+            {/* Pair Header */}
+            <div className="px-3 py-2 border-b border-[#2b3139] flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-4">
+                <div className="relative">
+                  <button
+                    onClick={() => setShowMarketDropdown(!showMarketDropdown)}
+                    className="flex items-center gap-1.5 hover:bg-[#2b3139] px-2 py-1 rounded transition-colors"
+                  >
+                    <span className="text-base font-semibold text-white">{selectedMarket?.symbol || 'Select'}</span>
+                    <Icon icon="ph:caret-down" width={14} className="text-[#848e9c]" />
+                  </button>
+                  
+                  {showMarketDropdown && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setShowMarketDropdown(false)} />
+                      <div className="absolute left-0 top-full mt-1 bg-[#2b3139] rounded-lg shadow-lg z-50 min-w-[200px]">
+                        {markets.map((market) => (
+                          <button
+                            key={market.id}
+                            onClick={() => handleSelectMarket(market)}
+                            className={`w-full px-4 py-3 text-left hover:bg-[#1e2329] transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                              selectedMarket?.id === market.id ? 'bg-[#1e2329]' : ''
+                            }`}
+                          >
+                            <span className="text-white font-medium text-sm">{market.symbol}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className={`text-xl font-semibold ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
+                    ${currentPrice.toFixed(2)}
+                  </span>
+                  <span className="text-xs text-[#848e9c]">
+                    ${currentPrice.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-5 text-[11px]">
+                <div className="flex flex-col">
+                  <span className="text-[#848e9c]">24h Change</span>
+                  <span className={`font-medium ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
+                    {isPositive ? '+' : ''}{priceChange.toFixed(2)}%
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Chart */}
+            <div className="flex-1 min-h-0">
+              <FuturesChart symbol={selectedMarket?.symbol} isDarkMode={true} />
+            </div>
+
+            {/* Order Form Placeholder - Will be styled in Phase 2 */}
+            <div className="border-t border-[#2b3139] shrink-0 p-4">
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleOpenOrderModal('long')}
+                  disabled={!isInitialized}
+                  className="flex-1 py-3 bg-[#0ecb81] hover:bg-[#0ecb81]/90 text-white font-semibold rounded transition-colors disabled:opacity-50"
+                >
+                  Long
+                </button>
+                <button
+                  onClick={() => handleOpenOrderModal('short')}
+                  disabled={!isInitialized}
+                  className="flex-1 py-3 bg-[#f6465d] hover:bg-[#f6465d]/90 text-white font-semibold rounded transition-colors disabled:opacity-50"
+                >
+                  Short
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT: Account Info */}
+          <div className="flex flex-col min-h-0 overflow-y-auto scrollbar-hide p-4 space-y-4">
+            <DriftAccountStatus />
+            <FuturesWalletBalance />
+            <CollateralPanel />
+            <RiskPanel />
+          </div>
+        </div>
+
+        {/* Mobile Layout */}
+        <div className="md:hidden flex flex-col h-[calc(100vh-60px)]">
+          {/* Pair Info Header */}
+          <div className="px-4 py-3 border-b border-[#2b3139] bg-[#181a20] shrink-0">
+            <div className="flex items-center justify-between mb-2">
+              <div className="relative">
+                <button 
+                  onClick={() => setShowMarketDropdown(!showMarketDropdown)}
+                  className="flex items-center gap-2 hover:bg-[#2b3139] px-2 py-1 rounded transition-colors"
+                >
+                  <div className="flex items-center gap-1">
+                    <span className="text-sm font-semibold text-white">{selectedMarket?.symbol || 'Select'}</span>
+                    <Icon icon="ph:caret-down" width={12} className="text-[#848e9c]" />
+                  </div>
+                </button>
+                
+                {showMarketDropdown && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowMarketDropdown(false)} />
+                    <div className="absolute left-0 top-full mt-2 bg-[#2b3139] rounded-lg shadow-lg z-50 min-w-[200px] max-h-60 overflow-y-auto scrollbar-hide">
                       {markets.map((market) => (
                         <button
                           key={market.id}
                           onClick={() => handleSelectMarket(market)}
-                          className={`w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 dark:hover:bg-white/5 text-sm font-medium transition-all duration-150 ${
-                            selectedMarket?.id === market.id 
-                              ? 'bg-primary/10 text-primary dark:bg-primary/20' 
-                              : 'text-dark dark:text-white'
+                          className={`w-full px-4 py-3 text-left hover:bg-[#181a20] transition-colors ${
+                            selectedMarket?.id === market.id ? 'bg-[#181a20]' : ''
                           }`}
                         >
-                          {market.symbol}
+                          <span className="text-white font-medium">{market.symbol}</span>
                         </button>
                       ))}
                     </div>
-                  </div>
-                </>
-              )}
+                  </>
+                )}
+              </div>
+              <Icon icon="ph:star" width={18} className="text-[#848e9c]" />
             </div>
             
-
-
-          </div>
-        </div>
-
-        {/* Two-Column Layout: 70/30 Split */}
-        <div className="h-[calc(100%-80px)] flex">
-          
-          {/* LEFT COLUMN (70%): Chart Only */}
-          <div className="w-[70%] h-full p-6 pr-3">
-            <div className="h-full bg-white dark:bg-[#0d0d0d] rounded-2xl border border-gray-200/50 dark:border-white/5 shadow-lg shadow-black/5 dark:shadow-black/20 overflow-hidden">
-              <FuturesChart symbol={selectedMarket?.symbol} isDarkMode={true} />
+            <div className="flex items-baseline gap-2 mb-2">
+              <span className={`text-2xl font-bold ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
+                ${currentPrice.toFixed(2)}
+              </span>
+              <span className="text-sm text-[#848e9c]">
+                ${currentPrice.toFixed(2)}
+              </span>
             </div>
-          </div>
 
-          {/* RIGHT COLUMN (30%): Scrollable Info & Actions */}
-          <div className="w-[30%] h-full overflow-y-auto pl-3 pr-6 py-6 custom-scrollbar">
-            <div className="flex flex-col gap-4">
-              
-              {/* 1. Quick Actions */}
-              <div className="bg-white dark:bg-[#0d0d0d] rounded-2xl border border-gray-200/50 dark:border-white/5 shadow-lg shadow-black/5 dark:shadow-black/20 p-6">
-                <h3 className="text-sm font-bold text-dark dark:text-white mb-4 uppercase tracking-wide">Quick Actions</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => handleOpenOrderModal('long')}
-                    className="group relative overflow-hidden py-4 bg-gradient-to-br from-success to-success/80 hover:from-success/90 hover:to-success/70 text-white font-bold rounded-xl transition-all duration-200 shadow-lg shadow-success/20 hover:shadow-xl hover:shadow-success/30 hover:-translate-y-0.5"
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                    <div className="relative flex flex-col items-center gap-1">
-                      <Icon icon="ph:arrow-up-bold" width={20} />
-                      <span className="text-sm">Open Long</span>
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => handleOpenOrderModal('short')}
-                    className="group relative overflow-hidden py-4 bg-gradient-to-br from-error to-error/80 hover:from-error/90 hover:to-error/70 text-white font-bold rounded-xl transition-all duration-200 shadow-lg shadow-error/20 hover:shadow-xl hover:shadow-error/30 hover:-translate-y-0.5"
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                    <div className="relative flex flex-col items-center gap-1">
-                      <Icon icon="ph:arrow-down-bold" width={20} />
-                      <span className="text-sm">Open Short</span>
-                    </div>
-                  </button>
-                </div>
+            <div className="flex items-center gap-4 text-xs">
+              <div>
+                <span className="text-[#848e9c]">24h Change </span>
+                <span className={`font-medium ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
+                  {isPositive ? '+' : ''}{priceChange.toFixed(2)}%
+                </span>
               </div>
-
-              <DriftAccountStatus />
-
-              {/* 3. Position Panel */}
-              <PositionPanel />
-
-              {/* 4. Wallet Balance */}
-              <FuturesWalletBalance />
-
-              {/* 5. Collateral Panel */}
-              <CollateralPanel />
-
-              {/* 6. Risk Panel */}
-              <RiskPanel />
-
-              {/* 7. Drift Account Status */}
             </div>
+          </div>
+
+          {/* Tab Navigation */}
+          <div className="flex border-b border-[#2b3139] bg-[#181a20] overflow-x-auto scrollbar-hide shrink-0">
+            {(['chart', 'positions', 'info'] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setMobileActiveTab(tab)}
+                className={`px-4 py-3 text-xs font-medium whitespace-nowrap border-b-2 transition-colors ${
+                  mobileActiveTab === tab
+                    ? 'border-[#fcd535] text-white'
+                    : 'border-transparent text-[#848e9c]'
+                }`}
+              >
+                {tab === 'chart' && 'Chart'}
+                {tab === 'positions' && 'Positions'}
+                {tab === 'info' && 'Account'}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab Content */}
+          <div className="flex-1 min-h-0 relative">
+            {mobileActiveTab === 'chart' && (
+              <div className="absolute inset-0">
+                <FuturesChart symbol={selectedMarket?.symbol} isDarkMode={true} />
+              </div>
+            )}
+            
+            {mobileActiveTab === 'positions' && (
+              <div className="absolute inset-0 overflow-y-auto scrollbar-hide p-4">
+                <PositionPanel />
+              </div>
+            )}
+            
+            {mobileActiveTab === 'info' && (
+              <div className="absolute inset-0 overflow-y-auto scrollbar-hide p-4 space-y-4 pb-24">
+                {needsInitialization ? (
+                  <div className="bg-[#2b3139] rounded-lg p-4">
+                    <h3 className="text-xs font-bold text-white mb-2 uppercase">Drift Account</h3>
+                    <p className="text-xs text-[#848e9c] mb-3">Account not initialized</p>
+                    <button
+                      onClick={handleInitialize}
+                      disabled={initializing}
+                      className="w-full py-2 bg-[#fcd535] hover:bg-[#fcd535]/90 text-[#181a20] rounded text-xs font-bold disabled:opacity-50"
+                    >
+                      {initializing ? 'Initializing...' : 'Initialize Account'}
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <DriftAccountStatus />
+                    <FuturesWalletBalance />
+                    <CollateralPanel />
+                    <RiskPanel />
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Fixed Bottom Action Buttons */}
+          <div className="grid grid-cols-2 gap-0 border-t border-[#2b3139] bg-[#181a20] safe-area-bottom shrink-0">
+            <button 
+              onClick={() => handleOpenOrderModal('long')}
+              disabled={!isInitialized}
+              className="py-4 bg-[#0ecb81] hover:bg-[#0ecb81]/90 text-white font-semibold text-base transition-colors disabled:opacity-50"
+            >
+              Long
+            </button>
+            <button 
+              onClick={() => handleOpenOrderModal('short')}
+              disabled={!isInitialized}
+              className="py-4 bg-[#f6465d] hover:bg-[#f6465d]/90 text-white font-semibold text-base transition-colors disabled:opacity-50"
+            >
+              Short
+            </button>
           </div>
         </div>
       </div>
 
+      {/* Modals */}
       <WalletModal
         isOpen={showWalletModal}
         onClose={() => setShowWalletModal(false)}
@@ -431,15 +431,12 @@ export default function FuturesPage() {
       {solBalanceInfo && (
         <InsufficientSolModal
           isOpen={showInsufficientSol}
-          onClose={() => {
-            setShowInsufficientSol(false);
-            // Don't reset here - user needs to click "Try Again" button explicitly
-          }}
+          onClose={() => setShowInsufficientSol(false)}
           requiredSol={solBalanceInfo.required}
           currentSol={solBalanceInfo.current}
           walletAddress={solBalanceInfo.address}
         />
       )}
-    </>
+    </div>
   );
 }
