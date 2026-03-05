@@ -250,7 +250,7 @@ export function SwapProvider({ children }: { children: ReactNode }) {
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [executing, setExecuting] = useState(false);
   const [swapStatus, setSwapStatus] = useState<SwapStatus | null>(null);
-  const [slippage, setSlippage] = useState(20.0); // 50% - extremely high tolerance to pass simulation
+  const [slippage, setSlippage] = useState(1.0); // 50% - extremely high tolerance to pass simulation
 
   // Fetch available tokens for a chain
   const fetchTokens = useCallback(async (chain: ChainKey) => {
