@@ -249,9 +249,9 @@ export default function BinanceSpotPage() {
         </div>
 
         {/* Mobile Layout */}
-        <div className="md:hidden flex flex-col flex-1 min-h-0">
+        <div className="md:hidden flex flex-col h-[calc(100vh-60px)]">
           {/* Pair Info Header */}
-          <div className="px-4 py-3 border-b border-[#2b3139] bg-[#181a20]">
+          <div className="px-4 py-3 border-b border-[#2b3139] bg-[#181a20] shrink-0">
             <div className="flex items-center justify-between mb-2">
               <button 
                 onClick={() => setShowPairSelector(!showPairSelector)}
@@ -321,7 +321,7 @@ export default function BinanceSpotPage() {
           </div>
 
           {/* Tab Navigation */}
-          <div className="flex border-b border-[#2b3139] bg-[#181a20] overflow-x-auto scrollbar-hide">
+          <div className="flex border-b border-[#2b3139] bg-[#181a20] overflow-x-auto scrollbar-hide shrink-0">
             {(['chart', 'orderbook', 'trades', 'info', 'data'] as const).map((tab) => (
               <button
                 key={tab}
@@ -342,9 +342,9 @@ export default function BinanceSpotPage() {
           </div>
 
           {/* Tab Content */}
-          <div className="flex-1 min-h-0 overflow-hidden bg-[#181a20]">
+          <div className="flex-1 min-h-0 relative">
             {mobileTab === 'chart' && (
-              <div className="w-full h-full">
+              <div className="absolute inset-0">
                 <LiveChart 
                   symbol={selectedPair}
                   stopLoss={chartStopLoss}
@@ -355,19 +355,19 @@ export default function BinanceSpotPage() {
             )}
             
             {mobileTab === 'orderbook' && (
-              <div className="h-full">
+              <div className="absolute inset-0">
                 <BinanceOrderBook selectedPair={selectedPair} />
               </div>
             )}
             
             {mobileTab === 'trades' && (
-              <div className="h-full">
+              <div className="absolute inset-0">
                 <MarketTrades selectedPair={selectedPair} />
               </div>
             )}
             
             {mobileTab === 'info' && (
-              <div className="h-full overflow-y-auto scrollbar-hide p-4">
+              <div className="absolute inset-0 overflow-y-auto scrollbar-hide p-4">
                 <div className="text-white space-y-4">
                   <h3 className="text-lg font-semibold">About Bitcoin (BTC)</h3>
                   <p className="text-sm text-[#848e9c] leading-relaxed">
@@ -391,7 +391,7 @@ export default function BinanceSpotPage() {
             )}
             
             {mobileTab === 'data' && (
-              <div className="h-full overflow-y-auto scrollbar-hide p-4">
+              <div className="absolute inset-0 overflow-y-auto scrollbar-hide p-4">
                 <div className="text-white space-y-3">
                   <div className="flex justify-between text-sm">
                     <span className="text-[#848e9c]">Market Cap</span>
@@ -411,7 +411,7 @@ export default function BinanceSpotPage() {
           </div>
 
           {/* Bottom Section */}
-          <div className="border-t border-[#2b3139] bg-[#181a20]">
+          <div className="border-t border-[#2b3139] bg-[#181a20] shrink-0">
             {/* Bottom Tabs */}
             <div className="flex border-b border-[#2b3139]">
               <button
@@ -454,7 +454,7 @@ export default function BinanceSpotPage() {
           </div>
 
           {/* Buy/Sell Buttons - Fixed at bottom */}
-          <div className="grid grid-cols-2 gap-0 border-t border-[#2b3139] bg-[#181a20] safe-area-bottom">
+          <div className="grid grid-cols-2 gap-0 border-t border-[#2b3139] bg-[#181a20] safe-area-bottom shrink-0">
             <button 
               onClick={handleBuyClick}
               className="py-4 bg-[#0ecb81] hover:bg-[#0ecb81]/90 text-white font-semibold text-base transition-colors"
