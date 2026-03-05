@@ -33,7 +33,7 @@ export default function SpotSwapConfirmModal({
   const [pinError, setPinError] = useState('');
   const [showPin, setShowPin] = useState(false);
 
-  if (!isOpen || !quote) return null;
+  if (!isOpen) return null;
 
   const handleConfirm = async () => {
     setPinError('');
@@ -85,12 +85,12 @@ export default function SpotSwapConfirmModal({
 
         {/* Content - Scrollable */}
         <div className="flex-1 overflow-y-auto scrollbar-hide px-6 py-4">
-          <SpotQuoteDetails quote={quote} pair={pair} side={side} />
+          {quote && <SpotQuoteDetails quote={quote} pair={pair} side={side} />}
 
           {/* PIN Input */}
-          <div className="mt-6 space-y-3">
+          <div className={quote ? "mt-6 space-y-3" : "space-y-3"}>
             <label className="block text-sm text-[#848e9c] font-medium">
-              Enter PIN to confirm
+              Enter PIN to confirm trade
             </label>
             <div className="relative">
               <input

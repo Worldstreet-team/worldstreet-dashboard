@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/app/context/authContext';
 import { usePairBalances } from '@/hooks/usePairBalances';
-import { useBackendSpotTrading } from '@/hooks/useBackendSpotTrading';
 import SpotSwapConfirmModal from './SpotSwapConfirmModal';
 
 interface BinanceOrderFormProps {
@@ -15,9 +14,6 @@ interface BinanceOrderFormProps {
 export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain }: BinanceOrderFormProps) {
   const { user } = useAuth();
   
-  // Use backend spot trading hook
-  const { quote, fetchQuote, executeSwap, loading: quoteLoading, executing: swapExecuting, error: backendError } = useBackendSpotTrading();
-  
   const [activeTab, setActiveTab] = useState<'buy' | 'sell'>('buy');
   const [orderType, setOrderType] = useState<'market' | 'limit' | 'stop-limit'>('market');
   const [price, setPrice] = useState('');
@@ -28,7 +24,7 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
   const [success, setSuccess] = useState<string | null>(null);
   const [currentMarketPrice, setCurrentMarketPrice] = useState<number>(0);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [transformedQuote, setTransformedQuote] = useState<any>(null);
+  const [executing, setExecuting] = useState(false);
 
   // Token metadata removed - now handled by backend
 
@@ -147,105 +143,90 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
       return;
     }
 
-    try {
-      console.log('[BinanceOrderForm] Fetching quote from backend:', {
-        pair: selectedPair,
-        side: activeTab,
-        amount,
-        chain: effectiveChain
-      });
-      
-      // Fetch quote from backend
-      const backendQuote = await fetchQuote({
-        pair: selectedPair,
-        side: activeTab,
-        amount,
-        chain: effectiveChain,
-      });
-
-      if (backendQuote) {
-        // Transform BackendQuote to SpotSwapQuote format for the modal
-        const transformed: any = {
-          id: `quote-${Date.now()}`,
-          fromAmount: amount,
-          toAmount: backendQuote.toAmount,
-          toAmountMin: backendQuote.toAmountMin,
-          executionPrice: currentMarketPrice.toString(),
-          estimatedDuration: 30, // Default 30 seconds
-          priceImpact: backendQuote.priceImpact,
-          gasEstimate: backendQuote.gasEstimate,
-          route: backendQuote.route || backendQuote.tool,
-          // Add required arrays for SpotQuoteDetails component
-          feeCosts: [],
-          gasCosts: backendQuote.gasEstimate ? [{
-            token: { symbol: effectiveChain === 'sol' ? 'SOL' : 'ETH' },
-            amount: backendQuote.gasEstimate,
-            amountUSD: '0.00'
-          }] : [],
-          _raw: backendQuote,
-        };
-        
-        setTransformedQuote(transformed);
-        setShowConfirmModal(true);
-      } else {
-        setError(backendError || 'Failed to get quote from backend');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to get quote');
-    }
+    // Show confirmation modal directly
+    setShowConfirmModal(true);
   };
 
   const handleConfirmSwap = async (pin: string) => {
-    if (!transformedQuote) {
-      setError('No quote available');
-      throw new Error('No quote available');
-    }
+    setError(null);
+    setSuccess(null);
+    setExecuting(true);
 
     try {
-      console.log('[BinanceOrderForm] Executing swap via backend');
+      console.log('[BinanceOrderForm] Executing trade via backend');
       
-      // Execute swap via backend (backend handles PIN verification and signing)
-      const result = await executeSwap({
+      const [baseAsset, quoteAsset] = selectedPair.split('-');
+      const chainType = effectiveChain === 'sol' ? 'sol' : 'eth';
+      
+      // Token metadata
+      const TOKEN_META: Record<string, Record<string, { address: string; decimals: number }>> = {
+        eth: {
+          ETH: { address: '0x0000000000000000000000000000000000000000', decimals: 18 },
+          BTC: { address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', decimals: 8 },
+          WBTC: { address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', decimals: 8 },
+          USDT: { address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', decimals: 6 },
+          USDC: { address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', decimals: 6 },
+        },
+        sol: {
+          SOL: { address: '11111111111111111111111111111111', decimals: 9 },
+          WSOL: { address: 'So11111111111111111111111111111111111111112', decimals: 9 },
+          USDT: { address: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', decimals: 6 },
+          USDC: { address: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', decimals: 6 },
+        },
+      };
+      
+      const chainMeta = TOKEN_META[chainType];
+      
+      // Get token addresses based on buy/sell
+      const fromTokenMeta = activeTab === 'buy' ? chainMeta[quoteAsset] : chainMeta[baseAsset];
+      const toTokenMeta = activeTab === 'buy' ? chainMeta[baseAsset] : chainMeta[quoteAsset];
+      
+      if (!fromTokenMeta || !toTokenMeta) {
+        throw new Error('Token not supported');
+      }
+      
+      // Convert amount to smallest unit
+      const decimals = fromTokenMeta.decimals;
+      const [intPart = '0', fracPart = ''] = amount.split('.');
+      const paddedFrac = fracPart.padEnd(decimals, '0').slice(0, decimals);
+      const rawAmount = (intPart + paddedFrac).replace(/^0+/, '') || '0';
+      
+      console.log('[BinanceOrderForm] Trade params:', {
+        userId: user?.userId,
+        fromChain: chainType,
+        toChain: chainType,
+        tokenIn: fromTokenMeta.address,
+        tokenOut: toTokenMeta.address,
+        amountIn: rawAmount,
         pair: selectedPair,
-        side: activeTab,
-        amount,
-        chain: effectiveChain,
+        side: activeTab
+      });
+      
+      // Call backend execute-trade endpoint directly
+      const response = await fetch('/api/execute-trade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user?.userId,
+          fromChain: chainType,
+          toChain: chainType,
+          tokenIn: fromTokenMeta.address,
+          tokenOut: toTokenMeta.address,
+          amountIn: rawAmount,
+          slippage: 0.005, // 0.5%
+        }),
       });
 
-      if (!result) {
-        throw new Error(backendError || 'Failed to execute trade');
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || result.error || 'Failed to execute trade');
       }
+      
+      console.log('[BinanceOrderForm] Trade executed:', result);
       
       setSuccess(`${activeTab === 'buy' ? 'Buy' : 'Sell'} order executed! TX: ${result.txHash.slice(0, 10)}...`);
       setShowConfirmModal(false);
-      
-      // Backend already saved trade history, just save to MongoDB for frontend
-      try {
-        const chainId = effectiveChain === 'sol' ? 1151111081099710 : 1;
-        
-        await fetch('/api/spot/trades', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: user?.userId,
-            txHash: result.txHash,
-            chainId,
-            pair: selectedPair,
-            side: activeTab.toUpperCase(),
-            fromTokenAddress: '', // Backend doesn't return this
-            fromTokenSymbol: result.tokenIn,
-            fromAmount: result.amountIn.toString(),
-            toTokenAddress: '', // Backend doesn't return this
-            toTokenSymbol: result.tokenOut,
-            toAmount: result.amountOut.toString(),
-            executionPrice: result.executionPrice.toString(),
-            slippagePercent: 0.5,
-            status: 'CONFIRMED',
-          }),
-        });
-      } catch (historyErr) {
-        console.warn('[BinanceOrderForm] Failed to save trade history to MongoDB:', historyErr);
-      }
       
       // Reset form
       setAmount('');
@@ -263,8 +244,11 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
       // Clear success after 5 seconds
       setTimeout(() => setSuccess(null), 5000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to execute trade');
+      const errorMsg = err instanceof Error ? err.message : 'Failed to execute trade';
+      setError(errorMsg);
       throw err; // Re-throw to show in modal
+    } finally {
+      setExecuting(false);
     }
   };
 
@@ -447,14 +431,14 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
       <div className="p-4 border-t border-[#2b3139]">
         <button
           onClick={executeTrade}
-          disabled={quoteLoading || swapExecuting || !amount}
+          disabled={executing || !amount}
           className={`w-full py-3 rounded font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
             activeTab === 'buy'
               ? 'bg-[#0ecb81] hover:bg-[#0ecb81]/90 text-white'
               : 'bg-[#f6465d] hover:bg-[#f6465d]/90 text-white'
           }`}
         >
-          {quoteLoading ? 'Getting Quote...' : `${activeTab === 'buy' ? 'Buy' : 'Sell'} ${tokenIn}`}
+          {executing ? 'Executing...' : `${activeTab === 'buy' ? 'Buy' : 'Sell'} ${tokenIn}`}
         </button>
       </div>
 
@@ -462,11 +446,11 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
       <SpotSwapConfirmModal
         isOpen={showConfirmModal}
         onClose={() => setShowConfirmModal(false)}
-        quote={transformedQuote}
+        quote={null}
         pair={selectedPair}
         side={activeTab}
         onConfirm={handleConfirmSwap}
-        executing={swapExecuting}
+        executing={executing}
       />
     </div>
   );

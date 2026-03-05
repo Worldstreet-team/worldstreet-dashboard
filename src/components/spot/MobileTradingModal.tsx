@@ -4,8 +4,6 @@ import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { useAuth } from '@/app/context/authContext';
 import { usePairBalances } from '@/hooks/usePairBalances';
-import { useSpotWallets } from '@/hooks/useSpotWallets';
-import { useSwap, SwapQuote } from '@/app/context/swapContext';
 
 interface MobileTradingModalProps {
   isOpen: boolean;
@@ -18,26 +16,19 @@ interface MobileTradingModalProps {
 export default function MobileTradingModal({ isOpen, onClose, side, selectedPair, chain }: MobileTradingModalProps) {
   const { user } = useAuth();
   
-  // Use swapContext directly
-  const { getQuote, executeSwap, executing } = useSwap();
-  
-  // Fetch spot wallet addresses from backend
-  const { getWalletAddress, loading: loadingWallets } = useSpotWallets(user?.userId);
-  
   const [orderType, setOrderType] = useState<'market' | 'limit'>('market');
   const [price, setPrice] = useState('');
   const [amount, setAmount] = useState('');
   const [total, setTotal] = useState('');
   const [sliderValue, setSliderValue] = useState(0);
   const [currentMarketPrice, setCurrentMarketPrice] = useState<number>(0);
-  const [fetchingQuote, setFetchingQuote] = useState(false);
   const [showQuote, setShowQuote] = useState(false);
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState('');
   const [showPin, setShowPin] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [quote, setQuote] = useState<SwapQuote | null>(null);
+  const [executing, setExecuting] = useState(false);
 
   // Token metadata for Li.Fi
   const TOKEN_META: Record<string, Record<string, { address: string; decimals: number }>> = {
@@ -179,71 +170,8 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
       return;
     }
     
-    setFetchingQuote(true);
-    
-    try {
-      // Determine chain type
-      const chainType = effectiveChain === 'sol' ? 'solana' : 'ethereum';
-      const chainMeta = effectiveChain === 'sol' ? TOKEN_META.solana : TOKEN_META.ethereum;
-      
-      // Get token addresses
-      const fromTokenMeta = side === 'buy' ? chainMeta[tokenOut] : chainMeta[tokenIn];
-      const toTokenMeta = side === 'buy' ? chainMeta[tokenIn] : chainMeta[tokenOut];
-      
-      if (!fromTokenMeta || !toTokenMeta) {
-        throw new Error('Token not supported');
-      }
-      
-      // Get spot wallet address from backend for the current chain
-      const walletAddress = getWalletAddress(effectiveChain);
-      
-      if (!walletAddress) {
-        throw new Error(`No spot wallet found for ${chainType} chain. Please set up your spot wallet first.`);
-      }
-      
-      console.log('[MobileTradingModal] Using spot wallet:', {
-        chain: effectiveChain,
-        address: walletAddress
-      });
-      
-      // Convert amount to smallest unit
-      const decimals = fromTokenMeta.decimals;
-      const [intPart = '0', fracPart = ''] = amount.split('.');
-      const paddedFrac = fracPart.padEnd(decimals, '0').slice(0, decimals);
-      const rawAmount = (intPart + paddedFrac).replace(/^0+/, '') || '0';
-      
-      console.log('[MobileTradingModal] Fetching quote:', {
-        pair: selectedPair,
-        side,
-        chainType,
-        fromToken: fromTokenMeta.address,
-        toToken: toTokenMeta.address,
-        rawAmount,
-        spotWalletAddress: walletAddress
-      });
-      
-      // Call swapContext.getQuote
-      const quoteResult = await getQuote({
-        fromChain: chainType,
-        toChain: chainType,
-        fromToken: fromTokenMeta.address,
-        toToken: toTokenMeta.address,
-        fromAmount: rawAmount,
-        fromAddress: walletAddress,
-        toAddress: walletAddress,
-      });
-      
-      if (quoteResult) {
-        setQuote(quoteResult);
-        setShowQuote(true);
-      } else {
-        setError('Failed to get quote from Li.Fi');
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to get quote');
-    } finally {
-      setFetchingQuote(false);
-    }
+    // Show PIN input directly
+    setShowQuote(true);
   };
 
   const handleConfirmSwap = async () => {
@@ -254,50 +182,58 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
       return;
     }
 
-    if (!quote) {
-      setError('No quote available');
-      return;
-    }
+    setExecuting(true);
 
     try {
-      // Call swapContext.executeSwap directly
-      const txHash = await executeSwap(quote, pin);
+      const chainType = effectiveChain === 'sol' ? 'sol' : 'eth';
+      const chainMeta = effectiveChain === 'sol' ? TOKEN_META.solana : TOKEN_META.ethereum;
       
-      setSuccess(`${side === 'buy' ? 'Buy' : 'Sell'} order executed! TX: ${txHash.slice(0, 10)}...`);
+      // Get token addresses
+      const fromTokenMeta = side === 'buy' ? chainMeta[tokenOut] : chainMeta[tokenIn];
+      const toTokenMeta = side === 'buy' ? chainMeta[tokenIn] : chainMeta[tokenOut];
       
-      // Save to trade history
-      try {
-        const chainType = effectiveChain === 'sol' ? 'solana' : 'ethereum';
-        const chainMeta = effectiveChain === 'sol' ? TOKEN_META.solana : TOKEN_META.ethereum;
-        const chainId = chainType === 'solana' ? 1151111081099710 : 1;
-        
-        // Get token metadata for history
-        const fromTokenMeta = side === 'buy' ? chainMeta[tokenOut] : chainMeta[tokenIn];
-        const toTokenMeta = side === 'buy' ? chainMeta[tokenIn] : chainMeta[tokenOut];
-        
-        await fetch('/api/spot/trades', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: user?.userId,
-            txHash,
-            chainId,
-            pair: selectedPair,
-            side: side.toUpperCase(),
-            fromTokenAddress: fromTokenMeta.address,
-            fromTokenSymbol: side === 'buy' ? tokenOut : tokenIn,
-            fromAmount: amount,
-            toTokenAddress: toTokenMeta.address,
-            toTokenSymbol: side === 'buy' ? tokenIn : tokenOut,
-            toAmount: total,
-            executionPrice: currentMarketPrice.toString(),
-            slippagePercent: 0.5,
-            status: 'CONFIRMED',
-          }),
-        });
-      } catch (historyErr) {
-        console.warn('[MobileTradingModal] Failed to save trade history:', historyErr);
+      if (!fromTokenMeta || !toTokenMeta) {
+        throw new Error('Token not supported');
       }
+      
+      // Convert amount to smallest unit
+      const decimals = fromTokenMeta.decimals;
+      const [intPart = '0', fracPart = ''] = amount.split('.');
+      const paddedFrac = fracPart.padEnd(decimals, '0').slice(0, decimals);
+      const rawAmount = (intPart + paddedFrac).replace(/^0+/, '') || '0';
+      
+      console.log('[MobileTradingModal] Executing trade:', {
+        userId: user?.userId,
+        fromChain: chainType,
+        tokenIn: fromTokenMeta.address,
+        tokenOut: toTokenMeta.address,
+        amountIn: rawAmount
+      });
+      
+      // Call backend execute-trade endpoint directly
+      const response = await fetch('/api/execute-trade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user?.userId,
+          fromChain: chainType,
+          toChain: chainType,
+          tokenIn: fromTokenMeta.address,
+          tokenOut: toTokenMeta.address,
+          amountIn: rawAmount,
+          slippage: 0.005, // 0.5%
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || result.error || 'Failed to execute trade');
+      }
+      
+      console.log('[MobileTradingModal] Trade executed:', result);
+      
+      setSuccess(`${side === 'buy' ? 'Buy' : 'Sell'} order executed! TX: ${result.txHash.slice(0, 10)}...`);
       
       // Refetch balances from backend (spot wallets)
       await refetchBalances();
@@ -309,7 +245,6 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
       setSliderValue(0);
       setPin('');
       setShowQuote(false);
-      setQuote(null);
       
       // Close modal after 3 seconds
       setTimeout(() => {
@@ -319,6 +254,8 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
       const errorMsg = err instanceof Error ? err.message : 'Failed to execute swap';
       setError(errorMsg);
       setPinError(errorMsg);
+    } finally {
+      setExecuting(false);
     }
   };
 
@@ -452,36 +389,10 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
             </>
           ) : (
             <>
-              {/* Quote Details */}
-              {quote && (
-                <div className="space-y-3">
-                  <div className="p-3 bg-[#2b3139] rounded-lg space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-[#848e9c]">You {side === 'buy' ? 'Pay' : 'Sell'}</span>
-                      <span className="text-white font-mono">
-                        {(parseFloat(quote.fromAmount) / Math.pow(10, quote.fromToken.decimals)).toFixed(6)} {quote.fromToken.symbol}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-[#848e9c]">You {side === 'buy' ? 'Receive' : 'Get'}</span>
-                      <span className="text-white font-mono">
-                        {(parseFloat(quote.toAmount) / Math.pow(10, quote.toToken.decimals)).toFixed(6)} {quote.toToken.symbol}
-                      </span>
-                    </div>
-                    {quote.toolDetails && (
-                      <div className="flex justify-between text-xs">
-                        <span className="text-[#848e9c]">Route</span>
-                        <span className="text-white">{quote.toolDetails.name}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
               {/* PIN Input */}
-              <div className="mt-4 space-y-3">
+              <div className="space-y-3">
                 <label className="block text-sm text-[#848e9c] font-medium">
-                  Enter PIN to confirm
+                  Enter PIN to confirm trade
                 </label>
                 <div className="relative">
                   <input
@@ -531,22 +442,20 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
           {!showQuote ? (
             <button
               onClick={handleGetQuote}
-              disabled={fetchingQuote || !amount || loadingBalances || loadingWallets}
+              disabled={executing || !amount || loadingBalances}
               className={`w-full py-4 rounded-lg font-semibold text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                 side === 'buy'
                   ? 'bg-[#0ecb81] hover:bg-[#0ecb81]/90 text-white'
                   : 'bg-[#f6465d] hover:bg-[#f6465d]/90 text-white'
               }`}
             >
-              {fetchingQuote ? (
+              {executing ? (
                 <span className="flex items-center justify-center gap-2">
                   <Icon icon="ph:circle-notch" className="animate-spin" width={20} />
-                  Getting Quote...
+                  Executing...
                 </span>
-              ) : loadingWallets ? (
-                'Loading Wallet...'
               ) : (
-                `Get Quote`
+                `Continue`
               )}
             </button>
           ) : (

@@ -73,11 +73,71 @@ export default function MobileTradingForm({ selectedPair, chain }: MobileTrading
     setExecuting(true);
     
     try {
-      console.log('Order submitted:', { side, total, slippageTolerance });
+      const chainType = chain === 'sol' ? 'sol' : 'eth';
       
-      // TODO: Implement actual trade execution via backend API
-      // This should call the backend spot trading API
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Token metadata
+      const TOKEN_META: Record<string, Record<string, { address: string; decimals: number }>> = {
+        eth: {
+          ETH: { address: '0x0000000000000000000000000000000000000000', decimals: 18 },
+          BTC: { address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', decimals: 8 },
+          WBTC: { address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', decimals: 8 },
+          USDT: { address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', decimals: 6 },
+          USDC: { address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', decimals: 6 },
+        },
+        sol: {
+          SOL: { address: '11111111111111111111111111111111', decimals: 9 },
+          WSOL: { address: 'So11111111111111111111111111111111111111112', decimals: 9 },
+          USDT: { address: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', decimals: 6 },
+          USDC: { address: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', decimals: 6 },
+        },
+      };
+      
+      const chainMeta = TOKEN_META[chainType];
+      
+      // Get token addresses based on buy/sell
+      const fromTokenMeta = side === 'buy' ? chainMeta[tokenOut] : chainMeta[tokenIn];
+      const toTokenMeta = side === 'buy' ? chainMeta[tokenIn] : chainMeta[tokenOut];
+      
+      if (!fromTokenMeta || !toTokenMeta) {
+        throw new Error('Token not supported');
+      }
+      
+      // Convert amount to smallest unit
+      const decimals = fromTokenMeta.decimals;
+      const [intPart = '0', fracPart = ''] = total.split('.');
+      const paddedFrac = fracPart.padEnd(decimals, '0').slice(0, decimals);
+      const rawAmount = (intPart + paddedFrac).replace(/^0+/, '') || '0';
+      
+      console.log('[MobileTradingForm] Executing trade:', {
+        userId: user.userId,
+        fromChain: chainType,
+        tokenIn: fromTokenMeta.address,
+        tokenOut: toTokenMeta.address,
+        amountIn: rawAmount
+      });
+      
+      // Call backend execute-trade endpoint directly
+      const response = await fetch('/api/execute-trade', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.userId,
+          fromChain: chainType,
+          toChain: chainType,
+          tokenIn: fromTokenMeta.address,
+          tokenOut: toTokenMeta.address,
+          amountIn: rawAmount,
+          slippage: 0.005, // 0.5%
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || result.error || 'Failed to execute trade');
+      }
+      
+      console.log('[MobileTradingForm] Trade executed:', result);
       
       setSuccess(`${side === 'buy' ? 'Buy' : 'Sell'} order placed successfully!`);
       
