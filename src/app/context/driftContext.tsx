@@ -645,12 +645,12 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       // Import BN for proper amount encoding
       const BN = (await import('bn.js')).default;
       const { getAssociatedTokenAddress, createAssociatedTokenAccountInstruction } = await import('@solana/spl-token');
-      const { Transaction } = await import('@solana/web3.js');
+      const { Transaction, PublicKey: SolanaPublicKey } = await import('@solana/web3.js');
       
       const depositAmount = new BN(Math.floor(netAmount * 1e6)); // Convert to USDC base units (6 decimals)
       
       // USDC mint address on Solana mainnet
-      const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+      const USDC_MINT = new SolanaPublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
       
       // Get user's USDC associated token account
       const userTokenAccount = await getAssociatedTokenAddress(
@@ -684,10 +684,18 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         console.log('[DriftContext] USDC token account created:', createAtaSig);
       }
       
+      // Get the user account public key using getUserAccountPublicKey method
+      const { getUserAccountPublicKey } = await import('@drift-labs/sdk');
+      const userAccountPublicKey = getUserAccountPublicKey(
+        client.program.programId,
+        client.wallet.publicKey,
+        0 // subaccount ID
+      );
+      
       const txSignature = await client.deposit(
         depositAmount,
         0, // USDC market index
-        client.getUser().getUserAccountPublicKey(),
+        userAccountPublicKey,
         userTokenAccount // Pass the user's token account explicitly
       );
       
@@ -729,12 +737,12 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       // Import BN for proper amount encoding
       const BN = (await import('bn.js')).default;
       const { getAssociatedTokenAddress } = await import('@solana/spl-token');
-      const { PublicKey } = await import('@solana/web3.js');
+      const { PublicKey: SolanaPublicKey } = await import('@solana/web3.js');
       
       const withdrawAmount = new BN(Math.floor(amount * 1e6)); // Convert to USDC base units (6 decimals)
       
       // USDC mint address on Solana mainnet
-      const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+      const USDC_MINT = new SolanaPublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
       
       // Get user's USDC associated token account
       const userTokenAccount = await getAssociatedTokenAddress(
@@ -742,10 +750,18 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         client.wallet.publicKey
       );
       
+      // Get the user account public key using getUserAccountPublicKey method
+      const { getUserAccountPublicKey } = await import('@drift-labs/sdk');
+      const userAccountPublicKey = getUserAccountPublicKey(
+        client.program.programId,
+        client.wallet.publicKey,
+        0 // subaccount ID
+      );
+      
       const txSignature = await client.withdraw(
         withdrawAmount,
         0, // USDC market index
-        client.getUser().getUserAccountPublicKey(),
+        userAccountPublicKey,
         userTokenAccount // Pass the user's token account explicitly
       );
       
