@@ -21,6 +21,9 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
   const [total, setTotal] = useState('');
   const [sliderValue, setSliderValue] = useState(0);
   const [currentMarketPrice, setCurrentMarketPrice] = useState<number>(0);
+  const [executing, setExecuting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   const [tokenIn, tokenOut] = selectedPair.split('-');
 
@@ -128,13 +131,56 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
   if (!isOpen) return null;
 
   const handleSubmit = async () => {
-    console.log('Order submitted:', { side, orderType, price, amount, total });
+    // Reset messages
+    setError(null);
+    setSuccess(null);
     
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Validation
+    if (!amount || parseFloat(amount) <= 0) {
+      setError('Please enter a valid amount');
+      return;
+    }
     
-    await refetchBalances();
+    if (orderType === 'limit' && (!price || parseFloat(price) <= 0)) {
+      setError('Please enter a valid price');
+      return;
+    }
     
-    onClose();
+    // Check balance
+    if (parseFloat(amount) > currentBalance) {
+      setError(`Insufficient ${currentToken} balance`);
+      return;
+    }
+    
+    setExecuting(true);
+    
+    try {
+      console.log('Order submitted:', { side, orderType, price, amount, total });
+      
+      // Simulate trade execution (replace with actual API call)
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      setSuccess(`${side === 'buy' ? 'Buy' : 'Sell'} order placed successfully!`);
+      
+      // Refetch balances
+      await refetchBalances();
+      
+      // Reset form
+      setAmount('');
+      setPrice('');
+      setTotal('');
+      setSliderValue(0);
+      
+      // Close modal after 2 seconds
+      setTimeout(() => {
+        onClose();
+      }, 2000);
+      
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to execute trade');
+    } finally {
+      setExecuting(false);
+    }
   };
 
   return (
@@ -279,19 +325,34 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
               </div>
             </div>
           )}
+
+          {/* Error Message */}
+          {error && (
+            <div className="p-3 bg-[rgba(246,70,93,0.12)] border border-[#f6465d] rounded-lg text-sm text-[#f6465d]">
+              {error}
+            </div>
+          )}
+
+          {/* Success Message */}
+          {success && (
+            <div className="p-3 bg-[rgba(14,203,129,0.12)] border border-[#0ecb81] rounded-lg text-sm text-[#0ecb81]">
+              {success}
+            </div>
+          )}
         </div>
 
         {/* Footer */}
         <div className="p-4 border-t border-[#2b3139] safe-area-bottom">
           <button
             onClick={handleSubmit}
-            className={`w-full py-4 rounded-lg font-semibold text-base transition-colors ${
+            disabled={executing || !amount || loadingBalances}
+            className={`w-full py-4 rounded-lg font-semibold text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
               side === 'buy'
                 ? 'bg-[#0ecb81] hover:bg-[#0ecb81]/90 text-white'
                 : 'bg-[#f6465d] hover:bg-[#f6465d]/90 text-white'
             }`}
           >
-            {side === 'buy' ? 'Buy' : 'Sell'} {tokenIn}
+            {executing ? 'Processing...' : `${side === 'buy' ? 'Buy' : 'Sell'} ${tokenIn}`}
           </button>
         </div>
       </div>

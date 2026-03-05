@@ -14,6 +14,9 @@ export default function MobileTradingForm({ selectedPair, balance }: MobileTradi
   const [total, setTotal] = useState('');
   const [sliderValue, setSliderValue] = useState(0);
   const [slippageTolerance, setSlippageTolerance] = useState(false);
+  const [executing, setExecuting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   const [tokenIn, tokenOut] = selectedPair.split('-');
   const currentToken = side === 'buy' ? tokenOut : tokenIn;
@@ -27,6 +30,50 @@ export default function MobileTradingForm({ selectedPair, balance }: MobileTradi
     setSliderValue(value);
     const calculatedAmount = (balance * value) / 100;
     setAmount(calculatedAmount.toFixed(6));
+  };
+
+  const handleSubmit = async () => {
+    // Reset messages
+    setError(null);
+    setSuccess(null);
+    
+    // Validation
+    if (!total || parseFloat(total) <= 0) {
+      setError('Please enter a valid amount');
+      return;
+    }
+    
+    // Check balance
+    if (parseFloat(total) > balance) {
+      setError(`Insufficient ${currentToken} balance`);
+      return;
+    }
+    
+    setExecuting(true);
+    
+    try {
+      console.log('Order submitted:', { side, total, slippageTolerance });
+      
+      // Simulate trade execution (replace with actual API call)
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      setSuccess(`${side === 'buy' ? 'Buy' : 'Sell'} order placed successfully!`);
+      
+      // Reset form
+      setAmount('');
+      setTotal('');
+      setSliderValue(0);
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        setSuccess(null);
+      }, 3000);
+      
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to execute trade');
+    } finally {
+      setExecuting(false);
+    }
   };
 
   return (
@@ -137,15 +184,31 @@ export default function MobileTradingForm({ selectedPair, balance }: MobileTradi
         </div>
       </div>
 
+      {/* Error Message */}
+      {error && (
+        <div className="p-2 bg-error/10 border border-error rounded-lg text-[10px] text-error">
+          {error}
+        </div>
+      )}
+
+      {/* Success Message */}
+      {success && (
+        <div className="p-2 bg-success/10 border border-success rounded-lg text-[10px] text-success">
+          {success}
+        </div>
+      )}
+
       {/* Buy Button */}
       <button
-        className={`w-full py-2.5 rounded-lg font-semibold text-sm mt-1 transition-colors ${
+        onClick={handleSubmit}
+        disabled={executing || !total}
+        className={`w-full py-2.5 rounded-lg font-semibold text-sm mt-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
           side === 'buy'
             ? 'bg-success hover:bg-success/90 text-white'
             : 'bg-error hover:bg-error/90 text-white'
         }`}
       >
-        {side === 'buy' ? 'Buy' : 'Sell'} {tokenIn}
+        {executing ? 'Processing...' : `${side === 'buy' ? 'Buy' : 'Sell'} ${tokenIn}`}
       </button>
     </div>
   );
