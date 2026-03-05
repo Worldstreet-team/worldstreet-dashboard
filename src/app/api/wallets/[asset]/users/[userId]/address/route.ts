@@ -4,13 +4,13 @@ import { auth } from '@clerk/nextjs/server';
 const BACKEND_URL = 'https://trading.watchup.site';
 
 /**
- * GET /api/trades/[userId]
- * Returns trade history for a user
- * Query params: status, limit (default 50)
+ * GET /api/wallets/[asset]/users/[userId]/address
+ * Single asset lookup for a user
+ * Query param: chain (optional, defaults to 'evm')
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: { asset: string; userId: string } }
 ) {
   try {
     const { userId: clerkUserId } = await auth();
@@ -22,10 +22,9 @@ export async function GET(
       );
     }
 
-    const { userId } = params;
+    const { asset, userId } = params;
     const { searchParams } = new URL(request.url);
-    const status = searchParams.get('status');
-    const limit = searchParams.get('limit') || '50';
+    const chain = searchParams.get('chain') || 'evm';
 
     // Verify the requesting user matches the userId
     if (clerkUserId !== userId) {
@@ -35,28 +34,26 @@ export async function GET(
       );
     }
 
-    let url = `${BACKEND_URL}/api/trades/${userId}?limit=${limit}`;
-    if (status) {
-      url += `&status=${status}`;
-    }
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    });
+    const response = await fetch(
+      `${BACKEND_URL}/api/wallets/${asset}/users/${userId}/address?chain=${chain}`,
+      {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
 
     if (!response.ok) {
       const errorData = await response.json();
       return NextResponse.json(
-        { error: errorData.error || 'Failed to fetch trade history' },
+        { error: errorData.error || 'Failed to fetch wallet address' },
         { status: response.status }
       );
     }
 
-    const trades = await response.json();
-    return NextResponse.json(trades);
+    const wallet = await response.json();
+    return NextResponse.json(wallet);
   } catch (error) {
-    console.error('[Trade History API] Error:', error);
+    console.error('[Wallet Address API] Error:', error);
     return NextResponse.json(
       { error: 'Internal server error', message: (error as Error).message },
       { status: 500 }

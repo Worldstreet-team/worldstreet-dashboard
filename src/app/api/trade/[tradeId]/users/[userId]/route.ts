@@ -4,13 +4,12 @@ import { auth } from '@clerk/nextjs/server';
 const BACKEND_URL = 'https://trading.watchup.site';
 
 /**
- * GET /api/trades/[userId]
- * Returns trade history for a user
- * Query params: status, limit (default 50)
+ * GET /api/trade/[tradeId]/users/[userId]
+ * Get a specific trade by ID
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: { tradeId: string; userId: string } }
 ) {
   try {
     const { userId: clerkUserId } = await auth();
@@ -22,10 +21,7 @@ export async function GET(
       );
     }
 
-    const { userId } = params;
-    const { searchParams } = new URL(request.url);
-    const status = searchParams.get('status');
-    const limit = searchParams.get('limit') || '50';
+    const { tradeId, userId } = params;
 
     // Verify the requesting user matches the userId
     if (clerkUserId !== userId) {
@@ -35,28 +31,26 @@ export async function GET(
       );
     }
 
-    let url = `${BACKEND_URL}/api/trades/${userId}?limit=${limit}`;
-    if (status) {
-      url += `&status=${status}`;
-    }
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    });
+    const response = await fetch(
+      `${BACKEND_URL}/api/trade/${tradeId}/users/${userId}`,
+      {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
 
     if (!response.ok) {
       const errorData = await response.json();
       return NextResponse.json(
-        { error: errorData.error || 'Failed to fetch trade history' },
+        { error: errorData.error || 'Failed to fetch trade' },
         { status: response.status }
       );
     }
 
-    const trades = await response.json();
-    return NextResponse.json(trades);
+    const trade = await response.json();
+    return NextResponse.json(trade);
   } catch (error) {
-    console.error('[Trade History API] Error:', error);
+    console.error('[Trade Detail API] Error:', error);
     return NextResponse.json(
       { error: 'Internal server error', message: (error as Error).message },
       { status: 500 }

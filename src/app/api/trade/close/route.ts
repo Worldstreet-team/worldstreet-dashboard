@@ -1,12 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthUser } from '@/lib/auth';
+import { auth } from '@clerk/nextjs/server';
 
 const BACKEND_URL = 'https://trading.watchup.site';
 
+/**
+ * POST /api/trade/close
+ * Closes an existing open trade position
+ * 
+ * Request body:
+ * {
+ *   "tradeId": "uuid-here",
+ *   "slippage": 0.005 // optional
+ * }
+ */
 export async function POST(request: NextRequest) {
   try {
-    const authUser = await getAuthUser();
-    if (!authUser) {
+    const { userId } = await auth();
+    
+    if (!userId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -16,65 +27,57 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { tradeId, slippage = 0.005 } = body;
 
-    // Validation
+    // Validate required fields
     if (!tradeId) {
       return NextResponse.json(
-        { error: 'Missing required fields', details: ['tradeId is required'] },
+        { error: 'Missing required field: tradeId' },
         { status: 400 }
       );
     }
 
-    if (typeof slippage !== 'number' || slippage < 0 || slippage > 0.5) {
+    // Validate slippage
+    if (slippage < 0 || slippage > 0.5) {
       return NextResponse.json(
-        { error: 'Invalid slippage', details: ['slippage must be between 0 and 0.5'] },
+        { error: 'Slippage must be between 0 and 0.5 (0-50%)' },
         { status: 400 }
       );
     }
 
-    console.log('[Close Trade] Request:', {
-      userId: authUser.userId,
+    console.log('[Trade Close API] Closing trade:', {
+      userId,
       tradeId,
       slippage
     });
 
-    // Call backend
-    const response = await fetch(`${BACKEND_URL}/api/trade/close`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: authUser.userId,
-        tradeId,
-        slippage
-      })
-    });
+    const response = await fetch(
+      `${BACKEND_URL}/api/trade/close`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          tradeId,
+          slippage
+        })
+      }
+    );
 
     const data = await response.json();
 
-    console.log('[Close Trade] Backend response:', {
-      status: response.status,
-      success: response.ok,
-      pnl: data.trade?.pnl_realized
-    });
-
     if (!response.ok) {
+      console.error('[Trade Close API] Backend error:', data);
       return NextResponse.json(
-        { 
-          error: data.error || 'Failed to close trade',
-          message: data.message,
-          details: data.details
-        },
+        { error: data.error || 'Failed to close trade', message: data.message },
         { status: response.status }
       );
     }
 
+    console.log('[Trade Close API] Trade closed successfully:', data);
     return NextResponse.json(data);
   } catch (error) {
-    console.error('[Close Trade] Error:', error);
+    console.error('[Trade Close API] Error:', error);
     return NextResponse.json(
-      { 
-        error: 'Internal server error',
-        message: (error as Error).message
-      },
+      { error: 'Internal server error', message: (error as Error).message },
       { status: 500 }
     );
   }

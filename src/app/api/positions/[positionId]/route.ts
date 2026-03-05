@@ -4,13 +4,13 @@ import { auth } from '@clerk/nextjs/server';
 const BACKEND_URL = 'https://trading.watchup.site';
 
 /**
- * GET /api/trades/[userId]
- * Returns trade history for a user
- * Query params: status, limit (default 50)
+ * GET /api/positions/[positionId]
+ * Get specific position by ID
+ * Query param: userId (required)
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: { positionId: string } }
 ) {
   try {
     const { userId: clerkUserId } = await auth();
@@ -22,10 +22,16 @@ export async function GET(
       );
     }
 
-    const { userId } = params;
+    const { positionId } = params;
     const { searchParams } = new URL(request.url);
-    const status = searchParams.get('status');
-    const limit = searchParams.get('limit') || '50';
+    const userId = searchParams.get('userId');
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'userId query parameter is required' },
+        { status: 400 }
+      );
+    }
 
     // Verify the requesting user matches the userId
     if (clerkUserId !== userId) {
@@ -35,28 +41,26 @@ export async function GET(
       );
     }
 
-    let url = `${BACKEND_URL}/api/trades/${userId}?limit=${limit}`;
-    if (status) {
-      url += `&status=${status}`;
-    }
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    });
+    const response = await fetch(
+      `${BACKEND_URL}/api/positions/${positionId}?userId=${userId}`,
+      {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
 
     if (!response.ok) {
       const errorData = await response.json();
       return NextResponse.json(
-        { error: errorData.error || 'Failed to fetch trade history' },
+        { error: errorData.error || 'Failed to fetch position' },
         { status: response.status }
       );
     }
 
-    const trades = await response.json();
-    return NextResponse.json(trades);
+    const position = await response.json();
+    return NextResponse.json(position);
   } catch (error) {
-    console.error('[Trade History API] Error:', error);
+    console.error('[Position Detail API] Error:', error);
     return NextResponse.json(
       { error: 'Internal server error', message: (error as Error).message },
       { status: 500 }
