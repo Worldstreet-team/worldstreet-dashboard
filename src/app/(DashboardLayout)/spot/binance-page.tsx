@@ -145,8 +145,6 @@ export default function BinanceSpotPage() {
       <div className="flex-1 flex flex-col">
         {/* Desktop Layout */}
         <div className="hidden md:grid md:grid-cols-[280px_1fr_340px] flex-1 min-h-0">
-        {/* Desktop Layout */}
-        <div className="hidden md:grid md:grid-cols-[280px_1fr_340px] flex-1 min-h-0">
           {/* LEFT: Order Book */}
           <div className="border-r border-[#2b3139] overflow-hidden">
             <BinanceOrderBook selectedPair={selectedPair} />
