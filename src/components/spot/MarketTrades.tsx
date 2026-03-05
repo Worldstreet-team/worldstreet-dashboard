@@ -11,6 +11,7 @@
 
 import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
+import { useAuth } from '@/app/context/authContext';
 
 interface Trade {
   id: string;
@@ -18,6 +19,20 @@ interface Trade {
   amount: number;
   time: Date;
   side: 'buy' | 'sell';
+}
+
+interface UserTrade {
+  id: string;
+  user_id: string;
+  chain_from: string;
+  chain_to: string;
+  token_in: string;
+  token_out: string;
+  amount_in: string;
+  amount_out: string;
+  price: string;
+  status: string;
+  created_at: string;
 }
 
 interface MarketTradesProps {
@@ -34,9 +49,12 @@ interface KuCoinTrade {
 }
 
 export default function MarketTrades({ selectedPair }: MarketTradesProps) {
+  const { user } = useAuth();
   const [trades, setTrades] = useState<Trade[]>([]);
+  const [userTrades, setUserTrades] = useState<UserTrade[]>([]);
   const [activeTab, setActiveTab] = useState<'market' | 'my'>('market');
   const [loading, setLoading] = useState(true);
+  const [userTradesLoading, setUserTradesLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -44,6 +62,40 @@ export default function MarketTrades({ selectedPair }: MarketTradesProps) {
     const interval = setInterval(fetchTrades, 3000);
     return () => clearInterval(interval);
   }, [selectedPair]);
+
+  // Fetch user trades when switching to "My Trades" tab
+  useEffect(() => {
+    if (activeTab === 'my' && user?.userId) {
+      fetchUserTrades();
+    }
+  }, [activeTab, user?.userId]);
+
+  const fetchUserTrades = async () => {
+    if (!user?.userId) return;
+    
+    setUserTradesLoading(true);
+    try {
+      const response = await fetch(`/api/trades/${user.userId}?status=COMPLETED&limit=50`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch user trades');
+      }
+
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to fetch user trades');
+      }
+
+      setUserTrades(result.data || []);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching user trades:', err);
+      setError('Failed to fetch your trades');
+    } finally {
+      setUserTradesLoading(false);
+    }
+  };
 
   const fetchTrades = async () => {
     try {
@@ -177,12 +229,74 @@ export default function MarketTrades({ selectedPair }: MarketTradesProps) {
           )}
         </>
       ) : (
-        <div className="flex-1 flex items-center justify-center p-4">
-          <div className="text-center">
-            <Icon icon="ph:swap" className="mx-auto mb-2 text-[#848e9c]" width={24} />
-            <p className="text-xs text-[#848e9c]">No trades yet</p>
+        /* My Trades Tab */
+        <>
+          {/* Column Headers */}
+          <div className="px-2 py-1 border-b border-[#2b3139] grid grid-cols-4 gap-2 text-[9px] text-[#848e9c] font-medium">
+            <div className="text-left">Pair</div>
+            <div className="text-right">Price</div>
+            <div className="text-right">Amount</div>
+            <div className="text-right">Time</div>
           </div>
-        </div>
+
+          {/* Loading State */}
+          {userTradesLoading ? (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center">
+                <Icon icon="ph:spinner" className="mx-auto mb-2 text-[#848e9c] animate-spin" width={24} />
+                <p className="text-xs text-[#848e9c]">Loading your trades...</p>
+              </div>
+            </div>
+          ) : !user?.userId ? (
+            <div className="flex-1 flex items-center justify-center p-4">
+              <div className="text-center">
+                <Icon icon="ph:user" className="mx-auto mb-2 text-[#848e9c]" width={24} />
+                <p className="text-xs text-[#848e9c]">Sign in to view your trades</p>
+              </div>
+            </div>
+          ) : userTrades.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center p-4">
+              <div className="text-center">
+                <Icon icon="ph:swap" className="mx-auto mb-2 text-[#848e9c]" width={24} />
+                <p className="text-xs text-[#848e9c]">No trades yet</p>
+              </div>
+            </div>
+          ) : (
+            /* User Trades List */
+            <div className="flex-1 overflow-y-auto scrollbar-hide">
+              {userTrades.map((trade) => {
+                const isBuy = trade.token_out !== 'USDT' && trade.token_out !== 'USDC';
+                const price = parseFloat(trade.price);
+                const amount = parseFloat(isBuy ? trade.amount_out : trade.amount_in);
+                const tradeTime = new Date(trade.created_at);
+                
+                return (
+                  <div
+                    key={trade.id}
+                    className="px-2 py-0.5 hover:bg-[#2b3139]/50 transition-colors"
+                  >
+                    <div className="grid grid-cols-4 gap-2 text-[10px] font-mono">
+                      <div className="text-left text-white truncate">
+                        {trade.token_in}/{trade.token_out}
+                      </div>
+                      <div className={`text-right font-semibold ${
+                        isBuy ? 'text-[#0ecb81]' : 'text-[#f6465d]'
+                      }`}>
+                        {formatPrice(price)}
+                      </div>
+                      <div className="text-right text-white">
+                        {formatAmount(amount)}
+                      </div>
+                      <div className="text-right text-[#848e9c]">
+                        {formatTime(tradeTime)}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

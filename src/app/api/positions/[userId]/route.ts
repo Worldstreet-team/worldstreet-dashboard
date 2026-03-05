@@ -9,16 +9,18 @@ export async function GET(
   try {
     const { userId } = params;
     const { searchParams } = new URL(request.url);
-    const status = searchParams.get('status');
+    const status = searchParams.get('status') || 'OPEN';
     const limit = searchParams.get('limit') || '50';
 
     // Build query string
-    const queryParams = new URLSearchParams();
-    if (status) queryParams.append('status', status);
-    queryParams.append('limit', limit);
+    const queryParams = new URLSearchParams({
+      userId,
+      status,
+      limit,
+    });
 
     const response = await fetch(
-      `${BACKEND_URL}/api/trades/${userId}?${queryParams.toString()}`,
+      `${BACKEND_URL}/api/positions?${queryParams.toString()}`,
       {
         method: 'GET',
         headers: {
@@ -30,21 +32,21 @@ export async function GET(
     if (!response.ok) {
       const error = await response.json();
       return NextResponse.json(
-        { error: error.message || 'Failed to fetch trade history' },
+        { error: error.message || 'Failed to fetch positions' },
         { status: response.status }
       );
     }
 
-    const trades = await response.json();
+    const positions = await response.json();
 
     return NextResponse.json({
       success: true,
-      data: trades,
+      data: positions,
     });
   } catch (error) {
-    console.error('Error fetching trade history:', error);
+    console.error('Error fetching positions:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch trade history' },
+      { error: 'Failed to fetch positions' },
       { status: 500 }
     );
   }

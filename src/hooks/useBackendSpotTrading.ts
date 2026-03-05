@@ -68,6 +68,7 @@ export function useBackendSpotTrading() {
     side: 'buy' | 'sell';
     amount: string;
     chain: string; // 'sol' or 'evm'
+    tokenAddress?: string; // Optional: mint/contract address
   }): Promise<BackendQuote | null> => {
     setError(null);
     setQuote(null);
@@ -83,8 +84,19 @@ export function useBackendSpotTrading() {
       const chainMeta = TOKEN_META[chainType];
 
       // Get token addresses
-      const fromTokenMeta = params.side === 'buy' ? chainMeta[quoteAsset] : chainMeta[baseAsset];
-      const toTokenMeta = params.side === 'buy' ? chainMeta[baseAsset] : chainMeta[quoteAsset];
+      // Use tokenAddress prop if available, otherwise fall back to TOKEN_META
+      let fromTokenMeta = params.side === 'buy' ? chainMeta[quoteAsset] : chainMeta[baseAsset];
+      let toTokenMeta = params.side === 'buy' ? chainMeta[baseAsset] : chainMeta[quoteAsset];
+      
+      // Override with tokenAddress if provided (for base asset)
+      if (params.tokenAddress) {
+        const baseTokenMeta = { address: params.tokenAddress, decimals: params.chain === 'sol' ? 9 : 18 };
+        if (params.side === 'buy') {
+          toTokenMeta = baseTokenMeta;
+        } else {
+          fromTokenMeta = baseTokenMeta;
+        }
+      }
 
       if (!fromTokenMeta || !toTokenMeta) {
         throw new Error('Token not supported');
@@ -148,6 +160,7 @@ export function useBackendSpotTrading() {
     side: 'buy' | 'sell';
     amount: string;
     chain: string;
+    tokenAddress?: string; // Optional: mint/contract address
   }): Promise<BackendExecuteResult | null> => {
     setError(null);
     setExecuting(true);
@@ -166,8 +179,19 @@ export function useBackendSpotTrading() {
       const chainMeta = TOKEN_META[chainType];
 
       // Get token addresses
-      const fromTokenMeta = params.side === 'buy' ? chainMeta[quoteAsset] : chainMeta[baseAsset];
-      const toTokenMeta = params.side === 'buy' ? chainMeta[baseAsset] : chainMeta[quoteAsset];
+      // Use tokenAddress prop if available, otherwise fall back to TOKEN_META
+      let fromTokenMeta = params.side === 'buy' ? chainMeta[quoteAsset] : chainMeta[baseAsset];
+      let toTokenMeta = params.side === 'buy' ? chainMeta[baseAsset] : chainMeta[quoteAsset];
+      
+      // Override with tokenAddress if provided (for base asset)
+      if (params.tokenAddress) {
+        const baseTokenMeta = { address: params.tokenAddress, decimals: params.chain === 'sol' ? 9 : 18 };
+        if (params.side === 'buy') {
+          toTokenMeta = baseTokenMeta;
+        } else {
+          fromTokenMeta = baseTokenMeta;
+        }
+      }
 
       if (!fromTokenMeta || !toTokenMeta) {
         throw new Error('Token not supported');

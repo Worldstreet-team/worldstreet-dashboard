@@ -8,9 +8,10 @@ import { usePairBalances } from '@/hooks/usePairBalances';
 interface MobileTradingFormProps {
   selectedPair: string;
   chain: string; // Required: specify blockchain network ('sol' or 'evm')
+  tokenAddress?: string; // Optional: mint/contract address of the base asset
 }
 
-export default function MobileTradingForm({ selectedPair, chain }: MobileTradingFormProps) {
+export default function MobileTradingForm({ selectedPair, chain, tokenAddress }: MobileTradingFormProps) {
   const { user } = useAuth();
   
   const [side, setSide] = useState<'buy' | 'sell'>('buy');
@@ -95,8 +96,19 @@ export default function MobileTradingForm({ selectedPair, chain }: MobileTrading
       const chainMeta = TOKEN_META[chainType];
       
       // Get token addresses based on buy/sell
-      const fromTokenMeta = side === 'buy' ? chainMeta[tokenOut] : chainMeta[tokenIn];
-      const toTokenMeta = side === 'buy' ? chainMeta[tokenIn] : chainMeta[tokenOut];
+      // Use tokenAddress prop if available, otherwise fall back to TOKEN_META
+      let fromTokenMeta = side === 'buy' ? chainMeta[tokenOut] : chainMeta[tokenIn];
+      let toTokenMeta = side === 'buy' ? chainMeta[tokenIn] : chainMeta[tokenOut];
+      
+      // Override with tokenAddress if provided (for base asset)
+      if (tokenAddress) {
+        const baseTokenMeta = { address: tokenAddress, decimals: chainType === 'sol' ? 9 : 18 };
+        if (side === 'buy') {
+          toTokenMeta = baseTokenMeta;
+        } else {
+          fromTokenMeta = baseTokenMeta;
+        }
+      }
       
       if (!fromTokenMeta || !toTokenMeta) {
         throw new Error('Token not supported');

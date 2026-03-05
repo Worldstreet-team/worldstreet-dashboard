@@ -11,9 +11,10 @@ interface MobileTradingModalProps {
   side: 'buy' | 'sell';
   selectedPair: string;
   chain: string; // Required: specify blockchain network ('sol' or 'evm')
+  tokenAddress?: string; // Optional: mint/contract address of the base asset
 }
 
-export default function MobileTradingModal({ isOpen, onClose, side, selectedPair, chain }: MobileTradingModalProps) {
+export default function MobileTradingModal({ isOpen, onClose, side, selectedPair, chain, tokenAddress }: MobileTradingModalProps) {
   const { user } = useAuth();
   
   const [orderType, setOrderType] = useState<'market' | 'limit'>('market');
@@ -189,8 +190,19 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
       const chainMeta = effectiveChain === 'sol' ? TOKEN_META.solana : TOKEN_META.ethereum;
       
       // Get token addresses
-      const fromTokenMeta = side === 'buy' ? chainMeta[tokenOut] : chainMeta[tokenIn];
-      const toTokenMeta = side === 'buy' ? chainMeta[tokenIn] : chainMeta[tokenOut];
+      // Use tokenAddress prop if available, otherwise fall back to TOKEN_META
+      let fromTokenMeta = side === 'buy' ? chainMeta[tokenOut] : chainMeta[tokenIn];
+      let toTokenMeta = side === 'buy' ? chainMeta[tokenIn] : chainMeta[tokenOut];
+      
+      // Override with tokenAddress if provided (for base asset)
+      if (tokenAddress) {
+        const baseTokenMeta = { address: tokenAddress, decimals: chainType === 'sol' ? 9 : 18 };
+        if (side === 'buy') {
+          toTokenMeta = baseTokenMeta;
+        } else {
+          fromTokenMeta = baseTokenMeta;
+        }
+      }
       
       if (!fromTokenMeta || !toTokenMeta) {
         throw new Error('Token not supported');

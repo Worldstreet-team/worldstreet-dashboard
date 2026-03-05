@@ -21,7 +21,7 @@ interface MarketData {
 
 interface BinanceMarketListProps {
   selectedPair: string;
-  onSelectPair: (pair: string, chain?: Chain) => void;
+  onSelectPair: (pair: string, chain?: Chain, tokenAddress?: string) => void;
 }
 
 export default function BinanceMarketList({ selectedPair, onSelectPair }: BinanceMarketListProps) {
@@ -244,7 +244,7 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
             return (
               <div
                 key={market.symbol}
-                onClick={() => onSelectPair(market.symbol, market.chain)}
+                onClick={() => onSelectPair(market.symbol, market.chain, market.mintAddress)}
                 className={`px-3 py-2 cursor-pointer transition-colors ${
                   isSelected
                     ? 'bg-[#1e2329]'

@@ -28,6 +28,7 @@ export default function BinanceSpotPage() {
   const pathname = usePathname();
   const [selectedPair, setSelectedPair] = useState('BTC-USDT');
   const [selectedChain, setSelectedChain] = useState<string>('evm'); // Track the chain for selected pair
+  const [selectedTokenAddress, setSelectedTokenAddress] = useState<string | undefined>(); // Track token address
   const [pairData, setPairData] = useState<Record<string, PairData>>({});
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -127,11 +128,12 @@ export default function BinanceSpotPage() {
     setActivePositionTPSL({ symbol: normalizedSymbol, takeProfit: tp, stopLoss: sl });
   }, []);
 
-  const handleSelectPair = useCallback((pair: string, chain?: 'solana' | 'ethereum' | 'bitcoin') => {
-    console.log('[BinanceSpotPage] Pair selected:', pair, 'Chain:', chain);
+  const handleSelectPair = useCallback((pair: string, chain?: 'solana' | 'ethereum' | 'bitcoin', tokenAddress?: string) => {
+    console.log('[BinanceSpotPage] Pair selected:', pair, 'Chain:', chain, 'Token Address:', tokenAddress);
     
     setSelectedPair(pair);
     setShowPairSelector(false);
+    setSelectedTokenAddress(tokenAddress);
     
     // Map chain to the format expected by trading components
     let newChain = 'evm'; // Default
@@ -392,6 +394,7 @@ export default function BinanceSpotPage() {
               <BinanceOrderForm 
                 selectedPair={selectedPair}
                 chain={selectedChain}
+                tokenAddress={selectedTokenAddress}
                 onTradeExecuted={handleTradeExecuted}
               />
             </div>
@@ -663,6 +666,7 @@ export default function BinanceSpotPage() {
         side={tradingSide}
         selectedPair={selectedPair}
         chain={selectedChain}
+        tokenAddress={selectedTokenAddress}
       />
     </div>
   );

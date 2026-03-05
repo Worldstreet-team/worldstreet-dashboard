@@ -9,9 +9,10 @@ interface BinanceOrderFormProps {
   selectedPair: string;
   onTradeExecuted?: () => void;
   chain: string; // Required: specify blockchain network ('sol' or 'evm')
+  tokenAddress?: string; // Optional: mint/contract address of the base asset
 }
 
-export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain }: BinanceOrderFormProps) {
+export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain, tokenAddress }: BinanceOrderFormProps) {
   const { user } = useAuth();
   
   const [activeTab, setActiveTab] = useState<'buy' | 'sell'>('buy');
@@ -178,8 +179,19 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
       const chainMeta = TOKEN_META[chainType];
       
       // Get token addresses based on buy/sell
-      const fromTokenMeta = activeTab === 'buy' ? chainMeta[quoteAsset] : chainMeta[baseAsset];
-      const toTokenMeta = activeTab === 'buy' ? chainMeta[baseAsset] : chainMeta[quoteAsset];
+      // Use tokenAddress prop if available, otherwise fall back to TOKEN_META
+      let fromTokenMeta = activeTab === 'buy' ? chainMeta[quoteAsset] : chainMeta[baseAsset];
+      let toTokenMeta = activeTab === 'buy' ? chainMeta[baseAsset] : chainMeta[quoteAsset];
+      
+      // Override with tokenAddress if provided (for base asset)
+      if (tokenAddress) {
+        const baseTokenMeta = { address: tokenAddress, decimals: chainType === 'sol' ? 9 : 18 };
+        if (activeTab === 'buy') {
+          toTokenMeta = baseTokenMeta;
+        } else {
+          fromTokenMeta = baseTokenMeta;
+        }
+      }
       
       if (!fromTokenMeta || !toTokenMeta) {
         throw new Error('Token not supported');
