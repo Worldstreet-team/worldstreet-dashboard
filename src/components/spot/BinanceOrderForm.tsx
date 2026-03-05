@@ -1,15 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Icon } from '@iconify/react';
+import { useState } from 'react';
 import { useAuth } from '@/app/context/authContext';
+import { usePairBalances } from '@/hooks/usePairBalances';
 
 interface BinanceOrderFormProps {
   selectedPair: string;
   onTradeExecuted?: () => void;
+  chain?: string; // Optional: specify blockchain network
 }
 
-export default function BinanceOrderForm({ selectedPair, onTradeExecuted }: BinanceOrderFormProps) {
+export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain }: BinanceOrderFormProps) {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'buy' | 'sell'>('buy');
   const [orderType, setOrderType] = useState<'limit' | 'market' | 'stop-limit'>('limit');
@@ -20,49 +21,17 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted }: Bina
   const [executing, setExecuting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  
-  // Balance states
-  const [buyBalance, setBuyBalance] = useState<number>(0);
-  const [sellBalance, setSellBalance] = useState<number>(0);
-  const [loadingBalances, setLoadingBalances] = useState(false);
+
+  // Use the custom hook to fetch pair balances
+  const { 
+    tokenIn: sellBalance, 
+    tokenOut: buyBalance, 
+    loading: loadingBalances,
+    error: balanceError,
+    refetch: refetchBalances 
+  } = usePairBalances(user?.userId, selectedPair, chain);
 
   const [tokenIn, tokenOut] = selectedPair.split('-');
-
-  useEffect(() => {
-    fetchBalances();
-  }, [selectedPair, user]);
-
-  const fetchBalances = async () => {
-    if (!user?.userId) {
-      setBuyBalance(0);
-      setSellBalance(0);
-      return;
-    }
-
-    setLoadingBalances(true);
-    try {
-      const response = await fetch(`/api/users/${user.userId}/balances`);
-      if (!response.ok) throw new Error('Failed to fetch balances');
-
-      const data = await response.json();
-      const balances = Array.isArray(data) ? data : data.balances || [];
-
-      // Find balances (using dummy data for now)
-      const buyTokenBalance = balances.find((b: any) => b.asset.toUpperCase() === tokenOut.toUpperCase());
-      setBuyBalance(buyTokenBalance ? parseFloat(buyTokenBalance.available_balance) : 1000); // Dummy: 1000 USDT
-
-      const sellTokenBalance = balances.find((b: any) => b.asset.toUpperCase() === tokenIn.toUpperCase());
-      setSellBalance(sellTokenBalance ? parseFloat(sellTokenBalance.available_balance) : 0.5); // Dummy: 0.5 BTC
-
-    } catch (err) {
-      console.error('Error fetching balances:', err);
-      // Use dummy data on error
-      setBuyBalance(1000);
-      setSellBalance(0.5);
-    } finally {
-      setLoadingBalances(false);
-    }
-  };
 
   const handlePercentage = (percent: number) => {
     const balance = activeTab === 'buy' ? buyBalance : sellBalance;
@@ -86,7 +55,8 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted }: Bina
       setTotal('');
       setSliderValue(0);
       
-      await fetchBalances();
+      // Refetch balances after trade
+      await refetchBalances();
       
       if (onTradeExecuted) {
         onTradeExecuted();
