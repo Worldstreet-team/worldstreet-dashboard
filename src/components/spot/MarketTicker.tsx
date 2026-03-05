@@ -15,9 +15,6 @@ interface MarketTickerProps {
   onSelectPair: (pair: string) => void;
 }
 
-// KuCoin uses symbols without the dash
-const formatKuCoinSymbol = (pair: string) => pair.replace('-', '');
-
 export default function MarketTicker({ selectedPair, onSelectPair }: MarketTickerProps) {
   const [tickers, setTickers] = useState<TickerData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,10 +34,8 @@ export default function MarketTicker({ selectedPair, onSelectPair }: MarketTicke
       try {
         // Fetch all tickers in parallel via our API route
         const tickerPromises = tradingPairs.map(async (pair) => {
-          const kucoinSymbol = formatKuCoinSymbol(pair);
-          
           const response = await fetch(
-            `/api/kucoin/ticker?symbol=${kucoinSymbol}`
+            `/api/kucoin/ticker?symbol=${pair}`
           );
 
           if (!response.ok) {

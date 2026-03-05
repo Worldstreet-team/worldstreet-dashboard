@@ -9,7 +9,9 @@ Backend proxy routes for KuCoin exchange API integration.
 Fetches market statistics for a trading pair.
 
 **Query Parameters:**
-- `symbol` (required): Trading pair symbol in KuCoin format (e.g., `BTCUSDT`)
+- `symbol` (required): Trading pair symbol in our format (e.g., `BTC-USDT`)
+
+**Note:** The API route automatically converts the symbol from our format (`BTC-USDT`) to KuCoin format (`BTCUSDT`).
 
 **Response:**
 ```json
@@ -30,7 +32,7 @@ Fetches market statistics for a trading pair.
 
 **Example:**
 ```typescript
-const response = await fetch('/api/kucoin/ticker?symbol=BTCUSDT');
+const response = await fetch('/api/kucoin/ticker?symbol=BTC-USDT');
 const data = await response.json();
 ```
 
@@ -41,7 +43,9 @@ const data = await response.json();
 Fetches recent trade history for a trading pair.
 
 **Query Parameters:**
-- `symbol` (required): Trading pair symbol in KuCoin format (e.g., `BTCUSDT`)
+- `symbol` (required): Trading pair symbol in our format (e.g., `BTC-USDT`)
+
+**Note:** The API route automatically converts the symbol from our format (`BTC-USDT`) to KuCoin format (`BTCUSDT`).
 
 **Response:**
 ```json
@@ -62,7 +66,7 @@ Fetches recent trade history for a trading pair.
 
 **Example:**
 ```typescript
-const response = await fetch('/api/kucoin/trades?symbol=BTCUSDT');
+const response = await fetch('/api/kucoin/trades?symbol=BTC-USDT');
 const data = await response.json();
 ```
 
@@ -126,7 +130,8 @@ All routes return consistent error responses:
 ### REST API Example (MarketTicker)
 
 ```typescript
-const response = await fetch(`/api/kucoin/ticker?symbol=${symbol}`);
+// Frontend sends symbol in our format (BTC-USDT)
+const response = await fetch(`/api/kucoin/ticker?symbol=BTC-USDT`);
 const result = await response.json();
 
 if (result.code === '200000' && result.data) {
@@ -134,6 +139,8 @@ if (result.code === '200000' && result.data) {
   const change24h = parseFloat(result.data.changeRate) * 100;
 }
 ```
+
+**Note:** The API route handles the conversion from `BTC-USDT` to `BTCUSDT` internally.
 
 ### WebSocket Example (OrderBook)
 

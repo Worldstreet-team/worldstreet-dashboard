@@ -47,10 +47,8 @@ export default function MarketTrades({ selectedPair }: MarketTradesProps) {
 
   const fetchTrades = async () => {
     try {
-      const kucoinSymbol = selectedPair.replace('-', '');
-      
       const response = await fetch(
-        `/api/kucoin/trades?symbol=${kucoinSymbol}`
+        `/api/kucoin/trades?symbol=${selectedPair}`
       );
 
       if (!response.ok) {
