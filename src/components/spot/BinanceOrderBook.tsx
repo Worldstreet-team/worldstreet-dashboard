@@ -56,9 +56,24 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPair]);
 
-  const connectWebSocket = () => {
+  const connectWebSocket = async () => {
     try {
-      const ws = new WebSocket('wss://ws-api-spot.kucoin.com/');
+      // Get WebSocket token from our API
+      const tokenResponse = await fetch('/api/kucoin/websocket-token');
+      if (!tokenResponse.ok) {
+        throw new Error('Failed to get WebSocket token');
+      }
+
+      const tokenResult = await tokenResponse.json();
+      if (tokenResult.code !== '200000' || !tokenResult.data) {
+        throw new Error('Invalid token response');
+      }
+
+      const { token, instanceServers } = tokenResult.data;
+      const server = instanceServers[0];
+      const wsUrl = `${server.endpoint}?token=${token}`;
+
+      const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -114,6 +129,11 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
     } catch (error) {
       console.error('Error connecting to WebSocket:', error);
       setConnected(false);
+      
+      // Retry connection after 3 seconds
+      reconnectTimeoutRef.current = setTimeout(() => {
+        connectWebSocket();
+      }, 3000);
     }
   };
 

@@ -50,12 +50,7 @@ export default function MarketTrades({ selectedPair }: MarketTradesProps) {
       const kucoinSymbol = selectedPair.replace('-', '');
       
       const response = await fetch(
-        `https://api.kucoin.com/api/v1/market/histories?symbol=${kucoinSymbol}`,
-        {
-          headers: {
-            'Accept': 'application/json',
-          },
-        }
+        `/api/kucoin/trades?symbol=${kucoinSymbol}`
       );
 
       if (!response.ok) {

@@ -35,17 +35,12 @@ export default function MarketTicker({ selectedPair, onSelectPair }: MarketTicke
   useEffect(() => {
     const fetchTickers = async () => {
       try {
-        // Fetch all tickers in parallel from KuCoin
+        // Fetch all tickers in parallel via our API route
         const tickerPromises = tradingPairs.map(async (pair) => {
           const kucoinSymbol = formatKuCoinSymbol(pair);
           
           const response = await fetch(
-            `https://api.kucoin.com/api/v1/market/stats?symbol=${kucoinSymbol}`,
-            {
-              headers: {
-                'Accept': 'application/json',
-              },
-            }
+            `/api/kucoin/ticker?symbol=${kucoinSymbol}`
           );
 
           if (!response.ok) {
