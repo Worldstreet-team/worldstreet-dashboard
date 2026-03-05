@@ -112,7 +112,7 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
   };
 
   return (
-    <div className="h-full max-h-[calc(100vh-200px)] flex flex-col bg-[#0b0e11] text-white overflow-hidden">
+    <div className="h-full max-h-[calc(60vh-200px)] flex flex-col bg-[#0b0e11] text-white overflow-hidden">
       {/* Search Bar */}
       <div className="p-3 border-b border-[#1e2329]">
         <div className="relative">
