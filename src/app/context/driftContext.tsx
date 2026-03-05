@@ -956,7 +956,9 @@ const withdrawCollateral = useCallback(
       let totalCollateral = 0;
       
       try {
-        freeCollateral = driftUser.getFreeCollateral ? Number(driftUser.getFreeCollateral()) / 1e6 : 0;
+        freeCollateral = driftUser.getFreeCollateral
+  ? driftUser.getFreeCollateral().toNumber() / 1e6
+  : 0;
         const spotPosition = driftUser.getSpotPosition(0); // USDC
         totalCollateral = spotPosition ? Number(spotPosition.scaledBalance) / 1e6 : 0;
       } catch (err) {
@@ -994,12 +996,12 @@ const withdrawCollateral = useCallback(
       const estimatedFundingImpact = fundingRate * notionalValue * (8 / 24);
       
       // Get max leverage for this market
-      const maxLeverageAllowed = perpMarket.marginRatioInitial 
-        ? Math.floor(10000 / perpMarket.marginRatioInitial.toNumber())
-        : 10;
+      const maxLeverageAllowed = perpMarket.marginRatioInitial
+  ? Math.floor(10000 / perpMarket.marginRatioInitial)
+  : 10;
       
       return {
-        market: perpMarket.name || `Market ${marketIndex}`,
+        market: Buffer.from(perpMarket.name).toString('utf8').replace(/\0/g, ''),
         side: direction.toUpperCase(),
         size,
         leverage,
