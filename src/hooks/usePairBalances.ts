@@ -65,6 +65,7 @@ export function usePairBalances(
   const fetchBalances = useCallback(async () => {
     // Reset if no user
     if (!userId) {
+      console.log('[usePairBalances] No userId, resetting balances');
       setTokenIn(0);
       setTokenOut(0);
       setLoading(false);
@@ -72,6 +73,7 @@ export function usePairBalances(
       return;
     }
 
+    console.log('[usePairBalances] Fetching balances:', { userId, baseAsset, quoteAsset, chain });
     setLoading(true);
     setError(null);
 
@@ -85,26 +87,36 @@ export function usePairBalances(
         params.append('chain', chain);
       }
 
-      const response = await fetch(`/api/users/${userId}/balances?${params.toString()}`);
+      const url = `/api/users/${userId}/balances?${params.toString()}`;
+      console.log('[usePairBalances] Fetching from:', url);
+
+      const response = await fetch(url);
 
       if (!response.ok) {
         throw new Error(`Failed to fetch balances: ${response.statusText}`);
       }
 
       const data: BalancesResponse = await response.json();
+      console.log('[usePairBalances] API Response:', data);
+
       const balances = Array.isArray(data) ? data : data.balances || [];
+      console.log('[usePairBalances] Parsed balances:', balances);
 
       // Find balance for base asset (tokenIn - what you're selling/trading)
       const baseBalance = balances.find(
         (b: AssetBalance) => b.asset.toUpperCase() === baseAsset.toUpperCase()
       );
-      setTokenIn(baseBalance ? parseFloat(baseBalance.available_balance) : 0);
+      const tokenInValue = baseBalance ? parseFloat(baseBalance.available_balance) : 0;
+      console.log('[usePairBalances] Base asset balance:', { baseAsset, balance: baseBalance, value: tokenInValue });
+      setTokenIn(tokenInValue);
 
       // Find balance for quote asset (tokenOut - what you're buying with)
       const quoteBalance = balances.find(
         (b: AssetBalance) => b.asset.toUpperCase() === quoteAsset.toUpperCase()
       );
-      setTokenOut(quoteBalance ? parseFloat(quoteBalance.available_balance) : 0);
+      const tokenOutValue = quoteBalance ? parseFloat(quoteBalance.available_balance) : 0;
+      console.log('[usePairBalances] Quote asset balance:', { quoteAsset, balance: quoteBalance, value: tokenOutValue });
+      setTokenOut(tokenOutValue);
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch balances';

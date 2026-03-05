@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/app/context/authContext';
 import { usePairBalances } from '@/hooks/usePairBalances';
 
@@ -32,6 +32,21 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
   } = usePairBalances(user?.userId, selectedPair, chain);
 
   const [tokenIn, tokenOut] = selectedPair.split('-');
+
+  // Debug logging
+  useEffect(() => {
+    console.log('[BinanceOrderForm] Balance Debug:', {
+      userId: user?.userId,
+      selectedPair,
+      chain,
+      sellBalance,
+      buyBalance,
+      loadingBalances,
+      balanceError,
+      tokenIn,
+      tokenOut
+    });
+  }, [user?.userId, selectedPair, chain, sellBalance, buyBalance, loadingBalances, balanceError, tokenIn, tokenOut]);
 
   const handlePercentage = (percent: number) => {
     const balance = activeTab === 'buy' ? buyBalance : sellBalance;
@@ -120,9 +135,22 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
         <div className="flex items-center justify-between text-xs">
           <span className="text-[#848e9c]">Avbl</span>
           <span className="text-white font-mono">
-            {loadingBalances ? '...' : currentBalance.toFixed(6)} {currentToken}
+            {loadingBalances ? (
+              <span className="text-[#848e9c]">Loading...</span>
+            ) : balanceError ? (
+              <span className="text-[#f6465d]">Error loading balance</span>
+            ) : (
+              `${currentBalance.toFixed(6)} ${currentToken}`
+            )}
           </span>
         </div>
+
+        {/* Balance Error Alert */}
+        {balanceError && (
+          <div className="p-2 bg-[rgba(246,70,93,0.12)] border border-[#f6465d] rounded text-xs text-[#f6465d]">
+            {balanceError}
+          </div>
+        )}
 
         {/* Price Input (for limit orders) */}
         {orderType !== 'market' && (
