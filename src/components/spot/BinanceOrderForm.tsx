@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/app/context/authContext';
 import { usePairBalances } from '@/hooks/usePairBalances';
+import { useSpotSwap } from '@/hooks/useSpotSwap';
+import SpotSwapConfirmModal from './SpotSwapConfirmModal';
 
 interface BinanceOrderFormProps {
   selectedPair: string;
@@ -22,6 +24,10 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [currentMarketPrice, setCurrentMarketPrice] = useState<number>(0);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [fetchingQuote, setFetchingQuote] = useState(false);
+
+  const { quote, fetchQuote, executeSpotSwap, loading: quoteLoading, executing: swapExecuting, error: swapError } = useSpotSwap();
 
   const [tokenIn, tokenOut] = selectedPair.split('-');
 
@@ -122,30 +128,82 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
   };
 
   const executeTrade = async () => {
-    setExecuting(true);
     setError(null);
     setSuccess(null);
 
+    // Validation
+    if (!amount || parseFloat(amount) <= 0) {
+      setError('Please enter a valid amount');
+      return;
+    }
+
+    if (orderType !== 'market') {
+      setError('Only market orders are supported');
+      return;
+    }
+
+    // Check balance
+    if (parseFloat(amount) > currentBalance) {
+      setError(`Insufficient ${currentToken} balance`);
+      return;
+    }
+
+    setFetchingQuote(true);
+
     try {
-      // Simulate trade execution
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      setSuccess(`${activeTab === 'buy' ? 'Buy' : 'Sell'} order placed successfully!`);
-      setAmount('');
-      setPrice('');
-      setTotal('');
-      setSliderValue(0);
-      
-      // Refetch balances after trade
-      await refetchBalances();
-      
-      if (onTradeExecuted) {
-        onTradeExecuted();
+      // Fetch quote
+      const quoteResult = await fetchQuote({
+        pair: selectedPair,
+        side: activeTab,
+        amount,
+        slippage: 0.5,
+      });
+
+      if (quoteResult) {
+        setShowConfirmModal(true);
+      } else {
+        setError(swapError || 'Failed to get quote');
       }
     } catch (err) {
-      setError((err as Error).message);
+      setError(err instanceof Error ? err.message : 'Failed to get quote');
     } finally {
-      setExecuting(false);
+      setFetchingQuote(false);
+    }
+  };
+
+  const handleConfirmSwap = async (pin: string) => {
+    try {
+      const result = await executeSpotSwap({
+        pair: selectedPair,
+        side: activeTab,
+        amount,
+      }, pin);
+
+      if (result.success) {
+        setSuccess(`${activeTab === 'buy' ? 'Buy' : 'Sell'} order executed! TX: ${result.txHash?.slice(0, 10)}...`);
+        setShowConfirmModal(false);
+        
+        // Reset form
+        setAmount('');
+        setPrice('');
+        setTotal('');
+        setSliderValue(0);
+        
+        // Refetch balances
+        await refetchBalances();
+        
+        if (onTradeExecuted) {
+          onTradeExecuted();
+        }
+
+        // Clear success after 5 seconds
+        setTimeout(() => setSuccess(null), 5000);
+      } else {
+        throw new Error(result.error || 'Failed to execute swap');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to execute trade');
+      throw err; // Re-throw to show in modal
     }
   };
 
@@ -328,16 +386,27 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain 
       <div className="p-4 border-t border-[#2b3139]">
         <button
           onClick={executeTrade}
-          disabled={executing || !amount}
+          disabled={fetchingQuote || swapExecuting || !amount}
           className={`w-full py-3 rounded font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
             activeTab === 'buy'
               ? 'bg-[#0ecb81] hover:bg-[#0ecb81]/90 text-white'
               : 'bg-[#f6465d] hover:bg-[#f6465d]/90 text-white'
           }`}
         >
-          {executing ? 'Processing...' : `${activeTab === 'buy' ? 'Buy' : 'Sell'} ${tokenIn}`}
+          {fetchingQuote ? 'Getting Quote...' : `${activeTab === 'buy' ? 'Buy' : 'Sell'} ${tokenIn}`}
         </button>
       </div>
+
+      {/* Confirmation Modal */}
+      <SpotSwapConfirmModal
+        isOpen={showConfirmModal}
+        onClose={() => setShowConfirmModal(false)}
+        quote={quote}
+        pair={selectedPair}
+        side={activeTab}
+        onConfirm={handleConfirmSwap}
+        executing={swapExecuting}
+      />
     </div>
   );
 }
