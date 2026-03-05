@@ -1,6 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createChart, ColorType } from 'lightweight-charts';
+import type { IChartApi, CandlestickSeriesOptions } from 'lightweight-charts';
 import { cn } from '@/lib/utils';
 
 interface LiveChartProps {
@@ -10,70 +12,258 @@ interface LiveChartProps {
   onUpdateLevels?: (sl: string, tp: string) => void;
 }
 
+interface CandleData {
+  time: number | string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+}
+
+interface KucoinKline {
+  time: string;
+  open: string;
+  high: string;
+  low: string;
+  close: string;
+  volume: string;
+  turnover: string;
+}
+
 const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartProps) => {
   const [showLevelsForm, setShowLevelsForm] = useState(false);
   const [tempStopLoss, setTempStopLoss] = useState(stopLoss || '');
   const [tempTakeProfit, setTempTakeProfit] = useState(takeProfit || '');
+  
   const containerRef = useRef<HTMLDivElement>(null);
-  const scriptLoadedRef = useRef(false);
+  const chartRef = useRef<IChartApi | null>(null);
+  const seriesRef = useRef<any>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const candlesRef = useRef<Map<number, CandleData>>(new Map());
+  const currentIntervalRef = useRef<number | null>(null);
 
   useEffect(() => {
     setTempStopLoss(stopLoss || '');
     setTempTakeProfit(takeProfit || '');
   }, [stopLoss, takeProfit]);
 
+  // Initialize chart
   useEffect(() => {
     if (!containerRef.current) return;
 
-    // Convert symbol format: BTC-USDT -> BINANCE:BTCUSDT
-    const tradingViewSymbol = `BINANCE:${symbol.replace('-', '')}`;
-
-    // Clear previous content
-    containerRef.current.innerHTML = '';
-
-    // Create the main widget container
-    const widgetContainer = document.createElement('div');
-    widgetContainer.className = 'tradingview-widget-container';
-    widgetContainer.style.width = '100%';
-    widgetContainer.style.height = '100%';
-
-    // Create the inner widget div
-    const widgetDiv = document.createElement('div');
-    widgetDiv.className = 'tradingview-widget-container__widget';
-    widgetDiv.style.width = '100%';
-    widgetDiv.style.height = '100%';
-    widgetContainer.appendChild(widgetDiv);
-
-    // Create and append the config script
-    const configScript = document.createElement('script');
-    configScript.type = 'text/x-tradingview-widget';
-    configScript.textContent = JSON.stringify({
-      symbols: [[tradingViewSymbol]],
-      width: '100%',
-      height: '100%',
-      locale: 'en',
-      colorTheme: 'dark',
+    const chart = createChart(containerRef.current, {
+      layout: {
+        background: { type: ColorType.Solid, color: '#181a20' },
+        textColor: '#848e9c',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      },
+      width: containerRef.current.clientWidth,
+      height: containerRef.current.clientHeight,
+      timeScale: {
+        timeVisible: true,
+        secondsVisible: false,
+        fixLeftEdge: true,
+        fixRightEdge: true,
+      },
+      crosshair: {
+        mode: 1,
+        vertLine: {
+          color: '#2b3139',
+          width: 1,
+          style: 2,
+        },
+        horzLine: {
+          color: '#2b3139',
+          width: 1,
+          style: 2,
+        },
+      },
+      grid: {
+        vertLines: { color: '#2b3139', style: 2 },
+        horzLines: { color: '#2b3139', style: 2 },
+      },
     });
-    widgetContainer.appendChild(configScript);
 
-    containerRef.current.appendChild(widgetContainer);
+    const candlestickSeries = (chart as any).addCandlestickSeries({
+      upColor: '#0ecb81',
+      downColor: '#f6465d',
+      borderUpColor: '#0ecb81',
+      borderDownColor: '#f6465d',
+      wickUpColor: '#0ecb81',
+      wickDownColor: '#f6465d',
+    });
 
-    // Load and execute TradingView embed script
-    if (!scriptLoadedRef.current) {
-      const script = document.createElement('script');
-      script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
-      script.async = true;
-      script.onload = () => {
-        scriptLoadedRef.current = true;
-      };
-      document.body.appendChild(script);
-    } else {
-      // If script already loaded, manually trigger widget processing
-      if (typeof (window as any).TradingView !== 'undefined') {
-        (window as any).TradingView.widget(new (window as any).TradingView.widget());
+    chartRef.current = chart;
+    seriesRef.current = candlestickSeries;
+
+    // Handle window resize
+    const handleResize = () => {
+      if (containerRef.current && chartRef.current) {
+        chartRef.current.applyOptions({
+          width: containerRef.current.clientWidth,
+          height: containerRef.current.clientHeight,
+        });
       }
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (chartRef.current) {
+        chartRef.current.remove();
+        chartRef.current = null;
+      }
+    };
+  }, []);
+
+  // Fetch historical data
+  const fetchHistoricalData = useCallback(async (pair: string) => {
+    try {
+      // Convert BTC-USDT to BTC-USDT format for Kucoin
+      const kucoinPair = pair.replace('-', '-');
+      
+      // Fetch 1-hour candles (last 100)
+      const response = await fetch(
+        `https://api.kucoin.com/api/v1/market/candles?symbol=${kucoinPair}&type=1hour&limit=100`
+      );
+      
+      if (!response.ok) throw new Error('Failed to fetch historical data');
+      
+      const data = await response.json();
+      
+      if (!data.data || !Array.isArray(data.data)) {
+        console.error('Invalid response format:', data);
+        return;
+      }
+
+      // Transform Kucoin data to lightweight-charts format
+      // Kucoin returns [time, open, high, low, close, volume, turnover]
+      const candles: CandleData[] = data.data
+        .map((kline: string[]) => ({
+          time: Math.floor(parseInt(kline[0]) / 1000), // Convert ms to seconds
+          open: parseFloat(kline[1]),
+          high: parseFloat(kline[3]),
+          low: parseFloat(kline[4]),
+          close: parseFloat(kline[2]),
+        }))
+        .sort((a: CandleData, b: CandleData) => (typeof a.time === 'number' && typeof b.time === 'number' ? a.time - b.time : 0));
+
+      // Store candles in map for easy updates
+      candlesRef.current.clear();
+      candles.forEach(candle => {
+        if (typeof candle.time === 'number') {
+          candlesRef.current.set(candle.time, candle);
+        }
+      });
+
+      // Set data on series
+      if (seriesRef.current) {
+        seriesRef.current.setData(candles);
+        chartRef.current?.timeScale().fitContent();
+      }
+    } catch (error) {
+      console.error('Error fetching historical data:', error);
     }
-  }, [symbol]);
+  }, []);
+
+  // Subscribe to WebSocket for real-time updates
+  const subscribeToWebSocket = useCallback((pair: string) => {
+    // Close existing connection
+    if (wsRef.current) {
+      wsRef.current.close();
+    }
+
+    try {
+      // Kucoin WebSocket endpoint
+      const ws = new WebSocket('wss://ws-api.kucoin.com/socket.io/?transport=websocket');
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        // Subscribe to 1-hour candles
+        const kucoinPair = pair.replace('-', '-');
+        const subscribeMessage = {
+          id: Date.now().toString(),
+          type: 'subscribe',
+          topic: `/market/candles:${kucoinPair}_1hour`,
+          privateChannel: false,
+          response: true,
+        };
+        ws.send(JSON.stringify(subscribeMessage));
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+
+          // Handle candle updates
+          if (message.type === 'message' && message.topic?.includes('candles')) {
+            const data = message.data;
+            if (data && data.candles && data.candles.length > 0) {
+              const kline = data.candles[0]; // [time, open, high, low, close, volume, turnover]
+              const candleTime = Math.floor(parseInt(kline[0]) / 1000);
+              const candle: CandleData = {
+                time: candleTime,
+                open: parseFloat(kline[1]),
+                high: parseFloat(kline[3]),
+                low: parseFloat(kline[4]),
+                close: parseFloat(kline[2]),
+              };
+
+              // Update or add candle
+              const existingCandle = candlesRef.current.get(candleTime);
+              if (existingCandle) {
+                // Update existing candle (still in progress)
+                candlesRef.current.set(candleTime, candle);
+              } else {
+                // New candle started
+                candlesRef.current.set(candleTime, candle);
+              }
+
+              // Update series with all candles
+              if (seriesRef.current) {
+                const allCandles = Array.from(candlesRef.current.values()).sort(
+                  (a: CandleData, b: CandleData) => (typeof a.time === 'number' && typeof b.time === 'number' ? a.time - b.time : 0)
+                );
+                seriesRef.current.update(candle);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error processing WebSocket message:', error);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket closed');
+      };
+    } catch (error) {
+      console.error('Error connecting to WebSocket:', error);
+    }
+  }, []);
+
+  // Handle symbol changes
+  useEffect(() => {
+    if (!symbol) return;
+
+    // Fetch historical data
+    fetchHistoricalData(symbol);
+
+    // Subscribe to WebSocket
+    subscribeToWebSocket(symbol);
+
+    // Cleanup on unmount or symbol change
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+    };
+  }, [symbol, fetchHistoricalData, subscribeToWebSocket]);
 
   const handleUpdateLevels = () => {
     if (onUpdateLevels) {
@@ -91,7 +281,7 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
           <span className="text-[10px] font-semibold text-white">
             {symbol.replace('-', '/')}
           </span>
-          <span className="text-[8px] text-[#848e9c]">TradingView Chart</span>
+          <span className="text-[8px] text-[#848e9c]">Lightweight Charts</span>
 
           {/* TP/SL Indicators */}
           {(stopLoss || takeProfit) && (
@@ -169,8 +359,8 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
         </div>
       )}
 
-      {/* TradingView Chart Container */}
-      <div className="flex-1 min-h-0 w-full overflow-hidden" ref={containerRef}></div>
+      {/* Chart Container */}
+      <div className="flex-1 min-h-0 w-full" ref={containerRef}></div>
     </div>
   );
 };
