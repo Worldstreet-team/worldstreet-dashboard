@@ -241,16 +241,22 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       console.log('[DriftContext] Client subscribed, checking user account...');
       
       // Check if user account is initialized
+      let userAccountPublicKey;
       try {
         const user = client.getUser();
         const userAccount = user.getUserAccount();
+        userAccountPublicKey = user.getUserAccountPublicKey();
         console.log('[DriftContext] User account found:', userAccount.authority.toBase58());
+        console.log('[DriftContext] User account public key:', userAccountPublicKey.toBase58());
       } catch (err) {
         // User account not initialized, initialize it
         console.log('[DriftContext] User account not initialized, initializing...');
         try {
-          await client.initializeUserAccount();
+          const [txSig, newUserAccountPublicKey] = await client.initializeUserAccount(0, "worldstreet-user");
+          userAccountPublicKey = newUserAccountPublicKey;
           console.log('[DriftContext] User account initialized successfully');
+          console.log('[DriftContext] Init TX:', txSig);
+          console.log('[DriftContext] User account public key:', userAccountPublicKey.toBase58());
         } catch (initErr: any) {
           console.error('[DriftContext] Failed to initialize user account:', initErr);
           
@@ -684,13 +690,13 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         console.log('[DriftContext] USDC token account created:', createAtaSig);
       }
       
-      // Get the user account public key using getUserAccountPublicKey method
-      const { getUserAccountPublicKey } = await import('@drift-labs/sdk');
-      const userAccountPublicKey = getUserAccountPublicKey(
-        client.program.programId,
-        client.wallet.publicKey,
-        0 // subaccount ID
-      );
+      // Get the user account public key from the client
+      const driftUser = client.getUser();
+      const userAccountPublicKey = driftUser.getUserAccountPublicKey();
+      
+      console.log('[DriftContext] User account public key:', userAccountPublicKey.toBase58());
+      console.log('[DriftContext] User token account:', userTokenAccount.toBase58());
+      console.log('[DriftContext] Deposit amount (BN):', depositAmount.toString());
       
       const txSignature = await client.deposit(
         depositAmount,
@@ -750,13 +756,9 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         client.wallet.publicKey
       );
       
-      // Get the user account public key using getUserAccountPublicKey method
-      const { getUserAccountPublicKey } = await import('@drift-labs/sdk');
-      const userAccountPublicKey = getUserAccountPublicKey(
-        client.program.programId,
-        client.wallet.publicKey,
-        0 // subaccount ID
-      );
+      // Get the user account public key from the client
+      const driftUser = client.getUser();
+      const userAccountPublicKey = driftUser.getUserAccountPublicKey();
       
       const txSignature = await client.withdraw(
         withdrawAmount,
