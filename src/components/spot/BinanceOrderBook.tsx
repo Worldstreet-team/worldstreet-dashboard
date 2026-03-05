@@ -3,11 +3,11 @@
 /**
  * BinanceOrderBook Component
  * 
- * Real-time order book display using KuCoin WebSocket API
- * - Connects to wss://ws-api-spot.kucoin.com/
- * - Subscribes to /spotMarket/level2Depth50 for 50-level order book
+ * Real-time order book display using KuCoin REST API with polling
+ * - Polls /api/kucoin/orderbook every 2 seconds
+ * - Fetches 50-level order book data
  * - Displays top 15 bids and asks with depth visualization
- * - Auto-reconnects on connection loss
+ * - Handles errors and connection status
  */
 
 import { useState, useEffect, useRef } from 'react';
@@ -30,6 +30,9 @@ interface KuCoinOrderBookData {
   sequence: number;
 }
 
+// Configurable polling interval (in milliseconds)
+const POLLING_INTERVAL = 2000; // 2 seconds
+
 export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps) {
   const [asks, setAsks] = useState<OrderBookEntry[]>([]);
   const [bids, setBids] = useState<OrderBookEntry[]>([]);
@@ -37,178 +40,104 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
   const [priceChange, setPriceChange] = useState<number>(0);
   const [viewMode, setViewMode] = useState<'both' | 'asks' | 'bids'>('both');
   const [connected, setConnected] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
-  // Refs to avoid stale closures
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
-  const lastSequenceRef = useRef<number>(0);
-  const currentTopicRef = useRef<string | null>(null);
-  
-  // NEW: Track the active pair to avoid stale closure in reconnect
+  // Refs for polling management
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const activePairRef = useRef<string>(selectedPair);
-  
-  // NEW: Control whether reconnection should happen
-  // Set to false when intentionally switching pairs or unmounting
-  const shouldReconnectRef = useRef<boolean>(true);
+  const isMountedRef = useRef<boolean>(true);
+
+  // Fetch order book data from our API
+  const fetchOrderBook = async (pair: string) => {
+    try {
+      const response = await fetch(`/api/kucoin/orderbook?symbol=${pair}`);
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      if (result.code !== '200000' || !result.data) {
+        throw new Error('Invalid response from API');
+      }
+
+      // Only update if still mounted and pair hasn't changed
+      if (isMountedRef.current && activePairRef.current === pair) {
+        processOrderBookUpdate(result.data);
+        setConnected(true);
+        setError(null);
+        setLoading(false);
+      }
+    } catch (err) {
+      console.error('[OrderBook] Error fetching data:', err);
+      
+      if (isMountedRef.current && activePairRef.current === pair) {
+        setConnected(false);
+        setError(err instanceof Error ? err.message : 'Failed to fetch order book');
+        setLoading(false);
+      }
+    }
+  };
+
+  // Start polling
+  const startPolling = (pair: string) => {
+    console.log('[OrderBook] Starting polling for pair:', pair);
+    
+    // Clear any existing interval
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+    }
+
+    // Fetch immediately
+    fetchOrderBook(pair);
+
+    // Set up polling interval
+    pollingIntervalRef.current = setInterval(() => {
+      fetchOrderBook(pair);
+    }, POLLING_INTERVAL);
+  };
+
+  // Stop polling
+  const stopPolling = () => {
+    console.log('[OrderBook] Stopping polling');
+    
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+  };
 
   useEffect(() => {
     console.log('[OrderBook] Pair changed to:', selectedPair);
     
     // Update active pair ref
     activePairRef.current = selectedPair;
-    
-    // Disable reconnect during pair switch
-    shouldReconnectRef.current = false;
-    
-    // Close existing connection
-    if (wsRef.current) {
-      console.log('[OrderBook] Closing existing WebSocket for pair switch');
-      wsRef.current.close();
-      wsRef.current = null;
-    }
+    isMountedRef.current = true;
 
-    // Clear any pending reconnect timers
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = undefined;
-    }
-
-    // Reset order book state
+    // Reset state
     setAsks([]);
     setBids([]);
     setLastPrice(0);
     setPriceChange(0);
     setConnected(false);
-    currentTopicRef.current = null;
-    lastSequenceRef.current = 0;
-    
-    // Re-enable reconnect for the new pair
-    shouldReconnectRef.current = true;
+    setLoading(true);
+    setError(null);
 
-    // Connect to new pair - pass pair explicitly to avoid stale closure
-    connectWebSocket(selectedPair);
+    // Start polling for new pair
+    startPolling(selectedPair);
     
     return () => {
-      console.log('[OrderBook] Cleanup - disabling reconnect');
-      
-      // Disable reconnect on unmount
-      shouldReconnectRef.current = false;
-      
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-      
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
+      console.log('[OrderBook] Cleanup');
+      isMountedRef.current = false;
+      stopPolling();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPair]);
-
-  // REFACTORED: Accept pair as argument to avoid stale closure
-  const connectWebSocket = async (pair: string) => {
-    try {
-      console.log('[OrderBook] Connecting WebSocket for pair:', pair);
-      
-      // Get WebSocket token from our API
-      const tokenResponse = await fetch('/api/kucoin/websocket-token');
-      if (!tokenResponse.ok) {
-        throw new Error('Failed to get WebSocket token');
-      }
-
-      const tokenResult = await tokenResponse.json();
-      if (tokenResult.code !== '200000' || !tokenResult.data) {
-        throw new Error('Invalid token response');
-      }
-
-      const { token, instanceServers } = tokenResult.data;
-      const server = instanceServers[0];
-      const wsUrl = `${server.endpoint}?token=${token}`;
-
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        console.log('[OrderBook] WebSocket connected for pair:', pair);
-        setConnected(true);
-        
-        // Subscribe to order book updates - use passed pair, not selectedPair
-        const newTopic = `/spotMarket/level2Depth50:${pair}`;
-        const subscribeMessage = {
-          id: Date.now().toString(),
-          type: 'subscribe',
-          topic: newTopic,
-          privateChannel: false,
-          response: true
-        };
-        
-        ws.send(JSON.stringify(subscribeMessage));
-        currentTopicRef.current = newTopic;
-        console.log('[OrderBook] Subscribed to:', newTopic);
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          
-          // Handle subscription confirmation
-          if (data.type === 'ack') {
-            console.log('[OrderBook] Subscription confirmed:', data.id);
-            return;
-          }
-
-          // Handle order book updates - only process if it's for the current pair
-          if (data.type === 'message' && data.topic?.includes('level2Depth50')) {
-            // Verify this is for the current selected pair
-            if (data.topic === currentTopicRef.current) {
-              const orderBookData = data.data;
-              processOrderBookUpdate(orderBookData);
-            } else {
-              console.log('[OrderBook] Ignoring update from old subscription:', data.topic);
-            }
-          }
-        } catch (error) {
-          console.error('[OrderBook] Error parsing WebSocket message:', error);
-        }
-      };
-
-      ws.onerror = (error) => {
-        console.error('[OrderBook] WebSocket error:', error);
-        setConnected(false);
-      };
-
-      ws.onclose = () => {
-        console.log('[OrderBook] WebSocket closed');
-        setConnected(false);
-        
-        // FIXED: Only reconnect if shouldReconnectRef is true
-        // This prevents reconnect during intentional pair switches or unmount
-        if (shouldReconnectRef.current) {
-          console.log('[OrderBook] Reconnecting in 3s to pair:', activePairRef.current);
-          
-          // Reconnect after 3 seconds using activePairRef (not stale selectedPair)
-          reconnectTimeoutRef.current = setTimeout(() => {
-            connectWebSocket(activePairRef.current);
-          }, 3000);
-        } else {
-          console.log('[OrderBook] Reconnect disabled, not reconnecting');
-        }
-      };
-    } catch (error) {
-      console.error('[OrderBook] Error connecting to WebSocket:', error);
-      setConnected(false);
-      
-      // FIXED: Only retry if shouldReconnectRef is true
-      if (shouldReconnectRef.current) {
-        console.log('[OrderBook] Retrying connection in 3s to pair:', activePairRef.current);
-        
-        reconnectTimeoutRef.current = setTimeout(() => {
-          connectWebSocket(activePairRef.current);
-        }, 3000);
-      }
-    }
-  };
 
   const processOrderBookUpdate = (data: KuCoinOrderBookData) => {
     try {
@@ -266,11 +195,6 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
         setLastPrice(newLastPrice);
         setPriceChange(change);
       }
-
-      // Update sequence
-      if (data.sequence) {
-        lastSequenceRef.current = data.sequence;
-      }
     } catch (error) {
       console.error('Error processing order book update:', error);
     }
@@ -292,7 +216,17 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
       <div className="px-3 py-2 border-b border-[#1e2329] flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium text-[#848e9c]">Order Book</span>
-          {connected ? (
+          {loading ? (
+            <div className="flex items-center gap-1">
+              <Icon icon="ph:spinner" width={12} className="text-[#848e9c] animate-spin" />
+              <span className="text-[10px] text-[#848e9c]">Loading...</span>
+            </div>
+          ) : error ? (
+            <div className="flex items-center gap-1">
+              <div className="w-1.5 h-1.5 rounded-full bg-[#f6465d]" />
+              <span className="text-[10px] text-[#f6465d]">Error</span>
+            </div>
+          ) : connected ? (
             <div className="flex items-center gap-1">
               <div className="w-1.5 h-1.5 rounded-full bg-[#0ecb81] animate-pulse" />
               <span className="text-[10px] text-[#0ecb81]">Live</span>
@@ -335,10 +269,29 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
 
       {/* Order Book Content */}
       <div className="flex flex-col">
+        {/* Error Message */}
+        {error && (
+          <div className="px-3 py-2 bg-[#f6465d]/10 border-b border-[#f6465d]/20">
+            <div className="flex items-center gap-2 text-[10px] text-[#f6465d]">
+              <Icon icon="ph:warning" width={14} />
+              <span>{error}</span>
+            </div>
+          </div>
+        )}
+
         {/* Asks (Sell Orders) */}
         {(viewMode === 'both' || viewMode === 'asks') && (
           <div className="h-[38vh] overflow-y-auto scrollbar-hide flex flex-col-reverse">
-            {asks.map((ask, index) => (
+            {loading && asks.length === 0 ? (
+              <div className="flex items-center justify-center h-full">
+                <Icon icon="ph:spinner" width={24} className="text-[#848e9c] animate-spin" />
+              </div>
+            ) : asks.length === 0 ? (
+              <div className="flex items-center justify-center h-full">
+                <span className="text-xs text-[#848e9c]">No data</span>
+              </div>
+            ) : (
+              asks.map((ask, index) => (
               <div
                 key={`ask-${index}`}
                 className="relative px-3 py-0.5 hover:bg-[#1e2329] cursor-pointer group"
@@ -356,7 +309,8 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
                   <div className="text-right text-[#848e9c] text-[10px]">{ask.total.toFixed(2)}</div>
                 </div>
               </div>
-            ))}
+              ))
+            )}
           </div>
         )}
 
@@ -380,7 +334,16 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
         {/* Bids (Buy Orders) */}
         {(viewMode === 'both' || viewMode === 'bids') && (
           <div className="h-[38vh] overflow-y-auto scrollbar-hide">
-            {bids.map((bid, index) => (
+            {loading && bids.length === 0 ? (
+              <div className="flex items-center justify-center h-full">
+                <Icon icon="ph:spinner" width={24} className="text-[#848e9c] animate-spin" />
+              </div>
+            ) : bids.length === 0 ? (
+              <div className="flex items-center justify-center h-full">
+                <span className="text-xs text-[#848e9c]">No data</span>
+              </div>
+            ) : (
+              bids.map((bid, index) => (
               <div
                 key={`bid-${index}`}
                 className="relative px-3 py-0.5 hover:bg-[#1e2329] cursor-pointer group"
@@ -398,7 +361,8 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
                   <div className="text-right text-[#848e9c] text-[10px]">{bid.total.toFixed(2)}</div>
                 </div>
               </div>
-            ))}
+              ))
+            )}
           </div>
         )}
       </div>
