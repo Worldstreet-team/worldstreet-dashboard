@@ -48,14 +48,15 @@ Updated all trading components to accept and use `tokenAddress`:
   - `limit` (optional): Limit number of results (default: 50)
 - **Backend endpoint**: `GET /api/trades/:userId`
 
-#### Created `/api/positions/[userId]/route.ts`
+#### Created `/api/positions/user/[userId]/route.ts`
 - **Method**: GET
 - **Purpose**: Fetch user's positions (open/closed) from backend
+- **Path**: `/api/positions/user/[userId]`
 - **Query params**:
-  - `userId` (required): User ID
   - `status` (optional): OPEN or CLOSED (default: OPEN)
   - `limit` (optional): Limit number of results (default: 50)
 - **Backend endpoint**: `GET /api/positions`
+- **Note**: Path changed to avoid conflict with existing `/api/positions/[positionId]` routes
 
 ### 3. MarketTrades Component Enhancement
 
@@ -123,8 +124,14 @@ Response: Array of position objects
 
 ## Next Steps
 
-1. **Position Display**: Create component to show open/closed positions using `/api/positions/[userId]`
+1. **Position Display**: Create component to show open/closed positions using `/api/positions/user/[userId]`
 2. **Mobile Bottom Tabs**: Add positions view to mobile interface
 3. **Real-time Updates**: Consider WebSocket for live trade/position updates
 4. **Trade Details**: Add modal to show full trade details on click
 5. **Export**: Add ability to export trade history
+
+## API Routes Summary
+
+- **Trade History**: `GET /api/trades/[userId]` - Fetch user's completed trades
+- **Positions**: `GET /api/positions/user/[userId]` - Fetch user's open/closed positions
+- **Note**: Position route uses `/user/[userId]` path to avoid conflict with existing `/api/positions/[positionId]` routes
