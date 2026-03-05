@@ -582,95 +582,85 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     throw new Error('Transaction confirmation timeout');
   };
 
-  // Deposit collateral using official Drift SDK
-  const depositCollateral = useCallback(async (amount: number): Promise<{ success: boolean; txSignature?: string; error?: string }> => {
+const depositCollateral = useCallback(
+  async (amount: number): Promise<{ success: boolean; txSignature?: string; error?: string }> => {
     if (!user?.userId) {
       return { success: false, error: 'User not authenticated' };
     }
-    
+
     try {
       setIsLoading(true);
-      
-      // 1. Request PIN and ensure wallet is connected
+
+      // Ensure wallet is unlocked / PIN provided
       const pin = await requestPin();
-      
-      // 2. Initialize or get existing driftClient
+
+      // Initialize or get existing Drift client
       let client = driftClientRef.current;
       if (!client) {
-        console.log('[DriftContext] Initializing Drift client...');
         client = await initializeDriftClient(pin);
       }
-      
-      // Verify client is subscribed
+
+      // Make sure client is subscribed (polling or websocket)
       if (!client.isSubscribed) {
         await client.subscribe();
       }
-      
+
       console.log(`[DriftContext] Depositing ${amount} USDC to Drift`);
-      
-      // 3. Get the user's USDC associated token account using Drift SDK
-      const marketIndex = 0; // USDC spot market
-      const userAssociatedTokenAccount = await client.getAssociatedTokenAccount(marketIndex);
-      
-      console.log('[DriftContext] User USDC token account:', userAssociatedTokenAccount.toBase58());
-      
-      // 4. Convert human amount to on-chain BN precision
-      const { convertToSpotPrecision } = await import('@drift-labs/sdk');
-      const depositAmountBN = convertToSpotPrecision(marketIndex, amount);
-      
+
+      // Spot market index for USDC
+      const marketIndex = 0;
+
+      // Get user's associated token account for USDC
+      const userTokenAccount = await client.getAssociatedTokenAccount(marketIndex);
+
+      console.log('[DriftContext] User USDC token account:', userTokenAccount.toBase58());
+
+      // Convert human amount to on‑chain BN using client method
+      const depositAmountBN = client.convertToSpotPrecision(marketIndex, amount);
+
       console.log('[DriftContext] Deposit amount (BN):', depositAmountBN.toString());
-      console.log('[DriftContext] Deposit amount (human):', amount);
-      
-      // Verify user account is initialized
-      const driftUser = client.getUser();
-      const userAccount = driftUser.getUserAccount();
-      
-      if (!userAccount || !userAccount.authority) {
-        throw new Error('Drift user account not properly initialized');
-      }
-      
-      console.log('[DriftContext] User account authority:', userAccount.authority.toBase58());
-      
-      // 5. Call driftClient.deposit() with correct arguments
+
+      // Perform the deposit.  
+      // Arguments: (amountBN, marketIndex, userAssociatedTokenAccount, optional subAccountId)
       const txSignature = await client.deposit(
-        depositAmountBN,           // BN amount in spot precision
-        marketIndex,               // 0 for USDC
-        userAssociatedTokenAccount, // User's USDC token account
-        0                          // subAccountId (default subaccount)
+        depositAmountBN,
+        marketIndex,
+        userTokenAccount,
+        0 // default subAccountId
       );
-      
+
       console.log('[DriftContext] Deposit transaction sent:', txSignature);
-      
-      // 6. Poll for confirmation
+
+      // Wait for confirmation
       await pollTransactionStatus(client.connection, txSignature, 30, 2000);
       console.log('[DriftContext] Deposit confirmed:', txSignature);
-      
-      // 7. Refresh account summary after success
+
+      // Refresh summary after success
       await refreshSummary();
-      
+
       return { success: true, txSignature };
     } catch (err) {
-      // 8. Handle errors
       const errorMessage = err instanceof Error ? err.message : 'Failed to deposit collateral';
       console.error('[DriftContext] Deposit error:', err);
-      
-      // Check for specific error types
-      if (errorMessage.includes('insufficient')) {
-        return { success: false, error: 'Insufficient USDC balance in wallet' };
+
+      let friendly = errorMessage;
+      if (errorMessage.toLowerCase().includes('insufficient')) {
+        friendly = 'Insufficient USDC balance in wallet';
       }
-      if (errorMessage.includes('not initialized')) {
-        return { success: false, error: 'Drift account not initialized. Please initialize first.' };
+      if (errorMessage.toLowerCase().includes('not initialized')) {
+        friendly = 'Drift account not initialized. Please initialize first.';
       }
-      if (errorMessage.includes('not connected')) {
-        return { success: false, error: 'Wallet not connected. Please unlock your wallet.' };
+      if (errorMessage.toLowerCase().includes('not connected')) {
+        friendly = 'Wallet not connected. Please unlock your wallet.';
       }
-      
-      return { success: false, error: errorMessage };
+
+      return { success: false, error: friendly };
     } finally {
       setIsLoading(false);
     }
-  }, [user?.userId, requestPin, initializeDriftClient, refreshSummary]);
-
+  },
+  [user?.userId, requestPin, initializeDriftClient, refreshSummary]
+);
   // Withdraw collateral
   const withdrawCollateral = useCallback(async (amount: number): Promise<{ success: boolean; txSignature?: string; error?: string }> => {
     if (!user?.userId) {
