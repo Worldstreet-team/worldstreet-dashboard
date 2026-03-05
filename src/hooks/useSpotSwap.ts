@@ -55,9 +55,6 @@ export function useSpotSwap() {
   const [error, setError] = useState<string | null>(null);
 
   /**
-   * Get token addresses for a trading pair
-   */
-  /**
    * Token metadata: address + decimals for each token on each chain
    */
   const TOKEN_META: Record<string, Record<string, { address: string; decimals: number }>> = {
