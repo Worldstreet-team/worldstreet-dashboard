@@ -18,11 +18,19 @@ export async function POST(request: NextRequest) {
     } = body;
 
     // Log the incoming request
-    console.log('[Quote API] Handled by QuoteService:', { userId, fromChain, toChain, tokenIn, tokenOut, amountIn });
+    console.log('[Quote API] Handled by QuoteService:', { userId, fromChain, toChain, tokenIn, tokenOut, amountIn, fromAddress });
 
     if (!tokenIn || !tokenOut || !amountIn || !fromChain) {
       return NextResponse.json(
         { message: 'Missing required fields (tokenIn, tokenOut, amountIn, fromChain)' },
+        { status: 400 }
+      );
+    }
+
+    // Validate fromAddress is provided and not zero address
+    if (!fromAddress || fromAddress === "0x0000000000000000000000000000000000000000" || fromAddress === "0x0") {
+      return NextResponse.json(
+        { message: '/fromAddress Zero address is provided. Please connect your wallet first.' },
         { status: 400 }
       );
     }
@@ -34,7 +42,7 @@ export async function POST(request: NextRequest) {
       fromToken: tokenIn,
       toToken: tokenOut,
       fromAmount: amountIn,
-      fromAddress: fromAddress || toAddress || "0x0000000000000000000000000000000000000000",
+      fromAddress,
       toAddress: toAddress || fromAddress,
       slippageOverride: slippage
     });

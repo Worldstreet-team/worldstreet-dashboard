@@ -11,8 +11,7 @@
 
 import { useState, useCallback } from 'react';
 import { useAuth } from '@/app/context/authContext';
-import { useSolana } from '@/app/context/solanaContext';
-import { useEvm } from '@/app/context/evmContext';
+import { useWallet } from '@/app/context/walletContext';
 import { useSwap } from '@/app/context/swapContext';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -104,8 +103,7 @@ function toSmallestUnit(amount: string, decimals: number): string {
 
 export function useSpotSwap() {
   const { user } = useAuth();
-  const { address: solAddress } = useSolana();
-  const { address: evmAddress } = useEvm();
+  const { addresses } = useWallet();
 
   const [quote, setQuote] = useState<SpotSwapQuote | null>(null);
   const [loading, setLoading] = useState(false);
@@ -125,6 +123,14 @@ export function useSpotSwap() {
 
       if (!user?.userId) throw new Error("User not authenticated");
 
+      // Get the appropriate wallet address from encrypted wallet system
+      const walletAddress = chain === 'solana' ? addresses?.solana : addresses?.ethereum;
+      
+      // Validate wallet address exists
+      if (!walletAddress) {
+        throw new Error(`Wallet not set up for ${chain === 'solana' ? 'Solana' : 'Ethereum'}. Please set up your wallet first.`);
+      }
+
       // Determine from/to token based on buy/sell
       const fromTokenAddr = params.side === 'buy' ? tokens.quote : tokens.base;
       const toTokenAddr = params.side === 'buy' ? tokens.base : tokens.quote;
@@ -132,7 +138,7 @@ export function useSpotSwap() {
       const amountIn = toSmallestUnit(params.amount, fromDecimals);
       const slippage = (params.slippage ?? 3) / 100; // percentage → decimal
 
-      console.log('[useSpotSwap] Fetching quote:', { pair: params.pair, side: params.side, amountIn, fromTokenAddr, toTokenAddr, chain });
+      console.log('[useSpotSwap] Fetching quote:', { pair: params.pair, side: params.side, amountIn, fromTokenAddr, toTokenAddr, chain, walletAddress });
 
       const res = await fetch('/api/quote', {
         method: 'POST',
@@ -144,8 +150,8 @@ export function useSpotSwap() {
           tokenIn: fromTokenAddr,
           tokenOut: toTokenAddr,
           amountIn,
-          fromAddress: chain === 'solana' ? solAddress : evmAddress,
-          toAddress: chain === 'solana' ? solAddress : evmAddress,
+          fromAddress: walletAddress,
+          toAddress: walletAddress,
           slippage,
         }),
       });
