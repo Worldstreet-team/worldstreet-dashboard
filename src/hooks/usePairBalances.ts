@@ -84,9 +84,9 @@ export function usePairBalances(
     const asset = chain.toUpperCase();
     
     // Map assets to their preferred USDT chain
-    if (asset === 'evm' || asset === 'btc') {
+    if (asset === 'EVM' || asset === 'BTC') {
       return 'evm'; // Ethereum USDT for ETH and BTC pairs
-    } else if (asset === 'sol') {
+    } else if (asset === 'SOL') {
       return 'sol'; // Solana USDT for SOL pairs
     }
     
@@ -170,7 +170,7 @@ export function usePairBalances(
       }
 
       // Determine which chain to use for USDT based on the base asset
-      const usdtChain = getUSDTChain(baseAsset);
+      const usdtChain = getUSDTChain(chain);
       console.log('[usePairBalances] USDT chain for', baseAsset, ':', usdtChain);
 
       // Find balance for base asset (tokenIn - what you're selling/trading)
