@@ -3,7 +3,7 @@
  *
  * Flow:
  *   1.  fetchQuote  →  POST /api/quote  →  backend calls LI.FI  →  returns quote data
- *   2.  executeSpotSwap  →  POST /api/execute-trade  →  backend signs & submits  →  returns txHash
+ *   2.  executeSpotSwap  →  (Solana) Use DriftContext OR (EVM) POST /api/execute-trade
  *   3.  (optional) poll blockchain for confirmation via getSignatureStatuses
  *
  * The frontend NEVER calls LI.FI directly; the backend is the single source.
@@ -13,6 +13,7 @@ import { useState, useCallback } from 'react';
 import { useAuth } from '@/app/context/authContext';
 import { useWallet } from '@/app/context/walletContext';
 import { useSwap } from '@/app/context/swapContext';
+import { useDrift } from '@/app/context/driftContext';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -104,6 +105,7 @@ function toSmallestUnit(amount: string, decimals: number): string {
 export function useSpotSwap() {
   const { user } = useAuth();
   const { addresses } = useWallet();
+  const { placeSpotOrder, getSpotMarketIndexBySymbol } = useDrift();
 
   const [quote, setQuote] = useState<SpotSwapQuote | null>(null);
   const [loading, setLoading] = useState(false);
@@ -125,9 +127,8 @@ export function useSpotSwap() {
 
       // Get the appropriate wallet address from encrypted wallet system
       const walletAddress = chain === 'solana' ? addresses?.solana : addresses?.ethereum;
-      
+
       // Validate wallet address exists
-      console.log("Wallets: ", addresses)
       if (!walletAddress) {
         throw new Error(`Wallet not set up for ${chain === 'solana' ? 'Solana' : 'Ethereum'}. Please set up your wallet first.`);
       }
@@ -209,9 +210,9 @@ export function useSpotSwap() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, addresses]);
 
-  // ── executeSpotSwap (Redirect to Client-Side Signing) ────────────────────
+  // ── executeSpotSwap (Redirect to Client-Side Signing or Drift) ────────────
   const { executeSwap: contextExecuteSwap } = useSwap();
 
   const executeSpotSwap = useCallback(async (
@@ -222,11 +223,40 @@ export function useSpotSwap() {
     setExecuting(true);
 
     try {
-      if (!quote) throw new Error('No quote available. Please fetch a quote first.');
       if (!user?.userId) throw new Error("User not authenticated");
 
-      // 1. Prepare the execution parameters
       const chain = getChainFromPair(params.pair);
+
+      // DRIFT INTEGRATION: If it's Solana, use Drift for spot trading
+      if (chain === 'solana') {
+        console.log('[useSpotSwap] Using Drift for Solana spot trade');
+        const [baseAsset] = params.pair.split('-');
+
+        // Map asset to Drift market index
+        const marketIndex = getSpotMarketIndexBySymbol(baseAsset);
+
+        if (marketIndex === undefined) {
+          throw new Error(`Market not found on Drift: ${baseAsset}`);
+        }
+
+        const amountNum = parseFloat(params.amount);
+        const result = await placeSpotOrder(
+          marketIndex,
+          params.side === 'buy' ? 'buy' : 'sell',
+          amountNum
+        );
+
+        if (!result.success) {
+          throw new Error(result.error || 'Drift spot order failed');
+        }
+
+        return { success: true, txHash: result.txSignature };
+      }
+
+      // LEGACY LI.FI/BACKEND FLOW for other chains
+      if (!quote) throw new Error('No quote available. Please fetch a quote first.');
+
+      // 1. Prepare the execution parameters
       const chainLabel = getChainLabel(params.pair);
       const tokens = getTokenMeta(params.pair, chain);
       const fromTokenAddr = params.side === 'buy' ? tokens.quote : tokens.base;
@@ -238,12 +268,10 @@ export function useSpotSwap() {
       });
 
       // 2. Map the spot quote to a SwapQuote format that contextExecuteSwap expects
-      // Note: We need to ensure the quote from fetchQuote (which has _raw.executionData) 
-      // is passed correctly.
       const mappedQuote = {
         fromChain: chain === 'solana' ? 'solana' : 'ethereum',
         toChain: chain === 'solana' ? 'solana' : 'ethereum',
-        fromToken: { address: fromTokenAddr, decimals: 18 } as any, // Simplify for execution
+        fromToken: { address: fromTokenAddr, decimals: 18 } as any, // Simplified
         toToken: { address: toTokenAddr, decimals: 18 } as any,
         fromAmount: quote._raw?.amountIn || quote.fromAmount,
         toAmount: quote.toAmount,
@@ -254,24 +282,19 @@ export function useSpotSwap() {
         throw new Error("Execution data still missing from quote. Please try fetching a new quote.");
       }
 
-      // 3. Call the perfected context execution (Simulate -> Sign -> Send)
+      // 3. Call the context execution
       const txHash = await contextExecuteSwap(mappedQuote, pin);
 
       // 4. Update local history/state
-      const chain = getChainFromPair(params.pair);
-      const chainId = getChainLabel(params.pair);
-      const tokens = getTokenMeta(params.pair, chain);
-      const fromTokenAddr = params.side === 'buy' ? tokens.quote : tokens.base;
-      const toTokenAddr = params.side === 'buy' ? tokens.base : tokens.quote;
       const [baseToken, quoteToken] = params.pair.split('-');
-      
+
       fetch('/api/spot/trades', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: user?.userId,
           txHash,
-          chainId: typeof chainId === 'number' ? chainId : 1,
+          chainId: typeof chainLabel === 'number' ? chainLabel : 1,
           pair: params.pair,
           side: params.side.toUpperCase(),
           fromTokenAddress: fromTokenAddr,
@@ -284,7 +307,7 @@ export function useSpotSwap() {
           slippagePercent: params.slippage || 3,
           status: 'CONFIRMED',
         }),
-      }).catch(err => console.warn('[useSpotSwap] Backend tracking failed (TX still went through):', err));
+      }).catch(err => console.warn('[useSpotSwap] Backend tracking failed:', err));
 
       return { success: true, txHash };
     } catch (err) {
@@ -295,7 +318,7 @@ export function useSpotSwap() {
     } finally {
       setExecuting(false);
     }
-  }, [quote, user, contextExecuteSwap]);
+  }, [quote, user, contextExecuteSwap, placeSpotOrder, getSpotMarketIndexBySymbol]);
 
   return {
     quote,

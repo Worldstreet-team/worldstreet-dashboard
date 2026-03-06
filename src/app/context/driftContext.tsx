@@ -50,18 +50,39 @@ interface PerpMarketInfo {
   initialized: boolean;
 }
 
+interface SpotMarketInfo {
+  marketIndex: number;
+  symbol: string;
+  decimals: number;
+  initialized: boolean;
+}
+
+interface DriftSpotPosition {
+  marketIndex: number;
+  marketName: string;
+  amount: number;
+  balanceType: 'deposit' | 'borrow';
+  value: number;
+  price: number;
+}
+
 interface DriftContextValue {
   // Client state
   isClientReady: boolean;
 
   // Account data
   summary: DriftAccountSummary | null;
-  positions: DriftPosition[];
-
   // Market data
   perpMarkets: Map<number, PerpMarketInfo>; // Stable mapping: marketIndex → market info
-  getMarketName: (marketIndex: number) => string; // Helper to get market name
-  getMarketIndexBySymbol: (symbol: string) => number | undefined; // Helper to get on-chain index by symbol
+  spotMarkets: Map<number, SpotMarketInfo>; // Stable mapping: marketIndex → spot market info
+  getMarketName: (marketIndex: number) => string; // Helper to get perp market name
+  getMarketIndexBySymbol: (symbol: string) => number | undefined; // Helper to get on-chain perp index by symbol
+  getSpotMarketName: (marketIndex: number) => string; // Helper to get spot market name
+  getSpotMarketIndexBySymbol: (symbol: string) => number | undefined; // Helper to get on-chain spot index by symbol
+
+  // Positions
+  positions: DriftPosition[]; // Perp positions
+  spotPositions: DriftSpotPosition[]; // Spot positions
 
   // Loading/error states
   isLoading: boolean;
@@ -99,6 +120,7 @@ interface DriftContextValue {
   withdrawCollateral: (amount: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
   openPosition: (marketIndex: number, direction: 'long' | 'short', size: number, leverage: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
   closePosition: (marketIndex: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
+  placeSpotOrder: (marketIndex: number, direction: 'buy' | 'sell', amount: number, orderType?: 'market' | 'limit', price?: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
   previewTrade: (marketIndex: number, direction: 'long' | 'short', size: number, leverage: number) => Promise<any>;
 
   // Auto-refresh control
@@ -129,9 +151,11 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   // Account data
   const [summary, setSummary] = useState<DriftAccountSummary | null>(null);
   const [positions, setPositions] = useState<DriftPosition[]>([]);
+  const [spotPositions, setSpotPositions] = useState<DriftSpotPosition[]>([]);
 
   // Market data - stable mapping from marketIndex to market info
   const [perpMarkets, setPerpMarkets] = useState<Map<number, PerpMarketInfo>>(new Map());
+  const [spotMarkets, setSpotMarkets] = useState<Map<number, SpotMarketInfo>>(new Map());
 
   // Loading/error states
   const [isLoading, setIsLoading] = useState(false);
@@ -497,9 +521,14 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         driftClientRef.current = client;
         console.log('[DriftContext] Drift client ready!');
 
-        // Build perp market mapping after client is ready
-        const marketMapping = await buildPerpMarketMapping(client);
-        setPerpMarkets(marketMapping);
+        // Build market mappings after client is ready
+        const [perpMapping, spotMapping] = await Promise.all([
+          buildPerpMarketMapping(client),
+          buildSpotMarketMapping(client)
+        ]);
+
+        setPerpMarkets(perpMapping);
+        setSpotMarkets(spotMapping);
 
         return client;
 
@@ -597,6 +626,54 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   }, []);
 
   /**
+   * Build stable mapping of spot marketIndex → market info
+   */
+  const buildSpotMarketMapping = useCallback(async (client: any): Promise<Map<number, SpotMarketInfo>> => {
+    console.log('[DriftContext] Building spot market mapping...');
+
+    try {
+      const marketMap = new Map<number, SpotMarketInfo>();
+      const spotMarketAccounts = client.getSpotMarketAccounts();
+
+      if (!spotMarketAccounts || spotMarketAccounts.length === 0) {
+        console.warn('[DriftContext] No spot markets found');
+        return marketMap;
+      }
+
+      for (const market of spotMarketAccounts) {
+        const marketIndex = market.marketIndex;
+        const nameBytes = market.name;
+        let symbol = 'UNKNOWN';
+
+        try {
+          if (nameBytes && nameBytes.length > 0) {
+            symbol = Buffer.from(nameBytes)
+              .toString('utf8')
+              .replace(/\0/g, '')
+              .trim();
+          }
+        } catch (err) {
+          console.warn(`[DriftContext] Error parsing spot market name for index ${marketIndex}:`, err);
+        }
+
+        marketMap.set(marketIndex, {
+          marketIndex,
+          symbol,
+          decimals: market.decimals,
+          initialized: true,
+        });
+
+        console.log(`[DriftContext] Spot Market ${marketIndex}: ${symbol}`);
+      }
+
+      return marketMap;
+    } catch (err) {
+      console.error('[DriftContext] Error building spot market mapping:', err);
+      return new Map();
+    }
+  }, []);
+
+  /**
    * Helper function to get market name from marketIndex
    * Falls back to "Market {index}" if not found
    */
@@ -637,6 +714,30 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
 
     return undefined;
   }, [perpMarkets]);
+
+  /**
+   * Helper function to get spot market name from marketIndex
+   */
+  const getSpotMarketName = useCallback((marketIndex: number): string => {
+    const marketInfo = spotMarkets.get(marketIndex);
+    return marketInfo?.symbol || `Spot ${marketIndex}`;
+  }, [spotMarkets]);
+
+  /**
+   * Helper function to find spot marketIndex by symbol
+   */
+  const getSpotMarketIndexBySymbol = useCallback((symbol: string): number | undefined => {
+    if (!symbol) return undefined;
+    const cleanSymbol = symbol.toUpperCase().trim();
+
+    for (const [index, info] of spotMarkets.entries()) {
+      if (info.symbol.toUpperCase() === cleanSymbol || info.symbol.toUpperCase().startsWith(cleanSymbol)) {
+        return index;
+      }
+    }
+
+    return undefined;
+  }, [spotMarkets]);
   /**
    * 
    * Handles:
@@ -933,6 +1034,57 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       }
 
       setPositions(positionsList);
+
+      // Get spot positions
+      const spotPositionsList = [];
+      try {
+        const spotMarketAccounts = client.getSpotMarketAccounts();
+        for (const marketAccount of spotMarketAccounts) {
+          const marketIndex = marketAccount.marketIndex;
+          const position = driftUser.getSpotPosition(marketIndex);
+
+          if (position && !position.scaledBalance.isZero()) {
+            const marketName = getSpotMarketName(marketIndex);
+            const decimals = marketAccount.decimals;
+
+            // Calculate actual amount based on balance type (deposit or borrow)
+            let amount = 0;
+            const balanceType = (position.balanceType.hasOwnProperty('deposit') ? 'deposit' : 'borrow') as 'deposit' | 'borrow';
+
+            // Get token price from oracle
+            let price = 0;
+            try {
+              const oracleData = client.getOracleDataForSpotMarket(marketIndex);
+              price = oracleData.price.toNumber() / 1e6;
+            } catch (pErr) {
+              console.warn(`[DriftContext] Could not get price for spot market ${marketIndex}`);
+            }
+
+            // Convert BN to human readable number
+            // Note: scaledBalance needs to be handled via getTokenAmount or similar Client method
+            const tokenAmount = client.getTokenAmount(
+              position.scaledBalance,
+              marketAccount,
+              position.balanceType
+            );
+
+            amount = tokenAmount.toNumber() / Math.pow(10, decimals);
+
+            spotPositionsList.push({
+              marketIndex,
+              marketName,
+              amount,
+              balanceType,
+              price,
+              value: amount * price
+            });
+          }
+        }
+      } catch (spotErr) {
+        console.warn('[DriftContext] Error getting spot positions:', spotErr);
+      }
+
+      setSpotPositions(spotPositionsList);
     } catch (err) {
       console.error('[DriftContext] Error refreshing positions:', err);
       setError(err instanceof Error ? err.message : 'Failed to refresh positions');
@@ -1373,6 +1525,62 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     }
   }, [user?.userId, requestPin, initializeDriftClient, refreshSummary, refreshPositions]);
 
+  /**
+   * Place a spot market or limit order
+   */
+  const placeSpotOrder = useCallback(async (
+    marketIndex: number,
+    direction: 'buy' | 'sell',
+    amount: number,
+    orderType: 'market' | 'limit' = 'market',
+    price?: number
+  ): Promise<{ success: boolean; txSignature?: string; error?: string }> => {
+    if (!user?.userId) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    try {
+      setIsLoading(true);
+      const pin = await requestPin();
+
+      let client = driftClientRef.current;
+      if (!client) {
+        client = await initializeDriftClient(pin);
+      }
+
+      const { BN, OrderType, MarketType, PositionDirection } = await import('@drift-labs/sdk');
+
+      const positionDirection = direction === 'buy'
+        ? PositionDirection.LONG
+        : PositionDirection.SHORT;
+
+      const baseAssetAmount = client.convertToSpotPrecision(marketIndex, amount);
+
+      const orderParams = {
+        orderType: orderType === 'market' ? OrderType.MARKET : OrderType.LIMIT,
+        marketType: MarketType.SPOT,
+        marketIndex,
+        direction: positionDirection,
+        baseAssetAmount,
+        price: price ? client.convertToPricePrecision(price) : new BN(0),
+      };
+
+      const txSignature = await client.placeSpotOrder(orderParams);
+      console.log('[DriftContext] Spot order sent:', txSignature);
+
+      await pollTransactionStatus(client.connection, txSignature, 30, 2000);
+      await refreshSummary();
+      await refreshPositions();
+
+      return { success: true, txSignature };
+    } catch (err) {
+      console.error('[DriftContext] Spot order error:', err);
+      return { success: false, error: err instanceof Error ? err.message : 'Spot order failed' };
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user?.userId, requestPin, initializeDriftClient, refreshSummary, refreshPositions]);
+
   // Preview trade locally using Drift SDK
   const previewTrade = useCallback(async (
     marketIndex: number,
@@ -1575,12 +1783,9 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   const value: DriftContextValue = {
     isClientReady,
     summary,
-    positions,
-    perpMarkets,
-    getMarketName,
     isLoading,
     error,
-    isInitializing: showInitOverlay && isInitializing, // Only expose as initializing if overlay should show
+    isInitializing: showInitOverlay && isInitializing,
     initializationError,
     isInitialized,
     canTrade,
@@ -1599,8 +1804,16 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     withdrawCollateral,
     openPosition,
     closePosition,
+    placeSpotOrder,
     previewTrade,
+    perpMarkets,
+    spotMarkets,
+    positions,
+    spotPositions,
+    getMarketName,
     getMarketIndexBySymbol,
+    getSpotMarketName,
+    getSpotMarketIndexBySymbol,
     startAutoRefresh,
     stopAutoRefresh,
   };

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useDrift } from '@/app/context/driftContext';
 
 /**
  * Balance data for a single asset
@@ -69,6 +70,7 @@ export function usePairBalances(
   chain?: string,
   tokenAddress?: string
 ): UsePairBalancesReturn {
+  const { spotPositions: driftSpotPositions, isLoading: loadingDrift } = useDrift();
   const [tokenIn, setTokenIn] = useState<number>(0);
   const [tokenOut, setTokenOut] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(false);
@@ -91,22 +93,22 @@ export function usePairBalances(
   const fetchCustomTokenBalance = async (mintAddress: string, chainType: string): Promise<number> => {
     try {
       console.log('[usePairBalances] Fetching custom token balance:', { mintAddress, chainType });
-      
+
       // Call the balance API with the token address
       const params = new URLSearchParams({
         tokenAddress: mintAddress,
         chain: chainType,
       });
-      
+
       const response = await fetch(`/api/users/${userId}/token-balance?${params.toString()}`);
-      
+
       if (!response.ok) {
         console.error('[usePairBalances] Custom token balance API error:', response.status);
         return 0;
       }
 
       const data = await response.json();
-      
+
       if (data.success && typeof data.balance === 'number') {
         console.log('[usePairBalances] Custom token balance:', data.balance);
         return data.balance;
@@ -129,16 +131,16 @@ export function usePairBalances(
     if (!chainParam) {
       return 'tron'; // Default to Tron USDT if no chain specified
     }
-    
+
     const asset = chainParam.toUpperCase();
-    
+
     // Map assets to their preferred USDT chain
     if (asset === 'EVM' || asset === 'BTC') {
       return 'evm'; // Ethereum USDT for ETH and BTC pairs
     } else if (asset === 'SOL') {
       return 'sol'; // Solana USDT for SOL pairs
     }
-    
+
     return 'tron'; // Default to Tron USDT
   };
 
@@ -148,14 +150,14 @@ export function usePairBalances(
   const fetchTronUSDT = async (): Promise<number> => {
     try {
       const response = await fetch('/api/tron/balance');
-      
+
       if (!response.ok) {
         console.log('[usePairBalances] Tron balance API error:', response.status);
         return 0;
       }
 
       const data: TronBalanceResponse = await response.json();
-      
+
       if (!data.success) {
         console.log('[usePairBalances] Tron balance API returned error');
         return 0;
@@ -214,6 +216,31 @@ export function usePairBalances(
       const balances = Array.isArray(data) ? data : data.balances || [];
       console.log('[usePairBalances] Parsed balances:', balances);
 
+      // DRIFT INTEGRATION: If chain is Solana, use Drift positions first
+      if (chain === 'sol' || chain === 'solana') {
+        console.log('[usePairBalances] Mapping Drift positions for Solana balances');
+        const [baseAsset, quoteAsset] = selectedPair.split('-');
+
+        let driftBase = 0;
+        let driftQuote = 0;
+
+        if (driftSpotPositions) {
+          driftSpotPositions.forEach(p => {
+            if (p.marketName === baseAsset || p.marketName === `${baseAsset}/USDC` || p.marketName.startsWith(baseAsset)) {
+              driftBase = p.amount;
+            }
+            if (p.marketName === quoteAsset || p.marketName === 'USDC' || p.marketName === 'USDT') {
+              driftQuote = p.amount;
+            }
+          });
+        }
+
+        setTokenIn(driftBase);
+        setTokenOut(driftQuote);
+        setLoading(false);
+        return;
+      }
+
       if (balances.length === 0) {
         console.warn('[usePairBalances] No balances returned from backend');
       }
@@ -232,19 +259,19 @@ export function usePairBalances(
           return matchesAsset && matchesChain;
         }
       );
-      
+
       let tokenInValue = baseBalance ? parseFloat(baseBalance.available_balance || '0') : 0;
-      
+
       // If base asset is not found and it's not a standard token, try fetching using tokenAddress
       if (tokenInValue === 0 && !isStandardToken(baseAsset) && tokenAddress && chain) {
         console.log('[usePairBalances] Base asset not found in backend, fetching custom token balance...');
         tokenInValue = await fetchCustomTokenBalance(tokenAddress, chain);
       }
-      
-      console.log('[usePairBalances] Base asset balance:', { 
-        baseAsset, 
+
+      console.log('[usePairBalances] Base asset balance:', {
+        baseAsset,
         chain,
-        balance: baseBalance, 
+        balance: baseBalance,
         value: tokenInValue,
         isCustomToken: !isStandardToken(baseAsset),
         allAssets: balances.map((b: AssetBalance) => `${b.asset}(${b.chain})`)
@@ -268,11 +295,11 @@ export function usePairBalances(
         }
       );
       let tokenOutValue = quoteBalance ? parseFloat(quoteBalance.available_balance || '0') : 0;
-      
+
       // If quote asset is USDT and we didn't find it with the expected chain, try fallback
       if (quoteAsset.toUpperCase() === 'USDT' && tokenOutValue === 0) {
         console.log(`[usePairBalances] USDT not found on ${usdtChain} chain, trying fallback...`);
-        
+
         // Try Tron as fallback
         const tronUSDT = await fetchTronUSDT();
         if (tronUSDT > 0) {
@@ -287,11 +314,11 @@ export function usePairBalances(
           }
         }
       }
-      
-      console.log('[usePairBalances] Quote asset balance:', { 
-        quoteAsset, 
+
+      console.log('[usePairBalances] Quote asset balance:', {
+        quoteAsset,
         expectedChain: usdtChain,
-        balance: quoteBalance, 
+        balance: quoteBalance,
         value: tokenOutValue,
         allAssets: balances.map((b: AssetBalance) => `${b.asset}(${b.chain})`)
       });
@@ -301,7 +328,7 @@ export function usePairBalances(
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch balances';
       setError(errorMessage);
       console.error('[usePairBalances] Error:', err);
-      
+
       // Set to 0 on error (no dummy data)
       setTokenIn(0);
       setTokenOut(0);
@@ -313,7 +340,7 @@ export function usePairBalances(
   // Fetch balances when dependencies change
   useEffect(() => {
     fetchBalances();
-  }, [fetchBalances]);
+  }, [fetchBalances, driftSpotPositions]);
 
   return {
     tokenIn,
