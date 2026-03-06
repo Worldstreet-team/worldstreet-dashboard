@@ -21,7 +21,7 @@ interface ErrorState {
 
 export const OrderPanel: React.FC = () => {
   const { selectedMarket, markets } = useFuturesStore();
-  const { openPosition: openPositionClient, refreshPositions, refreshSummary, previewTrade } = useDrift();
+  const { openPosition: openPositionClient, refreshPositions, refreshSummary, previewTrade, getMarketIndexBySymbol } = useDrift();
   const { isPolling: isConfirmingOrder, startPostActionPolling } = usePostActionPolling();
 
   const [previewData, setPreviewData] = useState<any>(null);
@@ -50,9 +50,9 @@ export const OrderPanel: React.FC = () => {
 
     const fetchPreview = async () => {
       try {
-        const marketIndex = markets.findIndex(m => m.id === selectedMarket.id);
-        if (marketIndex < 0) {
-          throw new Error('Market not found');
+        const marketIndex = getMarketIndexBySymbol(selectedMarket.symbol);
+        if (marketIndex === undefined) {
+          throw new Error(`Market ${selectedMarket.symbol} not found on-chain`);
         }
 
         const preview = await previewTrade(
@@ -220,8 +220,12 @@ export const OrderPanel: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      // Determine marketIndex from market symbol
-      const marketIndex = markets.findIndex(m => m.id === selectedMarket.id);
+      // Determine marketIndex using stable symbol mapping
+      const marketIndex = getMarketIndexBySymbol(selectedMarket.symbol);
+
+      if (marketIndex === undefined) {
+        throw new Error(`Market ${selectedMarket.symbol} not available on Drift`);
+      }
 
       // Use client-side openPosition
       const result = await openPositionClient(
@@ -317,8 +321,8 @@ export const OrderPanel: React.FC = () => {
         <button
           onClick={() => setSide('long')}
           className={`flex-1 py-2 rounded-lg font-medium transition-colors ${side === 'long'
-              ? 'bg-success text-white'
-              : 'bg-gray-100 dark:bg-dark text-dark dark:text-white hover:bg-gray-200 dark:hover:bg-darkgray'
+            ? 'bg-success text-white'
+            : 'bg-gray-100 dark:bg-dark text-dark dark:text-white hover:bg-gray-200 dark:hover:bg-darkgray'
             }`}
         >
           Long
@@ -326,8 +330,8 @@ export const OrderPanel: React.FC = () => {
         <button
           onClick={() => setSide('short')}
           className={`flex-1 py-2 rounded-lg font-medium transition-colors ${side === 'short'
-              ? 'bg-error text-white'
-              : 'bg-gray-100 dark:bg-dark text-dark dark:text-white hover:bg-gray-200 dark:hover:bg-darkgray'
+            ? 'bg-error text-white'
+            : 'bg-gray-100 dark:bg-dark text-dark dark:text-white hover:bg-gray-200 dark:hover:bg-darkgray'
             }`}
         >
           Short
@@ -341,8 +345,8 @@ export const OrderPanel: React.FC = () => {
           <button
             onClick={() => setOrderType('market')}
             className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${orderType === 'market'
-                ? 'bg-primary text-white'
-                : 'bg-gray-100 dark:bg-dark text-dark dark:text-white hover:bg-gray-200 dark:hover:bg-darkgray'
+              ? 'bg-primary text-white'
+              : 'bg-gray-100 dark:bg-dark text-dark dark:text-white hover:bg-gray-200 dark:hover:bg-darkgray'
               }`}
           >
             Market
@@ -350,8 +354,8 @@ export const OrderPanel: React.FC = () => {
           <button
             onClick={() => setOrderType('limit')}
             className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${orderType === 'limit'
-                ? 'bg-primary text-white'
-                : 'bg-gray-100 dark:bg-dark text-dark dark:text-white hover:bg-gray-200 dark:hover:bg-darkgray'
+              ? 'bg-primary text-white'
+              : 'bg-gray-100 dark:bg-dark text-dark dark:text-white hover:bg-gray-200 dark:hover:bg-darkgray'
               }`}
           >
             Limit
@@ -470,8 +474,8 @@ export const OrderPanel: React.FC = () => {
       {/* Error Display */}
       {error.type && (
         <div className={`mb-4 p-3 rounded-lg border ${error.type === 'oracle_unavailable' || error.type === 'volatility'
-            ? 'bg-warning/10 border-warning/20'
-            : 'bg-error/10 border-error/20'
+          ? 'bg-warning/10 border-warning/20'
+          : 'bg-error/10 border-error/20'
           }`}>
           <div className="flex items-start gap-2">
             <Icon
@@ -641,10 +645,10 @@ export const OrderPanel: React.FC = () => {
         onClick={handleSubmit}
         disabled={isDisabled || isConfirmingOrder}
         className={`w-full py-3 rounded-lg font-semibold transition-colors ${isDisabled || isConfirmingOrder
-            ? 'bg-gray-300 dark:bg-darkgray text-gray-500 cursor-not-allowed'
-            : side === 'long'
-              ? 'bg-success hover:bg-success/90 text-white'
-              : 'bg-error hover:bg-error/90 text-white'
+          ? 'bg-gray-300 dark:bg-darkgray text-gray-500 cursor-not-allowed'
+          : side === 'long'
+            ? 'bg-success hover:bg-success/90 text-white'
+            : 'bg-error hover:bg-error/90 text-white'
           }`}
       >
         {isConfirmingOrder ? (

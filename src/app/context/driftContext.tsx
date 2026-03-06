@@ -61,6 +61,7 @@ interface DriftContextValue {
   // Market data
   perpMarkets: Map<number, PerpMarketInfo>; // Stable mapping: marketIndex → market info
   getMarketName: (marketIndex: number) => string; // Helper to get market name
+  getMarketIndexBySymbol: (symbol: string) => number | undefined; // Helper to get on-chain index by symbol
 
   // Loading/error states
   isLoading: boolean;
@@ -602,6 +603,39 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   const getMarketName = useCallback((marketIndex: number): string => {
     const marketInfo = perpMarkets.get(marketIndex);
     return marketInfo?.symbol || `Market ${marketIndex}`;
+  }, [perpMarkets]);
+
+  /**
+   * Helper function to find marketIndex by symbol/id
+   * Essential for mapping external API markets to on-chain Drift indices
+   */
+  const getMarketIndexBySymbol = useCallback((symbol: string): number | undefined => {
+    if (!symbol) return undefined;
+    const cleanSymbol = symbol.toUpperCase().trim();
+    const cleanBase = cleanSymbol.split('-')[0];
+
+    // 1. Try exact match in mapping (e.g., "SOL-PERP")
+    for (const [index, info] of perpMarkets.entries()) {
+      if (info.symbol.toUpperCase() === cleanSymbol) {
+        return index;
+      }
+    }
+
+    // 2. Try base asset match (e.g., "SOL" matches "SOL-PERP")
+    for (const [index, info] of perpMarkets.entries()) {
+      if (info.baseAssetSymbol.toUpperCase() === cleanBase) {
+        return index;
+      }
+    }
+
+    // 3. Last resort: partial string match
+    for (const [index, info] of perpMarkets.entries()) {
+      if (info.symbol.toUpperCase().includes(cleanBase) || cleanSymbol.includes(info.baseAssetSymbol.toUpperCase())) {
+        return index;
+      }
+    }
+
+    return undefined;
   }, [perpMarkets]);
   /**
    * 
@@ -1566,6 +1600,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     openPosition,
     closePosition,
     previewTrade,
+    getMarketIndexBySymbol,
     startAutoRefresh,
     stopAutoRefresh,
   };

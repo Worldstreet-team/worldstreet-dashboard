@@ -8,7 +8,7 @@ import { Icon } from '@iconify/react';
 
 export const PositionPanel: React.FC = () => {
   const { markets } = useFuturesStore();
-  const { positions, refreshPositions, refreshSummary, isLoading, closePosition: closePositionClient } = useDrift();
+  const { positions, refreshPositions, refreshSummary, isLoading, closePosition: closePositionClient, getMarketName } = useDrift();
   const [closingMarketIndex, setClosingMarketIndex] = React.useState<number | null>(null);
   const { isPolling: isConfirmingClose, startPostActionPolling } = usePostActionPolling();
 
@@ -17,7 +17,7 @@ export const PositionPanel: React.FC = () => {
     const interval = setInterval(() => {
       refreshPositions();
     }, 15000);
-    
+
     return () => clearInterval(interval);
   }, [refreshPositions]);
 
@@ -31,7 +31,7 @@ export const PositionPanel: React.FC = () => {
       if (!result.success) {
         throw new Error(result.error || 'Failed to close position');
       }
-      
+
       // Start post-action polling to confirm position is closed
       startPostActionPolling({
         checkCondition: async () => {
@@ -57,10 +57,9 @@ export const PositionPanel: React.FC = () => {
     }
   };
 
-  // Get market symbol from index
+  // Get market symbol from index using stable mapping
   const getMarketSymbol = (marketIndex: number) => {
-    const market = markets[marketIndex];
-    return market?.symbol || `Market ${marketIndex}`;
+    return getMarketName(marketIndex);
   };
 
   if (isLoading && positions.length === 0) {
@@ -107,14 +106,14 @@ export const PositionPanel: React.FC = () => {
           className="p-2 hover:bg-[#2b3139] active:bg-[#2b3139]/80 rounded transition-all duration-200 disabled:opacity-50 active:scale-95 min-h-[44px] min-w-[44px] flex items-center justify-center touch-feedback"
           title="Refresh"
         >
-          <Icon 
-            icon="ph:arrow-clockwise" 
-            className={`text-[#848e9c] ${isLoading ? 'animate-spin' : ''}`} 
-            width={16} 
+          <Icon
+            icon="ph:arrow-clockwise"
+            className={`text-[#848e9c] ${isLoading ? 'animate-spin' : ''}`}
+            width={16}
           />
         </button>
       </div>
-      
+
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
@@ -136,11 +135,10 @@ export const PositionPanel: React.FC = () => {
                   {getMarketSymbol(position.marketIndex)}
                 </td>
                 <td className="py-3 px-3">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${
-                    position.direction === 'long' 
-                      ? 'bg-[#0ecb81]/10 text-[#0ecb81]' 
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${position.direction === 'long'
+                      ? 'bg-[#0ecb81]/10 text-[#0ecb81]'
                       : 'bg-[#f6465d]/10 text-[#f6465d]'
-                  }`}>
+                    }`}>
                     {position.direction.toUpperCase()}
                   </span>
                 </td>
@@ -153,9 +151,8 @@ export const PositionPanel: React.FC = () => {
                 <td className="py-3 px-3 text-sm text-right text-white font-mono tabular-nums">
                   ${position.quoteAmount?.toFixed(2) || '0.00'}
                 </td>
-                <td className={`py-3 px-3 text-sm text-right font-bold font-mono tabular-nums ${
-                  (position.unrealizedPnl || 0) >= 0 ? 'text-[#0ecb81]' : 'text-[#f6465d]'
-                }`}>
+                <td className={`py-3 px-3 text-sm text-right font-bold font-mono tabular-nums ${(position.unrealizedPnl || 0) >= 0 ? 'text-[#0ecb81]' : 'text-[#f6465d]'
+                  }`}>
                   {(position.unrealizedPnl || 0) >= 0 ? '+' : ''}${(Number(position.unrealizedPnl) || 0).toFixed(2)}
                 </td>
                 <td className="py-3 px-3 text-sm text-right text-white font-mono tabular-nums">

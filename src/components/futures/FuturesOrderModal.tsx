@@ -20,7 +20,7 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
   onSuccess,
 }) => {
   const { selectedMarket, markets } = useFuturesStore();
-  const { openPosition, isLoading: driftLoading, previewTrade } = useDrift();
+  const { openPosition, isLoading: driftLoading, previewTrade, getMarketIndexBySymbol } = useDrift();
 
   const [previewData, setPreviewData] = useState<any>(null);
 
@@ -44,9 +44,9 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
 
     const fetchPreview = async () => {
       try {
-        const marketIndex = markets.findIndex(m => m.id === selectedMarket.id);
-        if (marketIndex < 0) {
-          throw new Error('Market not found');
+        const marketIndex = getMarketIndexBySymbol(selectedMarket.symbol);
+        if (marketIndex === undefined) {
+          throw new Error(`Market ${selectedMarket.symbol} not found on-chain`);
         }
 
         const preview = await previewTrade(
@@ -79,11 +79,15 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
     setError(null);
 
     try {
-      const marketIndex = markets.findIndex(m => m.id === selectedMarket.id);
+      const marketIndex = getMarketIndexBySymbol(selectedMarket.symbol);
+
+      if (marketIndex === undefined) {
+        throw new Error(`Market ${selectedMarket.symbol} not available on Drift`);
+      }
 
       // Use the hook instead of direct API call
       const result = await openPosition(
-        marketIndex >= 0 ? marketIndex : 0,
+        marketIndex,
         side,
         parseFloat(size),
         leverage
