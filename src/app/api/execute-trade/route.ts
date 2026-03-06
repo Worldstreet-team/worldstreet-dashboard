@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
 
     if (!response.ok) {
       // Backend returns errors in 'error' field, not 'message'
-      const errorMessage = data.error || data.message || data;
+      const errorMessage = data.message || data || data.error;
       console.error('[Execute Trade API] Backend error:', errorMessage);
       
       return NextResponse.json(
