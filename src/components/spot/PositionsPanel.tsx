@@ -39,15 +39,22 @@ export default function PositionsPanel({ selectedPair, onRefresh }: PositionsPan
   const positions = activeTab === 'open' ? openPositions : closedPositions;
   const loading = activeTab === 'open' ? loadingOpen : loadingClosed;
 
-  const formatPrice = (price: number) => {
+  const formatPrice = (price?: number) => {
+    if (price === undefined || price === null || isNaN(price)) return '0.00';
     return price.toFixed(2);
   };
 
-  const formatPnL = (pnl: number, percentage: number) => {
+  const formatPnL = (pnl?: number, percentage?: number) => {
+    if (pnl === undefined || pnl === null || isNaN(pnl)) {
+      return <span className="text-[#848e9c]">--</span>;
+    }
+    if (percentage === undefined || percentage === null || isNaN(percentage)) {
+      percentage = 0;
+    }
     const isPositive = pnl >= 0;
     return (
       <span className={isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}>
-        {isPositive ? '+' : ''}{pnl.toFixed(2)} ({isPositive ? '+' : ''}{percentage.toFixed(2)}%)
+        {isPositive ? '+' : ''}{pnl.toFixed(4)} ({isPositive ? '+' : ''}{percentage.toFixed(2)}%)
       </span>
     );
   };
@@ -113,17 +120,19 @@ export default function PositionsPanel({ selectedPair, onRefresh }: PositionsPan
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-white">
-                      {position.symbol.replace('-', '/')}
+                      {position.symbol.replace('-', '/').replace('/', ' / ')}
                     </span>
-                    <span
-                      className={`px-2 py-0.5 rounded text-xs font-medium ${
-                        position.side === 'BUY'
-                          ? 'bg-[#0ecb81]/10 text-[#0ecb81]'
-                          : 'bg-[#f6465d]/10 text-[#f6465d]'
-                      }`}
-                    >
-                      {position.side}
-                    </span>
+                    {position.side && (
+                      <span
+                        className={`px-2 py-0.5 rounded text-xs font-medium ${
+                          position.side === 'BUY'
+                            ? 'bg-[#0ecb81]/10 text-[#0ecb81]'
+                            : 'bg-[#f6465d]/10 text-[#f6465d]'
+                        }`}
+                      >
+                        {position.side}
+                      </span>
+                    )}
                   </div>
                   <div className="text-right">
                     {formatPnL(position.pnl, position.pnl_percentage)}
@@ -141,19 +150,19 @@ export default function PositionsPanel({ selectedPair, onRefresh }: PositionsPan
                   </div>
                   <div className="flex justify-between">
                     <span className="text-[#848e9c]">Quantity:</span>
-                    <span className="text-white">{position.quantity}</span>
+                    <span className="text-white">{position.quantity?.toFixed(6) || '0'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-[#848e9c]">Time:</span>
                     <span className="text-white">{formatDate(position.opened_at)}</span>
                   </div>
-                  {position.take_profit && (
+                  {position.take_profit && position.take_profit > 0 && (
                     <div className="flex justify-between">
                       <span className="text-[#848e9c]">TP:</span>
                       <span className="text-[#0ecb81]">${formatPrice(position.take_profit)}</span>
                     </div>
                   )}
-                  {position.stop_loss && (
+                  {position.stop_loss && position.stop_loss > 0 && (
                     <div className="flex justify-between">
                       <span className="text-[#848e9c]">SL:</span>
                       <span className="text-[#f6465d]">${formatPrice(position.stop_loss)}</span>

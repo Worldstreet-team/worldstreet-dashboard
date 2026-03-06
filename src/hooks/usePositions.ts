@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 export interface Position {
   id: string;
   symbol: string;
-  side: 'BUY' | 'SELL';
+  side?: 'BUY' | 'SELL';
   entry_price: number;
   current_price: number;
   quantity: number;
@@ -14,6 +14,45 @@ export interface Position {
   closed_at?: string;
   take_profit?: number;
   stop_loss?: number;
+}
+
+interface BackendPosition {
+  id: string;
+  userId: string;
+  symbol: string;
+  baseAsset: string;
+  quoteAsset: string;
+  quantity: string;
+  entryPrice: string;
+  currentPrice: string;
+  investedQuote: string;
+  unrealizedPnl: string;
+  pnlPercent: string;
+  realizedPnl: string;
+  status: 'OPEN' | 'CLOSED';
+  createdAt: string;
+  updatedAt: string;
+  closedAt?: string;
+  takeProfit?: string;
+  stopLoss?: string;
+}
+
+function transformPosition(backendPos: BackendPosition): Position {
+  return {
+    id: backendPos.id,
+    symbol: backendPos.symbol,
+    side: undefined, // Backend doesn't provide this, we'll determine from PnL
+    entry_price: parseFloat(backendPos.entryPrice),
+    current_price: parseFloat(backendPos.currentPrice),
+    quantity: parseFloat(backendPos.quantity),
+    pnl: parseFloat(backendPos.unrealizedPnl),
+    pnl_percentage: parseFloat(backendPos.pnlPercent),
+    status: backendPos.status,
+    opened_at: backendPos.createdAt,
+    closed_at: backendPos.closedAt,
+    take_profit: backendPos.takeProfit ? parseFloat(backendPos.takeProfit) : undefined,
+    stop_loss: backendPos.stopLoss ? parseFloat(backendPos.stopLoss) : undefined,
+  };
 }
 
 interface UsePositionsOptions {
@@ -50,7 +89,10 @@ export function usePositions({
       }
 
       const data = await response.json();
-      setPositions(Array.isArray(data) ? data : []);
+      const transformedData = Array.isArray(data) 
+        ? data.map((pos: BackendPosition) => transformPosition(pos))
+        : [];
+      setPositions(transformedData);
       setError(null);
     } catch (err) {
       console.error('Error fetching positions:', err);
