@@ -34,12 +34,20 @@ interface DriftAccountSummary {
 
 interface DriftPosition {
   marketIndex: number;
+  marketName: string; // Stable market symbol (e.g., "SOL-PERP")
   direction: 'long' | 'short';
   baseAmount: number;
   quoteAmount: number;
   entryPrice: number;
   unrealizedPnl: number;
   leverage: number;
+}
+
+interface PerpMarketInfo {
+  marketIndex: number;
+  symbol: string;
+  baseAssetSymbol: string;
+  initialized: boolean;
 }
 
 interface DriftContextValue {
@@ -49,6 +57,10 @@ interface DriftContextValue {
   // Account data
   summary: DriftAccountSummary | null;
   positions: DriftPosition[];
+  
+  // Market data
+  perpMarkets: Map<number, PerpMarketInfo>; // Stable mapping: marketIndex → market info
+  getMarketName: (marketIndex: number) => string; // Helper to get market name
   
   // Loading/error states
   isLoading: boolean;
@@ -116,6 +128,9 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   // Account data
   const [summary, setSummary] = useState<DriftAccountSummary | null>(null);
   const [positions, setPositions] = useState<DriftPosition[]>([]);
+  
+  // Market data - stable mapping from marketIndex to market info
+  const [perpMarkets, setPerpMarkets] = useState<Map<number, PerpMarketInfo>>(new Map());
   
   // Loading/error states
   const [isLoading, setIsLoading] = useState(false);
@@ -480,6 +495,11 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         // Success!
         driftClientRef.current = client;
         console.log('[DriftContext] Drift client ready!');
+        
+        // Build perp market mapping after client is ready
+        const marketMapping = await buildPerpMarketMapping(client);
+        setPerpMarkets(marketMapping);
+        
         return client;
         
       } catch (error: any) {
@@ -509,7 +529,80 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   }, [encryptedPrivateKey]);
 
   /**
-   * Refresh accounts from Drift with automatic reconnection
+   * Build stable mapping of marketIndex → market info
+   * 
+   * This ensures market names remain consistent regardless of:
+   * - SDK array order changes
+   * - Session restarts
+   * - SDK version updates
+   * 
+   * The marketIndex is the on-chain unique identifier and never changes.
+   */
+  const buildPerpMarketMapping = useCallback(async (client: any): Promise<Map<number, PerpMarketInfo>> => {
+    console.log('[DriftContext] Building perp market mapping...');
+    
+    try {
+      const marketMap = new Map<number, PerpMarketInfo>();
+      
+      // Get all perp market accounts from the client
+      const perpMarketAccounts = client.getPerpMarketAccounts();
+      
+      if (!perpMarketAccounts || perpMarketAccounts.length === 0) {
+        console.warn('[DriftContext] No perp markets found');
+        return marketMap;
+      }
+      
+      // Build mapping using marketIndex as the stable key
+      for (const market of perpMarketAccounts) {
+        const marketIndex = market.marketIndex;
+        
+        // Extract market symbol from the name buffer
+        // Market names are stored as fixed-size byte arrays
+        const nameBytes = market.name;
+        let symbol = 'UNKNOWN';
+        
+        try {
+          if (nameBytes && nameBytes.length > 0) {
+            // Convert bytes to string and remove null terminators
+            symbol = Buffer.from(nameBytes)
+              .toString('utf8')
+              .replace(/\0/g, '')
+              .trim();
+          }
+        } catch (err) {
+          console.warn(`[DriftContext] Error parsing market name for index ${marketIndex}:`, err);
+        }
+        
+        // Extract base asset symbol (e.g., "SOL" from "SOL-PERP")
+        const baseAssetSymbol = symbol.split('-')[0] || symbol;
+        
+        marketMap.set(marketIndex, {
+          marketIndex,
+          symbol,
+          baseAssetSymbol,
+          initialized: true,
+        });
+        
+        console.log(`[DriftContext] Market ${marketIndex}: ${symbol}`);
+      }
+      
+      console.log(`[DriftContext] Built mapping for ${marketMap.size} perp markets`);
+      return marketMap;
+      
+    } catch (err) {
+      console.error('[DriftContext] Error building perp market mapping:', err);
+      return new Map();
+    }
+  }, []);
+
+  /**
+   * Helper function to get market name from marketIndex
+   * Falls back to "Market {index}" if not found
+   */
+  const getMarketName = useCallback((marketIndex: number): string => {
+    const marketInfo = perpMarkets.get(marketIndex);
+    return marketInfo?.symbol || `Market ${marketIndex}`;
+  }, [perpMarkets]);
    * 
    * Handles:
    * - WebSocket disconnection detection
@@ -776,16 +869,21 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
             if (baseAmount === 0) continue;
             
             const direction: 'long' | 'short' = baseAmount > 0 ? 'long' : 'short';
+            const marketIndex = position.marketIndex;
+            
+            // Get stable market name from mapping
+            const marketName = getMarketName(marketIndex);
             
             let market;
             try {
-              market = client.getPerpMarketAccount(position.marketIndex);
+              market = client.getPerpMarketAccount(marketIndex);
             } catch (err) {
-              console.log(`[DriftContext] Could not get market ${position.marketIndex}`);
+              console.log(`[DriftContext] Could not get market ${marketIndex}`);
             }
             
             positionsList.push({
-              marketIndex: position.marketIndex,
+              marketIndex,
+              marketName, // Stable market symbol
               direction,
               baseAmount: Math.abs(baseAmount) / 1e9,
               quoteAmount: Math.abs(position.quoteAssetAmount.toNumber()) / 1e6,
@@ -804,7 +902,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       console.error('[DriftContext] Error refreshing positions:', err);
       setError(err instanceof Error ? err.message : 'Failed to refresh positions');
     }
-  }, [user?.userId, requestPin, initializeDriftClient, refreshAccounts]);
+  }, [user?.userId, requestPin, initializeDriftClient, refreshAccounts, getMarketName]);
 
   // Poll transaction status using getSignatureStatus
   const pollTransactionStatus = async (
@@ -1402,6 +1500,8 @@ const withdrawCollateral = useCallback(
     isClientReady,
     summary,
     positions,
+    perpMarkets,
+    getMarketName,
     isLoading,
     error,
     isInitializing: showInitOverlay && isInitializing, // Only expose as initializing if overlay should show
