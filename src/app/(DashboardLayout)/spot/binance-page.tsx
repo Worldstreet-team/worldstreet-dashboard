@@ -309,8 +309,8 @@ export default function BinanceSpotPage() {
       <div className="flex-1 flex flex-col min-h-0">
         {/* Desktop Layout */}
         <div className="hidden md:flex md:flex-col flex-1">
-          {/* Top Section - 3 columns */}
-          <div className="grid grid-cols-[280px_1fr_340px] h-[calc(100vh-288px)]">
+          {/* Full Screen - 3 columns */}
+          <div className="grid grid-cols-[280px_1fr_340px] h-[calc(100vh-48px)]">
           {/* LEFT: Order Book */}
           <div className="border-r border-[#2b3139] overflow-hidden">
             <BinanceOrderBook selectedPair={selectedPair} />
@@ -434,14 +434,6 @@ export default function BinanceSpotPage() {
           </div>
 
           </div>
-          
-          {/* Bottom Section - Positions Panel */}
-          {/* <div className="h-[240px] border-t border-[#2b3139] shrink-0">
-            <PositionsPanel 
-              selectedPair={selectedPair}
-              onRefresh={handleTradeExecuted}
-            />
-          </div> */}
         </div>
 
         {/* Mobile Layout */}
