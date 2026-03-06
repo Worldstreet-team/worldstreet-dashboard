@@ -864,9 +864,48 @@ const withdrawCollateral = useCallback(
       await refreshPositions();
       return { success: true, txSignature };
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to open position';
+      const errorMessage = err instanceof Error ? err.message : String(err);
       console.error('[DriftContext] Open position error:', err);
-      return { success: false, error: errorMessage };
+      
+      // Sanitize error messages for user-friendly display
+      let friendlyError = 'Failed to open position';
+      
+      // Check for specific error patterns
+      if (errorMessage.includes('MarketPlaceOrderPaused') || errorMessage.includes('Market is in settlement mode')) {
+        friendlyError = 'Market is currently in settlement mode. Please try again in a few moments.';
+      } else if (errorMessage.includes('insufficient') || errorMessage.includes('Insufficient')) {
+        friendlyError = 'Insufficient collateral to open this position';
+      } else if (errorMessage.includes('InvalidOracle') || errorMessage.includes('oracle')) {
+        friendlyError = 'Market oracle is temporarily unavailable. Please try again.';
+      } else if (errorMessage.includes('UserHasNoPositionInMarket')) {
+        friendlyError = 'Unable to modify position. Please try again.';
+      } else if (errorMessage.includes('MarketIndexNotInitialized')) {
+        friendlyError = 'This market is not available for trading';
+      } else if (errorMessage.includes('UserMaxDeposit')) {
+        friendlyError = 'Maximum deposit limit reached';
+      } else if (errorMessage.includes('CantDeleteUserWithCollateral')) {
+        friendlyError = 'Cannot close position with active collateral';
+      } else if (errorMessage.includes('slippage')) {
+        friendlyError = 'Price moved too much. Please adjust your order and try again.';
+      } else if (errorMessage.includes('Transaction simulation failed')) {
+        // Extract the actual error from simulation logs if possible
+        if (errorMessage.includes('custom program error')) {
+          const errorCodeMatch = errorMessage.match(/0x([0-9a-fA-F]+)/);
+          if (errorCodeMatch) {
+            friendlyError = 'Transaction failed. Please check your collateral and try again.';
+          }
+        } else {
+          friendlyError = 'Transaction simulation failed. Please try again.';
+        }
+      } else if (errorMessage.includes('blockhash not found')) {
+        friendlyError = 'Network congestion. Please try again.';
+      } else if (errorMessage.includes('timeout') || errorMessage.includes('timed out')) {
+        friendlyError = 'Transaction timed out. Please check your position and try again if needed.';
+      } else if (errorMessage.includes('User rejected')) {
+        friendlyError = 'Transaction was cancelled';
+      }
+      
+      return { success: false, error: friendlyError };
     } finally {
       setIsLoading(false);
     }
@@ -908,9 +947,34 @@ const withdrawCollateral = useCallback(
       await refreshPositions();
       return { success: true, txSignature };
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to close position';
+      const errorMessage = err instanceof Error ? err.message : String(err);
       console.error('[DriftContext] Close position error:', err);
-      return { success: false, error: errorMessage };
+      
+      // Sanitize error messages for user-friendly display
+      let friendlyError = 'Failed to close position';
+      
+      // Check for specific error patterns
+      if (errorMessage.includes('MarketPlaceOrderPaused') || errorMessage.includes('Market is in settlement mode')) {
+        friendlyError = 'Market is currently in settlement mode. Please try again in a few moments.';
+      } else if (errorMessage.includes('No position found') || errorMessage.includes('UserHasNoPositionInMarket')) {
+        friendlyError = 'No open position found for this market';
+      } else if (errorMessage.includes('insufficient') || errorMessage.includes('Insufficient')) {
+        friendlyError = 'Insufficient balance to close position';
+      } else if (errorMessage.includes('InvalidOracle') || errorMessage.includes('oracle')) {
+        friendlyError = 'Market oracle is temporarily unavailable. Please try again.';
+      } else if (errorMessage.includes('slippage')) {
+        friendlyError = 'Price moved too much. Please try again.';
+      } else if (errorMessage.includes('Transaction simulation failed')) {
+        friendlyError = 'Transaction simulation failed. Please try again.';
+      } else if (errorMessage.includes('blockhash not found')) {
+        friendlyError = 'Network congestion. Please try again.';
+      } else if (errorMessage.includes('timeout') || errorMessage.includes('timed out')) {
+        friendlyError = 'Transaction timed out. Please check your position and try again if needed.';
+      } else if (errorMessage.includes('User rejected')) {
+        friendlyError = 'Transaction was cancelled';
+      }
+      
+      return { success: false, error: friendlyError };
     } finally {
       setIsLoading(false);
     }
