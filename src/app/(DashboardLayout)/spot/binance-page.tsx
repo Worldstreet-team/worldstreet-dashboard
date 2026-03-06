@@ -13,6 +13,7 @@ import LiveChart from '@/components/spot/LiveChart';
 import MarketTrades from '@/components/spot/MarketTrades';
 import MobileTradingModal from '@/components/spot/MobileTradingModal';
 import PositionsPanel from '@/components/spot/PositionsPanel';
+import MobileTokenSearchModal from '@/components/spot/MobileTokenSearchModal';
 
 const AVAILABLE_PAIRS = ['BTC-USDT', 'ETH-USDT', 'SOL-USDT'];
 
@@ -43,10 +44,11 @@ export default function BinanceSpotPage() {
   
   // Mobile state
   const [mobileTab, setMobileTab] = useState<'chart' | 'orderbook' | 'trades' | 'info' | 'data'>('chart');
-  const [mobileBottomTab, setMobileBottomTab] = useState<'orders' | 'holdings'>('orders');
+  const [mobileBottomTab, setMobileBottomTab] = useState<'orders' | 'markets'>('orders');
   const [showTradingModal, setShowTradingModal] = useState(false);
   const [tradingSide, setTradingSide] = useState<'buy' | 'sell'>('buy');
   const [showPairSelector, setShowPairSelector] = useState(false);
+  const [showTokenSearch, setShowTokenSearch] = useState(false);
 
   const [tokenIn, tokenOut] = selectedPair.split('-');
 
@@ -289,6 +291,12 @@ export default function BinanceSpotPage() {
           <span className="text-sm font-semibold text-white">WorldStreet</span>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowTokenSearch(true)}
+            className="p-2 hover:bg-[#2b3139] rounded-lg transition-colors"
+          >
+            <Icon icon="ph:magnifying-glass" width={20} className="text-[#848e9c] hover:text-white transition-colors" />
+          </button>
           <Link href="/assets" className="p-2">
             <Icon icon="ph:wallet" width={20} className="text-[#848e9c] hover:text-white transition-colors" />
           </Link>
@@ -612,11 +620,47 @@ export default function BinanceSpotPage() {
           </div>
 
           {/* Bottom Section - Positions */}
-          <div className="border-t border-[#2b3139] bg-[#181a20] h-[200px] shrink-0">
-            <PositionsPanel 
-              selectedPair={selectedPair}
-              onRefresh={handleTradeExecuted}
-            />
+          <div className="border-t border-[#2b3139] bg-[#181a20] shrink-0">
+            {/* Bottom Tabs */}
+            <div className="flex border-b border-[#2b3139]">
+              <button
+                onClick={() => setMobileBottomTab('orders')}
+                className={`flex-1 py-3 text-xs font-medium transition-colors border-b-2 ${
+                  mobileBottomTab === 'orders'
+                    ? 'border-[#fcd535] text-white'
+                    : 'border-transparent text-[#848e9c]'
+                }`}
+              >
+                Positions
+              </button>
+              <button
+                onClick={() => setMobileBottomTab('markets')}
+                className={`flex-1 py-3 text-xs font-medium transition-colors border-b-2 ${
+                  mobileBottomTab === 'markets'
+                    ? 'border-[#fcd535] text-white'
+                    : 'border-transparent text-[#848e9c]'
+                }`}
+              >
+                Markets
+              </button>
+            </div>
+
+            {/* Tab Content */}
+            <div className="h-[200px]">
+              {mobileBottomTab === 'orders' ? (
+                <PositionsPanel 
+                  selectedPair={selectedPair}
+                  onRefresh={handleTradeExecuted}
+                />
+              ) : (
+                <div className="h-full overflow-hidden">
+                  <BinanceMarketList 
+                    selectedPair={selectedPair}
+                    onSelectPair={handleSelectPair}
+                  />
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Buy/Sell Buttons - Fixed at bottom */}
@@ -645,6 +689,14 @@ export default function BinanceSpotPage() {
         selectedPair={selectedPair}
         chain={selectedChain}
         tokenAddress={selectedTokenAddress}
+      />
+
+      {/* Mobile Token Search Modal */}
+      <MobileTokenSearchModal
+        isOpen={showTokenSearch}
+        onClose={() => setShowTokenSearch(false)}
+        onSelectPair={handleSelectPair}
+        selectedPair={selectedPair}
       />
     </div>
   );

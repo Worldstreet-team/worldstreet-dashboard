@@ -38,7 +38,7 @@ export default function PositionsPanel({ selectedPair, onRefresh }: PositionsPan
     onRefresh?.();
   };
 
-  const handleClosePosition = async (positionId: string, symbol: string) => {
+  const handleClosePosition = async (positionId: string) => {
     if (!user?.id) {
       setErrorMessage('User not authenticated');
       setTimeout(() => setErrorMessage(null), 3000);
@@ -49,20 +49,17 @@ export default function PositionsPanel({ selectedPair, onRefresh }: PositionsPan
     setErrorMessage(null);
 
     try {
-      const response = await fetch(`https://trading.watchup.site/api/positions/${positionId}/close`, {
+      const response = await fetch(`/api/positions/${positionId}/close-proxy`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          userId: user.id,
-        }),
       });
 
       const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.error || data.message || 'Failed to close position');
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to close position');
       }
 
       // Refresh positions
@@ -230,7 +227,7 @@ export default function PositionsPanel({ selectedPair, onRefresh }: PositionsPan
                 {activeTab === 'open' && (
                   <div className="flex gap-2 mt-2">
                     <button 
-                      onClick={() => handleClosePosition(position.id, position.symbol)}
+                      onClick={() => handleClosePosition(position.id)}
                       disabled={closingPositions.has(position.id)}
                       className="flex-1 px-3 py-1.5 bg-[#f6465d] hover:bg-[#f6465d]/90 disabled:bg-[#2b3139] disabled:cursor-not-allowed text-white rounded text-xs font-medium transition-colors flex items-center justify-center gap-1"
                     >
