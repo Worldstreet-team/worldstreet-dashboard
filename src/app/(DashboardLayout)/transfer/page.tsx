@@ -651,32 +651,6 @@ export default function TransferPage() {
     }
   };
 
-  const toggleDirection = () => {
-    const directions: Array<'main-to-spot' | 'spot-to-main' | 'main-to-futures' | 'spot-to-futures' | 'futures-to-spot' | 'futures-to-main'> = [
-      'main-to-spot',
-      'spot-to-main',
-      'main-to-futures',
-      'spot-to-futures',
-      'futures-to-spot',
-      'futures-to-main'
-    ];
-    const currentIndex = directions.indexOf(direction);
-    const nextIndex = (currentIndex + 1) % directions.length;
-    setDirection(directions[nextIndex]);
-    
-    // Auto-set to Solana for futures transfers (keep current asset if it's USDT, USDC, or SOL)
-    if (directions[nextIndex].includes('futures')) {
-      if (selectedAsset !== 'USDT' && selectedAsset !== 'USDC' && selectedAsset !== 'SOL') {
-        setSelectedAsset('USDT');
-      }
-      setSelectedChain('sol');
-    }
-    
-    setAmount('');
-    setError('');
-    setSuccess('');
-  };
-
   // Get main wallet balance from on-chain data (Solana/EVM/Tron contexts)
   const getMainBalance = (asset: string): number => {
     if (asset === 'SOL') {
@@ -856,83 +830,92 @@ export default function TransferPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Transfer Form */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Direction Toggle */}
+          {/* Direction Selection */}
           <div className="bg-white dark:bg-black rounded-2xl border border-border/50 dark:border-darkborder p-6 shadow-sm">
             <h3 className="font-semibold text-dark dark:text-white mb-4">Transfer Direction</h3>
             
-            {/* Current Direction Display */}
-            <div className="mb-4 p-3 bg-primary/5 border border-primary/20 rounded-xl">
-              <div className="flex items-center justify-center gap-2 text-primary">
-                <Icon icon="ph:arrow-right" width={18} />
-                <span className="font-semibold text-sm">
-                  {direction === 'main-to-spot' && 'Main Wallet → Spot Wallet'}
-                  {direction === 'spot-to-main' && 'Spot Wallet → Main Wallet'}
-                  {direction === 'main-to-futures' && 'Main Wallet → Futures Wallet'}
-                  {direction === 'spot-to-futures' && 'Spot Wallet → Futures Wallet'}
-                  {direction === 'futures-to-spot' && 'Futures Wallet → Spot Wallet'}
-                  {direction === 'futures-to-main' && 'Futures Wallet → Main Wallet'}
+            <div className="relative">
+              <select
+                value={direction}
+                onChange={(e) => {
+                  const newDirection = e.target.value as typeof direction;
+                  setDirection(newDirection);
+                  
+                  // Auto-set to Solana for futures transfers
+                  if (newDirection.includes('futures')) {
+                    if (selectedAsset !== 'USDT' && selectedAsset !== 'USDC' && selectedAsset !== 'SOL') {
+                      setSelectedAsset('USDT');
+                    }
+                    setSelectedChain('sol');
+                  }
+                  
+                  setAmount('');
+                  setError('');
+                  setSuccess('');
+                }}
+                className="w-full px-4 py-3.5 bg-gradient-to-br from-primary/5 to-primary/10 border-2 border-primary/20 rounded-xl text-dark dark:text-white font-medium appearance-none cursor-pointer hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+              >
+                <option value="main-to-spot">Main Wallet → Spot Wallet</option>
+                <option value="spot-to-main">Spot Wallet → Main Wallet</option>
+                <option value="main-to-futures">Main Wallet → Futures Wallet</option>
+                <option value="spot-to-futures">Spot Wallet → Futures Wallet</option>
+                <option value="futures-to-spot">Futures Wallet → Spot Wallet</option>
+                <option value="futures-to-main">Futures Wallet → Main Wallet</option>
+              </select>
+              
+              {/* Custom dropdown arrow */}
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                <Icon icon="ph:caret-down" className="text-primary" width={20} />
+              </div>
+            </div>
+            
+            {/* Visual indicator */}
+            <div className="mt-4 flex items-center justify-center gap-3 p-3 bg-muted/20 dark:bg-white/5 rounded-lg">
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-black rounded-lg">
+                <Icon 
+                  icon={
+                    direction.startsWith('main') ? 'ph:wallet' :
+                    direction.startsWith('spot') ? 'ph:chart-line' :
+                    'ph:trend-up'
+                  } 
+                  width={16} 
+                  className="text-primary" 
+                />
+                <span className="text-xs font-medium text-dark dark:text-white">
+                  {direction.startsWith('main') ? 'Main' :
+                   direction.startsWith('spot') ? 'Spot' :
+                   'Futures'}
+                </span>
+              </div>
+              
+              <Icon icon="ph:arrow-right" width={20} className="text-primary" />
+              
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-black rounded-lg">
+                <Icon 
+                  icon={
+                    direction.endsWith('spot') ? 'ph:chart-line' :
+                    direction.endsWith('futures') ? 'ph:trend-up' :
+                    'ph:wallet'
+                  } 
+                  width={16} 
+                  className="text-primary" 
+                />
+                <span className="text-xs font-medium text-dark dark:text-white">
+                  {direction.endsWith('spot') ? 'Spot' :
+                   direction.endsWith('futures') ? 'Futures' :
+                   'Main'}
                 </span>
               </div>
             </div>
             
-            <div className="flex items-center justify-center">
-              <div className="inline-flex flex-col items-center gap-3 bg-muted/30 dark:bg-white/5 p-4 rounded-xl w-full max-w-md">
-                {/* Main Wallet */}
-                <div className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all w-full justify-center ${
-                  direction === 'main-to-spot' || direction === 'main-to-futures'
-                    ? 'bg-primary text-white shadow-sm' 
-                    : 'text-muted'
-                }`}>
-                  <Icon icon="ph:wallet" width={18} />
-                  <span className="font-medium">Main Wallet</span>
-                </div>
-                
-                {/* Arrow */}
-                <button
-                  onClick={toggleDirection}
-                  className="p-2 rounded-lg bg-white dark:bg-black hover:bg-muted/40 dark:hover:bg-white/10 transition-colors"
-                >
-                  <Icon icon="ph:arrows-down-up" width={20} className="text-primary" />
-                </button>
-                
-                {/* Spot Wallet */}
-                <div className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all w-full justify-center ${
-                  direction === 'spot-to-main' || direction === 'spot-to-futures'
-                    ? 'bg-primary text-white shadow-sm' 
-                    : 'text-muted'
-                }`}>
-                  <Icon icon="ph:chart-line" width={18} />
-                  <span className="font-medium">Spot Wallet</span>
-                </div>
-                
-                {/* Arrow for futures */}
-                {(direction.includes('futures')) && (
-                  <>
-                    <button
-                      onClick={toggleDirection}
-                      className="p-2 rounded-lg bg-white dark:bg-black hover:bg-muted/40 dark:hover:bg-white/10 transition-colors"
-                    >
-                      <Icon icon="ph:arrows-down-up" width={20} className="text-primary" />
-                    </button>
-                    
-                    {/* Futures Wallet */}
-                    <div className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all w-full justify-center ${
-                      direction === 'futures-to-spot' || direction === 'futures-to-main'
-                        ? 'bg-primary text-white shadow-sm' 
-                        : 'text-muted'
-                    }`}>
-                      <Icon icon="ph:trend-up" width={18} />
-                      <span className="font-medium">Futures Wallet</span>
-                      <span className="text-xs bg-white/20 px-2 py-0.5 rounded">USDT, USDC & SOL</span>
-                    </div>
-                  </>
-                )}
-                
-                <p className="text-xs text-center text-muted mt-2">
-                  Click the arrows to change direction
+            {direction.includes('futures') && (
+              <div className="mt-3 p-2.5 bg-blue-500/10 border border-blue-500/20 rounded-lg flex items-center gap-2">
+                <Icon icon="ph:info" className="text-blue-500 shrink-0" width={14} />
+                <p className="text-xs text-blue-600 dark:text-blue-400">
+                  Futures transfers support USDT, USDC & SOL on Solana only
                 </p>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Asset Selection */}
