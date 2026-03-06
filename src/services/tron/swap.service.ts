@@ -120,13 +120,26 @@ export async function executeTrxToUsdtSwap(
     const tx = await contract.methods.trxToTokenSwapInput(minTokens, deadline).send({
       callValue: trxSun,
       feeLimit: 100_000_000, // 100 TRX fee limit
-      shouldPollResponse: true,
+      shouldPollResponse: false, // Don't poll, return immediately
     });
 
     console.log("[SwapService] Swap transaction sent:", tx);
 
     // Extract transaction ID (handle different return formats)
     const txId = typeof tx === 'string' ? tx : (tx.txid || tx.transaction?.txID || tx);
+    
+    // Wait for transaction confirmation using TronWeb's built-in method
+    if (txId) {
+      try {
+        const confirmedTx = await tronWeb.trx.getConfirmedTransaction(txId);
+        if (confirmedTx && confirmedTx.ret && confirmedTx.ret[0].contractRet === 'SUCCESS') {
+          console.log("[SwapService] Transaction confirmed:", txId);
+        }
+      } catch (confirmErr) {
+        console.warn("[SwapService] Could not confirm transaction immediately:", confirmErr);
+        // Transaction was sent, confirmation will happen eventually
+      }
+    }
 
     return {
       txHash: String(txId),
@@ -189,13 +202,13 @@ export async function executeUsdtToTrxSwap(
         tokensSold
       ).send({
         feeLimit: 50_000_000, // 50 TRX fee limit
-        shouldPollResponse: true,
+        shouldPollResponse: false, // Don't poll, return immediately
       });
 
       console.log("[SwapService] Approval transaction:", approveTx);
       
-      // Wait a bit for approval to be confirmed
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // Wait a bit for approval to propagate
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
 
     // Step 3: Execute swap
@@ -214,13 +227,26 @@ export async function executeUsdtToTrxSwap(
       deadline
     ).send({
       feeLimit: 100_000_000, // 100 TRX fee limit
-      shouldPollResponse: true,
+      shouldPollResponse: false, // Don't poll, return immediately
     });
 
     console.log("[SwapService] Swap transaction sent:", tx);
 
     // Extract transaction ID (handle different return formats)
     const txId = typeof tx === 'string' ? tx : (tx.txid || tx.transaction?.txID || tx);
+    
+    // Wait for transaction confirmation using TronWeb's built-in method
+    if (txId) {
+      try {
+        const confirmedTx = await tronWeb.trx.getConfirmedTransaction(txId);
+        if (confirmedTx && confirmedTx.ret && confirmedTx.ret[0].contractRet === 'SUCCESS') {
+          console.log("[SwapService] Transaction confirmed:", txId);
+        }
+      } catch (confirmErr) {
+        console.warn("[SwapService] Could not confirm transaction immediately:", confirmErr);
+        // Transaction was sent, confirmation will happen eventually
+      }
+    }
 
     return {
       txHash: String(txId),

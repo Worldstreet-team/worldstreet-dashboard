@@ -342,90 +342,6 @@ export function SwapProvider({ children }: { children: ReactNode }) {
     [slippage]
   );
 
-  // ── Poll transaction status from blockchain explorer ────────────────────
-  const pollTransactionStatus = useCallback(
-    async (txHash: string, chain: ChainKey): Promise<boolean> => {
-      const maxAttempts = 30; // 30 attempts
-      const pollInterval = 2000; // 2 seconds
-
-      for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        try {
-          if (chain === "solana") {
-            // Poll Solana transaction via Solscan API
-            const response = await fetch(
-              `https://api.solscan.io/transaction?tx=${txHash}`,
-              {
-                headers: {
-                  Accept: "application/json",
-                },
-              }
-            );
-
-            if (response.ok) {
-              const data = await response.json();
-              
-              // Check if transaction is confirmed
-              if (data.status === "Success" || data.confirmationStatus === "finalized") {
-                console.log(`[Swap] Solana TX confirmed via explorer: ${txHash}`);
-                return true;
-              }
-              
-              // Check for failure
-              if (data.status === "Fail") {
-                throw new Error("Transaction failed on-chain");
-              }
-            }
-          } else {
-            // Poll Ethereum transaction via Etherscan API
-            const etherscanKey = process.env.NEXT_PUBLIC_ETHERSCAN_API_KEY || "";
-            const response = await fetch(
-              `https://api.etherscan.io/api?module=transaction&action=gettxreceiptstatus&txhash=${txHash}&apikey=${etherscanKey}`
-            );
-
-            if (response.ok) {
-              const data = await response.json();
-              
-              if (data.status === "1" && data.result) {
-                // status: "0" = failed, "1" = success
-                if (data.result.status === "1") {
-                  console.log(`[Swap] Ethereum TX confirmed via explorer: ${txHash}`);
-                  return true;
-                } else if (data.result.status === "0") {
-                  throw new Error("Transaction failed on-chain");
-                }
-              }
-            }
-          }
-
-          // Wait before next attempt
-          if (attempt < maxAttempts - 1) {
-            await new Promise((resolve) => setTimeout(resolve, pollInterval));
-          }
-        } catch (error) {
-          console.error(`[Swap] Error polling transaction status (attempt ${attempt + 1}):`, error);
-          
-          // If it's a failure error, throw immediately
-          if (error instanceof Error && error.message.includes("failed on-chain")) {
-            throw error;
-          }
-          
-          // Otherwise continue polling
-          if (attempt < maxAttempts - 1) {
-            await new Promise((resolve) => setTimeout(resolve, pollInterval));
-          }
-        }
-      }
-
-      // If we've exhausted all attempts, log warning but don't fail
-      // The transaction might still succeed, Li.Fi will track it
-      console.warn(
-        `[Swap] Could not confirm transaction via explorer after ${maxAttempts} attempts. TX: ${txHash}`
-      );
-      return false;
-    },
-    []
-  );
-
   // ── Execute the swap ─────────────────────────────────────────────────────
   const executeSwap = useCallback(
     async (swapQuote: SwapQuote, pin: string): Promise<string> => {
@@ -515,8 +431,15 @@ export function SwapProvider({ children }: { children: ReactNode }) {
                 }
               );
 
-              // Poll ATA creation via explorer
-              await pollTransactionStatus(ataSignature, "solana");
+              // Wait for ATA creation confirmation
+              await connection.confirmTransaction(
+                {
+                  signature: ataSignature,
+                  blockhash,
+                  lastValidBlockHeight,
+                },
+                "confirmed"
+              );
               console.log(`[Swap] ATA created: ${ataSignature}`);
             }
           }
@@ -560,8 +483,17 @@ export function SwapProvider({ children }: { children: ReactNode }) {
 
           console.log(`[Swap] Solana TX sent: ${signature}`);
 
-          // Poll transaction status via blockchain explorer
-          await pollTransactionStatus(signature, "solana");
+          // Wait for transaction confirmation
+          const { blockhash, lastValidBlockHeight } =
+            await connection.getLatestBlockhash("finalized");
+          await connection.confirmTransaction(
+            {
+              signature,
+              blockhash,
+              lastValidBlockHeight,
+            },
+            "confirmed"
+          );
           console.log(`[Swap] Solana TX confirmed: ${signature}`);
 
           return signature;
@@ -610,8 +542,8 @@ export function SwapProvider({ children }: { children: ReactNode }) {
                 ethers.MaxUint256
               );
               
-              // Poll approval transaction via explorer
-              await pollTransactionStatus(approveTx.hash, "ethereum");
+              // Wait for approval confirmation
+              await approveTx.wait();
               console.log("[Swap] ERC20 approval confirmed");
             }
           }
@@ -628,8 +560,8 @@ export function SwapProvider({ children }: { children: ReactNode }) {
 
           console.log(`[Swap] EVM TX sent: ${tx.hash}`);
 
-          // Poll transaction status via blockchain explorer
-          await pollTransactionStatus(tx.hash, "ethereum");
+          // Wait for transaction confirmation
+          await tx.wait();
           console.log(`[Swap] EVM TX confirmed: ${tx.hash}`);
 
           return tx.hash;
@@ -646,7 +578,7 @@ export function SwapProvider({ children }: { children: ReactNode }) {
         setExecuting(false);
       }
     },
-    [getEncryptedKeys, pollTransactionStatus]
+    [getEncryptedKeys]
   );
 
   // ── Poll swap status via Li.Fi ───────────────────────────────────────────

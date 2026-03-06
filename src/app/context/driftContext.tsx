@@ -181,7 +181,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     fetchWallet();
   }, [user?.userId]);
 
-  // Initialize Drift client with polling (SAFE VERSION)
+  // Initialize Drift client with WebSocket
   const initializeDriftClient = useCallback(async (pin: string) => {
     try {
       // Fetch encrypted wallet with PIN
@@ -215,37 +215,36 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       const secretKey = new Uint8Array(Buffer.from(decryptedPrivateKey, 'base64'));
       const keypair = Keypair.fromSecretKey(secretKey);
       
-      // Initialize connection
+      // Initialize connection with WebSocket endpoint
+      const wsUrl = 'wss://solana-mainnet.core.chainstack.com/6b2efd9b0b11d871382ce7bf3c7c0d89';
       const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
-      const connection = new Connection(rpcUrl, 'confirmed');
+      const connection = new Connection(rpcUrl, {
+        commitment: 'confirmed',
+        wsEndpoint: wsUrl,
+      });
       
-      // Create wallet and LOAD IT
+      // Create wallet
       const wallet = new Wallet(keypair);
-      console.log('[DriftContext] Wallet created, loading...');
+      console.log('[DriftContext] Wallet created with WebSocket connection');
       
-      // Create Drift client with POLLING (no WebSocket)
+      // Create Drift client with WebSocket subscription
       const DRIFT_PROGRAM_ID = process.env.NEXT_PUBLIC_DRIFT_PROGRAM_ID || 'dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH';
-      
-      // Import BulkAccountLoader for polling
-      const { BulkAccountLoader } = await import('@drift-labs/sdk');
-      const accountLoader = new BulkAccountLoader(connection, 'confirmed', 1000);
       
       const client = new DriftClient({
         connection,
         wallet,
         programID: new PublicKey(DRIFT_PROGRAM_ID),
         accountSubscription: {
-          type: 'polling',
-          accountLoader,
+          type: 'websocket',
         },
       });
       
-      console.log('[DriftContext] DriftClient created, subscribing...');
+      console.log('[DriftContext] DriftClient created with WebSocket, subscribing...');
       
-      // Subscribe to the client (required even for polling mode)
+      // Subscribe to the client
       await client.subscribe();
       
-      console.log('[DriftContext] Client subscribed, checking user account...');
+      console.log('[DriftContext] Client subscribed via WebSocket, checking user account...');
       
       // Check if user account is initialized
       let userAccountPublicKey;
@@ -305,7 +304,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     }
   }, [encryptedPrivateKey]);
 
-  // Refresh accounts from Drift (polling) - SAFE VERSION
+  // Refresh accounts from Drift (WebSocket)
   const refreshAccounts = useCallback(async () => {
     const client = driftClientRef.current;
     if (!client) {
@@ -314,7 +313,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     }
     
     try {
-      // With polling + subscription, accounts are automatically refreshed
+      // With WebSocket subscription, accounts are automatically updated
       // We just need to ensure the subscription is active
       if (!client.isSubscribed) {
         console.log('[DriftContext] Client not subscribed, subscribing...');
@@ -328,7 +327,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         console.log('[DriftContext] User accounts fetched successfully');
       }
       
-      console.log('[DriftContext] Accounts refreshed via polling subscription');
+      console.log('[DriftContext] Accounts refreshed via WebSocket subscription');
     } catch (err) {
       console.error('[DriftContext] Error refreshing accounts:', err);
       // Don't throw, just log
@@ -367,7 +366,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     }
   }, []);
 
-  // Refresh account summary from Drift client (with polling) - SAFE VERSION
+  // Refresh account summary from Drift client (with WebSocket)
   const refreshSummary = useCallback(async () => {
     if (!user?.userId) return;
     
@@ -392,7 +391,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         console.log('[DriftContext] Initializing client for summary...');
         client = await initializeDriftClient(pin);
       } else {
-        // Refresh accounts via polling
+        // Refresh accounts via WebSocket
         await refreshAccounts();
       }
       
@@ -498,7 +497,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     }
   }, [user?.userId, requestPin, initializeDriftClient, refreshAccounts, initializationFailed, isFirstLoad]);
 
-  // Refresh positions from Drift client (with polling) - SAFE VERSION
+  // Refresh positions from Drift client (with WebSocket)
   const refreshPositions = useCallback(async () => {
     if (!user?.userId) return;
     
@@ -510,7 +509,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         console.log('[DriftContext] Initializing client for positions...');
         client = await initializeDriftClient(pin);
       } else {
-        // Refresh accounts via polling
+        // Refresh accounts via WebSocket
         await refreshAccounts();
       }
       
@@ -576,34 +575,32 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     maxAttempts: number = 60,
     intervalMs: number = 2000
   ): Promise<boolean> => {
-    console.log(`[DriftContext] Polling transaction status: ${signature}`);
+    console.log(`[DriftContext] Waiting for transaction confirmation: ${signature}`);
     
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      try {
-        const status = await connection.getSignatureStatus(signature);
-        
-        if (status?.value?.confirmationStatus === 'confirmed' || status?.value?.confirmationStatus === 'finalized') {
-          console.log(`[DriftContext] Transaction confirmed: ${signature}`);
-          return true;
-        }
-        
-        if (status?.value?.err) {
-          console.error(`[DriftContext] Transaction failed: ${signature}`, status.value.err);
-          throw new Error(`Transaction failed: ${JSON.stringify(status.value.err)}`);
-        }
-        
-        console.log(`[DriftContext] Attempt ${attempt + 1}/${maxAttempts}: Transaction pending...`);
-        await new Promise(resolve => setTimeout(resolve, intervalMs));
-      } catch (err) {
-        console.error(`[DriftContext] Error polling transaction:`, err);
-        if (attempt === maxAttempts - 1) {
-          throw err;
-        }
-        await new Promise(resolve => setTimeout(resolve, intervalMs));
+    try {
+      // Use confirmTransaction with finalized commitment for reliable confirmation
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
+      
+      const confirmation = await connection.confirmTransaction(
+        {
+          signature,
+          blockhash,
+          lastValidBlockHeight,
+        },
+        'confirmed'
+      );
+      
+      if (confirmation.value.err) {
+        console.error(`[DriftContext] Transaction failed: ${signature}`, confirmation.value.err);
+        throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
       }
+      
+      console.log(`[DriftContext] Transaction confirmed: ${signature}`);
+      return true;
+    } catch (err) {
+      console.error(`[DriftContext] Error confirming transaction:`, err);
+      throw err;
     }
-    
-    throw new Error('Transaction confirmation timeout');
   };
 
 const depositCollateral = useCallback(
@@ -1109,10 +1106,10 @@ const withdrawCollateral = useCallback(
     }
   }, [user?.userId, requestPin, initializeDriftClient, refreshAccounts]);
 
-  // Auto-refresh with polling (every 5 seconds)
-  const startAutoRefresh = useCallback((intervalMs: number = 5000) => {
+  // Auto-refresh with WebSocket (every 10 seconds for UI updates)
+  const startAutoRefresh = useCallback((intervalMs: number = 10000) => {
     stopAutoRefresh();
-    console.log(`[DriftContext] Starting auto-refresh polling every ${intervalMs}ms`);
+    console.log(`[DriftContext] Starting auto-refresh with WebSocket every ${intervalMs}ms`);
     autoRefreshIntervalRef.current = setInterval(() => {
       refreshSummary();
       refreshPositions();
