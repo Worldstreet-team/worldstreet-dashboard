@@ -751,9 +751,8 @@ const withdrawCollateral = useCallback(
 
       console.log(`[DriftContext] Withdrawing ${amount} USDC from Drift`);
 
-      // 3. Convert amount to on-chain BN precision
-      // Drift uses 6 decimals for USDC
-      const BN = (await import("bn.js")).default;
+      // 3. Convert amount to on-chain BN precision using Drift SDK
+      const { BN } = await import('@drift-labs/sdk');
       const withdrawAmountBN = new BN(Math.floor(amount * 1e6)); // USDC has 6 decimals
 
       // 4. Get the user's USDC associated token account (ATA) via the SDK
@@ -821,16 +820,24 @@ const withdrawCollateral = useCallback(
         client = await initializeDriftClient(pin);
       }
       
-      // Place order
-      // Import BN for proper amount encoding
-      const BN = (await import('bn.js')).default;
-      const baseAmount = new BN(Math.floor(size * 1e9));
+      // Import Drift SDK enums and types
+      const { BN, OrderType, MarketType, PositionDirection } = await import('@drift-labs/sdk');
       
+      // Convert direction string to SDK enum
+      const positionDirection = direction === 'long' 
+        ? PositionDirection.LONG 
+        : PositionDirection.SHORT;
+      
+      // Convert size to proper precision using SDK method
+      const baseAssetAmount = client.convertToPerpPrecision(size);
+      
+      // Construct order parameters with correct SDK enums
       const orderParams = {
-        orderType: 'market',
+        orderType: OrderType.MARKET,
+        marketType: MarketType.PERP,
         marketIndex,
-        direction,
-        baseAssetAmount: baseAmount,
+        direction: positionDirection,
+        baseAssetAmount,
         price: new BN(0),
       };
       
@@ -869,7 +876,7 @@ const withdrawCollateral = useCallback(
         client = await initializeDriftClient(pin);
       }
       
-      // Get position
+      // Get position to verify it exists
       const driftUser = client.getUser();
       const position = driftUser.getPerpPosition(marketIndex);
       
@@ -877,22 +884,8 @@ const withdrawCollateral = useCallback(
         return { success: false, error: 'No position found' };
       }
       
-      // Close position by placing opposite order
-      // Import BN for proper amount encoding
-      const BN = (await import('bn.js')).default;
-      const baseAmount = new BN(Math.abs(position.baseAssetAmount.toNumber()));
-      const direction = position.baseAssetAmount.toNumber() > 0 ? 'short' : 'long';
-      
-      const orderParams = {
-        orderType: 'market',
-        marketIndex,
-        direction,
-        baseAssetAmount: baseAmount,
-        price: new BN(0),
-        reduceOnly: true,
-      };
-      
-      const txSignature = await client.placePerpOrder(orderParams);
+      // Use Drift SDK native closePosition method
+      const txSignature = await client.closePosition(marketIndex);
       
       console.log('[DriftContext] Close position transaction sent:', txSignature);
       
@@ -944,9 +937,11 @@ const withdrawCollateral = useCallback(
       const perpMarket = client.getPerpMarketAccount(marketIndex);
       const oracleData = client.getOracleDataForPerpMarket(marketIndex);
       
-      // Calculate position size in base units (9 decimals for most perp markets)
-      const BN = (await import('bn.js')).default;
-      const baseAssetAmount = new BN(Math.floor(size * 1e9));
+      // Import BN from Drift SDK
+      const { BN } = await import('@drift-labs/sdk');
+      
+      // Use SDK precision helper for base asset amount
+      const baseAssetAmount = client.convertToPerpPrecision(size);
       
       // Get current oracle price
       const oraclePrice = oracleData.price.toNumber() / 1e6; // Convert from 6 decimals

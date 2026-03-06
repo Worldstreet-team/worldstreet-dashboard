@@ -44,7 +44,6 @@ export default function BinanceSpotPage() {
   
   // Mobile state
   const [mobileTab, setMobileTab] = useState<'chart' | 'orderbook' | 'trades' | 'info' | 'data'>('chart');
-  const [mobileBottomTab, setMobileBottomTab] = useState<'orders' | 'markets'>('orders');
   const [showTradingModal, setShowTradingModal] = useState(false);
   const [tradingSide, setTradingSide] = useState<'buy' | 'sell'>('buy');
   const [showPairSelector, setShowPairSelector] = useState(false);
@@ -309,9 +308,9 @@ export default function BinanceSpotPage() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-h-0">
         {/* Desktop Layout */}
-        <div className="hidden md:flex md:flex-col flex-1 overflow-y-auto">
+        <div className="hidden md:flex md:flex-col flex-1">
           {/* Top Section - 3 columns */}
-          <div className="grid grid-cols-[280px_1fr_340px] min-h-[calc(100vh-48px)]">
+          <div className="grid grid-cols-[280px_1fr_340px] h-[calc(100vh-288px)]">
           {/* LEFT: Order Book */}
           <div className="border-r border-[#2b3139] overflow-hidden">
             <BinanceOrderBook selectedPair={selectedPair} />
@@ -351,7 +350,7 @@ export default function BinanceSpotPage() {
                           >
                             <div className="flex items-center justify-between">
                               <span className="text-white font-medium text-sm">{pair.replace('-', '/')}</span>
-                              <span className="text-[#848e9c] text-xs">${pairData[pair]?.price.toFixed(2) || '0.00'}</span>
+                              <span className="text-[#848e9c] text-xs">${pairData[pair]?.price.toFixed(4) || '0.00'}</span>
                             </div>
                           </button>
                         );
@@ -446,7 +445,7 @@ export default function BinanceSpotPage() {
         </div>
 
         {/* Mobile Layout */}
-        <div className="md:hidden flex flex-col h-[calc(100vh-60px)] min-h-0">
+        <div className="md:hidden flex flex-col h-full">
           {/* Pair Info Header */}
           <div className="px-4 py-3 border-b border-[#2b3139] bg-[#181a20] shrink-0">
             <div className="flex items-center justify-between mb-2">
@@ -551,9 +550,9 @@ export default function BinanceSpotPage() {
           </div>
 
           {/* Tab Content */}
-          <div className="flex-1 min-h-0 relative">
+          <div className="flex-1 overflow-y-auto pb-[280px]">
             {mobileTab === 'chart' && (
-              <div className="absolute inset-0">
+              <div className="h-[400px]">
                 <LiveChart 
                   symbol={selectedPair}
                   stopLoss={chartStopLoss}
@@ -564,19 +563,19 @@ export default function BinanceSpotPage() {
             )}
             
             {mobileTab === 'orderbook' && (
-              <div className="absolute inset-0">
+              <div className="h-[600px]">
                 <BinanceOrderBook selectedPair={selectedPair} />
               </div>
             )}
             
             {mobileTab === 'trades' && (
-              <div className="absolute inset-0">
+              <div className="h-[600px]">
                 <MarketTrades selectedPair={selectedPair} />
               </div>
             )}
             
             {mobileTab === 'info' && (
-              <div className="absolute inset-0 overflow-y-auto scrollbar-hide p-4">
+              <div className="p-4">
                 <div className="text-white space-y-4">
                   <h3 className="text-lg font-semibold">About Bitcoin (BTC)</h3>
                   <p className="text-sm text-[#848e9c] leading-relaxed">
@@ -600,7 +599,7 @@ export default function BinanceSpotPage() {
             )}
             
             {mobileTab === 'data' && (
-              <div className="absolute inset-0 overflow-y-auto scrollbar-hide p-4">
+              <div className="p-4">
                 <div className="text-white space-y-3">
                   <div className="flex justify-between text-sm">
                     <span className="text-[#848e9c]">Market Cap</span>
@@ -617,54 +616,21 @@ export default function BinanceSpotPage() {
                 </div>
               </div>
             )}
-          </div>
 
-          {/* Bottom Section - Positions */}
-          <div className="border-t border-[#2b3139] bg-[#181a20] shrink-0">
-            {/* Bottom Tabs */}
-            <div className="flex border-b border-[#2b3139]">
-              <button
-                onClick={() => setMobileBottomTab('orders')}
-                className={`flex-1 py-3 text-xs font-medium transition-colors border-b-2 ${
-                  mobileBottomTab === 'orders'
-                    ? 'border-[#fcd535] text-white'
-                    : 'border-transparent text-[#848e9c]'
-                }`}
-              >
-                Positions
-              </button>
-              <button
-                onClick={() => setMobileBottomTab('markets')}
-                className={`flex-1 py-3 text-xs font-medium transition-colors border-b-2 ${
-                  mobileBottomTab === 'markets'
-                    ? 'border-[#fcd535] text-white'
-                    : 'border-transparent text-[#848e9c]'
-                }`}
-              >
-                Markets
-              </button>
-            </div>
-
-            {/* Tab Content */}
-            <div className="h-[200px]">
-              {mobileBottomTab === 'orders' ? (
-                <PositionsPanel 
-                  selectedPair={selectedPair}
-                  onRefresh={handleTradeExecuted}
-                />
-              ) : (
-                <div className="h-full overflow-hidden">
-                  <BinanceMarketList 
-                    selectedPair={selectedPair}
-                    onSelectPair={handleSelectPair}
-                  />
-                </div>
-              )}
+            {/* Positions Section - Scrollable */}
+            <div className="border-t border-[#2b3139] bg-[#181a20] mt-4">
+              <div className="px-4 py-3 border-b border-[#2b3139]">
+                <h3 className="text-sm font-semibold text-white">Your Positions</h3>
+              </div>
+              <PositionsPanel 
+                selectedPair={selectedPair}
+                onRefresh={handleTradeExecuted}
+              />
             </div>
           </div>
 
           {/* Buy/Sell Buttons - Fixed at bottom */}
-          <div className="grid grid-cols-2 gap-0 border-t border-[#2b3139] bg-[#181a20] safe-area-bottom shrink-0">
+          <div className="fixed bottom-0 left-0 right-0 md:hidden grid grid-cols-2 gap-0 border-t border-[#2b3139] bg-[#181a20] z-50 shadow-[0_-4px_12px_rgba(0,0,0,0.3)]">
             <button 
               onClick={handleBuyClick}
               className="py-4 bg-[#0ecb81] hover:bg-[#0ecb81]/90 text-white font-semibold text-base transition-colors"
