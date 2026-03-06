@@ -436,12 +436,12 @@ export default function BinanceSpotPage() {
           </div>
           
           {/* Bottom Section - Positions Panel */}
-          <div className="h-[240px] border-t border-[#2b3139] shrink-0">
+          {/* <div className="h-[240px] border-t border-[#2b3139] shrink-0">
             <PositionsPanel 
               selectedPair={selectedPair}
               onRefresh={handleTradeExecuted}
             />
-          </div>
+          </div> */}
         </div>
 
         {/* Mobile Layout */}
