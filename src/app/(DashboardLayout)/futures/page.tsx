@@ -17,6 +17,7 @@ import { DriftAccountStatus } from '@/components/futures/DriftAccountStatus';
 import { FuturesOrderModal } from '@/components/futures/FuturesOrderModal';
 import { PinUnlockModal } from '@/components/wallet/PinUnlockModal';
 import { InsufficientSolModal } from '@/components/futures/InsufficientSolModal';
+import { DriftInitializationOverlay } from '@/components/futures/DriftInitializationOverlay';
 import type { OrderSide } from '@/store/futuresStore';
 
 export default function BinanceFuturesPage() {
@@ -35,6 +36,8 @@ export default function BinanceFuturesPage() {
     refreshSummary,
     summary,
     needsInitialization,
+    isInitializing,
+    initializationError,
   } = useDrift();
   const { fetchWallet } = useFuturesData();
   
@@ -51,6 +54,11 @@ export default function BinanceFuturesPage() {
     resetInitializationFailure();
     await refreshSummary();
     setInitializing(false);
+  };
+
+  const handleRetryInitialization = async () => {
+    resetInitializationFailure();
+    await refreshSummary();
   };
 
   useEffect(() => {
@@ -458,6 +466,13 @@ export default function BinanceFuturesPage() {
           walletAddress={solBalanceInfo.address}
         />
       )}
+
+      {/* Initialization Overlay */}
+      <DriftInitializationOverlay
+        isLoading={isInitializing}
+        error={initializationError}
+        onRetry={handleRetryInitialization}
+      />
     </div>
   );
 }

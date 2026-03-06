@@ -53,6 +53,8 @@ interface DriftContextValue {
   // Loading/error states
   isLoading: boolean;
   error: string | null;
+  isInitializing: boolean;
+  initializationError: string | null;
   
   // Computed booleans
   isInitialized: boolean;
@@ -118,6 +120,8 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   // Loading/error states
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isInitializing, setIsInitializing] = useState(false);
+  const [initializationError, setInitializationError] = useState<string | null>(null);
   
   // PIN unlock state
   const [showPinUnlock, setShowPinUnlock] = useState(false);
@@ -372,6 +376,9 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     }
     
     try {
+      setIsInitializing(true);
+      setInitializationError(null);
+      
       const pin = await requestPin();
       
       let client = driftClientRef.current;
@@ -410,6 +417,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
           openOrders: 0,
         });
         setIsClientReady(true);
+        setIsInitializing(false);
         return;
       }
       
@@ -468,10 +476,14 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         openOrders: 0,
       });
       setIsClientReady(true);
+      setIsInitializing(false);
     } catch (err) {
       console.error('[DriftContext] Error refreshing summary:', err);
-      setError(err instanceof Error ? err.message : 'Failed to refresh summary');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to refresh summary';
+      setError(errorMessage);
+      setInitializationError(errorMessage);
       setInitializationFailed(true); // Mark as failed on any error
+      setIsInitializing(false);
     }
   }, [user?.userId, requestPin, initializeDriftClient, refreshAccounts, initializationFailed]);
 
@@ -1054,6 +1066,7 @@ const withdrawCollateral = useCallback(
   const resetInitializationFailure = useCallback(() => {
     setInitializationFailed(false);
     setError(null);
+    setInitializationError(null);
     console.log('[DriftContext] Reset initialization failure flag');
   }, []);
 
@@ -1084,6 +1097,8 @@ const withdrawCollateral = useCallback(
     positions,
     isLoading,
     error,
+    isInitializing,
+    initializationError,
     isInitialized,
     canTrade,
     needsInitialization,
