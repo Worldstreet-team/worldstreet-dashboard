@@ -14,8 +14,7 @@ import MarketTrades from '@/components/spot/MarketTrades';
 import MobileTradingModal from '@/components/spot/MobileTradingModal';
 import PositionsPanel from '@/components/spot/PositionsPanel';
 import MobileTokenSearchModal from '@/components/spot/MobileTokenSearchModal';
-
-const AVAILABLE_PAIRS = ['SOL-USDC', 'BTC-USDC', 'ETH-USDC', 'JUP-USDC', 'DRIFT-USDC', 'SOL-USDT'];
+import { useDrift } from '@/app/context/driftContext';
 
 interface PairData {
   name: string;
@@ -29,6 +28,25 @@ interface PairData {
 export default function BinanceSpotPage() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { spotMarkets, isClientReady } = useDrift();
+
+  // Dynamic tradeable pairs from Drift SDK
+  const AVAILABLE_PAIRS = React.useMemo(() => {
+    const defaultPairs = ['SOL-USDC', 'BTC-USDC', 'ETH-USDC', 'JUP-USDC', 'DRIFT-USDC', 'SOL-USDT'];
+
+    if (isClientReady && spotMarkets.size > 0) {
+      const driftPairs: string[] = [];
+      spotMarkets.forEach((info) => {
+        if (info.symbol !== 'USDC' && info.symbol !== 'USDT') {
+          const pair = `${info.symbol}-USDC`;
+          if (!defaultPairs.includes(pair)) driftPairs.push(pair);
+        }
+      });
+      return [...defaultPairs, ...driftPairs];
+    }
+
+    return defaultPairs;
+  }, [isClientReady, spotMarkets]);
 
   // Initial state from URL
   const initialPair = searchParams?.get('pair') || 'SOL-USDC';

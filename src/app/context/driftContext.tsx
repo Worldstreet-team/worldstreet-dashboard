@@ -43,14 +43,14 @@ interface DriftPosition {
   leverage: number;
 }
 
-interface PerpMarketInfo {
+export interface PerpMarketInfo {
   marketIndex: number;
   symbol: string;
   baseAssetSymbol: string;
   initialized: boolean;
 }
 
-interface SpotMarketInfo {
+export interface SpotMarketInfo {
   marketIndex: number;
   symbol: string;
   decimals: number;
@@ -125,6 +125,7 @@ interface DriftContextValue {
   closePosition: (marketIndex: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
   placeSpotOrder: (marketIndex: number, direction: 'buy' | 'sell', amount: number, orderType?: 'market' | 'limit', price?: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
   previewTrade: (marketIndex: number, direction: 'long' | 'short', size: number, leverage: number) => Promise<any>;
+  getMarketPrice: (marketIndex: number, type?: 'perp' | 'spot') => number;
 
   // Auto-refresh control
   startAutoRefresh: (intervalMs?: number) => void;
@@ -1600,6 +1601,19 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     }
   }, [user?.userId, requestPin, initializeDriftClient, refreshSummary, refreshPositions]);
 
+  // Helper to get current oracle price from Drift
+  const getMarketPrice = useCallback((marketIndex: number, type: 'perp' | 'spot' = 'perp'): number => {
+    if (!driftClientRef.current) return 0;
+    try {
+      const oracleData = type === 'perp'
+        ? driftClientRef.current.getOracleDataForPerpMarket(marketIndex)
+        : driftClientRef.current.getOracleDataForSpotMarket(marketIndex);
+      return oracleData.price.toNumber() / 1e6;
+    } catch (err) {
+      return 0;
+    }
+  }, []);
+
   // Preview trade locally using Drift SDK
   const previewTrade = useCallback(async (
     marketIndex: number,
@@ -1835,6 +1849,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     getMarketName,
     getMarketIndexBySymbol,
     getSpotMarketName,
+    getMarketPrice,
     startAutoRefresh,
     stopAutoRefresh,
   };

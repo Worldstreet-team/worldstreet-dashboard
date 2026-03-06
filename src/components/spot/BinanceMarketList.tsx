@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { Icon } from '@iconify/react';
+import { useDrift, type SpotMarketInfo } from '@/app/context/driftContext';
 
 type Chain = 'solana' | 'ethereum' | 'bitcoin';
 
@@ -35,6 +36,8 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const { spotMarkets, getMarketPrice, isClientReady } = useDrift();
+
   // Fetch market data from API route
   useEffect(() => {
     const fetchMarketData = async () => {
@@ -42,6 +45,7 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
         setLoading(true);
         setError(null);
 
+        // Fetch from KuCoin for decorative data (24h change/volume)
         const response = await fetch('/api/kucoin/markets');
         const data = await response.json();
 
@@ -49,7 +53,44 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
           throw new Error(data.error || 'Failed to fetch market data');
         }
 
-        setMarkets(data.data);
+        let finalMarkets: MarketData[] = data.data;
+
+        // If Drift is ready, ensure we include ALL Drift spot markets 
+        // even if they aren't on KuCoin's main list (though they usually are)
+        if (isClientReady && spotMarkets.size > 0) {
+          const driftList: MarketData[] = [];
+
+          spotMarkets.forEach((info: SpotMarketInfo, index: number) => {
+            if (info.symbol === 'USDC' || info.symbol === 'USDT') return; // Skip quote assets as bases
+
+            // Look for existing KuCoin record for this symbol
+            const existing = finalMarkets.find(m => m.baseAsset === info.symbol);
+            const driftPrice = getMarketPrice(index, 'spot');
+
+            if (existing) {
+              // Augment existing record with Drift info and oracle price if available
+              existing.chain = 'solana';
+              if (driftPrice > 0) existing.price = driftPrice;
+            } else {
+              // Create new record for Drift market not in KuCoin list
+              driftList.push({
+                symbol: `${info.symbol}-USDT`,
+                baseAsset: info.symbol,
+                quoteAsset: 'USDT',
+                price: driftPrice || 0,
+                change24h: 0,
+                volume24h: 0,
+                high24h: 0,
+                low24h: 0,
+                chain: 'solana',
+              });
+            }
+          });
+
+          finalMarkets = [...finalMarkets, ...driftList];
+        }
+
+        setMarkets(finalMarkets);
       } catch (err) {
         console.error('Error fetching market data:', err);
         setError(err instanceof Error ? err.message : 'Failed to fetch market data');
@@ -59,21 +100,21 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
     };
 
     fetchMarketData();
-    
-    // Refresh every 3 minutes (180000ms)
+
+    // Refresh every 3 minutes
     const interval = setInterval(fetchMarketData, 180000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isClientReady, spotMarkets, getMarketPrice]);
 
   const filteredMarkets = useMemo(() => {
     let filtered = markets.filter(market => {
-      const matchesSearch = searchQuery === '' || 
+      const matchesSearch = searchQuery === '' ||
         market.baseAsset.toLowerCase().includes(searchQuery.toLowerCase()) ||
         market.symbol.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesQuote = market.quoteAsset === selectedQuote;
       const matchesFavorites = selectedTab !== 'favorites' || favorites.has(market.symbol);
       const matchesChain = selectedChain === 'all' || market.chain === selectedChain;
-      
+
       return matchesSearch && matchesQuote && matchesFavorites && matchesChain;
     });
 
@@ -116,10 +157,10 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
       {/* Search Bar */}
       <div className="p-3 border-b border-[#1e2329]">
         <div className="relative">
-          <Icon 
-            icon="ph:magnifying-glass" 
-            width={16} 
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-[#848e9c]" 
+          <Icon
+            icon="ph:magnifying-glass"
+            width={16}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-[#848e9c]"
           />
           <input
             type="text"
@@ -137,11 +178,10 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
           <button
             key={tab}
             onClick={() => setSelectedTab(tab)}
-            className={`px-3 py-2 text-xs font-medium transition-colors border-b-2 ${
-              selectedTab === tab
-                ? 'border-[#f0b90b] text-white'
-                : 'border-transparent text-[#848e9c] hover:text-white'
-            }`}
+            className={`px-3 py-2 text-xs font-medium transition-colors border-b-2 ${selectedTab === tab
+              ? 'border-[#f0b90b] text-white'
+              : 'border-transparent text-[#848e9c] hover:text-white'
+              }`}
           >
             {tab === 'favorites' && <Icon icon="ph:star" width={12} className="inline mr-1" />}
             {tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -155,11 +195,10 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
           <button
             key={quote}
             onClick={() => setSelectedQuote(quote)}
-            className={`px-2 py-1 text-[10px] font-medium rounded transition-colors ${
-              selectedQuote === quote
-                ? 'bg-[#1e2329] text-white'
-                : 'text-[#848e9c] hover:text-white'
-            }`}
+            className={`px-2 py-1 text-[10px] font-medium rounded transition-colors ${selectedQuote === quote
+              ? 'bg-[#1e2329] text-white'
+              : 'text-[#848e9c] hover:text-white'
+              }`}
           >
             {quote}
           </button>
@@ -170,11 +209,10 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
       <div className="flex border-b border-[#1e2329] px-3 gap-2 py-2 overflow-x-auto scrollbar-hide">
         <button
           onClick={() => setSelectedChain('all')}
-          className={`px-2 py-1 text-[10px] font-medium rounded transition-colors whitespace-nowrap ${
-            selectedChain === 'all'
-              ? 'bg-[#1e2329] text-white'
-              : 'text-[#848e9c] hover:text-white'
-          }`}
+          className={`px-2 py-1 text-[10px] font-medium rounded transition-colors whitespace-nowrap ${selectedChain === 'all'
+            ? 'bg-[#1e2329] text-white'
+            : 'text-[#848e9c] hover:text-white'
+            }`}
         >
           All Chains
         </button>
@@ -182,11 +220,10 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
           <button
             key={chain}
             onClick={() => setSelectedChain(chain)}
-            className={`px-2 py-1 text-[10px] font-medium rounded transition-colors whitespace-nowrap flex items-center gap-1 ${
-              selectedChain === chain
-                ? 'bg-[#1e2329] text-white'
-                : 'text-[#848e9c] hover:text-white'
-            }`}
+            className={`px-2 py-1 text-[10px] font-medium rounded transition-colors whitespace-nowrap flex items-center gap-1 ${selectedChain === chain
+              ? 'bg-[#1e2329] text-white'
+              : 'text-[#848e9c] hover:text-white'
+              }`}
           >
             {chain === 'solana' && <Icon icon="cryptocurrency:sol" width={12} />}
             {chain === 'ethereum' && <Icon icon="cryptocurrency:eth" width={12} />}
@@ -245,11 +282,10 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
               <div
                 key={market.symbol}
                 onClick={() => onSelectPair(market.symbol, market.chain, market.mintAddress)}
-                className={`px-3 py-2 cursor-pointer transition-colors ${
-                  isSelected
-                    ? 'bg-[#1e2329]'
-                    : 'hover:bg-[#1e2329]'
-                }`}
+                className={`px-3 py-2 cursor-pointer transition-colors ${isSelected
+                  ? 'bg-[#1e2329]'
+                  : 'hover:bg-[#1e2329]'
+                  }`}
               >
                 <div className="grid grid-cols-[1fr_auto_auto] gap-2 items-center">
                   {/* Pair */}
@@ -275,8 +311,8 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
                               market.chain === 'solana'
                                 ? 'cryptocurrency:sol'
                                 : market.chain === 'ethereum'
-                                ? 'cryptocurrency:eth'
-                                : 'cryptocurrency:btc'
+                                  ? 'cryptocurrency:eth'
+                                  : 'cryptocurrency:btc'
                             }
                             width={10}
                             className="flex-shrink-0"
@@ -299,9 +335,8 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
 
                   {/* Change */}
                   <div className="text-right min-w-[60px]">
-                    <div className={`text-xs font-semibold px-2 py-0.5 rounded ${
-                      isPositive ? 'bg-[rgba(14,203,129,0.12)] text-[#0ecb81]' : 'bg-[rgba(246,70,93,0.12)] text-[#f6465d]'
-                    }`}>
+                    <div className={`text-xs font-semibold px-2 py-0.5 rounded ${isPositive ? 'bg-[rgba(14,203,129,0.12)] text-[#0ecb81]' : 'bg-[rgba(246,70,93,0.12)] text-[#f6465d]'
+                      }`}>
                       {isPositive ? '+' : ''}{market.change24h.toFixed(2)}%
                     </div>
                   </div>
