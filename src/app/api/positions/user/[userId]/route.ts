@@ -2,15 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://trading.watchup.site';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { userId: string } }
-) {
+export async function GET(request: NextRequest) {
   try {
-    const { userId } = params;
     const { searchParams } = new URL(request.url);
+    const userId = searchParams.get('userId');
     const status = searchParams.get('status') || 'OPEN';
     const limit = searchParams.get('limit') || '50';
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'userId query parameter is required' },
+        { status: 400 }
+      );
+    }
 
     // Build query string
     const queryParams = new URLSearchParams({
@@ -41,7 +45,7 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      data: positions,
+      data: Array.isArray(positions) ? positions : [],
     });
   } catch (error) {
     console.error('Error fetching positions:', error);

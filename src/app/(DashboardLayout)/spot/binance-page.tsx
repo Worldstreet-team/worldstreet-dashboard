@@ -12,6 +12,7 @@ import BinanceBottomPanel from '@/components/spot/BinanceBottomPanel';
 import LiveChart from '@/components/spot/LiveChart';
 import MarketTrades from '@/components/spot/MarketTrades';
 import MobileTradingModal from '@/components/spot/MobileTradingModal';
+import PositionsPanel from '@/components/spot/PositionsPanel';
 
 const AVAILABLE_PAIRS = ['BTC-USDT', 'ETH-USDT', 'SOL-USDT'];
 
@@ -298,9 +299,9 @@ export default function BinanceSpotPage() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-h-0">
         {/* Desktop Layout */}
-        <div className="hidden md:grid md:grid-cols-[280px_1fr_340px] flex-1 min-h-0">
+        <div className="hidden md:grid md:grid-cols-[280px_1fr_340px] md:grid-rows-[1fr_240px] flex-1 min-h-0">
           {/* LEFT: Order Book */}
           <div className="border-r border-[#2b3139] overflow-hidden">
             <BinanceOrderBook selectedPair={selectedPair} />
@@ -422,10 +423,18 @@ export default function BinanceSpotPage() {
               </div>
             </div>
           </div>
+
+          {/* BOTTOM: Positions Panel - Spans all 3 columns */}
+          <div className="col-span-3 border-t border-[#2b3139]">
+            <PositionsPanel 
+              selectedPair={selectedPair}
+              onRefresh={handleTradeExecuted}
+            />
+          </div>
         </div>
 
         {/* Mobile Layout */}
-        <div className="md:hidden flex flex-col h-[calc(100vh-60px)]">
+        <div className="md:hidden flex flex-col h-[calc(100vh-60px)] min-h-0">
           {/* Pair Info Header */}
           <div className="px-4 py-3 border-b border-[#2b3139] bg-[#181a20] shrink-0">
             <div className="flex items-center justify-between mb-2">
@@ -598,47 +607,12 @@ export default function BinanceSpotPage() {
             )}
           </div>
 
-          {/* Bottom Section */}
-          <div className="border-t border-[#2b3139] bg-[#181a20] shrink-0">
-            {/* Bottom Tabs */}
-            <div className="flex border-b border-[#2b3139]">
-              <button
-                onClick={() => setMobileBottomTab('orders')}
-                className={`flex-1 px-4 py-3 text-xs font-medium border-b-2 transition-colors ${
-                  mobileBottomTab === 'orders'
-                    ? 'border-[#fcd535] text-white'
-                    : 'border-transparent text-[#848e9c]'
-                }`}
-              >
-                Open Orders(0)
-              </button>
-              <button
-                onClick={() => setMobileBottomTab('holdings')}
-                className={`flex-1 px-4 py-3 text-xs font-medium border-b-2 transition-colors ${
-                  mobileBottomTab === 'holdings'
-                    ? 'border-[#fcd535] text-white'
-                    : 'border-transparent text-[#848e9c]'
-                }`}
-              >
-                Holdings
-              </button>
-            </div>
-
-            {/* Bottom Content */}
-            <div className="h-32 flex items-center justify-center">
-              {mobileBottomTab === 'orders' && (
-                <div className="text-center">
-                  <Icon icon="ph:file-text" className="mx-auto mb-2 text-[#848e9c]" width={32} />
-                  <p className="text-xs text-[#848e9c]">No records</p>
-                </div>
-              )}
-              {mobileBottomTab === 'holdings' && (
-                <div className="text-center">
-                  <Icon icon="ph:wallet" className="mx-auto mb-2 text-[#848e9c]" width={32} />
-                  <p className="text-xs text-[#848e9c]">No holdings</p>
-                </div>
-              )}
-            </div>
+          {/* Bottom Section - Positions */}
+          <div className="border-t border-[#2b3139] bg-[#181a20] h-[200px] shrink-0">
+            <PositionsPanel 
+              selectedPair={selectedPair}
+              onRefresh={handleTradeExecuted}
+            />
           </div>
 
           {/* Buy/Sell Buttons - Fixed at bottom */}
