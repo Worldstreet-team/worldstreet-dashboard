@@ -20,10 +20,10 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
   onSuccess,
 }) => {
   const { selectedMarket, markets } = useFuturesStore();
-  const { openPosition, loading: driftLoading, previewTrade } = useDrift();
-  
+  const { openPosition, isLoading: driftLoading, previewTrade } = useDrift();
+
   const [previewData, setPreviewData] = useState<any>(null);
-  
+
   const [orderType, setOrderType] = useState<OrderType>('market');
   const [size, setSize] = useState('');
   const [leverage, setLeverage] = useState(1);
@@ -80,7 +80,7 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
 
     try {
       const marketIndex = markets.findIndex(m => m.id === selectedMarket.id);
-      
+
       // Use the hook instead of direct API call
       const result = await openPosition(
         marketIndex >= 0 ? marketIndex : 0,
@@ -90,7 +90,7 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
       );
 
       setSuccessMessage(`Position opened! TX: ${result.txSignature?.slice(0, 8)}...`);
-      
+
       // Close modal after success
       setTimeout(() => {
         onSuccess?.();
@@ -121,21 +121,22 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
 
   if (!isOpen) return null;
 
-  const canSubmit = selectedMarket && 
-    size && 
-    parseFloat(size) > 0 && 
+  const canSubmit = selectedMarket &&
+    size &&
+    parseFloat(size) > 0 &&
     previewData &&
     previewData.marginCheckPassed &&
+    !previewData.sizeTooSmall &&
     !driftLoading;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center animate-fadeIn">
       {/* Backdrop */}
-      <div 
+      <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
       />
-      
+
       {/* Modal */}
       <div className="relative w-full md:w-[500px] bg-[#181a20] rounded-t-2xl md:rounded-2xl shadow-2xl border border-[#2b3139] max-h-[90vh] overflow-y-auto animate-slideUp">
         {/* Header */}
@@ -170,21 +171,19 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
             <div className="flex gap-2">
               <button
                 onClick={() => setOrderType('market')}
-                className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all duration-200 active:scale-95 min-h-[44px] touch-feedback ${
-                  orderType === 'market'
-                    ? 'bg-[#fcd535] text-[#181a20] shadow-lg shadow-[#fcd535]/20'
-                    : 'bg-[#2b3139] text-white hover:bg-[#2b3139]/80'
-                }`}
+                className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all duration-200 active:scale-95 min-h-[44px] touch-feedback ${orderType === 'market'
+                  ? 'bg-[#fcd535] text-[#181a20] shadow-lg shadow-[#fcd535]/20'
+                  : 'bg-[#2b3139] text-white hover:bg-[#2b3139]/80'
+                  }`}
               >
                 Market
               </button>
               <button
                 onClick={() => setOrderType('limit')}
-                className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all duration-200 active:scale-95 min-h-[44px] touch-feedback ${
-                  orderType === 'limit'
-                    ? 'bg-[#fcd535] text-[#181a20] shadow-lg shadow-[#fcd535]/20'
-                    : 'bg-[#2b3139] text-white hover:bg-[#2b3139]/80'
-                }`}
+                className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all duration-200 active:scale-95 min-h-[44px] touch-feedback ${orderType === 'limit'
+                  ? 'bg-[#fcd535] text-[#181a20] shadow-lg shadow-[#fcd535]/20'
+                  : 'bg-[#2b3139] text-white hover:bg-[#2b3139]/80'
+                  }`}
               >
                 Limit
               </button>
@@ -258,9 +257,8 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
                   ${(Number(previewData?.totalRequired) || 0).toFixed(2)}
                 </span>
               </div>
-              <div className={`flex justify-between text-sm ${
-                previewData?.marginCheckPassed ? 'text-success' : 'text-error'
-              }`}>
+              <div className={`flex justify-between text-sm ${previewData?.marginCheckPassed ? 'text-success' : 'text-error'
+                }`}>
                 <span className="font-semibold">Your Available:</span>
                 <span className="font-bold font-mono">
                   ${(Number(previewData?.freeCollateral) || 0).toFixed(2)}
@@ -273,6 +271,12 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
                     ${(Number(previewData?.estimatedLiquidationPrice) || 0).toFixed(2)}
                   </span>
                 </div>
+                {previewData.sizeTooSmall && (
+                  <div className="flex justify-between text-xs text-error animate-pulse">
+                    <span className="font-bold">Min Order Size:</span>
+                    <span className="font-bold font-mono">{previewData.minOrderSize} {selectedMarket?.symbol?.split('-')[0]}</span>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -299,13 +303,12 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
           <button
             onClick={handleSubmit}
             disabled={!canSubmit}
-            className={`w-full py-4 rounded-xl font-bold text-lg transition-all duration-200 active:scale-95 min-h-[56px] touch-feedback ${
-              canSubmit
-                ? side === 'long'
-                  ? 'bg-gradient-to-br from-[#0ecb81] to-[#0ecb81]/80 hover:from-[#0ecb81]/90 hover:to-[#0ecb81]/70 text-white shadow-lg shadow-[#0ecb81]/20 hover:shadow-xl hover:shadow-[#0ecb81]/30'
-                  : 'bg-gradient-to-br from-[#f6465d] to-[#f6465d]/80 hover:from-[#f6465d]/90 hover:to-[#f6465d]/70 text-white shadow-lg shadow-[#f6465d]/20 hover:shadow-xl hover:shadow-[#f6465d]/30'
-                : 'bg-[#2b3139] text-[#848e9c] cursor-not-allowed'
-            }`}
+            className={`w-full py-4 rounded-xl font-bold text-lg transition-all duration-200 active:scale-95 min-h-[56px] touch-feedback ${canSubmit
+              ? side === 'long'
+                ? 'bg-gradient-to-br from-[#0ecb81] to-[#0ecb81]/80 hover:from-[#0ecb81]/90 hover:to-[#0ecb81]/70 text-white shadow-lg shadow-[#0ecb81]/20 hover:shadow-xl hover:shadow-[#0ecb81]/30'
+                : 'bg-gradient-to-br from-[#f6465d] to-[#f6465d]/80 hover:from-[#f6465d]/90 hover:to-[#f6465d]/70 text-white shadow-lg shadow-[#f6465d]/20 hover:shadow-xl hover:shadow-[#f6465d]/30'
+              : 'bg-[#2b3139] text-[#848e9c] cursor-not-allowed'
+              }`}
           >
             {driftLoading ? (
               <span className="flex items-center justify-center gap-2">

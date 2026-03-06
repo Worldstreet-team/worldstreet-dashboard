@@ -1197,9 +1197,20 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       await refreshSummary();
       await refreshPositions();
       return { success: true, txSignature };
-    } catch (err) {
+    } catch (err: any) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       console.error('[DriftContext] Open position error:', err);
+
+      // Extract logs if available (for SendTransactionError)
+      if (err.logs) {
+        console.log('[DriftContext] Transaction Logs:', err.logs);
+      } else if (typeof err.getLogs === 'function') {
+        try {
+          console.log('[DriftContext] Transaction Logs:', err.getLogs());
+        } catch (logErr) {
+          console.warn('[DriftContext] Could not fetch logs:', logErr);
+        }
+      }
 
       // Sanitize error messages for user-friendly display
       let friendlyError = 'Failed to open position';
@@ -1221,12 +1232,26 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         friendlyError = 'Cannot close position with active collateral';
       } else if (errorMessage.includes('slippage')) {
         friendlyError = 'Price moved too much. Please adjust your order and try again.';
+      } else if (errorMessage.includes('0x17a8') || errorMessage.includes('InvalidOrderMinOrderSize')) {
+        friendlyError = 'Order size is too small for this market. Please increase your position size.';
       } else if (errorMessage.includes('Transaction simulation failed')) {
         // Extract the actual error from simulation logs if possible
-        if (errorMessage.includes('custom program error')) {
+        const logs = err.logs || (typeof err.getLogs === 'function' ? err.getLogs() : []);
+        const minOrderSizeLog = logs.find((l: string) => l.includes('InvalidOrderMinOrderSize'));
+
+        if (minOrderSizeLog || errorMessage.includes('0x17a8')) {
+          friendlyError = 'Order size is below the minimum required for this market.';
+
+          // Try to extract exact min size from logs if present
+          const sizeMatch = logs.join('\n').match(/min_order_size \((\d+)\)/);
+          if (sizeMatch) {
+            const minSize = parseInt(sizeMatch[1]) / 1e9;
+            friendlyError = `Order size is too small. Minimum required is ${minSize} units.`;
+          }
+        } else if (errorMessage.includes('custom program error')) {
           const errorCodeMatch = errorMessage.match(/0x([0-9a-fA-F]+)/);
           if (errorCodeMatch) {
-            friendlyError = 'Transaction failed. Please check your collateral and try again.';
+            friendlyError = `Transaction failed (Error: ${errorCodeMatch[0]}). Please check your balance and try again.`;
           }
         } else {
           friendlyError = 'Transaction simulation failed. Please try again.';
@@ -1411,6 +1436,20 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       // Estimate funding impact (funding rate * position size * 8 hours)
       const estimatedFundingImpact = fundingRate * notionalValue * (8 / 24);
 
+      // Get market constraints
+      const minOrderSize = perpMarket.orderStepSize
+        ? perpMarket.orderStepSize.toNumber() / 1e9
+        : 0;
+
+      const minOrderSizeFromAmm = perpMarket.amm?.minOrderSize
+        ? perpMarket.amm.minOrderSize.toNumber() / 1e9
+        : 0;
+
+      const effectiveMinSize = Math.max(minOrderSize, minOrderSizeFromAmm);
+
+      // Check if size is valid
+      const sizeTooSmall = size < effectiveMinSize;
+
       // Get max leverage for this market
       const maxLeverageAllowed = perpMarket.marginRatioInitial
         ? Math.floor(10000 / perpMarket.marginRatioInitial)
@@ -1435,6 +1474,8 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         fundingImpact: estimatedFundingImpact,
         estimatedFundingImpact,
         maxLeverageAllowed,
+        minOrderSize: effectiveMinSize,
+        sizeTooSmall,
         isPlaceholder: false,
       };
     } catch (err) {
