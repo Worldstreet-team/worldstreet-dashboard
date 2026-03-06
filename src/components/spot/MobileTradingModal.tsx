@@ -258,7 +258,29 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.message || result.error || 'Failed to execute trade');
+        // Sanitize error message for user display
+        const rawError = result.message || result.error || 'Failed to execute trade';
+        let userError = rawError;
+        
+        // Common error patterns and user-friendly messages
+        if (rawError.toLowerCase().includes('insufficient')) {
+          userError = 'Insufficient balance to complete this trade';
+        } else if (rawError.toLowerCase().includes('slippage')) {
+          userError = 'Price moved too much. Please try again with higher slippage';
+        } else if (rawError.toLowerCase().includes('timeout') || rawError.toLowerCase().includes('timed out')) {
+          userError = 'Transaction timed out. Please try again';
+        } else if (rawError.toLowerCase().includes('network')) {
+          userError = 'Network error. Please check your connection';
+        } else if (rawError.toLowerCase().includes('not found') || rawError.toLowerCase().includes('no route')) {
+          userError = 'No trading route found for this pair';
+        } else if (rawError.toLowerCase().includes('wallet') || rawError.toLowerCase().includes('private key')) {
+          userError = 'Wallet error. Please contact support';
+        } else if (rawError.length > 100) {
+          // Truncate very long error messages
+          userError = rawError.substring(0, 100) + '...';
+        }
+        
+        throw new Error(userError);
       }
       
       console.log('[MobileTradingModal] Trade executed:', result);
