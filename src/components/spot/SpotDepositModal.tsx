@@ -1,8 +1,8 @@
-'use client';
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Icon } from '@iconify/react';
 import { useDrift } from '@/app/context/driftContext';
+import { PublicKey } from '@solana/web3.js';
+import { getAssociatedTokenAddressSync } from '@solana/spl-token';
 
 interface SpotDepositModalProps {
     isOpen: boolean;
@@ -10,18 +10,45 @@ interface SpotDepositModalProps {
     initialAsset?: string;
 }
 
+const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+
 export default function SpotDepositModal({
     isOpen,
     onClose,
     initialAsset = 'USDC'
 }: SpotDepositModalProps) {
-    const { depositCollateral, walletBalance, summary, isLoading } = useDrift();
+    const { depositCollateral, walletBalance, summary, connection, isLoading } = useDrift();
     const [amount, setAmount] = useState('');
+    const [usdcWalletBalance, setUsdcWalletBalance] = useState<number>(0);
     const [executing, setExecuting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
 
+    const fetchUsdcBalance = useCallback(async () => {
+        if (!summary?.publicAddress || !connection) return;
+
+        try {
+            const userPubkey = new PublicKey(summary.publicAddress);
+            const mint = new PublicKey(USDC_MINT);
+            const ata = getAssociatedTokenAddressSync(mint, userPubkey);
+            const balResponse = await connection.getTokenAccountBalance(ata);
+            setUsdcWalletBalance(balResponse.value.uiAmount || 0);
+        } catch (err) {
+            setUsdcWalletBalance(0);
+        }
+    }, [summary, connection]);
+
+    useEffect(() => {
+        if (isOpen) {
+            fetchUsdcBalance();
+        }
+    }, [isOpen, fetchUsdcBalance]);
+
     if (!isOpen) return null;
+
+    const handleMax = () => {
+        setAmount(usdcWalletBalance.toString());
+    };
 
     const handleDeposit = async () => {
         setError(null);
@@ -90,7 +117,7 @@ export default function SpotDepositModal({
                                 <Icon icon="cryptocurrency:usdc" width={24} className="text-[#2775ca]" />
                                 <span className="text-white font-medium">USDC</span>
                             </div>
-                            <span className="text-white font-mono text-sm">-- USDC</span>
+                            <span className="text-white font-mono text-sm">{usdcWalletBalance.toFixed(2)} USDC</span>
                         </div>
                         <p className="text-[10px] text-[#848e9c]">
                             Currently only USDC deposits are supported for spot collateral.
@@ -108,7 +135,7 @@ export default function SpotDepositModal({
                                 className="w-full px-4 py-3 bg-[#2b3139] border border-[#2b3139] rounded-lg text-lg text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#fcd535]"
                             />
                             <button
-                                onClick={() => setAmount('10')} // Example max/fast buttons
+                                onClick={handleMax}
                                 className="absolute right-3 top-1/2 -translate-y-1/2 px-2 py-1 bg-[#181a20] text-[#fcd535] text-[10px] font-bold rounded"
                             >
                                 MAX

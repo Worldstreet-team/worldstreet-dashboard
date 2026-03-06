@@ -229,6 +229,15 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
       </div>
 
       <SpotSwapConfirmModal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} quote={null} pair={selectedPair} side={activeTab} onConfirm={handleConfirmSwap} executing={executing} />
+
+      <SpotDepositModal
+        isOpen={showDepositModal}
+        onClose={() => {
+          setShowDepositModal(false);
+          refetchBalances();
+        }}
+        initialAsset={activeTab === 'buy' ? quoteAsset : baseAsset}
+      />
     </div>
   );
 }
