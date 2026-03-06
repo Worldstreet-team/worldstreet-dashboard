@@ -13,6 +13,8 @@ interface PositionsPanelProps {
 export default function PositionsPanel({ selectedPair, onRefresh }: PositionsPanelProps) {
   const { user } = useUser();
   const [activeTab, setActiveTab] = useState<'open' | 'history'>('open');
+  const [closingPositions, setClosingPositions] = useState<Set<string>>(new Set());
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
   const { positions: openPositions, loading: loadingOpen, refetch: refetchOpen } = usePositions({
     userId: user?.id || null,
@@ -34,6 +36,51 @@ export default function PositionsPanel({ selectedPair, onRefresh }: PositionsPan
       refetchClosed();
     }
     onRefresh?.();
+  };
+
+  const handleClosePosition = async (positionId: string, symbol: string) => {
+    if (!user?.id) {
+      setErrorMessage('User not authenticated');
+      setTimeout(() => setErrorMessage(null), 3000);
+      return;
+    }
+
+    setClosingPositions(prev => new Set(prev).add(positionId));
+    setErrorMessage(null);
+
+    try {
+      const response = await fetch(`https://trading.watchup.site/api/positions/${positionId}/close`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.id,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || data.message || 'Failed to close position');
+      }
+
+      // Refresh positions
+      refetchOpen();
+      refetchClosed();
+      onRefresh?.();
+    } catch (error) {
+      console.error('Error closing position:', error);
+      const message = error instanceof Error ? error.message : 'Failed to close position';
+      setErrorMessage(message);
+      setTimeout(() => setErrorMessage(null), 5000);
+    } finally {
+      setClosingPositions(prev => {
+        const next = new Set(prev);
+        next.delete(positionId);
+        return next;
+      });
+    }
   };
 
   const positions = activeTab === 'open' ? openPositions : closedPositions;
@@ -99,6 +146,16 @@ export default function PositionsPanel({ selectedPair, onRefresh }: PositionsPan
           <Icon icon="ph:arrow-clockwise" width={16} className="text-[#848e9c]" />
         </button>
       </div>
+
+      {/* Error Message */}
+      {errorMessage && (
+        <div className="px-4 py-2 bg-[#f6465d]/10 border-b border-[#f6465d]/20">
+          <div className="flex items-center gap-2 text-[#f6465d] text-xs">
+            <Icon icon="ph:warning-circle" width={16} />
+            <span>{errorMessage}</span>
+          </div>
+        </div>
+      )}
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto scrollbar-hide">
@@ -172,8 +229,19 @@ export default function PositionsPanel({ selectedPair, onRefresh }: PositionsPan
 
                 {activeTab === 'open' && (
                   <div className="flex gap-2 mt-2">
-                    <button className="flex-1 px-3 py-1.5 bg-[#2b3139] hover:bg-[#3d4450] text-white rounded text-xs font-medium transition-colors">
-                      Close Position
+                    <button 
+                      onClick={() => handleClosePosition(position.id, position.symbol)}
+                      disabled={closingPositions.has(position.id)}
+                      className="flex-1 px-3 py-1.5 bg-[#f6465d] hover:bg-[#f6465d]/90 disabled:bg-[#2b3139] disabled:cursor-not-allowed text-white rounded text-xs font-medium transition-colors flex items-center justify-center gap-1"
+                    >
+                      {closingPositions.has(position.id) ? (
+                        <>
+                          <Icon icon="ph:spinner" className="animate-spin" width={14} />
+                          Closing...
+                        </>
+                      ) : (
+                        'Close Position'
+                      )}
                     </button>
                     <button className="px-3 py-1.5 bg-[#2b3139] hover:bg-[#3d4450] text-white rounded text-xs font-medium transition-colors">
                       Edit TP/SL
