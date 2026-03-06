@@ -195,8 +195,26 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
       let toTokenMeta = side === 'buy' ? chainMeta[tokenIn] : chainMeta[tokenOut];
       
       // Override with tokenAddress if provided (for base asset)
+      // For custom tokens, we need to fetch the actual decimals
       if (tokenAddress) {
-        const baseTokenMeta = { address: tokenAddress, decimals: chainType === 'sol' ? 9 : 18 };
+        console.log('[MobileTradingModal] Fetching decimals for custom token:', tokenAddress);
+        
+        // Fetch actual decimals from blockchain
+        const decimalsResponse = await fetch(
+          `/api/users/${user?.userId}/token-decimals?tokenAddress=${tokenAddress}&chain=${chainType}`
+        );
+        
+        let actualDecimals = chainType === 'sol' ? 9 : 18; // Default
+        
+        if (decimalsResponse.ok) {
+          const decimalsData = await decimalsResponse.json();
+          if (decimalsData.success) {
+            actualDecimals = decimalsData.decimals;
+            console.log('[MobileTradingModal] Fetched decimals:', actualDecimals);
+          }
+        }
+        
+        const baseTokenMeta = { address: tokenAddress, decimals: actualDecimals };
         if (side === 'buy') {
           toTokenMeta = baseTokenMeta;
         } else {

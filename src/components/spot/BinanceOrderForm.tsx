@@ -184,8 +184,26 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
       let toTokenMeta = activeTab === 'buy' ? chainMeta[baseAsset] : chainMeta[quoteAsset];
       
       // Override with tokenAddress if provided (for base asset)
+      // For custom tokens, we need to fetch the actual decimals
       if (tokenAddress) {
-        const baseTokenMeta = { address: tokenAddress, decimals: chainType === 'sol' ? 9 : 18 };
+        console.log('[BinanceOrderForm] Fetching decimals for custom token:', tokenAddress);
+        
+        // Fetch actual decimals from blockchain
+        const decimalsResponse = await fetch(
+          `/api/users/${user?.userId}/token-decimals?tokenAddress=${tokenAddress}&chain=${chainType}`
+        );
+        
+        let actualDecimals = chainType === 'sol' ? 9 : 18; // Default
+        
+        if (decimalsResponse.ok) {
+          const decimalsData = await decimalsResponse.json();
+          if (decimalsData.success) {
+            actualDecimals = decimalsData.decimals;
+            console.log('[BinanceOrderForm] Fetched decimals:', actualDecimals);
+          }
+        }
+        
+        const baseTokenMeta = { address: tokenAddress, decimals: actualDecimals };
         if (activeTab === 'buy') {
           toTokenMeta = baseTokenMeta;
         } else {
@@ -210,6 +228,7 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
         tokenIn: fromTokenMeta.address,
         tokenOut: toTokenMeta.address,
         amountIn: rawAmount,
+        decimals: fromTokenMeta.decimals,
         pair: selectedPair,
         side: activeTab
       });
