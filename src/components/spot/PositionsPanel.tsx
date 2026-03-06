@@ -13,16 +13,10 @@ interface PositionsPanelProps {
 
 export default function PositionsPanel({ selectedPair, onRefresh }: PositionsPanelProps) {
   const { user } = useUser();
-  const { spotPositions: driftSpotPositions, isLoading: loadingDrift } = useDrift();
+  const { spotPositions: driftSpotPositions, isLoading: loadingDrift, refreshPositions } = useDrift();
   const [activeTab, setActiveTab] = useState<'open' | 'history'>('open');
   const [closingPositions, setClosingPositions] = useState<Set<string>>(new Set());
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  const { positions: openPositions, loading: loadingOpen, refetch: refetchOpen } = usePositions({
-    userId: user?.id || null,
-    status: 'OPEN',
-    refreshInterval: 5000,
-  });
 
   const { positions: closedPositions, loading: loadingClosed, refetch: refetchClosed } = usePositions({
     userId: user?.id || null,
@@ -33,7 +27,7 @@ export default function PositionsPanel({ selectedPair, onRefresh }: PositionsPan
 
   const handleRefresh = () => {
     if (activeTab === 'open') {
-      refetchOpen();
+      refreshPositions();
     } else {
       refetchClosed();
     }
@@ -41,76 +35,35 @@ export default function PositionsPanel({ selectedPair, onRefresh }: PositionsPan
   };
 
   const handleClosePosition = async (positionId: string) => {
-    if (positionId.startsWith('drift-spot-')) {
-      setErrorMessage('Spot positions cannot be "closed" directly. Please Sell the asset in the Order Form.');
-      setTimeout(() => setErrorMessage(null), 3000);
-      return;
-    }
-
-    if (!user?.id) {
-      setErrorMessage('User not authenticated');
-      setTimeout(() => setErrorMessage(null), 3000);
-      return;
-    }
-
-    setClosingPositions(prev => new Set(prev).add(positionId));
-    setErrorMessage(null);
-
-    try {
-      const response = await fetch(`/api/positions/${positionId}/close-proxy`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Failed to close position');
-      }
-
-      refetchOpen();
-      refetchClosed();
-      onRefresh?.();
-    } catch (error) {
-      console.error('Error closing position:', error);
-      const message = error instanceof Error ? error.message : 'Failed to close position';
-      setErrorMessage(message);
-      setTimeout(() => setErrorMessage(null), 5000);
-    } finally {
-      setClosingPositions(prev => {
-        const next = new Set(prev);
-        next.delete(positionId);
-        return next;
-      });
-    }
+    setErrorMessage('Please use the Order Form to sell your spot holdings.');
+    setTimeout(() => setErrorMessage(null), 3000);
   };
 
-  const backendPositions = activeTab === 'open' ? openPositions : closedPositions;
-  const loading = activeTab === 'open' ? (loadingOpen || loadingDrift) : loadingClosed;
+  const loading = activeTab === 'open' ? loadingDrift : loadingClosed;
+  const positions: any[] = [];
 
-  // Combine backend positions with Drift spot positions if we are in 'open' tab
-  const positions = [...backendPositions];
-
-  if (activeTab === 'open' && driftSpotPositions) {
-    driftSpotPositions.forEach(p => {
-      // Don't show the quote asset (USDC index 0) as a position unless it's a borrow
-      if (p.marketIndex !== 0 && (p.amount > 0.000001 || p.balanceType === 'borrow')) {
-        positions.push({
-          id: `drift-spot-${p.marketIndex}`,
-          symbol: p.marketName,
-          side: p.balanceType === 'deposit' ? 'BUY' : 'SELL',
-          entry_price: p.price, // Fallback
-          current_price: p.price,
-          quantity: p.amount,
-          pnl: 0,
-          pnl_percentage: 0,
-          status: 'OPEN',
-          opened_at: new Date().toISOString(),
-        } as any);
-      }
-    });
+  if (activeTab === 'open') {
+    if (driftSpotPositions) {
+      driftSpotPositions.forEach(p => {
+        // Hide USDC (quote) from positions list, only show actual assets
+        if (p.marketIndex !== 0 && Math.abs(p.amount) > 0.000001) {
+          positions.push({
+            id: `drift-spot-${p.marketIndex}`,
+            symbol: p.marketName,
+            side: p.amount > 0 ? 'BUY' : 'SELL',
+            entry_price: p.price,
+            current_price: p.price,
+            quantity: Math.abs(p.amount),
+            pnl: 0,
+            pnl_percentage: 0,
+            status: 'OPEN',
+            opened_at: new Date().toISOString(),
+          });
+        }
+      });
+    }
+  } else {
+    positions.push(...closedPositions);
   }
 
   const formatPrice = (price?: number) => {
@@ -204,8 +157,8 @@ export default function PositionsPanel({ selectedPair, onRefresh }: PositionsPan
                     {position.side && (
                       <span
                         className={`px-2 py-0.5 rounded text-xs font-medium ${position.side === 'BUY'
-                            ? 'bg-[#0ecb81]/10 text-[#0ecb81]'
-                            : 'bg-[#f6465d]/10 text-[#f6465d]'
+                          ? 'bg-[#0ecb81]/10 text-[#0ecb81]'
+                          : 'bg-[#f6465d]/10 text-[#f6465d]'
                           }`}
                       >
                         {position.side}

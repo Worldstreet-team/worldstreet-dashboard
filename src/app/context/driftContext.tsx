@@ -69,20 +69,23 @@ interface DriftSpotPosition {
 interface DriftContextValue {
   // Client state
   isClientReady: boolean;
+  connection: Connection | null;
 
   // Account data
   summary: DriftAccountSummary | null;
+  walletBalance: number; // Native SOL balance
+
   // Market data
-  perpMarkets: Map<number, PerpMarketInfo>; // Stable mapping: marketIndex → market info
-  spotMarkets: Map<number, SpotMarketInfo>; // Stable mapping: marketIndex → spot market info
-  getMarketName: (marketIndex: number) => string; // Helper to get perp market name
-  getMarketIndexBySymbol: (symbol: string) => number | undefined; // Helper to get on-chain perp index by symbol
-  getSpotMarketName: (marketIndex: number) => string; // Helper to get spot market name
-  getSpotMarketIndexBySymbol: (symbol: string) => number | undefined; // Helper to get on-chain spot index by symbol
+  perpMarkets: Map<number, PerpMarketInfo>;
+  spotMarkets: Map<number, SpotMarketInfo>;
+  getMarketName: (marketIndex: number) => string;
+  getMarketIndexBySymbol: (symbol: string) => number | undefined;
+  getSpotMarketName: (marketIndex: number) => string;
+  getSpotMarketIndexBySymbol: (symbol: string) => number | undefined;
 
   // Positions
-  positions: DriftPosition[]; // Perp positions
-  spotPositions: DriftSpotPosition[]; // Spot positions
+  positions: DriftPosition[];
+  spotPositions: DriftSpotPosition[];
 
   // Loading/error states
   isLoading: boolean;
@@ -95,7 +98,7 @@ interface DriftContextValue {
   canTrade: boolean;
   needsInitialization: boolean;
 
-  // PIN unlock state (for futures page)
+  // PIN unlock state
   showPinUnlock: boolean;
   setShowPinUnlock: (show: boolean) => void;
   handlePinUnlock: (pin: string) => void;
@@ -180,6 +183,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
 
   // Track initialization failure to prevent auto-retry
   const [initializationFailed, setInitializationFailed] = useState(false);
+  const [walletBalance, setWalletBalance] = useState<number>(0);
 
   const autoRefreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const driftClientRef = useRef<any>(null);
@@ -862,6 +866,12 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         await refreshAccounts();
       }
 
+      // Fetch wallet balance (SOL)
+      if (client.wallet?.publicKey) {
+        const bal = await client.connection.getBalance(client.wallet.publicKey);
+        setWalletBalance(bal / 1e9);
+      }
+
       // SAFE: Try to get user account
       let driftUser;
       let userAccount;
@@ -937,8 +947,15 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       const leverage = totalCollateral > 0 ? (totalCollateral - freeCollateral) / totalCollateral : 0;
       const marginRatio = totalCollateral > 0 ? freeCollateral / totalCollateral : 0;
 
+      // Fetch native SOL balance
+      try {
+        const balance = await client.connection.getBalance(keypair.publicKey);
+        setWalletBalance(balance / 1e9);
+      } catch (balErr) {
+        console.warn('[DriftContext] Failed to fetch native SOL balance:', balErr);
+      }
+
       setSummary({
-        initialized: true,
         subaccountId: 0,
         publicAddress: keypair.publicKey.toBase58(),
         totalCollateral,
@@ -948,7 +965,9 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         marginRatio,
         openPositions,
         openOrders: 0,
+        initialized: true,
       });
+
       setIsClientReady(true);
       setIsInitializing(false);
       setShowInitOverlay(false); // Hide overlay on success
@@ -1782,6 +1801,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
 
   const value: DriftContextValue = {
     isClientReady,
+    connection: driftClientRef.current?.connection || null,
     summary,
     isLoading,
     error,
@@ -1810,10 +1830,11 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     spotMarkets,
     positions,
     spotPositions,
+    walletBalance,
+    getSpotMarketIndexBySymbol,
     getMarketName,
     getMarketIndexBySymbol,
     getSpotMarketName,
-    getSpotMarketIndexBySymbol,
     startAutoRefresh,
     stopAutoRefresh,
   };

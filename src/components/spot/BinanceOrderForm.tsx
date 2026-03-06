@@ -11,13 +11,14 @@ interface BinanceOrderFormProps {
   onTradeExecuted?: () => void;
   chain: string; // Required: specify blockchain network ('sol' or 'evm')
   tokenAddress?: string; // Optional: mint/contract address of the base asset
+  initialSide?: 'buy' | 'sell';
 }
 
-export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain, tokenAddress }: BinanceOrderFormProps) {
+export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain, tokenAddress, initialSide = 'buy' }: BinanceOrderFormProps) {
   const { user } = useAuth();
-  const { placeSpotOrder, getSpotMarketIndexBySymbol } = useDrift();
+  const { placeSpotOrder, getSpotMarketIndexBySymbol, spotPositions: driftSpotPositions } = useDrift();
 
-  const [activeTab, setActiveTab] = useState<'buy' | 'sell'>('buy');
+  const [activeTab, setActiveTab] = useState<'buy' | 'sell'>(initialSide);
   const [orderType, setOrderType] = useState<'market' | 'limit' | 'stop-limit'>('market');
   const [price, setPrice] = useState('');
   const [amount, setAmount] = useState('');
@@ -41,25 +42,28 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
     refetch: refetchBalances
   } = usePairBalances(user?.userId, selectedPair, effectiveChain, tokenAddress);
 
+  const { spotMarkets } = useDrift();
+
   useEffect(() => {
-    const fetchPrice = async () => {
-      try {
-        const response = await fetch(`/api/kucoin/ticker?symbol=${selectedPair}`);
-        if (response.ok) {
-          const result = await response.json();
-          if (result.code === '200000' && result.data) {
-            setCurrentMarketPrice(parseFloat(result.data.last) || 0);
-          }
+    const updatePrice = () => {
+      const [baseAsset] = selectedPair.split('-');
+      const marketIndex = getSpotMarketIndexBySymbol(baseAsset);
+      if (marketIndex !== undefined) {
+        // Find market in spotMarkets map (populated by DriftContext)
+        const market = Array.from(driftSpotPositions || []).find(p => p.marketIndex === marketIndex);
+        if (market && market.price > 0) {
+          setCurrentMarketPrice(market.price);
+        } else {
+          // Fallback to searching spotMarkets map for oracle data if needed
+          // (Though spotPositions already includes current oracle price in my previous edit)
         }
-      } catch (err) {
-        console.error('Error fetching market price:', err);
       }
     };
 
-    fetchPrice();
-    const interval = setInterval(fetchPrice, 5000);
+    updatePrice();
+    const interval = setInterval(updatePrice, 2000);
     return () => clearInterval(interval);
-  }, [selectedPair]);
+  }, [selectedPair, driftSpotPositions, getSpotMarketIndexBySymbol]);
 
   useEffect(() => {
     if (orderType === 'market' && amount && currentMarketPrice > 0) {
@@ -112,92 +116,36 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
     setExecuting(true);
 
     try {
-      const [baseAsset, quoteAsset] = selectedPair.split('-');
+      const [baseAsset] = selectedPair.split('-');
+      const marketIndex = getSpotMarketIndexBySymbol(baseAsset);
 
-      if (chain === 'sol') {
-        const marketIndex = getSpotMarketIndexBySymbol(baseAsset);
-        if (marketIndex === undefined) throw new Error(`Market not found on Drift: ${baseAsset}`);
-
-        const amountNum = parseFloat(amount);
-        const result = await placeSpotOrder(marketIndex, activeTab === 'buy' ? 'buy' : 'sell', amountNum);
-
-        if (!result.success) throw new Error(result.error || 'Drift spot order failed');
-
-        setSuccess(`${activeTab === 'buy' ? 'Buy' : 'Sell'} order executed on Drift!`);
-        setShowConfirmModal(false);
-        setAmount('');
-        setPrice('');
-        setTotal('');
-        setSliderValue(0);
-        await refetchBalances();
-        if (onTradeExecuted) onTradeExecuted();
-        setTimeout(() => setSuccess(null), 5000);
-        return;
+      if (marketIndex === undefined) {
+        throw new Error(`Market not found on Drift: ${baseAsset}`);
       }
 
-      // EVM / Existing logic
-      const chainType = 'eth';
-      const TOKEN_META: Record<string, Record<string, { address: string; decimals: number }>> = {
-        eth: {
-          ETH: { address: '0x0000000000000000000000000000000000000000', decimals: 18 },
-          BTC: { address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', decimals: 8 },
-          USDT: { address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', decimals: 6 },
-          USDC: { address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', decimals: 6 },
-        }
-      };
+      const amountNum = parseFloat(amount);
+      const result = await placeSpotOrder(
+        marketIndex,
+        activeTab === 'buy' ? 'buy' : 'sell',
+        amountNum
+      );
 
-      const chainMeta = TOKEN_META[chainType];
-      let fromTokenMeta = activeTab === 'buy' ? chainMeta[quoteAsset] : chainMeta[baseAsset];
-      let toTokenMeta = activeTab === 'buy' ? chainMeta[baseAsset] : chainMeta[quoteAsset];
+      if (!result.success) throw new Error(result.error || 'Drift spot order failed');
 
-      if (tokenAddress) {
-        const decimalsResponse = await fetch(`/api/users/${user?.userId}/token-decimals?tokenAddress=${tokenAddress}&chain=${chainType}`);
-        let actualDecimals = 18;
-        if (decimalsResponse.ok) {
-          const decimalsData = await decimalsResponse.ok ? await decimalsResponse.json() : null;
-          if (decimalsData?.success) actualDecimals = decimalsData.decimals;
-        }
-        const baseTokenMeta = { address: tokenAddress, decimals: actualDecimals };
-        if (activeTab === 'buy') toTokenMeta = baseTokenMeta; else fromTokenMeta = baseTokenMeta;
-      }
-
-      if (!fromTokenMeta || !toTokenMeta) throw new Error('Token not supported');
-
-      const decimals = fromTokenMeta.decimals;
-      const [intPart = '0', fracPart = ''] = amount.split('.');
-      const paddedFrac = fracPart.padEnd(decimals, '0').slice(0, decimals);
-      const rawAmount = (intPart + paddedFrac).replace(/^0+/, '') || '0';
-
-      const response = await fetch('/api/execute-trade', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user?.userId,
-          fromChain: chainType,
-          toChain: chainType,
-          tokenIn: fromTokenMeta.address,
-          tokenOut: toTokenMeta.address,
-          amountIn: rawAmount,
-          slippage: 0.005,
-        }),
-      });
-
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.message || result.error || 'Failed to execute trade');
-
-      setSuccess(`${activeTab === 'buy' ? 'Buy' : 'Sell'} order executed! TX: ${result.txHash.slice(0, 10)}...`);
+      setSuccess(`${activeTab === 'buy' ? 'Buy' : 'Sell'} order executed successfully!`);
       setShowConfirmModal(false);
       setAmount('');
       setPrice('');
       setTotal('');
       setSliderValue(0);
+
       await refetchBalances();
       if (onTradeExecuted) onTradeExecuted();
+
       setTimeout(() => setSuccess(null), 5000);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to execute trade';
       setError(errorMsg);
-      throw err;
     } finally {
       setExecuting(false);
     }

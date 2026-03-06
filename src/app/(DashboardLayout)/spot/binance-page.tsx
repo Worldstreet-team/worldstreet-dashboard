@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { Icon } from '@iconify/react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import BinanceOrderBook from '@/components/spot/BinanceOrderBook';
@@ -15,7 +15,7 @@ import MobileTradingModal from '@/components/spot/MobileTradingModal';
 import PositionsPanel from '@/components/spot/PositionsPanel';
 import MobileTokenSearchModal from '@/components/spot/MobileTokenSearchModal';
 
-const AVAILABLE_PAIRS = ['BTC-USDT', 'ETH-USDT', 'SOL-USDT'];
+const AVAILABLE_PAIRS = ['SOL-USDC', 'BTC-USDC', 'ETH-USDC', 'JUP-USDC', 'DRIFT-USDC', 'SOL-USDT'];
 
 interface PairData {
   name: string;
@@ -28,8 +28,14 @@ interface PairData {
 
 export default function BinanceSpotPage() {
   const pathname = usePathname();
-  const [selectedPair, setSelectedPair] = useState('BTC-USDT');
-  const [selectedChain, setSelectedChain] = useState<string>('evm'); // Track the chain for selected pair
+  const searchParams = useSearchParams();
+
+  // Initial state from URL
+  const initialPair = searchParams?.get('pair') || 'SOL-USDC';
+  const initialAction = (searchParams?.get('action') === 'sell' ? 'sell' : 'buy') as 'buy' | 'sell';
+
+  const [selectedPair, setSelectedPair] = useState(initialPair);
+  const [selectedChain, setSelectedChain] = useState<string>('sol'); // Exclusive to Drift (Solana)
   const [selectedTokenAddress, setSelectedTokenAddress] = useState<string | undefined>(); // Track token address
   const [pairData, setPairData] = useState<Record<string, PairData>>({});
   const [loading, setLoading] = useState(true);
@@ -41,11 +47,11 @@ export default function BinanceSpotPage() {
     takeProfit: string | null;
     stopLoss: string | null;
   } | null>(null);
-  
+
   // Mobile state
   const [mobileTab, setMobileTab] = useState<'chart' | 'orderbook' | 'trades' | 'info' | 'data'>('chart');
   const [showTradingModal, setShowTradingModal] = useState(false);
-  const [tradingSide, setTradingSide] = useState<'buy' | 'sell'>('buy');
+  const [tradingSide, setTradingSide] = useState<'buy' | 'sell'>(initialAction);
   const [showPairSelector, setShowPairSelector] = useState(false);
   const [showTokenSearch, setShowTokenSearch] = useState(false);
 
@@ -72,22 +78,22 @@ export default function BinanceSpotPage() {
       try {
         // Always fetch the currently selected pair
         const response = await fetch(`/api/kucoin/ticker?symbol=${selectedPair}`);
-        
+
         if (!response.ok) {
           throw new Error(`Failed to fetch ${selectedPair}`);
         }
 
         const result = await response.json();
-        
+
         if (result.code !== '200000' || !result.data) {
           throw new Error(`Invalid response for ${selectedPair}`);
         }
 
         const data = result.data;
         const pairName = selectedPair.split('-')[0];
-        const fullName = pairName === 'BTC' ? 'Bitcoin' : 
-                        pairName === 'ETH' ? 'Ethereum' : 
-                        pairName === 'SOL' ? 'Solana' : pairName;
+        const fullName = pairName === 'BTC' ? 'Bitcoin' :
+          pairName === 'ETH' ? 'Ethereum' :
+            pairName === 'SOL' ? 'Solana' : pairName;
 
         setPairData(prev => ({
           ...prev,
@@ -100,7 +106,7 @@ export default function BinanceSpotPage() {
             volume24h: parseFloat(data.vol) || 0
           }
         }));
-        
+
         setLoading(false);
       } catch (error) {
         console.error('Error fetching pair data:', error);
@@ -132,55 +138,37 @@ export default function BinanceSpotPage() {
 
   const handleSelectPair = useCallback((pair: string, chain?: 'solana' | 'ethereum' | 'bitcoin', tokenAddress?: string) => {
     console.log('[BinanceSpotPage] Pair selected:', pair, 'Chain:', chain, 'Token Address:', tokenAddress);
-    
+
     setSelectedPair(pair);
     setShowPairSelector(false);
     setSelectedTokenAddress(tokenAddress);
-    
-    // Map chain to the format expected by trading components
-    let newChain = 'evm'; // Default
-    
-    if (chain === 'solana') {
-      newChain = 'sol';
-    } else if (chain === 'ethereum') {
-      newChain = 'evm';
-    } else if (chain === 'bitcoin') {
-      newChain = 'evm'; // Bitcoin uses EVM chain (wrapped BTC on Ethereum)
-    } else {
-      // Fallback: determine chain from pair name
-      const [baseAsset] = pair.split('-');
-      const asset = baseAsset.toUpperCase();
-      
-      if (asset === 'SOL' || asset === 'SOLANA') {
-        newChain = 'sol';
-      } else if (asset === 'ETH' || asset === 'BTC' || asset === 'ETHEREUM' || asset === 'BITCOIN') {
-        newChain = 'evm';
-      }
-    }
-    
+
+    // Map chain to 'sol' for Drift-exclusive spot trading
+    let newChain = 'sol';
+
     console.log('[BinanceSpotPage] Setting chain to:', newChain);
     setSelectedChain(newChain);
-    
+
     // Immediately fetch the new pair's data
     const fetchNewPairData = async () => {
       try {
         const response = await fetch(`/api/kucoin/ticker?symbol=${pair}`);
-        
+
         if (!response.ok) {
           throw new Error(`Failed to fetch ${pair}`);
         }
 
         const result = await response.json();
-        
+
         if (result.code !== '200000' || !result.data) {
           throw new Error(`Invalid response for ${pair}`);
         }
 
         const data = result.data;
         const pairName = pair.split('-')[0];
-        const fullName = pairName === 'BTC' ? 'Bitcoin' : 
-                        pairName === 'ETH' ? 'Ethereum' : 
-                        pairName === 'SOL' ? 'Solana' : pairName;
+        const fullName = pairName === 'BTC' ? 'Bitcoin' :
+          pairName === 'ETH' ? 'Ethereum' :
+            pairName === 'SOL' ? 'Solana' : pairName;
 
         setPairData(prev => ({
           ...prev,
@@ -197,7 +185,7 @@ export default function BinanceSpotPage() {
         console.error('Error fetching new pair data:', error);
       }
     };
-    
+
     fetchNewPairData();
   }, []);
 
@@ -211,12 +199,12 @@ export default function BinanceSpotPage() {
     setShowTradingModal(true);
   };
 
-  const chartStopLoss = activePositionTPSL?.symbol === selectedPair 
-    ? activePositionTPSL.stopLoss || stopLoss 
+  const chartStopLoss = activePositionTPSL?.symbol === selectedPair
+    ? activePositionTPSL.stopLoss || stopLoss
     : stopLoss;
-  
-  const chartTakeProfit = activePositionTPSL?.symbol === selectedPair 
-    ? activePositionTPSL.takeProfit || takeProfit 
+
+  const chartTakeProfit = activePositionTPSL?.symbol === selectedPair
+    ? activePositionTPSL.takeProfit || takeProfit
     : takeProfit;
 
   const currentPairData = pairData[selectedPair];
@@ -311,127 +299,127 @@ export default function BinanceSpotPage() {
         <div className="hidden md:flex md:flex-col flex-1">
           {/* Full Screen - 3 columns */}
           <div className="grid grid-cols-[280px_1fr_340px] h-[calc(100vh-48px)]">
-          {/* LEFT: Order Book */}
-          <div className="border-r border-[#2b3139] overflow-hidden">
-            <BinanceOrderBook selectedPair={selectedPair} />
-          </div>
+            {/* LEFT: Order Book */}
+            <div className="border-r border-[#2b3139] overflow-hidden">
+              <BinanceOrderBook selectedPair={selectedPair} />
+            </div>
 
-          {/* CENTER: Chart + Order Form */}
-          <div className="border-r border-[#2b3139] flex flex-col min-h-0">
-            {/* Pair Header */}
-            <div className="px-3 py-2 border-b border-[#2b3139] flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-4">
-                <div className="relative pair-selector-container">
-                  <button
-                    onClick={() => setShowPairSelector(!showPairSelector)}
-                    className="flex items-center gap-1.5 hover:bg-[#2b3139] px-2 py-1 rounded transition-colors"
-                  >
-                    <span className="text-base font-semibold text-white">{selectedPair.replace('-', '/')}</span>
-                    <Icon icon="ph:caret-down" width={14} className="text-[#848e9c]" />
-                  </button>
-                  
-                  {/* Desktop Pair Selector Dropdown */}
-                  {showPairSelector && (
-                    <div className="absolute left-0 top-full mt-1 bg-[#2b3139] rounded-lg shadow-lg z-50 min-w-[200px]">
-                      {AVAILABLE_PAIRS.map((pair) => {
-                        // Determine chain for each pair
-                        const [baseAsset] = pair.split('-');
-                        const chain = baseAsset === 'SOL' ? 'solana' : 
-                                     baseAsset === 'ETH' ? 'ethereum' : 
-                                     baseAsset === 'BTC' ? 'bitcoin' : 'ethereum';
-                        
-                        return (
-                          <button
-                            key={pair}
-                            onClick={() => handleSelectPair(pair, chain as 'solana' | 'ethereum' | 'bitcoin')}
-                            className={`w-full px-4 py-3 text-left hover:bg-[#1e2329] transition-colors first:rounded-t-lg last:rounded-b-lg ${
-                              selectedPair === pair ? 'bg-[#1e2329]' : ''
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="text-white font-medium text-sm">{pair.replace('-', '/')}</span>
-                              <span className="text-[#848e9c] text-xs">${pairData[pair]?.price.toFixed(4) || '0.00'}</span>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
+            {/* CENTER: Chart + Order Form */}
+            <div className="border-r border-[#2b3139] flex flex-col min-h-0">
+              {/* Pair Header */}
+              <div className="px-3 py-2 border-b border-[#2b3139] flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-4">
+                  <div className="relative pair-selector-container">
+                    <button
+                      onClick={() => setShowPairSelector(!showPairSelector)}
+                      className="flex items-center gap-1.5 hover:bg-[#2b3139] px-2 py-1 rounded transition-colors"
+                    >
+                      <span className="text-base font-semibold text-white">{selectedPair.replace('-', '/')}</span>
+                      <Icon icon="ph:caret-down" width={14} className="text-[#848e9c]" />
+                    </button>
+
+                    {/* Desktop Pair Selector Dropdown */}
+                    {showPairSelector && (
+                      <div className="absolute left-0 top-full mt-1 bg-[#2b3139] rounded-lg shadow-lg z-50 min-w-[200px]">
+                        {AVAILABLE_PAIRS.map((pair) => {
+                          // Determine chain for each pair
+                          const [baseAsset] = pair.split('-');
+                          const chain = baseAsset === 'SOL' ? 'solana' :
+                            baseAsset === 'ETH' ? 'ethereum' :
+                              baseAsset === 'BTC' ? 'bitcoin' : 'ethereum';
+
+                          return (
+                            <button
+                              key={pair}
+                              onClick={() => handleSelectPair(pair, chain as 'solana' | 'ethereum' | 'bitcoin')}
+                              className={`w-full px-4 py-3 text-left hover:bg-[#1e2329] transition-colors first:rounded-t-lg last:rounded-b-lg ${selectedPair === pair ? 'bg-[#1e2329]' : ''
+                                }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="text-white font-medium text-sm">{pair.replace('-', '/')}</span>
+                                <span className="text-[#848e9c] text-xs">${pairData[pair]?.price.toFixed(4) || '0.00'}</span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className={`text-xl font-semibold ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
+                      {currentPrice.toFixed(2)}
+                    </span>
+                    <span className="text-xs text-[#848e9c]">
+                      ${currentPrice.toFixed(2)}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-baseline gap-2">
-                  <span className={`text-xl font-semibold ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
-                    {currentPrice.toFixed(2)}
-                  </span>
-                  <span className="text-xs text-[#848e9c]">
-                    ${currentPrice.toFixed(2)}
-                  </span>
+                <div className="flex items-center gap-5 text-[11px]">
+                  <div className="flex flex-col">
+                    <span className="text-[#848e9c]">24h Change</span>
+                    <span className={`font-medium ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
+                      {isPositive ? '+' : ''}{priceChange.toFixed(2)}%
+                    </span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[#848e9c]">24h High</span>
+                    <span className="text-white">{currentPairData?.high24h.toFixed(2) || '0.00'}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[#848e9c]">24h Low</span>
+                    <span className="text-white">{currentPairData?.low24h.toFixed(2) || '0.00'}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[#848e9c]">24h Volume({tokenIn})</span>
+                    <span className="text-white">{currentPairData?.volume24h.toFixed(2) || '0.00'}</span>
+                  </div>
                 </div>
               </div>
-              <div className="flex items-center gap-5 text-[11px]">
-                <div className="flex flex-col">
-                  <span className="text-[#848e9c]">24h Change</span>
-                  <span className={`font-medium ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
-                    {isPositive ? '+' : ''}{priceChange.toFixed(2)}%
-                  </span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[#848e9c]">24h High</span>
-                  <span className="text-white">{currentPairData?.high24h.toFixed(2) || '0.00'}</span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[#848e9c]">24h Low</span>
-                  <span className="text-white">{currentPairData?.low24h.toFixed(2) || '0.00'}</span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[#848e9c]">24h Volume({tokenIn})</span>
-                  <span className="text-white">{currentPairData?.volume24h.toFixed(2) || '0.00'}</span>
-                </div>
+
+              {/* Chart */}
+              <div className="flex-1 min-h-0">
+                <LiveChart
+                  symbol={selectedPair}
+                  stopLoss={chartStopLoss}
+                  takeProfit={chartTakeProfit}
+                  onUpdateLevels={handleUpdateLevels}
+                />
+              </div>
+
+              {/* Order Form */}
+              <div className="border-t border-[#2b3139] shrink-0">
+                <BinanceOrderForm
+                  selectedPair={selectedPair}
+                  chain={selectedChain}
+                  tokenAddress={selectedTokenAddress}
+                  onTradeExecuted={handleTradeExecuted}
+                  initialSide={tradingSide}
+                />
               </div>
             </div>
 
-            {/* Chart */}
-            <div className="flex-1 min-h-0">
-              <LiveChart 
-                symbol={selectedPair}
-                stopLoss={chartStopLoss}
-                takeProfit={chartTakeProfit}
-                onUpdateLevels={handleUpdateLevels}
-              />
-            </div>
+            {/* RIGHT: Market List + Market Trades */}
+            <div className="flex flex-col min-h-0">
+              {/* Market List */}
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <BinanceMarketList
+                  selectedPair={selectedPair}
+                  onSelectPair={handleSelectPair}
+                />
+              </div>
 
-            {/* Order Form */}
-            <div className="border-t border-[#2b3139] shrink-0">
-              <BinanceOrderForm 
-                selectedPair={selectedPair}
-                chain={selectedChain}
-                tokenAddress={selectedTokenAddress}
-                onTradeExecuted={handleTradeExecuted}
-              />
-            </div>
-          </div>
-
-          {/* RIGHT: Market List + Market Trades */}
-          <div className="flex flex-col min-h-0">
-            {/* Market List */}
-            <div className="flex-1 min-h-0 overflow-hidden">
-              <BinanceMarketList 
-                selectedPair={selectedPair}
-                onSelectPair={handleSelectPair}
-              />
-            </div>
-
-            {/* Market Trades */}
-            <div className="h-[280px] border-t border-[#2b3139] bg-[#181a20] shrink-0">
-              <div className="flex flex-col h-full">
-                <div className="px-3 py-2 border-b border-[#2b3139] flex items-center justify-between shrink-0">
-                  <span className="text-xs font-medium text-[#848e9c]">Market Trades</span>
-                </div>
-                <div className="flex-1 min-h-0">
-                  <MarketTrades selectedPair={selectedPair} />
+              {/* Market Trades */}
+              <div className="h-[280px] border-t border-[#2b3139] bg-[#181a20] shrink-0">
+                <div className="flex flex-col h-full">
+                  <div className="px-3 py-2 border-b border-[#2b3139] flex items-center justify-between shrink-0">
+                    <span className="text-xs font-medium text-[#848e9c]">Market Trades</span>
+                  </div>
+                  <div className="flex-1 min-h-0">
+                    <MarketTrades selectedPair={selectedPair} />
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
           </div>
         </div>
@@ -442,7 +430,7 @@ export default function BinanceSpotPage() {
           <div className="px-4 py-3 border-b border-[#2b3139] bg-[#181a20] shrink-0">
             <div className="flex items-center justify-between mb-2">
               <div className="relative pair-selector-container">
-                <button 
+                <button
                   onClick={() => setShowPairSelector(!showPairSelector)}
                   className="flex items-center gap-2 hover:bg-[#2b3139] px-2 py-1 rounded transition-colors"
                 >
@@ -452,24 +440,23 @@ export default function BinanceSpotPage() {
                     <Icon icon="ph:caret-down" width={12} className="text-[#848e9c]" />
                   </div>
                 </button>
-                
+
                 {/* Pair Selector Dropdown */}
                 {showPairSelector && (
                   <div className="absolute left-0 top-full mt-2 bg-[#2b3139] rounded-lg shadow-lg z-10 min-w-[200px] max-h-60 overflow-y-auto scrollbar-hide">
                     {AVAILABLE_PAIRS.map((pair) => {
                       // Determine chain for each pair
                       const [baseAsset] = pair.split('-');
-                      const chain = baseAsset === 'SOL' ? 'solana' : 
-                                   baseAsset === 'ETH' ? 'ethereum' : 
-                                   baseAsset === 'BTC' ? 'bitcoin' : 'ethereum';
-                      
+                      const chain = baseAsset === 'SOL' ? 'solana' :
+                        baseAsset === 'ETH' ? 'ethereum' :
+                          baseAsset === 'BTC' ? 'bitcoin' : 'ethereum';
+
                       return (
                         <button
                           key={pair}
                           onClick={() => handleSelectPair(pair, chain as 'solana' | 'ethereum' | 'bitcoin')}
-                          className={`w-full px-4 py-3 text-left hover:bg-[#181a20] transition-colors ${
-                            selectedPair === pair ? 'bg-[#181a20]' : ''
-                          }`}
+                          className={`w-full px-4 py-3 text-left hover:bg-[#181a20] transition-colors ${selectedPair === pair ? 'bg-[#181a20]' : ''
+                            }`}
                         >
                           <div className="flex items-center justify-between">
                             <span className="text-white font-medium">{pair.replace('-', '/')}</span>
@@ -483,7 +470,7 @@ export default function BinanceSpotPage() {
               </div>
               <Icon icon="ph:star" width={18} className="text-[#848e9c]" />
             </div>
-            
+
             <div className="flex items-baseline gap-2 mb-2">
               <span className={`text-2xl font-bold ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
                 {currentPrice.toFixed(2)}
@@ -526,11 +513,10 @@ export default function BinanceSpotPage() {
               <button
                 key={tab}
                 onClick={() => setMobileTab(tab)}
-                className={`px-4 py-3 text-xs font-medium whitespace-nowrap border-b-2 transition-colors ${
-                  mobileTab === tab
-                    ? 'border-[#fcd535] text-white'
-                    : 'border-transparent text-[#848e9c]'
-                }`}
+                className={`px-4 py-3 text-xs font-medium whitespace-nowrap border-b-2 transition-colors ${mobileTab === tab
+                  ? 'border-[#fcd535] text-white'
+                  : 'border-transparent text-[#848e9c]'
+                  }`}
               >
                 {tab === 'chart' && 'Chart'}
                 {tab === 'orderbook' && 'Order Book'}
@@ -545,7 +531,7 @@ export default function BinanceSpotPage() {
           <div className="flex-1 overflow-y-auto pb-[280px]">
             {mobileTab === 'chart' && (
               <div className="h-[400px]">
-                <LiveChart 
+                <LiveChart
                   symbol={selectedPair}
                   stopLoss={chartStopLoss}
                   takeProfit={chartTakeProfit}
@@ -553,19 +539,19 @@ export default function BinanceSpotPage() {
                 />
               </div>
             )}
-            
+
             {mobileTab === 'orderbook' && (
               <div className="h-[600px]">
                 <BinanceOrderBook selectedPair={selectedPair} />
               </div>
             )}
-            
+
             {mobileTab === 'trades' && (
               <div className="h-[600px]">
                 <MarketTrades selectedPair={selectedPair} />
               </div>
             )}
-            
+
             {mobileTab === 'info' && (
               <div className="p-4">
                 <div className="text-white space-y-4">
@@ -577,11 +563,11 @@ export default function BinanceSpotPage() {
                     Bitcoin was introduced to the public in 2009 by an anonymous developer or group of developers using the name Satoshi Nakamoto. It has since become the most well-known cryptocurrency in the world. Its popularity has inspired the development of many other cryptocurrencies.
                   </p>
                   <button className="text-[#fcd535] text-sm font-medium">Unfold</button>
-                  
+
                   <div className="pt-4 border-t border-[#2b3139] text-xs text-[#848e9c]">
                     * Underlying data is sourced and provided by CMC and is for reference only. This information is presented on an 'as is' basis and does not serve as any form of representation or guarantee by Binance.
                   </div>
-                  
+
                   <div className="pt-4">
                     <span className="text-[#848e9c] text-sm">Found an issue? </span>
                     <button className="text-[#fcd535] text-sm font-medium">Submit FeedBack</button>
@@ -589,7 +575,7 @@ export default function BinanceSpotPage() {
                 </div>
               </div>
             )}
-            
+
             {mobileTab === 'data' && (
               <div className="p-4">
                 <div className="text-white space-y-3">
@@ -614,7 +600,7 @@ export default function BinanceSpotPage() {
               <div className="px-4 py-3 border-b border-[#2b3139]">
                 <h3 className="text-sm font-semibold text-white">Your Positions</h3>
               </div>
-              <PositionsPanel 
+              <PositionsPanel
                 selectedPair={selectedPair}
                 onRefresh={handleTradeExecuted}
               />
@@ -623,13 +609,13 @@ export default function BinanceSpotPage() {
 
           {/* Buy/Sell Buttons - Fixed at bottom */}
           <div className="fixed bottom-0 left-0 right-0 md:hidden grid grid-cols-2 gap-0 border-t border-[#2b3139] bg-[#181a20] z-50 shadow-[0_-4px_12px_rgba(0,0,0,0.3)]">
-            <button 
+            <button
               onClick={handleBuyClick}
               className="py-4 bg-[#0ecb81] hover:bg-[#0ecb81]/90 text-white font-semibold text-base transition-colors"
             >
               Buy
             </button>
-            <button 
+            <button
               onClick={handleSellClick}
               className="py-4 bg-[#f6465d] hover:bg-[#f6465d]/90 text-white font-semibold text-base transition-colors"
             >

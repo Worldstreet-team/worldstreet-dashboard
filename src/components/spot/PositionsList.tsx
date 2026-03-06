@@ -63,15 +63,22 @@ export default function PositionsList({
     setError(null);
 
     try {
-      const response = await fetch(`/api/positions?status=${activeTab}`);
-      if (!response.ok) throw new Error('Failed to fetch positions');
-      const data = await response.json();
-      let positionsArray: Position[] = Array.isArray(data) ? data : data.positions || [];
+      let positionsArray: Position[] = [];
 
-      // Combine with Drift spot positions
+      // Only fetch history from backend if tab is CLOSED
+      if (activeTab === 'CLOSED') {
+        const response = await fetch(`/api/positions?status=CLOSED`);
+        if (response.ok) {
+          const data = await response.json();
+          positionsArray = Array.isArray(data) ? data : data.positions || [];
+        }
+      }
+
+      // Merge with Drift spot positions if tab is OPEN
       if (activeTab === 'OPEN' && driftSpotPositions) {
         driftSpotPositions.forEach(p => {
-          if (p.marketIndex !== 0 && (p.amount > 0.000001 || p.balanceType === 'borrow')) {
+          // Hide USDC (quote) from positions list, only show actual assets
+          if (p.marketIndex !== 0 && (Math.abs(p.amount) > 0.000001)) {
             positionsArray.push({
               id: `drift-spot-${p.marketIndex}`,
               userId: user.userId,
