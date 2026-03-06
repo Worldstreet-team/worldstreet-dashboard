@@ -11,7 +11,7 @@ let Wallet: any;
 // Load Drift SDK dynamically
 const loadDriftSDK = async () => {
   if (!DriftClient || !Wallet) {
-    // @ts-expect-error - Dynamic import, types will be available at runtime
+    // Dynamic import, types will be available at runtime
     const sdk = await import('@drift-labs/sdk');
     DriftClient = sdk.DriftClient;
     Wallet = sdk.Wallet;
@@ -53,31 +53,31 @@ interface PerpMarketInfo {
 interface DriftContextValue {
   // Client state
   isClientReady: boolean;
-  
+
   // Account data
   summary: DriftAccountSummary | null;
   positions: DriftPosition[];
-  
+
   // Market data
   perpMarkets: Map<number, PerpMarketInfo>; // Stable mapping: marketIndex → market info
   getMarketName: (marketIndex: number) => string; // Helper to get market name
-  
+
   // Loading/error states
   isLoading: boolean;
   error: string | null;
   isInitializing: boolean;
   initializationError: string | null;
-  
+
   // Computed booleans
   isInitialized: boolean;
   canTrade: boolean;
   needsInitialization: boolean;
-  
+
   // PIN unlock state (for futures page)
   showPinUnlock: boolean;
   setShowPinUnlock: (show: boolean) => void;
   handlePinUnlock: (pin: string) => void;
-  
+
   // Insufficient SOL modal state
   showInsufficientSol: boolean;
   setShowInsufficientSol: (show: boolean) => void;
@@ -86,20 +86,20 @@ interface DriftContextValue {
     current: number;
     address: string;
   } | null;
-  
+
   // Methods
   refreshSummary: () => Promise<void>;
   refreshPositions: () => Promise<void>;
   clearCache: () => void;
   resetInitializationFailure: () => void;
-  
+
   // Trading operations
   depositCollateral: (amount: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
   withdrawCollateral: (amount: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
   openPosition: (marketIndex: number, direction: 'long' | 'short', size: number, leverage: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
   closePosition: (marketIndex: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
   previewTrade: (marketIndex: number, direction: 'long' | 'short', size: number, leverage: number) => Promise<any>;
-  
+
   // Auto-refresh control
   startAutoRefresh: (intervalMs?: number) => void;
   stopAutoRefresh: () => void;
@@ -121,17 +121,17 @@ interface DriftProviderProps {
 
 export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   const { user } = useAuth();
-  
+
   // Client state
   const [isClientReady, setIsClientReady] = useState(false);
-  
+
   // Account data
   const [summary, setSummary] = useState<DriftAccountSummary | null>(null);
   const [positions, setPositions] = useState<DriftPosition[]>([]);
-  
+
   // Market data - stable mapping from marketIndex to market info
   const [perpMarkets, setPerpMarkets] = useState<Map<number, PerpMarketInfo>>(new Map());
-  
+
   // Loading/error states
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -139,12 +139,12 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   const [initializationError, setInitializationError] = useState<string | null>(null);
   const [isFirstLoad, setIsFirstLoad] = useState(true); // Track if this is the first initialization
   const [showInitOverlay, setShowInitOverlay] = useState(false); // Control overlay visibility
-  
+
   // PIN unlock state
   const [showPinUnlock, setShowPinUnlock] = useState(false);
   const [userPin, setUserPin] = useState<string | null>(null);
   const pinResolveRef = useRef<((pin: string) => void) | null>(null);
-  
+
   // Insufficient SOL modal state
   const [showInsufficientSol, setShowInsufficientSol] = useState(false);
   const [solBalanceInfo, setSolBalanceInfo] = useState<{
@@ -152,10 +152,10 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     current: number;
     address: string;
   } | null>(null);
-  
+
   // Track initialization failure to prevent auto-retry
   const [initializationFailed, setInitializationFailed] = useState(false);
-  
+
   const autoRefreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const driftClientRef = useRef<any>(null);
   const [encryptedPrivateKey, setEncryptedPrivateKey] = useState<string | null>(null);
@@ -187,12 +187,12 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   useEffect(() => {
     const fetchWallet = async () => {
       if (!user?.userId) return;
-      
+
       // Don't fetch wallet until we have a PIN
       // The wallet will be fetched when user unlocks with PIN
       console.log('[DriftContext] Waiting for PIN to fetch wallet (polling mode)');
     };
-    
+
     fetchWallet();
   }, [user?.userId]);
 
@@ -209,25 +209,25 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   const initializeDriftClient = useCallback(async (pin: string) => {
     const MAX_RETRIES = 3;
     const INITIAL_RETRY_DELAY = 1000; // 1 second
-    
+
     // Helper: Wait for WebSocket to be ready
     const waitForWebSocketReady = async (connection: Connection, timeoutMs: number = 5000): Promise<boolean> => {
       console.log('[DriftContext] Checking WebSocket connection readiness...');
-      
+
       return new Promise((resolve) => {
         const startTime = Date.now();
-        
+
         // Test WebSocket by attempting a simple subscription
         const testInterval = setInterval(() => {
           const elapsed = Date.now() - startTime;
-          
+
           if (elapsed > timeoutMs) {
             console.warn('[DriftContext] WebSocket readiness check timed out');
             clearInterval(testInterval);
             resolve(false);
             return;
           }
-          
+
           // Check if connection has _rpcWebSocket and it's ready
           try {
             const ws = (connection as any)._rpcWebSocket;
@@ -243,7 +243,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         }, 100);
       });
     };
-    
+
     // Helper: Check if user account exists on-chain
     const checkUserAccountExists = async (
       connection: Connection,
@@ -259,7 +259,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         return false;
       }
     };
-    
+
     // Helper: Create Drift client with specified subscription type
     const createDriftClient = async (
       connection: Connection,
@@ -268,12 +268,12 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       subscriptionType: 'websocket' | 'polling'
     ) => {
       console.log(`[DriftContext] Creating DriftClient with ${subscriptionType} subscription`);
-      
+
       if (subscriptionType === 'polling') {
         // Import BulkAccountLoader for polling mode
         const { BulkAccountLoader } = await import('@drift-labs/sdk');
-        const accountLoader = new BulkAccountLoader(connection, 'confirmed', 1000);
-        
+        const accountLoader = new BulkAccountLoader(connection as any, 'confirmed', 1000);
+
         return new DriftClient({
           connection,
           wallet,
@@ -294,66 +294,66 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         });
       }
     };
-    
+
     // Main initialization logic with retry
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       try {
         console.log(`[DriftContext] Initialization attempt ${attempt + 1}/${MAX_RETRIES}`);
-        
+
         // Step 1: Fetch encrypted wallet with PIN
         let fetchedEncryptedKey = encryptedPrivateKey;
-        
+
         if (!fetchedEncryptedKey) {
           const response = await fetch('/api/wallet/keys', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ pin })
           });
-          
+
           const data = await response.json();
-          
+
           if (!data.success || !data.wallets?.solana?.encryptedPrivateKey) {
             throw new Error(data.message || 'Failed to fetch wallet');
           }
-          
+
           fetchedEncryptedKey = data.wallets.solana.encryptedPrivateKey;
           setEncryptedPrivateKey(fetchedEncryptedKey);
         }
-        
+
         // Step 2: Load SDK and decrypt private key
         await loadDriftSDK();
-        
+
         const { decryptWithPIN } = await import('@/lib/wallet/encryption');
         const decryptedPrivateKey = decryptWithPIN(fetchedEncryptedKey!, pin);
-        
+
         const secretKey = new Uint8Array(Buffer.from(decryptedPrivateKey, 'base64'));
         const keypair = Keypair.fromSecretKey(secretKey);
-        
+
         console.log('[DriftContext] Wallet keypair created:', keypair.publicKey.toBase58());
-        
+
         // Step 3: Initialize connection with configurable endpoints
-        const wsUrl = process.env.NEXT_PUBLIC_SOLANA_WS_URL || 
-                      'wss://solana-mainnet.core.chainstack.com/6b2efd9b0b11d871382ce7bf3c7c0d89';
-        const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 
-                       'https://api.mainnet-beta.solana.com';
-        
+        const wsUrl = process.env.NEXT_PUBLIC_SOLANA_WS_URL ||
+          'wss://solana-mainnet.core.chainstack.com/6b2efd9b0b11d871382ce7bf3c7c0d89';
+        const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ||
+          'https://api.mainnet-beta.solana.com';
+
         console.log('[DriftContext] Connecting to RPC:', rpcUrl);
         console.log('[DriftContext] WebSocket endpoint:', wsUrl);
-        
+
         const connection = new Connection(rpcUrl, {
           commitment: 'confirmed',
           wsEndpoint: wsUrl,
         });
-        
+
         // Step 4: Create wallet
         const wallet = new Wallet(keypair);
-        
+
         // Step 5: Determine user account public key
         const DRIFT_PROGRAM_ID = new PublicKey(
-          process.env.NEXT_PUBLIC_DRIFT_PROGRAM_ID || 
+          process.env.NEXT_PUBLIC_DRIFT_PROGRAM_ID ||
           'dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH'
         );
-        
+
         // Derive user account PDA (subaccount 0)
         const [userAccountPubkey] = PublicKey.findProgramAddressSync(
           [
@@ -363,16 +363,16 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
           ],
           DRIFT_PROGRAM_ID
         );
-        
+
         console.log('[DriftContext] Derived user account PDA:', userAccountPubkey.toBase58());
-        
+
         // Step 6: Check if user account exists on-chain
         const userAccountExists = await checkUserAccountExists(connection, userAccountPubkey);
-        
+
         // Step 7: Decide subscription type based on WebSocket readiness
         let subscriptionType: 'websocket' | 'polling' = 'websocket';
         let usePolling = false;
-        
+
         if (!userAccountExists) {
           console.log('[DriftContext] User account does not exist yet - will initialize first');
           // For initialization, we don't need subscription yet
@@ -381,46 +381,46 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         } else {
           // Check WebSocket readiness
           const wsReady = await waitForWebSocketReady(connection, 5000);
-          
+
           if (!wsReady) {
             console.warn('[DriftContext] WebSocket not ready, falling back to polling');
             subscriptionType = 'polling';
             usePolling = true;
           }
         }
-        
+
         // Step 8: Create Drift client
         const client = await createDriftClient(connection, wallet, DRIFT_PROGRAM_ID, subscriptionType);
-        
+
         console.log(`[DriftContext] DriftClient created with ${subscriptionType} subscription`);
-        
+
         // Step 9: Initialize user account if it doesn't exist
         if (!userAccountExists) {
           console.log('[DriftContext] Initializing user account...');
-          
+
           try {
             const [txSig, newUserAccountPublicKey] = await client.initializeUserAccount(0, "worldstreet-user");
             console.log('[DriftContext] User account initialized successfully');
             console.log('[DriftContext] Init TX:', txSig);
             console.log('[DriftContext] User account public key:', newUserAccountPublicKey.toBase58());
-            
+
             // Wait for account to be confirmed on-chain
             await connection.confirmTransaction(txSig, 'confirmed');
             console.log('[DriftContext] User account initialization confirmed');
-            
+
           } catch (initErr: any) {
             console.error('[DriftContext] Failed to initialize user account:', initErr);
-            
+
             // Check if it's an insufficient SOL error
             const errorMessage = initErr?.message || String(initErr);
             if (errorMessage.includes('insufficient lamports') || errorMessage.includes('Transfer: insufficient')) {
               const match = errorMessage.match(/need (\d+)/);
               const requiredLamports = match ? parseInt(match[1]) : 2561280;
               const requiredSol = requiredLamports / 1e9;
-              
+
               const balance = await connection.getBalance(keypair.publicKey);
               const currentSol = balance / 1e9;
-              
+
               setSolBalanceInfo({
                 required: Math.ceil(requiredSol * 100) / 100,
                 current: currentSol,
@@ -428,28 +428,28 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
               });
               setShowInsufficientSol(true);
               setInitializationFailed(true);
-              
+
               throw new Error(`Insufficient SOL: Need at least ${Math.ceil(requiredSol * 100) / 100} SOL to initialize Drift account`);
             }
-            
+
             throw initErr;
           }
         }
-        
+
         // Step 10: Subscribe to client (now that account exists)
         try {
           console.log('[DriftContext] Subscribing to DriftClient...');
           await client.subscribe();
           console.log('[DriftContext] Successfully subscribed to DriftClient');
-          
+
           // Verify subscription is active
           if (!client.isSubscribed) {
             throw new Error('Client subscription failed - isSubscribed is false');
           }
-          
+
         } catch (subscribeErr: any) {
           console.error('[DriftContext] Subscription error:', subscribeErr);
-          
+
           // Log detailed JSON-RPC error if available
           if (subscribeErr.code) {
             console.error('[DriftContext] JSON-RPC Error Code:', subscribeErr.code);
@@ -457,31 +457,31 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
           if (subscribeErr.data) {
             console.error('[DriftContext] JSON-RPC Error Data:', subscribeErr.data);
           }
-          
+
           // If WebSocket subscription failed, fall back to polling
           if (!usePolling && subscriptionType === 'websocket') {
             console.warn('[DriftContext] WebSocket subscription failed, falling back to polling');
-            
+
             // Unsubscribe current client
             try {
               await client.unsubscribe();
             } catch (err) {
               console.warn('[DriftContext] Error unsubscribing failed client:', err);
             }
-            
+
             // Create new client with polling
             const pollingClient = await createDriftClient(connection, wallet, DRIFT_PROGRAM_ID, 'polling');
             await pollingClient.subscribe();
-            
+
             console.log('[DriftContext] Successfully subscribed with polling mode');
-            
+
             driftClientRef.current = pollingClient;
             return pollingClient;
           }
-          
+
           throw subscribeErr;
         }
-        
+
         // Step 11: Verify user account is accessible
         try {
           const user = client.getUser();
@@ -491,20 +491,20 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
           console.error('[DriftContext] Error accessing user account after subscription:', err);
           throw new Error('User account not accessible after subscription');
         }
-        
+
         // Success!
         driftClientRef.current = client;
         console.log('[DriftContext] Drift client ready!');
-        
+
         // Build perp market mapping after client is ready
         const marketMapping = await buildPerpMarketMapping(client);
         setPerpMarkets(marketMapping);
-        
+
         return client;
-        
+
       } catch (error: any) {
         console.error(`[DriftContext] Initialization attempt ${attempt + 1} failed:`, error);
-        
+
         // Log detailed error information
         if (error.code) {
           console.error('[DriftContext] Error code:', error.code);
@@ -512,19 +512,19 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         if (error.data) {
           console.error('[DriftContext] Error data:', JSON.stringify(error.data, null, 2));
         }
-        
+
         // If this is the last attempt, throw the error
         if (attempt === MAX_RETRIES - 1) {
           throw error;
         }
-        
+
         // Exponential backoff before retry
         const delay = INITIAL_RETRY_DELAY * Math.pow(2, attempt);
         console.log(`[DriftContext] Retrying in ${delay}ms...`);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
-    
+
     throw new Error('Failed to initialize Drift client after all retries');
   }, [encryptedPrivateKey]);
 
@@ -540,27 +540,27 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
    */
   const buildPerpMarketMapping = useCallback(async (client: any): Promise<Map<number, PerpMarketInfo>> => {
     console.log('[DriftContext] Building perp market mapping...');
-    
+
     try {
       const marketMap = new Map<number, PerpMarketInfo>();
-      
+
       // Get all perp market accounts from the client
       const perpMarketAccounts = client.getPerpMarketAccounts();
-      
+
       if (!perpMarketAccounts || perpMarketAccounts.length === 0) {
         console.warn('[DriftContext] No perp markets found');
         return marketMap;
       }
-      
+
       // Build mapping using marketIndex as the stable key
       for (const market of perpMarketAccounts) {
         const marketIndex = market.marketIndex;
-        
+
         // Extract market symbol from the name buffer
         // Market names are stored as fixed-size byte arrays
         const nameBytes = market.name;
         let symbol = 'UNKNOWN';
-        
+
         try {
           if (nameBytes && nameBytes.length > 0) {
             // Convert bytes to string and remove null terminators
@@ -572,23 +572,23 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         } catch (err) {
           console.warn(`[DriftContext] Error parsing market name for index ${marketIndex}:`, err);
         }
-        
+
         // Extract base asset symbol (e.g., "SOL" from "SOL-PERP")
         const baseAssetSymbol = symbol.split('-')[0] || symbol;
-        
+
         marketMap.set(marketIndex, {
           marketIndex,
           symbol,
           baseAssetSymbol,
           initialized: true,
         });
-        
+
         console.log(`[DriftContext] Market ${marketIndex}: ${symbol}`);
       }
-      
+
       console.log(`[DriftContext] Built mapping for ${marketMap.size} perp markets`);
       return marketMap;
-      
+
     } catch (err) {
       console.error('[DriftContext] Error building perp market mapping:', err);
       return new Map();
@@ -603,6 +603,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     const marketInfo = perpMarkets.get(marketIndex);
     return marketInfo?.symbol || `Market ${marketIndex}`;
   }, [perpMarkets]);
+  /**
    * 
    * Handles:
    * - WebSocket disconnection detection
@@ -615,18 +616,18 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       console.log('[DriftContext] No client to refresh');
       return;
     }
-    
+
     try {
       // Check if client is still subscribed
       if (!client.isSubscribed) {
         console.warn('[DriftContext] Client not subscribed, attempting to resubscribe...');
-        
+
         try {
           await client.subscribe();
           console.log('[DriftContext] Successfully resubscribed');
         } catch (resubErr: any) {
           console.error('[DriftContext] Resubscription failed:', resubErr);
-          
+
           // Log detailed error
           if (resubErr.code) {
             console.error('[DriftContext] Resubscription error code:', resubErr.code);
@@ -634,24 +635,24 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
           if (resubErr.data) {
             console.error('[DriftContext] Resubscription error data:', resubErr.data);
           }
-          
+
           // If resubscription fails, we might need to recreate the client
           // For now, just log and continue - the next refresh will try again
           console.warn('[DriftContext] Will retry subscription on next refresh');
         }
       }
-      
+
       // Fetch latest account data
       const driftUser = client.getUser();
       if (driftUser && driftUser.fetchAccounts) {
         await driftUser.fetchAccounts();
         console.log('[DriftContext] User accounts fetched successfully');
       }
-      
+
       console.log('[DriftContext] Accounts refreshed successfully');
     } catch (err: any) {
       console.error('[DriftContext] Error refreshing accounts:', err);
-      
+
       // Log detailed error information
       if (err.code) {
         console.error('[DriftContext] Error code:', err.code);
@@ -659,7 +660,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       if (err.data) {
         console.error('[DriftContext] Error data:', err.data);
       }
-      
+
       // Don't throw - allow the app to continue functioning
       // The next refresh attempt will try again
     }
@@ -672,13 +673,13 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         resolve(userPin);
         return;
       }
-      
+
       // If modal is already showing, don't show it again
       if (showPinUnlock) {
         console.log('[DriftContext] PIN modal already showing, waiting...');
         return;
       }
-      
+
       // Otherwise, show PIN unlock modal
       console.log('[DriftContext] Showing PIN unlock modal');
       pinResolveRef.current = resolve;
@@ -690,7 +691,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   const handlePinUnlock = useCallback((pin: string) => {
     setUserPin(pin);
     setShowPinUnlock(false);
-    
+
     if (pinResolveRef.current) {
       pinResolveRef.current(pin);
       pinResolveRef.current = null;
@@ -700,13 +701,13 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   // Refresh account summary from Drift client (with WebSocket)
   const refreshSummary = useCallback(async () => {
     if (!user?.userId) return;
-    
+
     // Don't retry if initialization already failed
     if (initializationFailed) {
       console.log('[DriftContext] Initialization previously failed, skipping auto-retry');
       return;
     }
-    
+
     try {
       // Only show overlay on first load
       if (isFirstLoad) {
@@ -714,9 +715,9 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       }
       setIsInitializing(true);
       setInitializationError(null);
-      
+
       const pin = await requestPin();
-      
+
       let client = driftClientRef.current;
       if (!client) {
         console.log('[DriftContext] Initializing client for summary...');
@@ -725,12 +726,12 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         // Refresh accounts via WebSocket
         await refreshAccounts();
       }
-      
+
       // SAFE: Try to get user account
       let driftUser;
       let userAccount;
       let accountInitialized = false;
-      
+
       try {
         driftUser = client.getUser();
         userAccount = driftUser.getUserAccount();
@@ -758,34 +759,34 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         setIsFirstLoad(false); // Mark first load as complete
         return;
       }
-      
+
       // If we got here, account is initialized
       const keypair = client.wallet.payer;
-      
+
       let spotPosition;
       let perpPositions;
       let totalCollateral = 0;
       let freeCollateral = 0;
-      
+
       try {
         spotPosition = driftUser.getSpotPosition(0);
         totalCollateral = spotPosition ? Number(spotPosition.scaledBalance) / 1e6 : 0;
       } catch (err) {
         console.log('[DriftContext] No spot position found');
       }
-      
+
       try {
         freeCollateral = driftUser.getFreeCollateral ? Number(driftUser.getFreeCollateral()) / 1e6 : 0;
       } catch (err) {
         console.log('[DriftContext] Could not get free collateral');
       }
-      
+
       let unrealizedPnl = 0;
       let openPositions = 0;
-      
+
       try {
         perpPositions = driftUser.getActivePerpPositions ? driftUser.getActivePerpPositions() : [];
-        
+
         if (perpPositions && Array.isArray(perpPositions)) {
           for (const position of perpPositions) {
             if (position.baseAssetAmount && position.baseAssetAmount.toNumber() !== 0) {
@@ -797,10 +798,10 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       } catch (err) {
         console.log('[DriftContext] No perp positions found');
       }
-      
+
       const leverage = totalCollateral > 0 ? (totalCollateral - freeCollateral) / totalCollateral : 0;
       const marginRatio = totalCollateral > 0 ? freeCollateral / totalCollateral : 0;
-      
+
       setSummary({
         initialized: true,
         subaccountId: 0,
@@ -831,10 +832,10 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   // Refresh positions from Drift client (with WebSocket)
   const refreshPositions = useCallback(async () => {
     if (!user?.userId) return;
-    
+
     try {
       const pin = await requestPin();
-      
+
       let client = driftClientRef.current;
       if (!client) {
         console.log('[DriftContext] Initializing client for positions...');
@@ -843,11 +844,11 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         // Refresh accounts via WebSocket
         await refreshAccounts();
       }
-      
+
       // SAFE: Try to get user account
       let driftUser;
       let userAccount;
-      
+
       try {
         driftUser = client.getUser();
         userAccount = driftUser.getUserAccount();
@@ -856,31 +857,31 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         setPositions([]);
         return;
       }
-      
+
       // Get positions
       const positionsList = [];
-      
+
       try {
         const perpPositions = driftUser.getActivePerpPositions ? driftUser.getActivePerpPositions() : [];
-        
+
         if (perpPositions && Array.isArray(perpPositions)) {
           for (const position of perpPositions) {
             const baseAmount = position.baseAssetAmount ? position.baseAssetAmount.toNumber() : 0;
             if (baseAmount === 0) continue;
-            
+
             const direction: 'long' | 'short' = baseAmount > 0 ? 'long' : 'short';
             const marketIndex = position.marketIndex;
-            
+
             // Get stable market name from mapping
             const marketName = getMarketName(marketIndex);
-            
+
             let market;
             try {
               market = client.getPerpMarketAccount(marketIndex);
             } catch (err) {
               console.log(`[DriftContext] Could not get market ${marketIndex}`);
             }
-            
+
             positionsList.push({
               marketIndex,
               marketName, // Stable market symbol
@@ -896,7 +897,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       } catch (err) {
         console.log('[DriftContext] Error getting perp positions:', err);
       }
-      
+
       setPositions(positionsList);
     } catch (err) {
       console.error('[DriftContext] Error refreshing positions:', err);
@@ -912,11 +913,11 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     intervalMs: number = 2000
   ): Promise<boolean> => {
     console.log(`[DriftContext] Waiting for transaction confirmation: ${signature}`);
-    
+
     try {
       // Use confirmTransaction with finalized commitment for reliable confirmation
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
-      
+
       const confirmation = await connection.confirmTransaction(
         {
           signature,
@@ -925,12 +926,12 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         },
         'confirmed'
       );
-      
+
       if (confirmation.value.err) {
         console.error(`[DriftContext] Transaction failed: ${signature}`, confirmation.value.err);
         throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
       }
-      
+
       console.log(`[DriftContext] Transaction confirmed: ${signature}`);
       return true;
     } catch (err) {
@@ -939,211 +940,211 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     }
   };
 
-const depositCollateral = useCallback(
-  async (amount: number): Promise<{ success: boolean; txSignature?: string; error?: string }> => {
-    if (!user?.userId) {
-      return { success: false, error: 'User not authenticated' };
-    }
-
-    try {
-      setIsLoading(true);
-
-      // Ensure wallet is unlocked / PIN provided
-      const pin = await requestPin();
-
-      // Initialize or get existing Drift client
-      let client = driftClientRef.current;
-      if (!client) {
-        client = await initializeDriftClient(pin);
+  const depositCollateral = useCallback(
+    async (amount: number): Promise<{ success: boolean; txSignature?: string; error?: string }> => {
+      if (!user?.userId) {
+        return { success: false, error: 'User not authenticated' };
       }
 
-      // Make sure client is subscribed (polling or websocket)
-      if (!client.isSubscribed) {
-        await client.subscribe();
-      }
+      try {
+        setIsLoading(true);
 
-      // Calculate fee (5%) and net amount
-      const { calculateFee } = await import('@/config/drift');
-      const { fee, netAmount } = calculateFee(amount);
+        // Ensure wallet is unlocked / PIN provided
+        const pin = await requestPin();
 
-      console.log(`[DriftContext] Depositing ${amount} USDC: ${fee} USDC fee + ${netAmount} USDC net`);
+        // Initialize or get existing Drift client
+        let client = driftClientRef.current;
+        if (!client) {
+          client = await initializeDriftClient(pin);
+        }
 
-      // Send fee to master wallet if configured
-      const { DRIFT_CONFIG } = await import('@/config/drift');
-      if (DRIFT_CONFIG.MASTER_WALLET_ADDRESS && fee > 0) {
-        const { PublicKey, Transaction } = await import('@solana/web3.js');
-        const { TOKEN_PROGRAM_ID, getAssociatedTokenAddress, createTransferInstruction } = await import('@solana/spl-token');
+        // Make sure client is subscribed (polling or websocket)
+        if (!client.isSubscribed) {
+          await client.subscribe();
+        }
 
-        const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
-        
-        // Get token accounts
-        const fromTokenAccount = await getAssociatedTokenAddress(USDC_MINT, client.wallet.publicKey);
-        const toTokenAccount = await getAssociatedTokenAddress(USDC_MINT, new PublicKey(DRIFT_CONFIG.MASTER_WALLET_ADDRESS));
+        // Calculate fee (5%) and net amount
+        const { calculateFee } = await import('@/config/drift');
+        const { fee, netAmount } = calculateFee(amount);
 
-        // Create fee transfer transaction
-        const feeTx = new Transaction().add(
-          createTransferInstruction(
-            fromTokenAccount,
-            toTokenAccount,
-            client.wallet.publicKey,
-            Math.floor(fee * 1e6), // Convert to USDC base units
-            [],
-            TOKEN_PROGRAM_ID
-          )
+        console.log(`[DriftContext] Depositing ${amount} USDC: ${fee} USDC fee + ${netAmount} USDC net`);
+
+        // Send fee to master wallet if configured
+        const { DRIFT_CONFIG } = await import('@/config/drift');
+        if (DRIFT_CONFIG.MASTER_WALLET_ADDRESS && fee > 0) {
+          const { PublicKey, Transaction } = await import('@solana/web3.js');
+          const { TOKEN_PROGRAM_ID, getAssociatedTokenAddress, createTransferInstruction } = await import('@solana/spl-token');
+
+          const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
+
+          // Get token accounts
+          const fromTokenAccount = await getAssociatedTokenAddress(USDC_MINT, client.wallet.publicKey);
+          const toTokenAccount = await getAssociatedTokenAddress(USDC_MINT, new PublicKey(DRIFT_CONFIG.MASTER_WALLET_ADDRESS));
+
+          // Create fee transfer transaction
+          const feeTx = new Transaction().add(
+            createTransferInstruction(
+              fromTokenAccount,
+              toTokenAccount,
+              client.wallet.publicKey,
+              Math.floor(fee * 1e6), // Convert to USDC base units
+              [],
+              TOKEN_PROGRAM_ID
+            )
+          );
+
+          const { blockhash } = await client.connection.getLatestBlockhash('finalized');
+          feeTx.recentBlockhash = blockhash;
+          feeTx.feePayer = client.wallet.publicKey;
+
+          feeTx.sign(client.wallet.payer);
+          const feeTxSig = await client.connection.sendRawTransaction(feeTx.serialize(), {
+            skipPreflight: false,
+            preflightCommitment: 'confirmed',
+          });
+
+          console.log('[DriftContext] Fee transaction sent:', feeTxSig);
+
+          // Wait for fee transaction confirmation
+          await pollTransactionStatus(client.connection, feeTxSig, 30, 2000);
+          console.log('[DriftContext] Fee transaction confirmed:', feeTxSig);
+        }
+
+        // Now deposit net amount to Drift
+        console.log(`[DriftContext] Depositing ${netAmount} USDC to Drift (after ${fee} USDC fee)`);
+
+        // Spot market index for USDC
+        const marketIndex = 0;
+
+        // Get user's associated token account for USDC
+        const userTokenAccount = await client.getAssociatedTokenAccount(marketIndex);
+
+        console.log('[DriftContext] User USDC token account:', userTokenAccount.toBase58());
+
+        // Convert net amount to on‑chain BN using client method
+        const depositAmountBN = client.convertToSpotPrecision(marketIndex, netAmount);
+
+        console.log('[DriftContext] Deposit amount (BN):', depositAmountBN.toString());
+        console.log('[DriftContext] Deposit amount (human):', netAmount);
+
+        // Perform the deposit
+        const txSignature = await client.deposit(
+          depositAmountBN,
+          marketIndex,
+          userTokenAccount,
+          0 // default subAccountId
         );
 
-        const { blockhash } = await client.connection.getLatestBlockhash('finalized');
-        feeTx.recentBlockhash = blockhash;
-        feeTx.feePayer = client.wallet.publicKey;
+        console.log('[DriftContext] Deposit transaction sent:', txSignature);
 
-        feeTx.sign(client.wallet.payer);
-        const feeTxSig = await client.connection.sendRawTransaction(feeTx.serialize(), {
-          skipPreflight: false,
-          preflightCommitment: 'confirmed',
-        });
+        // Wait for confirmation
+        await pollTransactionStatus(client.connection, txSignature, 30, 2000);
+        console.log('[DriftContext] Deposit confirmed:', txSignature);
 
-        console.log('[DriftContext] Fee transaction sent:', feeTxSig);
+        // Refresh accounts after deposit
+        await refreshAccounts();
 
-        // Wait for fee transaction confirmation
-        await pollTransactionStatus(client.connection, feeTxSig, 30, 2000);
-        console.log('[DriftContext] Fee transaction confirmed:', feeTxSig);
+        // Refresh summary after success
+        await refreshSummary();
+
+        return { success: true, txSignature };
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to deposit collateral';
+        console.error('[DriftContext] Deposit error:', err);
+
+        let friendly = errorMessage;
+        if (errorMessage.toLowerCase().includes('insufficient')) {
+          friendly = 'Insufficient USDC balance in wallet';
+        }
+        if (errorMessage.toLowerCase().includes('not initialized')) {
+          friendly = 'Drift account not initialized. Please initialize first.';
+        }
+        if (errorMessage.toLowerCase().includes('not connected')) {
+          friendly = 'Wallet not connected. Please unlock your wallet.';
+        }
+
+        return { success: false, error: friendly };
+      } finally {
+        setIsLoading(false);
       }
-
-      // Now deposit net amount to Drift
-      console.log(`[DriftContext] Depositing ${netAmount} USDC to Drift (after ${fee} USDC fee)`);
-
-      // Spot market index for USDC
-      const marketIndex = 0;
-
-      // Get user's associated token account for USDC
-      const userTokenAccount = await client.getAssociatedTokenAccount(marketIndex);
-
-      console.log('[DriftContext] User USDC token account:', userTokenAccount.toBase58());
-
-      // Convert net amount to on‑chain BN using client method
-      const depositAmountBN = client.convertToSpotPrecision(marketIndex, netAmount);
-
-      console.log('[DriftContext] Deposit amount (BN):', depositAmountBN.toString());
-      console.log('[DriftContext] Deposit amount (human):', netAmount);
-
-      // Perform the deposit
-      const txSignature = await client.deposit(
-        depositAmountBN,
-        marketIndex,
-        userTokenAccount,
-        0 // default subAccountId
-      );
-
-      console.log('[DriftContext] Deposit transaction sent:', txSignature);
-
-      // Wait for confirmation
-      await pollTransactionStatus(client.connection, txSignature, 30, 2000);
-      console.log('[DriftContext] Deposit confirmed:', txSignature);
-
-      // Refresh accounts after deposit
-      await refreshAccounts();
-      
-      // Refresh summary after success
-      await refreshSummary();
-
-      return { success: true, txSignature };
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to deposit collateral';
-      console.error('[DriftContext] Deposit error:', err);
-
-      let friendly = errorMessage;
-      if (errorMessage.toLowerCase().includes('insufficient')) {
-        friendly = 'Insufficient USDC balance in wallet';
-      }
-      if (errorMessage.toLowerCase().includes('not initialized')) {
-        friendly = 'Drift account not initialized. Please initialize first.';
-      }
-      if (errorMessage.toLowerCase().includes('not connected')) {
-        friendly = 'Wallet not connected. Please unlock your wallet.';
-      }
-
-      return { success: false, error: friendly };
-    } finally {
-      setIsLoading(false);
-    }
-  },
-  [user?.userId, requestPin, initializeDriftClient, refreshAccounts, refreshSummary]
-);
+    },
+    [user?.userId, requestPin, initializeDriftClient, refreshAccounts, refreshSummary]
+  );
   // Withdraw collateral
-const withdrawCollateral = useCallback(
-  async (amount: number): Promise<{ success: boolean; txSignature?: string; error?: string }> => {
-    if (!user?.userId) {
-      return { success: false, error: "User not authenticated" };
-    }
-
-    try {
-      setIsLoading(true);
-
-      // 1. Ensure wallet is unlocked / PIN provided
-      const pin = await requestPin();
-
-      // 2. Initialize or get existing Drift client
-      let client = driftClientRef.current;
-      if (!client) {
-        client = await initializeDriftClient(pin);
+  const withdrawCollateral = useCallback(
+    async (amount: number): Promise<{ success: boolean; txSignature?: string; error?: string }> => {
+      if (!user?.userId) {
+        return { success: false, error: "User not authenticated" };
       }
 
-      // Subscribe client if not already
-      if (!client.isSubscribed) {
-        await client.subscribe();
+      try {
+        setIsLoading(true);
+
+        // 1. Ensure wallet is unlocked / PIN provided
+        const pin = await requestPin();
+
+        // 2. Initialize or get existing Drift client
+        let client = driftClientRef.current;
+        if (!client) {
+          client = await initializeDriftClient(pin);
+        }
+
+        // Subscribe client if not already
+        if (!client.isSubscribed) {
+          await client.subscribe();
+        }
+
+        console.log(`[DriftContext] Withdrawing ${amount} USDC from Drift`);
+
+        // 3. Convert amount to on-chain BN precision using Drift SDK
+        const { BN } = await import('@drift-labs/sdk');
+        const withdrawAmountBN = new BN(Math.floor(amount * 1e6)); // USDC has 6 decimals
+
+        // 4. Get the user's USDC associated token account (ATA) via the SDK
+        const marketIndex = 0; // USDC spot collateral market index
+        const userTokenAccount = await client.getAssociatedTokenAccount(marketIndex);
+
+        console.log(
+          "[DriftContext] User USDC token account for withdrawal:",
+          userTokenAccount.toBase58()
+        );
+
+        // 5. Call driftClient.withdraw with correct args:
+        //   withdraw(amountBN, marketIndex, associatedTokenAccount)
+        const txSignature = await client.withdraw(
+          withdrawAmountBN,
+          marketIndex,
+          userTokenAccount
+        );
+
+        console.log("[DriftContext] Withdrawal transaction sent:", txSignature);
+
+        // 6. Poll for confirmation
+        await pollTransactionStatus(client.connection, txSignature, 30, 2000);
+        console.log("[DriftContext] Withdrawal confirmed:", txSignature);
+
+        // 7. Refresh summary after success
+        await refreshSummary();
+
+        return { success: true, txSignature };
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Failed to withdraw collateral";
+        console.error("[DriftContext] Withdraw error:", err);
+
+        let friendlyError = errorMessage;
+        if (errorMessage.toLowerCase().includes("insufficient")) {
+          friendlyError = "Insufficient free collateral to withdraw that amount";
+        }
+        if (errorMessage.toLowerCase().includes("not initialized")) {
+          friendlyError = "Drift account not initialized — please initialize first.";
+        }
+        return { success: false, error: friendlyError };
+      } finally {
+        setIsLoading(false);
       }
-
-      console.log(`[DriftContext] Withdrawing ${amount} USDC from Drift`);
-
-      // 3. Convert amount to on-chain BN precision using Drift SDK
-      const { BN } = await import('@drift-labs/sdk');
-      const withdrawAmountBN = new BN(Math.floor(amount * 1e6)); // USDC has 6 decimals
-
-      // 4. Get the user's USDC associated token account (ATA) via the SDK
-      const marketIndex = 0; // USDC spot collateral market index
-      const userTokenAccount = await client.getAssociatedTokenAccount(marketIndex);
-
-      console.log(
-        "[DriftContext] User USDC token account for withdrawal:",
-        userTokenAccount.toBase58()
-      );
-
-      // 5. Call driftClient.withdraw with correct args:
-      //   withdraw(amountBN, marketIndex, associatedTokenAccount)
-      const txSignature = await client.withdraw(
-        withdrawAmountBN,
-        marketIndex,
-        userTokenAccount
-      );
-
-      console.log("[DriftContext] Withdrawal transaction sent:", txSignature);
-
-      // 6. Poll for confirmation
-      await pollTransactionStatus(client.connection, txSignature, 30, 2000);
-      console.log("[DriftContext] Withdrawal confirmed:", txSignature);
-
-      // 7. Refresh summary after success
-      await refreshSummary();
-
-      return { success: true, txSignature };
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to withdraw collateral";
-      console.error("[DriftContext] Withdraw error:", err);
-
-      let friendlyError = errorMessage;
-      if (errorMessage.toLowerCase().includes("insufficient")) {
-        friendlyError = "Insufficient free collateral to withdraw that amount";
-      }
-      if (errorMessage.toLowerCase().includes("not initialized")) {
-        friendlyError = "Drift account not initialized — please initialize first.";
-      }
-      return { success: false, error: friendlyError };
-    } finally {
-      setIsLoading(false);
-    }
-  },
-  [user?.userId, requestPin, initializeDriftClient, refreshSummary]
-);
+    },
+    [user?.userId, requestPin, initializeDriftClient, refreshSummary]
+  );
   // Open position
   const openPosition = useCallback(async (
     marketIndex: number,
@@ -1154,27 +1155,27 @@ const withdrawCollateral = useCallback(
     if (!user?.userId) {
       return { success: false, error: 'User not authenticated' };
     }
-    
+
     try {
       setIsLoading(true);
       const pin = await requestPin();
-      
+
       let client = driftClientRef.current;
       if (!client) {
         client = await initializeDriftClient(pin);
       }
-      
+
       // Import Drift SDK enums and types
       const { BN, OrderType, MarketType, PositionDirection } = await import('@drift-labs/sdk');
-      
+
       // Convert direction string to SDK enum
-      const positionDirection = direction === 'long' 
-        ? PositionDirection.LONG 
+      const positionDirection = direction === 'long'
+        ? PositionDirection.LONG
         : PositionDirection.SHORT;
-      
+
       // Convert size to proper precision using SDK method
       const baseAssetAmount = client.convertToPerpPrecision(size);
-      
+
       // Construct order parameters with correct SDK enums
       const orderParams = {
         orderType: OrderType.MARKET,
@@ -1184,25 +1185,25 @@ const withdrawCollateral = useCallback(
         baseAssetAmount,
         price: new BN(0),
       };
-      
+
       const txSignature = await client.placePerpOrder(orderParams);
-      
+
       console.log('[DriftContext] Order transaction sent:', txSignature);
-      
+
       // Poll for order transaction confirmation
       await pollTransactionStatus(client.connection, txSignature, 30, 2000);
       console.log('[DriftContext] Order confirmed:', txSignature);
-      
+
       await refreshSummary();
       await refreshPositions();
       return { success: true, txSignature };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       console.error('[DriftContext] Open position error:', err);
-      
+
       // Sanitize error messages for user-friendly display
       let friendlyError = 'Failed to open position';
-      
+
       // Check for specific error patterns
       if (errorMessage.includes('MarketPlaceOrderPaused') || errorMessage.includes('Market is in settlement mode')) {
         friendlyError = 'Market is currently in settlement mode. Please try again in a few moments.';
@@ -1237,7 +1238,7 @@ const withdrawCollateral = useCallback(
       } else if (errorMessage.includes('User rejected')) {
         friendlyError = 'Transaction was cancelled';
       }
-      
+
       return { success: false, error: friendlyError };
     } finally {
       setIsLoading(false);
@@ -1249,43 +1250,43 @@ const withdrawCollateral = useCallback(
     if (!user?.userId) {
       return { success: false, error: 'User not authenticated' };
     }
-    
+
     try {
       setIsLoading(true);
       const pin = await requestPin();
-      
+
       let client = driftClientRef.current;
       if (!client) {
         client = await initializeDriftClient(pin);
       }
-      
+
       // Get position to verify it exists
       const driftUser = client.getUser();
       const position = driftUser.getPerpPosition(marketIndex);
-      
+
       if (!position || position.baseAssetAmount.toNumber() === 0) {
         return { success: false, error: 'No position found' };
       }
-      
+
       // Use Drift SDK native closePosition method
       const txSignature = await client.closePosition(marketIndex);
-      
+
       console.log('[DriftContext] Close position transaction sent:', txSignature);
-      
+
       // Poll for close position transaction confirmation
       await pollTransactionStatus(client.connection, txSignature, 30, 2000);
       console.log('[DriftContext] Close position confirmed:', txSignature);
-      
+
       await refreshSummary();
       await refreshPositions();
       return { success: true, txSignature };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       console.error('[DriftContext] Close position error:', err);
-      
+
       // Sanitize error messages for user-friendly display
       let friendlyError = 'Failed to close position';
-      
+
       // Check for specific error patterns
       if (errorMessage.includes('MarketPlaceOrderPaused') || errorMessage.includes('Market is in settlement mode')) {
         friendlyError = 'Market is currently in settlement mode. Please try again in a few moments.';
@@ -1306,7 +1307,7 @@ const withdrawCollateral = useCallback(
       } else if (errorMessage.includes('User rejected')) {
         friendlyError = 'Transaction was cancelled';
       }
-      
+
       return { success: false, error: friendlyError };
     } finally {
       setIsLoading(false);
@@ -1323,80 +1324,80 @@ const withdrawCollateral = useCallback(
     if (!user?.userId) {
       throw new Error('User not authenticated');
     }
-    
+
     try {
       const pin = await requestPin();
-      
+
       let client = driftClientRef.current;
       if (!client) {
         client = await initializeDriftClient(pin);
       }
-      
+
       // Ensure client is subscribed
       if (!client.isSubscribed) {
         await client.subscribe();
       }
-      
+
       // Refresh accounts to get latest data
       await refreshAccounts();
-      
+
       // Get user and market data
       const driftUser = client.getUser();
       const perpMarket = client.getPerpMarketAccount(marketIndex);
       const oracleData = client.getOracleDataForPerpMarket(marketIndex);
-      
+
       // Import BN from Drift SDK
       const { BN } = await import('@drift-labs/sdk');
-      
+
       // Use SDK precision helper for base asset amount
       const baseAssetAmount = client.convertToPerpPrecision(size);
-      
+
       // Get current oracle price
       const oraclePrice = oracleData.price.toNumber() / 1e6; // Convert from 6 decimals
-      
+
       // Calculate notional value
       const notionalValue = size * oraclePrice;
-      
+
       // Calculate required margin based on leverage
       const requiredMargin = notionalValue / leverage;
-      
+
       // Estimate trading fee (0.1% for taker)
       const estimatedFee = notionalValue * 0.001;
-      
+
       // Total required = margin + fee
       const totalRequired = requiredMargin + estimatedFee;
-      
+
       // Get user's free collateral
       let freeCollateral = 0;
       let totalCollateral = 0;
-      
+
       try {
         freeCollateral = driftUser.getFreeCollateral
-  ? driftUser.getFreeCollateral().toNumber() / 1e6
-  : 0;
+          ? driftUser.getFreeCollateral().toNumber() / 1e6
+          : 0;
         const spotPosition = driftUser.getSpotPosition(0); // USDC
         totalCollateral = spotPosition ? Number(spotPosition.scaledBalance) / 1e6 : 0;
       } catch (err) {
         console.log('[DriftContext] Could not get collateral info:', err);
       }
-      
+
       // Check if user has enough margin
       const marginCheckPassed = freeCollateral >= totalRequired;
-      
+
       // Calculate estimated liquidation price
       // For long: liq price = entry - (margin / size)
       // For short: liq price = entry + (margin / size)
       const maintenanceMarginRatio = 0.05; // 5% maintenance margin
       const maintenanceMargin = notionalValue * maintenanceMarginRatio;
       const buffer = (requiredMargin - maintenanceMargin) / size;
-      
+
       let estimatedLiquidationPrice;
       if (direction === 'long') {
         estimatedLiquidationPrice = oraclePrice - buffer;
       } else {
         estimatedLiquidationPrice = oraclePrice + buffer;
       }
-      
+
       // Get funding rate
       let fundingRate = 0;
       try {
@@ -1406,15 +1407,15 @@ const withdrawCollateral = useCallback(
       } catch (err) {
         console.log('[DriftContext] Could not get funding rate');
       }
-      
+
       // Estimate funding impact (funding rate * position size * 8 hours)
       const estimatedFundingImpact = fundingRate * notionalValue * (8 / 24);
-      
+
       // Get max leverage for this market
       const maxLeverageAllowed = perpMarket.marginRatioInitial
-  ? Math.floor(10000 / perpMarket.marginRatioInitial)
-  : 10;
-      
+        ? Math.floor(10000 / perpMarket.marginRatioInitial)
+        : 10;
+
       return {
         market: Buffer.from(perpMarket.name).toString('utf8').replace(/\0/g, ''),
         side: direction.toUpperCase(),
