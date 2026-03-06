@@ -1,14 +1,6 @@
 "use client";
 
 import React from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
 import { Icon } from '@iconify/react';
 
 interface InsufficientSolModalProps {
@@ -28,6 +20,8 @@ export const InsufficientSolModal: React.FC<InsufficientSolModalProps> = ({
 }) => {
   const [copied, setCopied] = React.useState(false);
 
+  if (!isOpen) return null;
+
   const handleCopyAddress = () => {
     navigator.clipboard.writeText(walletAddress);
     setCopied(true);
@@ -37,63 +31,69 @@ export const InsufficientSolModal: React.FC<InsufficientSolModalProps> = ({
   const shortfall = requiredSol - currentSol;
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-[95vw] max-w-lg p-0 overflow-hidden border-warning/20 !bg-white dark:!bg-[#0d0d0d] max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-[#2b3139] rounded-lg w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden border border-[#3a4149]">
         {/* Header */}
-        <div className="bg-gradient-to-br from-warning/10 to-error/10 dark:from-warning/20 dark:to-error/20 p-4 sm:p-6 border-b border-warning/20 flex-shrink-0">
-          <DialogHeader>
-            <div className="flex items-start gap-3">
-              <div className="p-2 sm:p-3 bg-warning/20 rounded-xl flex-shrink-0">
-                <Icon icon="ph:warning-duotone" className="text-warning" height={24} width={24} />
+        <div className="p-4 sm:p-6 border-b border-[#3a4149] flex-shrink-0">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3 flex-1">
+              <div className="w-10 h-10 rounded-lg bg-[#f6465d]/10 flex items-center justify-center flex-shrink-0">
+                <Icon icon="ph:warning" className="text-[#f6465d]" width={20} />
               </div>
-              <div className="min-w-0 flex-1">
-                <DialogTitle className="text-lg sm:text-xl font-bold text-dark dark:text-white">
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base sm:text-lg font-bold text-white">
                   Insufficient SOL Balance
-                </DialogTitle>
-                <DialogDescription className="text-xs sm:text-sm text-muted dark:text-gray-400 mt-1">
+                </h3>
+                <p className="text-xs sm:text-sm text-[#848e9c] mt-1">
                   You need more SOL to initialize your Drift account
-                </DialogDescription>
+                </p>
               </div>
             </div>
-          </DialogHeader>
+            <button
+              onClick={onClose}
+              className="text-[#848e9c] hover:text-white transition-colors p-1 flex-shrink-0"
+            >
+              <Icon icon="ph:x" width={20} />
+            </button>
+          </div>
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
           {/* Balance Comparison */}
-          <div className="grid grid-cols-2 gap-2 sm:gap-4">
-            <div className="bg-error/10 dark:bg-error/20 p-3 sm:p-4 rounded-xl border border-error/20">
-              <p className="text-[10px] sm:text-xs font-semibold text-error/70 dark:text-error/60 mb-1 sm:mb-2 uppercase tracking-wider">
-                Current Balance
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-[#1e2329] p-3 sm:p-4 rounded-lg border border-[#3a4149]">
+              <p className="text-[10px] sm:text-xs text-[#848e9c] mb-1 uppercase tracking-wider">
+                Current
               </p>
-              <p className="text-lg sm:text-2xl font-bold text-error">
+              <p className="text-lg sm:text-xl font-bold text-[#f6465d]">
                 {currentSol.toFixed(4)}
               </p>
-              <p className="text-[10px] sm:text-xs text-error/70 mt-0.5">SOL</p>
+              <p className="text-[10px] sm:text-xs text-[#848e9c] mt-0.5">SOL</p>
             </div>
 
-            <div className="bg-success/10 dark:bg-success/20 p-3 sm:p-4 rounded-xl border border-success/20">
-              <p className="text-[10px] sm:text-xs font-semibold text-success/70 dark:text-success/60 mb-1 sm:mb-2 uppercase tracking-wider">
+            <div className="bg-[#1e2329] p-3 sm:p-4 rounded-lg border border-[#3a4149]">
+              <p className="text-[10px] sm:text-xs text-[#848e9c] mb-1 uppercase tracking-wider">
                 Required
               </p>
-              <p className="text-lg sm:text-2xl font-bold text-success">
+              <p className="text-lg sm:text-xl font-bold text-[#0ecb81]">
                 {requiredSol.toFixed(2)}
               </p>
-              <p className="text-[10px] sm:text-xs text-success/70 mt-0.5">SOL</p>
+              <p className="text-[10px] sm:text-xs text-[#848e9c] mt-0.5">SOL</p>
             </div>
           </div>
 
           {/* Shortage Amount */}
-          <div className="bg-warning/10 dark:bg-warning/20 p-3 sm:p-4 rounded-xl border border-warning/20">
+          <div className="bg-[#fcd535]/10 p-3 sm:p-4 rounded-lg border border-[#fcd535]/20">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs sm:text-sm font-semibold text-warning">
+              <span className="text-xs sm:text-sm font-semibold text-[#fcd535]">
                 You need to add:
               </span>
               <div className="text-right">
-                <span className="text-base sm:text-lg font-bold text-warning block">
+                <span className="text-base sm:text-lg font-bold text-[#fcd535]">
                   {shortfall.toFixed(4)} SOL
                 </span>
-                <span className="text-[10px] sm:text-xs text-warning/70">
+                <span className="text-[10px] sm:text-xs text-[#fcd535]/70 block">
                   ≈ ${(shortfall * 150).toFixed(2)} USD
                 </span>
               </div>
@@ -101,12 +101,12 @@ export const InsufficientSolModal: React.FC<InsufficientSolModalProps> = ({
           </div>
 
           {/* Info Box */}
-          <div className="bg-primary/10 dark:bg-primary/20 p-3 sm:p-4 rounded-xl border border-primary/20">
+          <div className="bg-[#1e2329] p-3 sm:p-4 rounded-lg border border-[#3a4149]">
             <div className="flex items-start gap-2">
-              <Icon icon="ph:info" className="text-primary flex-shrink-0 mt-0.5" height={16} />
-              <div className="text-xs sm:text-sm text-dark dark:text-white min-w-0">
+              <Icon icon="ph:info" className="text-[#fcd535] flex-shrink-0 mt-0.5" width={16} />
+              <div className="text-xs sm:text-sm text-white">
                 <p className="font-semibold mb-1">Why do I need SOL?</p>
-                <p className="text-muted dark:text-gray-400 leading-relaxed">
+                <p className="text-[#848e9c] leading-relaxed">
                   This one-time fee covers Solana network rent and transaction costs for initializing your Drift account.
                 </p>
               </div>
@@ -115,32 +115,31 @@ export const InsufficientSolModal: React.FC<InsufficientSolModalProps> = ({
 
           {/* Wallet Address */}
           <div className="space-y-2">
-            <label className="text-xs sm:text-sm font-semibold text-dark dark:text-white flex items-center gap-1">
-              <Icon icon="ph:wallet" height={16} />
+            <label className="text-xs sm:text-sm font-semibold text-white flex items-center gap-1">
+              <Icon icon="ph:wallet" width={16} />
               Your Futures Wallet Address
             </label>
             
-            {/* Address Display - Mobile Optimized */}
-            <div className="bg-muted/50 dark:bg-white/5 p-3 rounded-xl border border-border dark:border-white/10">
+            <div className="bg-[#1e2329] p-3 rounded-lg border border-[#3a4149]">
               <div className="flex items-start gap-2">
-                <code className="text-[10px] sm:text-xs font-mono text-dark dark:text-white break-all leading-relaxed flex-1">
+                <code className="text-[10px] sm:text-xs font-mono text-white break-all leading-relaxed flex-1">
                   {walletAddress}
                 </code>
                 <button
                   onClick={handleCopyAddress}
-                  className="flex-shrink-0 p-2 hover:bg-muted/50 dark:hover:bg-white/10 rounded-lg transition-colors touch-manipulation"
+                  className="flex-shrink-0 p-2 hover:bg-[#2b3139] rounded transition-colors"
                   title="Copy address"
                 >
                   {copied ? (
-                    <Icon icon="ph:check-circle" className="text-success" height={18} />
+                    <Icon icon="ph:check-circle" className="text-[#0ecb81]" width={18} />
                   ) : (
-                    <Icon icon="ph:copy" className="text-primary" height={18} />
+                    <Icon icon="ph:copy" className="text-[#fcd535]" width={18} />
                   )}
                 </button>
               </div>
               {copied && (
-                <p className="text-[10px] text-success mt-1 flex items-center gap-1">
-                  <Icon icon="ph:check" height={12} />
+                <p className="text-[10px] text-[#0ecb81] mt-2 flex items-center gap-1">
+                  <Icon icon="ph:check" width={12} />
                   Copied to clipboard!
                 </p>
               )}
@@ -149,10 +148,10 @@ export const InsufficientSolModal: React.FC<InsufficientSolModalProps> = ({
 
           {/* Instructions */}
           <div className="space-y-2">
-            <p className="text-xs sm:text-sm font-semibold text-dark dark:text-white">
+            <p className="text-xs sm:text-sm font-semibold text-white">
               How to send SOL:
             </p>
-            <ol className="space-y-2 text-xs sm:text-sm text-muted dark:text-gray-400">
+            <ol className="space-y-2 text-xs sm:text-sm text-[#848e9c]">
               {[
                 'Copy the wallet address above',
                 'Open Phantom, Solflare, or any Solana wallet',
@@ -161,7 +160,7 @@ export const InsufficientSolModal: React.FC<InsufficientSolModalProps> = ({
                 'Click "Try Again" to initialize'
               ].map((step, index) => (
                 <li key={index} className="flex items-start gap-2">
-                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/20 text-primary text-xs flex items-center justify-center font-semibold">
+                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-[#fcd535]/20 text-[#fcd535] text-xs flex items-center justify-center font-semibold">
                     {index + 1}
                   </span>
                   <span className="pt-0.5">{step}</span>
@@ -171,32 +170,30 @@ export const InsufficientSolModal: React.FC<InsufficientSolModalProps> = ({
           </div>
 
           {/* Warning */}
-          <div className="bg-warning/10 border border-warning/20 rounded-lg p-2.5 sm:p-3 flex items-start gap-2">
-            <Icon icon="ph:warning" className="text-warning flex-shrink-0 mt-0.5" height={14} />
-            <p className="text-[10px] sm:text-xs text-warning leading-relaxed">
+          <div className="bg-[#fcd535]/10 border border-[#fcd535]/20 rounded-lg p-2.5 sm:p-3 flex items-start gap-2">
+            <Icon icon="ph:info" className="text-[#fcd535] flex-shrink-0 mt-0.5" width={14} />
+            <p className="text-[10px] sm:text-xs text-[#fcd535] leading-relaxed">
               One-time fee. You won't need to pay this again after initialization.
             </p>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="flex-shrink-0 flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 p-4 sm:p-6 bg-muted/50 dark:bg-white/5 border-t border-border dark:border-white/10">
-          <Button 
+        <div className="flex-shrink-0 flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 p-4 sm:p-6 border-t border-[#3a4149]">
+          <button 
             onClick={onClose} 
-            variant="outline" 
-            className="w-full sm:w-auto px-6 touch-manipulation"
+            className="w-full sm:w-auto px-6 py-2.5 bg-[#2b3139] hover:bg-[#3a4149] text-white rounded transition-colors text-sm font-medium"
           >
             Cancel
-          </Button>
-          <Button 
+          </button>
+          <button 
             onClick={onClose} 
-            variant="default" 
-            className="w-full sm:w-auto px-6 touch-manipulation"
+            className="w-full sm:w-auto px-6 py-2.5 bg-[#fcd535] hover:bg-[#fcd535]/90 text-[#181a20] rounded transition-colors text-sm font-semibold"
           >
             I Understand
-          </Button>
+          </button>
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   );
 };
