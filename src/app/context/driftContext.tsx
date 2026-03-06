@@ -122,6 +122,8 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   const [error, setError] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(false);
   const [initializationError, setInitializationError] = useState<string | null>(null);
+  const [isFirstLoad, setIsFirstLoad] = useState(true); // Track if this is the first initialization
+  const [showInitOverlay, setShowInitOverlay] = useState(false); // Control overlay visibility
   
   // PIN unlock state
   const [showPinUnlock, setShowPinUnlock] = useState(false);
@@ -376,6 +378,10 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     }
     
     try {
+      // Only show overlay on first load
+      if (isFirstLoad) {
+        setShowInitOverlay(true);
+      }
       setIsInitializing(true);
       setInitializationError(null);
       
@@ -418,6 +424,8 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         });
         setIsClientReady(true);
         setIsInitializing(false);
+        setShowInitOverlay(false); // Hide overlay - account just needs initialization
+        setIsFirstLoad(false); // Mark first load as complete
         return;
       }
       
@@ -477,6 +485,8 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       });
       setIsClientReady(true);
       setIsInitializing(false);
+      setShowInitOverlay(false); // Hide overlay on success
+      setIsFirstLoad(false); // Mark first load as complete
     } catch (err) {
       console.error('[DriftContext] Error refreshing summary:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to refresh summary';
@@ -484,8 +494,9 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       setInitializationError(errorMessage);
       setInitializationFailed(true); // Mark as failed on any error
       setIsInitializing(false);
+      // Keep overlay visible on error so user can retry
     }
-  }, [user?.userId, requestPin, initializeDriftClient, refreshAccounts, initializationFailed]);
+  }, [user?.userId, requestPin, initializeDriftClient, refreshAccounts, initializationFailed, isFirstLoad]);
 
   // Refresh positions from Drift client (with polling) - SAFE VERSION
   const refreshPositions = useCallback(async () => {
@@ -1062,6 +1073,8 @@ const withdrawCollateral = useCallback(
     setInitializationFailed(false);
     setError(null);
     setInitializationError(null);
+    setIsFirstLoad(true); // Treat retry as first load to show overlay
+    setShowInitOverlay(true); // Show overlay for retry
     console.log('[DriftContext] Reset initialization failure flag');
   }, []);
 
@@ -1092,7 +1105,7 @@ const withdrawCollateral = useCallback(
     positions,
     isLoading,
     error,
-    isInitializing,
+    isInitializing: showInitOverlay && isInitializing, // Only expose as initializing if overlay should show
     initializationError,
     isInitialized,
     canTrade,
