@@ -301,7 +301,7 @@ export default function BinanceSpotPage() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-h-0">
         {/* Desktop Layout */}
-        <div className="hidden md:flex md:flex-col flex-1 min-h-0">
+        <div className="hidden md:flex md:flex-col flex-1 min-h-screen overflow-y-auto">
           {/* Top Section - 3 columns */}
           <div className="flex-1 grid grid-cols-[280px_1fr_340px] min-h-0">
           {/* LEFT: Order Book */}
