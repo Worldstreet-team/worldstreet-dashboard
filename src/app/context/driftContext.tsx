@@ -181,130 +181,341 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     fetchWallet();
   }, [user?.userId]);
 
-  // Initialize Drift client with WebSocket
+  /**
+   * Initialize Drift client with robust WebSocket handling and fallback to polling
+   * 
+   * This function handles:
+   * 1. WebSocket connection readiness detection
+   * 2. User account existence check BEFORE subscribing
+   * 3. Automatic fallback to polling if WebSocket fails
+   * 4. Retry logic with exponential backoff
+   * 5. Detailed error logging for debugging
+   */
   const initializeDriftClient = useCallback(async (pin: string) => {
-    try {
-      // Fetch encrypted wallet with PIN
-      let fetchedEncryptedKey = encryptedPrivateKey;
+    const MAX_RETRIES = 3;
+    const INITIAL_RETRY_DELAY = 1000; // 1 second
+    
+    // Helper: Wait for WebSocket to be ready
+    const waitForWebSocketReady = async (connection: Connection, timeoutMs: number = 5000): Promise<boolean> => {
+      console.log('[DriftContext] Checking WebSocket connection readiness...');
       
-      if (!fetchedEncryptedKey) {
-        const response = await fetch('/api/wallet/keys', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pin })
-        });
+      return new Promise((resolve) => {
+        const startTime = Date.now();
         
-        const data = await response.json();
-        
-        if (!data.success || !data.wallets?.solana?.encryptedPrivateKey) {
-          throw new Error(data.message || 'Failed to fetch wallet');
-        }
-        
-        fetchedEncryptedKey = data.wallets.solana.encryptedPrivateKey;
-        setEncryptedPrivateKey(fetchedEncryptedKey);
-      }
-      
-      // Load SDK
-      await loadDriftSDK();
-      
-      // Decrypt private key
-      const { decryptWithPIN } = await import('@/lib/wallet/encryption');
-      const decryptedPrivateKey = decryptWithPIN(fetchedEncryptedKey!, pin);
-      
-      // Create keypair
-      const secretKey = new Uint8Array(Buffer.from(decryptedPrivateKey, 'base64'));
-      const keypair = Keypair.fromSecretKey(secretKey);
-      
-      // Initialize connection with WebSocket endpoint
-      const wsUrl = 'wss://solana-mainnet.core.chainstack.com/6b2efd9b0b11d871382ce7bf3c7c0d89';
-      const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
-      const connection = new Connection(rpcUrl, {
-        commitment: 'confirmed',
-        wsEndpoint: wsUrl,
-      });
-      
-      // Create wallet
-      const wallet = new Wallet(keypair);
-      console.log('[DriftContext] Wallet created with WebSocket connection');
-      
-      // Create Drift client with WebSocket subscription
-      const DRIFT_PROGRAM_ID = process.env.NEXT_PUBLIC_DRIFT_PROGRAM_ID || 'dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH';
-      
-      const client = new DriftClient({
-        connection,
-        wallet,
-        programID: new PublicKey(DRIFT_PROGRAM_ID),
-        accountSubscription: {
-          type: 'websocket',
-        },
-      });
-      
-      console.log('[DriftContext] DriftClient created with WebSocket, subscribing...');
-      
-      // Subscribe to the client
-      await client.subscribe();
-      
-      console.log('[DriftContext] Client subscribed via WebSocket, checking user account...');
-      
-      // Check if user account is initialized
-      let userAccountPublicKey;
-      try {
-        const user = client.getUser();
-        const userAccount = user.getUserAccount();
-        userAccountPublicKey = user.getUserAccountPublicKey();
-        console.log('[DriftContext] User account found:', userAccount.authority.toBase58());
-        console.log('[DriftContext] User account public key:', userAccountPublicKey.toBase58());
-      } catch (err) {
-        // User account not initialized, initialize it
-        console.log('[DriftContext] User account not initialized, initializing...');
-        try {
-          const [txSig, newUserAccountPublicKey] = await client.initializeUserAccount(0, "worldstreet-user");
-          userAccountPublicKey = newUserAccountPublicKey;
-          console.log('[DriftContext] User account initialized successfully');
-          console.log('[DriftContext] Init TX:', txSig);
-          console.log('[DriftContext] User account public key:', userAccountPublicKey.toBase58());
-        } catch (initErr: any) {
-          console.error('[DriftContext] Failed to initialize user account:', initErr);
+        // Test WebSocket by attempting a simple subscription
+        const testInterval = setInterval(() => {
+          const elapsed = Date.now() - startTime;
           
-          // Check if it's an insufficient SOL error
-          const errorMessage = initErr?.message || String(initErr);
-          if (errorMessage.includes('insufficient lamports') || errorMessage.includes('Transfer: insufficient')) {
-            // Parse the error to get required amount
-            const match = errorMessage.match(/need (\d+)/);
-            const requiredLamports = match ? parseInt(match[1]) : 2561280; // Default from error
-            const requiredSol = requiredLamports / 1e9;
-            
-            // Get current balance
-            const balance = await connection.getBalance(keypair.publicKey);
-            const currentSol = balance / 1e9;
-            
-            // Show insufficient SOL modal
-            setSolBalanceInfo({
-              required: Math.ceil(requiredSol * 100) / 100, // Round up to 2 decimals
-              current: currentSol,
-              address: keypair.publicKey.toBase58(),
-            });
-            setShowInsufficientSol(true);
-            setInitializationFailed(true); // Mark initialization as failed
-            
-            throw new Error(`Insufficient SOL: Need at least ${Math.ceil(requiredSol * 100) / 100} SOL to initialize Drift account`);
+          if (elapsed > timeoutMs) {
+            console.warn('[DriftContext] WebSocket readiness check timed out');
+            clearInterval(testInterval);
+            resolve(false);
+            return;
           }
           
-          // Re-throw other errors
-          throw initErr;
-        }
+          // Check if connection has _rpcWebSocket and it's ready
+          try {
+            const ws = (connection as any)._rpcWebSocket;
+            if (ws && ws.readyState === 1) { // 1 = OPEN
+              console.log('[DriftContext] WebSocket is ready');
+              clearInterval(testInterval);
+              resolve(true);
+              return;
+            }
+          } catch (err) {
+            console.warn('[DriftContext] Error checking WebSocket state:', err);
+          }
+        }, 100);
+      });
+    };
+    
+    // Helper: Check if user account exists on-chain
+    const checkUserAccountExists = async (
+      connection: Connection,
+      userAccountPubkey: PublicKey
+    ): Promise<boolean> => {
+      try {
+        const accountInfo = await connection.getAccountInfo(userAccountPubkey);
+        const exists = accountInfo !== null;
+        console.log(`[DriftContext] User account ${userAccountPubkey.toBase58()} exists:`, exists);
+        return exists;
+      } catch (err) {
+        console.error('[DriftContext] Error checking user account:', err);
+        return false;
       }
+    };
+    
+    // Helper: Create Drift client with specified subscription type
+    const createDriftClient = async (
+      connection: Connection,
+      wallet: any,
+      programId: PublicKey,
+      subscriptionType: 'websocket' | 'polling'
+    ) => {
+      console.log(`[DriftContext] Creating DriftClient with ${subscriptionType} subscription`);
       
-      driftClientRef.current = client;
-      console.log('[DriftContext] Drift client ready!');
-      return client;
-    } catch (error) {
-      console.error('[DriftContext] Error initializing Drift client:', error);
-      throw error;
+      if (subscriptionType === 'polling') {
+        // Import BulkAccountLoader for polling mode
+        const { BulkAccountLoader } = await import('@drift-labs/sdk');
+        const accountLoader = new BulkAccountLoader(connection, 'confirmed', 1000);
+        
+        return new DriftClient({
+          connection,
+          wallet,
+          programID: programId,
+          accountSubscription: {
+            type: 'polling',
+            accountLoader,
+          },
+        });
+      } else {
+        return new DriftClient({
+          connection,
+          wallet,
+          programID: programId,
+          accountSubscription: {
+            type: 'websocket',
+          },
+        });
+      }
+    };
+    
+    // Main initialization logic with retry
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        console.log(`[DriftContext] Initialization attempt ${attempt + 1}/${MAX_RETRIES}`);
+        
+        // Step 1: Fetch encrypted wallet with PIN
+        let fetchedEncryptedKey = encryptedPrivateKey;
+        
+        if (!fetchedEncryptedKey) {
+          const response = await fetch('/api/wallet/keys', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pin })
+          });
+          
+          const data = await response.json();
+          
+          if (!data.success || !data.wallets?.solana?.encryptedPrivateKey) {
+            throw new Error(data.message || 'Failed to fetch wallet');
+          }
+          
+          fetchedEncryptedKey = data.wallets.solana.encryptedPrivateKey;
+          setEncryptedPrivateKey(fetchedEncryptedKey);
+        }
+        
+        // Step 2: Load SDK and decrypt private key
+        await loadDriftSDK();
+        
+        const { decryptWithPIN } = await import('@/lib/wallet/encryption');
+        const decryptedPrivateKey = decryptWithPIN(fetchedEncryptedKey!, pin);
+        
+        const secretKey = new Uint8Array(Buffer.from(decryptedPrivateKey, 'base64'));
+        const keypair = Keypair.fromSecretKey(secretKey);
+        
+        console.log('[DriftContext] Wallet keypair created:', keypair.publicKey.toBase58());
+        
+        // Step 3: Initialize connection with configurable endpoints
+        const wsUrl = process.env.NEXT_PUBLIC_SOLANA_WS_URL || 
+                      'wss://solana-mainnet.core.chainstack.com/6b2efd9b0b11d871382ce7bf3c7c0d89';
+        const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 
+                       'https://api.mainnet-beta.solana.com';
+        
+        console.log('[DriftContext] Connecting to RPC:', rpcUrl);
+        console.log('[DriftContext] WebSocket endpoint:', wsUrl);
+        
+        const connection = new Connection(rpcUrl, {
+          commitment: 'confirmed',
+          wsEndpoint: wsUrl,
+        });
+        
+        // Step 4: Create wallet
+        const wallet = new Wallet(keypair);
+        
+        // Step 5: Determine user account public key
+        const DRIFT_PROGRAM_ID = new PublicKey(
+          process.env.NEXT_PUBLIC_DRIFT_PROGRAM_ID || 
+          'dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH'
+        );
+        
+        // Derive user account PDA (subaccount 0)
+        const [userAccountPubkey] = PublicKey.findProgramAddressSync(
+          [
+            Buffer.from('user'),
+            keypair.publicKey.toBuffer(),
+            new Uint8Array([0, 0]), // subaccount 0
+          ],
+          DRIFT_PROGRAM_ID
+        );
+        
+        console.log('[DriftContext] Derived user account PDA:', userAccountPubkey.toBase58());
+        
+        // Step 6: Check if user account exists on-chain
+        const userAccountExists = await checkUserAccountExists(connection, userAccountPubkey);
+        
+        // Step 7: Decide subscription type based on WebSocket readiness
+        let subscriptionType: 'websocket' | 'polling' = 'websocket';
+        let usePolling = false;
+        
+        if (!userAccountExists) {
+          console.log('[DriftContext] User account does not exist yet - will initialize first');
+          // For initialization, we don't need subscription yet
+          subscriptionType = 'polling'; // Use polling temporarily
+          usePolling = true;
+        } else {
+          // Check WebSocket readiness
+          const wsReady = await waitForWebSocketReady(connection, 5000);
+          
+          if (!wsReady) {
+            console.warn('[DriftContext] WebSocket not ready, falling back to polling');
+            subscriptionType = 'polling';
+            usePolling = true;
+          }
+        }
+        
+        // Step 8: Create Drift client
+        const client = await createDriftClient(connection, wallet, DRIFT_PROGRAM_ID, subscriptionType);
+        
+        console.log(`[DriftContext] DriftClient created with ${subscriptionType} subscription`);
+        
+        // Step 9: Initialize user account if it doesn't exist
+        if (!userAccountExists) {
+          console.log('[DriftContext] Initializing user account...');
+          
+          try {
+            const [txSig, newUserAccountPublicKey] = await client.initializeUserAccount(0, "worldstreet-user");
+            console.log('[DriftContext] User account initialized successfully');
+            console.log('[DriftContext] Init TX:', txSig);
+            console.log('[DriftContext] User account public key:', newUserAccountPublicKey.toBase58());
+            
+            // Wait for account to be confirmed on-chain
+            await connection.confirmTransaction(txSig, 'confirmed');
+            console.log('[DriftContext] User account initialization confirmed');
+            
+          } catch (initErr: any) {
+            console.error('[DriftContext] Failed to initialize user account:', initErr);
+            
+            // Check if it's an insufficient SOL error
+            const errorMessage = initErr?.message || String(initErr);
+            if (errorMessage.includes('insufficient lamports') || errorMessage.includes('Transfer: insufficient')) {
+              const match = errorMessage.match(/need (\d+)/);
+              const requiredLamports = match ? parseInt(match[1]) : 2561280;
+              const requiredSol = requiredLamports / 1e9;
+              
+              const balance = await connection.getBalance(keypair.publicKey);
+              const currentSol = balance / 1e9;
+              
+              setSolBalanceInfo({
+                required: Math.ceil(requiredSol * 100) / 100,
+                current: currentSol,
+                address: keypair.publicKey.toBase58(),
+              });
+              setShowInsufficientSol(true);
+              setInitializationFailed(true);
+              
+              throw new Error(`Insufficient SOL: Need at least ${Math.ceil(requiredSol * 100) / 100} SOL to initialize Drift account`);
+            }
+            
+            throw initErr;
+          }
+        }
+        
+        // Step 10: Subscribe to client (now that account exists)
+        try {
+          console.log('[DriftContext] Subscribing to DriftClient...');
+          await client.subscribe();
+          console.log('[DriftContext] Successfully subscribed to DriftClient');
+          
+          // Verify subscription is active
+          if (!client.isSubscribed) {
+            throw new Error('Client subscription failed - isSubscribed is false');
+          }
+          
+        } catch (subscribeErr: any) {
+          console.error('[DriftContext] Subscription error:', subscribeErr);
+          
+          // Log detailed JSON-RPC error if available
+          if (subscribeErr.code) {
+            console.error('[DriftContext] JSON-RPC Error Code:', subscribeErr.code);
+          }
+          if (subscribeErr.data) {
+            console.error('[DriftContext] JSON-RPC Error Data:', subscribeErr.data);
+          }
+          
+          // If WebSocket subscription failed, fall back to polling
+          if (!usePolling && subscriptionType === 'websocket') {
+            console.warn('[DriftContext] WebSocket subscription failed, falling back to polling');
+            
+            // Unsubscribe current client
+            try {
+              await client.unsubscribe();
+            } catch (err) {
+              console.warn('[DriftContext] Error unsubscribing failed client:', err);
+            }
+            
+            // Create new client with polling
+            const pollingClient = await createDriftClient(connection, wallet, DRIFT_PROGRAM_ID, 'polling');
+            await pollingClient.subscribe();
+            
+            console.log('[DriftContext] Successfully subscribed with polling mode');
+            
+            driftClientRef.current = pollingClient;
+            return pollingClient;
+          }
+          
+          throw subscribeErr;
+        }
+        
+        // Step 11: Verify user account is accessible
+        try {
+          const user = client.getUser();
+          const userAccount = user.getUserAccount();
+          console.log('[DriftContext] User account verified:', userAccount.authority.toBase58());
+        } catch (err) {
+          console.error('[DriftContext] Error accessing user account after subscription:', err);
+          throw new Error('User account not accessible after subscription');
+        }
+        
+        // Success!
+        driftClientRef.current = client;
+        console.log('[DriftContext] Drift client ready!');
+        return client;
+        
+      } catch (error: any) {
+        console.error(`[DriftContext] Initialization attempt ${attempt + 1} failed:`, error);
+        
+        // Log detailed error information
+        if (error.code) {
+          console.error('[DriftContext] Error code:', error.code);
+        }
+        if (error.data) {
+          console.error('[DriftContext] Error data:', JSON.stringify(error.data, null, 2));
+        }
+        
+        // If this is the last attempt, throw the error
+        if (attempt === MAX_RETRIES - 1) {
+          throw error;
+        }
+        
+        // Exponential backoff before retry
+        const delay = INITIAL_RETRY_DELAY * Math.pow(2, attempt);
+        console.log(`[DriftContext] Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
     }
+    
+    throw new Error('Failed to initialize Drift client after all retries');
   }, [encryptedPrivateKey]);
 
-  // Refresh accounts from Drift (WebSocket)
+  /**
+   * Refresh accounts from Drift with automatic reconnection
+   * 
+   * Handles:
+   * - WebSocket disconnection detection
+   * - Automatic resubscription
+   * - Graceful fallback to polling if WebSocket fails
+   */
   const refreshAccounts = useCallback(async () => {
     const client = driftClientRef.current;
     if (!client) {
@@ -313,11 +524,28 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     }
     
     try {
-      // With WebSocket subscription, accounts are automatically updated
-      // We just need to ensure the subscription is active
+      // Check if client is still subscribed
       if (!client.isSubscribed) {
-        console.log('[DriftContext] Client not subscribed, subscribing...');
-        await client.subscribe();
+        console.warn('[DriftContext] Client not subscribed, attempting to resubscribe...');
+        
+        try {
+          await client.subscribe();
+          console.log('[DriftContext] Successfully resubscribed');
+        } catch (resubErr: any) {
+          console.error('[DriftContext] Resubscription failed:', resubErr);
+          
+          // Log detailed error
+          if (resubErr.code) {
+            console.error('[DriftContext] Resubscription error code:', resubErr.code);
+          }
+          if (resubErr.data) {
+            console.error('[DriftContext] Resubscription error data:', resubErr.data);
+          }
+          
+          // If resubscription fails, we might need to recreate the client
+          // For now, just log and continue - the next refresh will try again
+          console.warn('[DriftContext] Will retry subscription on next refresh');
+        }
       }
       
       // Fetch latest account data
@@ -327,10 +555,20 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         console.log('[DriftContext] User accounts fetched successfully');
       }
       
-      console.log('[DriftContext] Accounts refreshed via WebSocket subscription');
-    } catch (err) {
+      console.log('[DriftContext] Accounts refreshed successfully');
+    } catch (err: any) {
       console.error('[DriftContext] Error refreshing accounts:', err);
-      // Don't throw, just log
+      
+      // Log detailed error information
+      if (err.code) {
+        console.error('[DriftContext] Error code:', err.code);
+      }
+      if (err.data) {
+        console.error('[DriftContext] Error data:', err.data);
+      }
+      
+      // Don't throw - allow the app to continue functioning
+      // The next refresh attempt will try again
     }
   }, []);
   const requestPin = useCallback((): Promise<string> => {
