@@ -5,6 +5,7 @@ import { useAuth } from '@/app/context/authContext';
 import { usePairBalances } from '@/hooks/usePairBalances';
 import { useDrift } from '@/app/context/driftContext';
 import SpotSwapConfirmModal from './SpotSwapConfirmModal';
+import SpotDepositModal from './SpotDepositModal';
 
 interface BinanceOrderFormProps {
   selectedPair: string;
@@ -28,7 +29,10 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
   const [success, setSuccess] = useState<string | null>(null);
   const [currentMarketPrice, setCurrentMarketPrice] = useState<number>(0);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showDepositModal, setShowDepositModal] = useState(false);
   const [executing, setExecuting] = useState(false);
+
+  const [baseAsset, quoteAsset] = selectedPair.split('-');
 
   const [tokenIn, tokenOut] = selectedPair.split('-');
 
@@ -172,7 +176,15 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
 
       <div className="max-h-[25vh] overflow-y-auto scrollbar-hide px-4 py-4 space-y-4">
         <div className="flex items-center justify-between text-xs">
-          <span className="text-[#848e9c]">Avbl</span>
+          <div className="flex items-center gap-2">
+            <span className="text-[#848e9c]">Avbl</span>
+            <button
+              onClick={() => setShowDepositModal(true)}
+              className="px-1.5 py-0.5 rounded bg-[#fcd535]/10 text-[#fcd535] text-[10px] hover:bg-[#fcd535]/20 font-bold transition-all transition-colors"
+            >
+              Deposit
+            </button>
+          </div>
           <span className="text-white font-mono">{loadingBalances ? 'Loading...' : `${currentBalance.toFixed(6)} ${currentToken}`}</span>
         </div>
 
