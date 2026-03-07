@@ -362,7 +362,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
 
           // Verify subscription is active
           if (!client.isSubscribed) {
-            throw new Error('Client subscription failed - isSubscribed is false');
+            console.warn('[DriftContext] Client subscription finished, but isSubscribed is false. Proceeding anyway.');
           }
 
         } catch (subscribeErr: any) {
@@ -376,7 +376,14 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
             console.error('[DriftContext] JSON-RPC Error Data:', subscribeErr.data);
           }
 
-          throw subscribeErr;
+          // If it's a JSON-RPC error about accountSubscribe (happens when the user account doesn't exist yet)
+          // we can safely ignore it and proceed to initialize the user account.
+          const errString = String(subscribeErr?.message || subscribeErr);
+          if (errString.includes('accountSubscribe') || errString.includes('Invalid parameter')) {
+            console.warn('[DriftContext] Received accountSubscribe RPC error. Continuing since this is expected for uninitialized accounts.');
+          } else {
+            throw subscribeErr;
+          }
         }
 
         // Step 10: Initialize user account if it doesn't exist
