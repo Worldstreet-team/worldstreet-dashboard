@@ -1626,9 +1626,56 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       await refreshPositions();
 
       return { success: true, txSignature };
-    } catch (err) {
+    } catch (err: any) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
       console.error('[DriftContext] Spot order error:', err);
-      return { success: false, error: err instanceof Error ? err.message : 'Spot order failed' };
+
+      // Extract logs if available (for SendTransactionError)
+      if (err.logs) {
+        console.log('[DriftContext] Transaction Logs:', err.logs);
+      } else if (typeof err.getLogs === 'function') {
+        try {
+          console.log('[DriftContext] Transaction Logs:', err.getLogs());
+        } catch (logErr) {
+          console.warn('[DriftContext] Could not fetch logs:', logErr);
+        }
+      }
+
+      // Sanitize error messages for user-friendly display
+      let friendlyError = 'Failed to place spot order';
+
+      // Check for specific error patterns
+      if (errorMessage.includes('InsufficientCollateral') || errorMessage.includes('0x1773')) {
+        friendlyError = 'Insufficient collateral. You need more USDC to place this order.';
+      } else if (errorMessage.includes('MarketPlaceOrderPaused') || errorMessage.includes('Market is in settlement mode')) {
+        friendlyError = 'Market is currently in settlement mode. Please try again in a few moments.';
+      } else if (errorMessage.includes('insufficient') || errorMessage.includes('Insufficient')) {
+        friendlyError = 'Insufficient balance to place this order';
+      } else if (errorMessage.includes('InvalidOracle') || errorMessage.includes('oracle')) {
+        friendlyError = 'Market oracle is temporarily unavailable. Please try again.';
+      } else if (errorMessage.includes('slippage')) {
+        friendlyError = 'Price moved too much. Please try again.';
+      } else if (errorMessage.includes('0x17a8') || errorMessage.includes('InvalidOrderMinOrderSize')) {
+        friendlyError = 'Order size is too small for this market. Please increase your order size.';
+      } else if (errorMessage.includes('Transaction simulation failed')) {
+        // Extract the actual error from simulation logs if possible
+        const logs = err.logs || (typeof err.getLogs === 'function' ? err.getLogs() : []);
+        const insufficientCollateralLog = logs.find((l: string) => l.includes('InsufficientCollateral'));
+        
+        if (insufficientCollateralLog || errorMessage.includes('0x1773')) {
+          friendlyError = 'Insufficient collateral. You need more USDC to place this order.';
+        } else {
+          friendlyError = 'Transaction simulation failed. Please check your balance and try again.';
+        }
+      } else if (errorMessage.includes('blockhash not found')) {
+        friendlyError = 'Network congestion. Please try again.';
+      } else if (errorMessage.includes('timeout') || errorMessage.includes('timed out')) {
+        friendlyError = 'Transaction timed out. Please try again.';
+      } else if (errorMessage.includes('User rejected')) {
+        friendlyError = 'Transaction was cancelled';
+      }
+
+      return { success: false, error: friendlyError };
     } finally {
       setIsLoading(false);
     }
