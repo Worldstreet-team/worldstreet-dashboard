@@ -54,6 +54,7 @@ export function useSpotBalances(
 
   const fetchBalances = useCallback(async () => {
     if (!isClientReady || baseMarketIndex === undefined || quoteMarketIndex === undefined) {
+      console.log('[useSpotBalances] Not ready:', { isClientReady, baseMarketIndex, quoteMarketIndex });
       setBaseBalance(0);
       setQuoteBalance(0);
       setBaseBalanceBN(null);
@@ -66,6 +67,9 @@ export function useSpotBalances(
     setError(null);
 
     try {
+      console.log('[useSpotBalances] Fetching balances for markets:', { baseMarketIndex, quoteMarketIndex });
+      console.log('[useSpotBalances] Available spotPositions:', spotPositions?.length || 0);
+      
       // Find balances from spotPositions (which are populated by DriftContext)
       let baseAmount = 0;
       let quoteAmount = 0;
@@ -73,12 +77,19 @@ export function useSpotBalances(
       let quoteBorrowed = false;
 
       if (spotPositions && spotPositions.length > 0) {
+        // Log all positions for debugging
+        spotPositions.forEach(p => {
+          console.log(`[useSpotBalances] Position: ${p.marketName} (index ${p.marketIndex}), amount: ${p.amount}, type: ${p.balanceType}`);
+        });
+
         // Find base token balance
         const basePosition = spotPositions.find(p => p.marketIndex === baseMarketIndex);
         if (basePosition) {
           baseAmount = basePosition.amount;
           baseBorrowed = basePosition.balanceType === 'borrow';
           console.log(`[useSpotBalances] Base (${getSpotMarketName(baseMarketIndex)}):`, baseAmount, baseBorrowed ? '(borrowed)' : '(deposited)');
+        } else {
+          console.log(`[useSpotBalances] No base position found for market index ${baseMarketIndex}`);
         }
 
         // Find quote token balance
@@ -87,7 +98,11 @@ export function useSpotBalances(
           quoteAmount = quotePosition.amount;
           quoteBorrowed = quotePosition.balanceType === 'borrow';
           console.log(`[useSpotBalances] Quote (${getSpotMarketName(quoteMarketIndex)}):`, quoteAmount, quoteBorrowed ? '(borrowed)' : '(deposited)');
+        } else {
+          console.log(`[useSpotBalances] No quote position found for market index ${quoteMarketIndex}`);
         }
+      } else {
+        console.log('[useSpotBalances] No spotPositions available');
       }
 
       // Update state

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { useAuth } from '@/app/context/authContext';
-import { usePairBalances } from '@/hooks/usePairBalances';
+import { useSpotBalances } from '@/hooks/useSpotBalances';
 import { useDrift } from '@/app/context/driftContext';
 
 interface MobileTradingModalProps {
@@ -36,13 +36,19 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
   const [tokenIn, tokenOut] = selectedPair.split('-');
   const effectiveChain = chain;
 
+  // Get Drift market indices for the pair
+  const baseMarketIndex = getSpotMarketIndexBySymbol(tokenIn);
+  const quoteMarketIndex = getSpotMarketIndexBySymbol(tokenOut);
+
+  // Fetch balances from Drift using the new hook
   const {
-    tokenIn: baseBalance,
-    tokenOut: quoteBalance,
+    baseBalance,
+    quoteBalance,
+    isBorrowed,
     loading: loadingBalances,
     error: balanceError,
     refetch: refetchBalances
-  } = usePairBalances(user?.userId, selectedPair, effectiveChain, tokenAddress);
+  } = useSpotBalances(baseMarketIndex, quoteMarketIndex);
 
   const currentBalance = side === 'buy' ? quoteBalance : baseBalance;
   const currentToken = side === 'buy' ? tokenOut : tokenIn;

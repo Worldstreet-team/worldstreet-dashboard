@@ -1079,7 +1079,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
 
       setPositions(positionsList);
 
-      // Get spot positions
+      // Get spot positions - INCLUDE ALL MARKETS (even with 0 balance)
       const spotPositionsList = [];
       try {
         const spotMarketAccounts = client.getSpotMarketAccounts();
@@ -1087,42 +1087,51 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
           const marketIndex = marketAccount.marketIndex;
           const position = driftUser.getSpotPosition(marketIndex);
 
-          if (position && !position.scaledBalance.isZero()) {
-            const marketName = getSpotMarketName(marketIndex);
-            const decimals = marketAccount.decimals;
+          const marketName = getSpotMarketName(marketIndex);
+          const decimals = marketAccount.decimals;
 
-            // Calculate actual amount based on balance type (deposit or borrow)
-            let amount = 0;
-            const balanceType = (position.balanceType.hasOwnProperty('deposit') ? 'deposit' : 'borrow') as 'deposit' | 'borrow';
+          // Calculate actual amount based on balance type (deposit or borrow)
+          let amount = 0;
+          let balanceType: 'deposit' | 'borrow' = 'deposit';
 
-            // Get token price from oracle
-            let price = 0;
-            try {
-              const oracleData = client.getOracleDataForSpotMarket(marketIndex);
-              price = oracleData.price.toNumber() / 1e6;
-            } catch (pErr) {
-              console.warn(`[DriftContext] Could not get price for spot market ${marketIndex}`);
-            }
+          // Only process if position exists and has non-zero balance
+          if (position && position.scaledBalance && !position.scaledBalance.isZero()) {
+            balanceType = (position.balanceType.hasOwnProperty('deposit') ? 'deposit' : 'borrow') as 'deposit' | 'borrow';
 
             // Convert BN to human readable number
-            // Note: scaledBalance needs to be handled via getTokenAmount or similar Client method
+            // IMPORTANT: getTokenAmount already returns the amount in human-readable precision
+            // Do NOT divide by decimals again!
             const tokenAmount = client.getTokenAmount(
               position.scaledBalance,
               marketAccount,
               position.balanceType
             );
 
-            amount = tokenAmount.toNumber() / Math.pow(10, decimals);
-
-            spotPositionsList.push({
-              marketIndex,
-              marketName,
-              amount,
-              balanceType,
-              price,
-              value: amount * price
-            });
+            // getTokenAmount returns a BN in the token's native precision
+            // We just need to convert to number
+            amount = tokenAmount.toNumber();
+            
+            console.log(`[DriftContext] Spot position ${marketName}: ${amount} (${balanceType})`);
           }
+
+          // Get token price from oracle
+          let price = 0;
+          try {
+            const oracleData = client.getOracleDataForSpotMarket(marketIndex);
+            price = oracleData.price.toNumber() / 1e6;
+          } catch (pErr) {
+            console.warn(`[DriftContext] Could not get price for spot market ${marketIndex}`);
+          }
+
+          // Always push to list (even if amount is 0)
+          spotPositionsList.push({
+            marketIndex,
+            marketName,
+            amount,
+            balanceType,
+            price,
+            value: amount * price
+          });
         }
       } catch (spotErr) {
         console.warn('[DriftContext] Error getting spot positions:', spotErr);
@@ -1133,7 +1142,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       console.error('[DriftContext] Error refreshing positions:', err);
       setError(err instanceof Error ? err.message : 'Failed to refresh positions');
     }
-  }, [user?.userId, requestPin, initializeDriftClient, refreshAccounts, getMarketName]);
+  }, [user?.userId, requestPin, initializeDriftClient, refreshAccounts, getMarketName, getSpotMarketName]);
 
   // Poll transaction status using getSignatureStatus
   const pollTransactionStatus = async (
