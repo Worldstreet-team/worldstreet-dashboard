@@ -15,6 +15,8 @@ import MobileTradingModal from '@/components/spot/MobileTradingModal';
 import PositionsPanel from '@/components/spot/PositionsPanel';
 import MobileTokenSearchModal from '@/components/spot/MobileTokenSearchModal';
 import { useDrift } from '@/app/context/driftContext';
+import { InsufficientSolModal } from '@/components/futures/InsufficientSolModal';
+import { DriftInitializationOverlay } from '@/components/futures/DriftInitializationOverlay';
 
 interface PairData {
   name: string;
@@ -28,7 +30,16 @@ interface PairData {
 export default function BinanceSpotPage() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { spotMarkets, isClientReady } = useDrift();
+  const {
+    spotMarkets,
+    isClientReady,
+    showInsufficientSol,
+    setShowInsufficientSol,
+    solBalanceInfo,
+    isInitializing,
+    initializationError,
+    resetInitializationFailure
+  } = useDrift();
 
   // Dynamic tradeable pairs from Drift SDK
   const AVAILABLE_PAIRS = React.useMemo(() => {
@@ -659,6 +670,24 @@ export default function BinanceSpotPage() {
         onClose={() => setShowTokenSearch(false)}
         onSelectPair={handleSelectPair}
         selectedPair={selectedPair}
+      />
+
+      {/* Drift Overlays */}
+      {solBalanceInfo && (
+        <InsufficientSolModal
+          isOpen={showInsufficientSol}
+          onClose={() => setShowInsufficientSol(false)}
+          requiredSol={solBalanceInfo.required}
+          currentSol={solBalanceInfo.current}
+          walletAddress={solBalanceInfo.address}
+        />
+      )}
+
+      {/* Initialization Overlay */}
+      <DriftInitializationOverlay
+        isLoading={isInitializing}
+        error={initializationError}
+        onRetry={resetInitializationFailure}
       />
     </div>
   );

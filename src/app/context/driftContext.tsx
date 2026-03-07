@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 import { useAuth } from '@/app/context/authContext';
+import { PinUnlockModal } from '@/components/wallet/PinUnlockModal';
 
 // Dynamic imports for Drift SDK
 let DriftClient: any;
@@ -194,6 +195,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   useEffect(() => {
     if (!user?.userId) {
       setUserPin(null);
+      if (typeof window !== 'undefined') localStorage.removeItem('worldstreet_temp_pin');
       setIsClientReady(false);
       setSummary(null);
       setPositions([]);
@@ -746,6 +748,15 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         return;
       }
 
+      // Temporary persistence from localStorage
+      const cachedPin = typeof window !== 'undefined' ? localStorage.getItem('worldstreet_temp_pin') : null;
+      if (cachedPin) {
+        console.log('[DriftContext] Using temporary PIN from localStorage');
+        setUserPin(cachedPin);
+        resolve(cachedPin);
+        return;
+      }
+
       // If modal is already showing, don't show it again
       if (showPinUnlock) {
         console.log('[DriftContext] PIN modal already showing, waiting...');
@@ -762,6 +773,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   // Handle PIN unlock
   const handlePinUnlock = useCallback((pin: string) => {
     setUserPin(pin);
+    if (typeof window !== 'undefined') localStorage.setItem('worldstreet_temp_pin', pin);
     setShowPinUnlock(false);
 
     if (pinResolveRef.current) {
@@ -1778,6 +1790,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   // Clear cached PIN
   const clearCache = useCallback(() => {
     setUserPin(null);
+    if (typeof window !== 'undefined') localStorage.removeItem('worldstreet_temp_pin');
     console.log('[DriftContext] Cleared cached PIN');
   }, []);
 
@@ -1856,6 +1869,11 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   return (
     <DriftContext.Provider value={value}>
       {children}
+      <PinUnlockModal
+        isOpen={showPinUnlock}
+        onUnlock={handlePinUnlock}
+        onClose={() => setShowPinUnlock(false)}
+      />
     </DriftContext.Provider>
   );
 };

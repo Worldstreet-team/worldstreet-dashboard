@@ -15,19 +15,18 @@ import { RiskPanel } from '@/components/futures/RiskPanel';
 import { WalletModal } from '@/components/futures/WalletModal';
 import { DriftAccountStatus } from '@/components/futures/DriftAccountStatus';
 import { FuturesOrderModal } from '@/components/futures/FuturesOrderModal';
-import { PinUnlockModal } from '@/components/wallet/PinUnlockModal';
 import { InsufficientSolModal } from '@/components/futures/InsufficientSolModal';
 import { DriftInitializationOverlay } from '@/components/futures/DriftInitializationOverlay';
 import type { OrderSide } from '@/store/futuresStore';
 
 export default function BinanceFuturesPage() {
   const { selectedMarket, markets, setSelectedMarket } = useFuturesStore();
-  const { 
-    isInitialized, 
-    startAutoRefresh, 
-    stopAutoRefresh, 
-    showPinUnlock, 
-    setShowPinUnlock, 
+  const {
+    isInitialized,
+    startAutoRefresh,
+    stopAutoRefresh,
+    showPinUnlock,
+    setShowPinUnlock,
     handlePinUnlock,
     showInsufficientSol,
     setShowInsufficientSol,
@@ -40,7 +39,7 @@ export default function BinanceFuturesPage() {
     initializationError,
   } = useDrift();
   const { fetchWallet } = useFuturesData();
-  
+
   const [mobileActiveTab, setMobileActiveTab] = useState<'chart' | 'positions' | 'info'>('chart');
   const [showMarketDropdown, setShowMarketDropdown] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
@@ -204,7 +203,7 @@ export default function BinanceFuturesPage() {
                     <span className="text-base font-semibold text-white">{selectedMarket?.symbol || 'Select'}</span>
                     <Icon icon="ph:caret-down" width={14} className="text-[#848e9c]" />
                   </button>
-                  
+
                   {showMarketDropdown && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setShowMarketDropdown(false)} />
@@ -213,9 +212,8 @@ export default function BinanceFuturesPage() {
                           <button
                             key={market.id}
                             onClick={() => handleSelectMarket(market)}
-                            className={`w-full px-4 py-3 text-left hover:bg-[#1e2329] transition-colors first:rounded-t-lg last:rounded-b-lg ${
-                              selectedMarket?.id === market.id ? 'bg-[#1e2329]' : ''
-                            }`}
+                            className={`w-full px-4 py-3 text-left hover:bg-[#1e2329] transition-colors first:rounded-t-lg last:rounded-b-lg ${selectedMarket?.id === market.id ? 'bg-[#1e2329]' : ''
+                              }`}
                           >
                             <span className="text-white font-medium text-sm">{market.symbol}</span>
                           </button>
@@ -284,7 +282,7 @@ export default function BinanceFuturesPage() {
           <div className="px-4 py-3 border-b border-[#2b3139] bg-[#181a20] shrink-0">
             <div className="flex items-center justify-between mb-2">
               <div className="relative">
-                <button 
+                <button
                   onClick={() => setShowMarketDropdown(!showMarketDropdown)}
                   className="flex items-center gap-2 hover:bg-[#2b3139] active:bg-[#2b3139]/80 px-2 py-1 rounded transition-all duration-200 active:scale-95 min-h-[44px]"
                 >
@@ -293,7 +291,7 @@ export default function BinanceFuturesPage() {
                     <Icon icon="ph:caret-down" width={12} className="text-[#848e9c]" />
                   </div>
                 </button>
-                
+
                 {showMarketDropdown && (
                   <>
                     <div className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm animate-fadeIn" onClick={() => setShowMarketDropdown(false)} />
@@ -302,9 +300,8 @@ export default function BinanceFuturesPage() {
                         <button
                           key={market.id}
                           onClick={() => handleSelectMarket(market)}
-                          className={`w-full px-4 py-3 text-left hover:bg-[#181a20] active:bg-[#181a20]/80 transition-all duration-200 min-h-[44px] ${
-                            selectedMarket?.id === market.id ? 'bg-[#181a20]' : ''
-                          }`}
+                          className={`w-full px-4 py-3 text-left hover:bg-[#181a20] active:bg-[#181a20]/80 transition-all duration-200 min-h-[44px] ${selectedMarket?.id === market.id ? 'bg-[#181a20]' : ''
+                            }`}
                         >
                           <span className="text-white font-medium">{market.symbol}</span>
                         </button>
@@ -315,7 +312,7 @@ export default function BinanceFuturesPage() {
               </div>
               <Icon icon="ph:star" width={18} className="text-[#848e9c]" />
             </div>
-            
+
             <div className="flex items-baseline gap-2 mb-2">
               <span className={`text-2xl font-bold ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
                 ${Number(currentPrice).toFixed(2)}
@@ -341,11 +338,10 @@ export default function BinanceFuturesPage() {
               <button
                 key={tab}
                 onClick={() => setMobileActiveTab(tab)}
-                className={`px-4 py-3 text-xs font-medium whitespace-nowrap border-b-2 transition-all duration-200 active:scale-95 ${
-                  mobileActiveTab === tab
-                    ? 'border-[#fcd535] text-white'
-                    : 'border-transparent text-[#848e9c] active:text-white'
-                }`}
+                className={`px-4 py-3 text-xs font-medium whitespace-nowrap border-b-2 transition-all duration-200 active:scale-95 ${mobileActiveTab === tab
+                  ? 'border-[#fcd535] text-white'
+                  : 'border-transparent text-[#848e9c] active:text-white'
+                  }`}
               >
                 {tab === 'chart' && 'Chart'}
                 {tab === 'positions' && 'Positions'}
@@ -357,34 +353,31 @@ export default function BinanceFuturesPage() {
           {/* Tab Content */}
           <div className="flex-1 min-h-0 relative overflow-hidden">
             {/* Chart Tab */}
-            <div 
-              className={`absolute inset-0 transition-all duration-300 ${
-                mobileActiveTab === 'chart' 
-                  ? 'translate-x-0 opacity-100' 
-                  : 'translate-x-full opacity-0 pointer-events-none'
-              }`}
+            <div
+              className={`absolute inset-0 transition-all duration-300 ${mobileActiveTab === 'chart'
+                ? 'translate-x-0 opacity-100'
+                : 'translate-x-full opacity-0 pointer-events-none'
+                }`}
             >
               <FuturesChart symbol={selectedMarket?.symbol} isDarkMode={true} />
             </div>
-            
+
             {/* Positions Tab */}
-            <div 
-              className={`absolute inset-0 overflow-y-auto scrollbar-hide p-4 transition-all duration-300 ${
-                mobileActiveTab === 'positions' 
-                  ? 'translate-x-0 opacity-100' 
-                  : '-translate-x-full opacity-0 pointer-events-none'
-              }`}
+            <div
+              className={`absolute inset-0 overflow-y-auto scrollbar-hide p-4 transition-all duration-300 ${mobileActiveTab === 'positions'
+                ? 'translate-x-0 opacity-100'
+                : '-translate-x-full opacity-0 pointer-events-none'
+                }`}
             >
               <PositionPanel />
             </div>
-            
+
             {/* Info Tab */}
-            <div 
-              className={`absolute inset-0 overflow-y-auto scrollbar-hide p-4 space-y-4 pb-24 transition-all duration-300 ${
-                mobileActiveTab === 'info' 
-                  ? 'translate-x-0 opacity-100' 
-                  : 'translate-x-full opacity-0 pointer-events-none'
-              }`}
+            <div
+              className={`absolute inset-0 overflow-y-auto scrollbar-hide p-4 space-y-4 pb-24 transition-all duration-300 ${mobileActiveTab === 'info'
+                ? 'translate-x-0 opacity-100'
+                : 'translate-x-full opacity-0 pointer-events-none'
+                }`}
             >
               {needsInitialization ? (
                 <div className="bg-[#2b3139] rounded-lg p-4 animate-fadeIn">
@@ -411,7 +404,7 @@ export default function BinanceFuturesPage() {
 
           {/* Fixed Bottom Action Buttons */}
           <div className="grid grid-cols-2 gap-0 border-t border-[#2b3139] bg-[#181a20] safe-area-bottom shrink-0 shadow-[0_-4px_12px_rgba(0,0,0,0.3)]">
-            <button 
+            <button
               onClick={() => handleOpenOrderModal('long')}
               disabled={!isInitialized}
               className="py-4 bg-[#0ecb81] hover:bg-[#0ecb81]/90 active:bg-[#0ecb81]/80 text-white font-semibold text-base transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 min-h-[56px]"
@@ -421,7 +414,7 @@ export default function BinanceFuturesPage() {
                 Long
               </span>
             </button>
-            <button 
+            <button
               onClick={() => handleOpenOrderModal('short')}
               disabled={!isInitialized}
               className="py-4 bg-[#f6465d] hover:bg-[#f6465d]/90 active:bg-[#f6465d]/80 text-white font-semibold text-base transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 min-h-[56px]"
@@ -447,14 +440,6 @@ export default function BinanceFuturesPage() {
         onClose={() => setShowOrderModal(false)}
         side={orderSide}
         onSuccess={() => setShowOrderModal(false)}
-      />
-
-      <PinUnlockModal
-        isOpen={showPinUnlock}
-        onClose={() => setShowPinUnlock(false)}
-        onUnlock={handlePinUnlock}
-        title="Unlock Drift Wallet"
-        description="Enter your PIN to access Drift Protocol trading"
       />
 
       {solBalanceInfo && (
