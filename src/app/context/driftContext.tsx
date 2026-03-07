@@ -240,40 +240,6 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     const MAX_RETRIES = 3;
     const INITIAL_RETRY_DELAY = 1000; // 1 second
 
-    // Helper: Wait for WebSocket to be ready
-    const waitForWebSocketReady = async (connection: Connection, timeoutMs: number = 5000): Promise<boolean> => {
-      console.log('[DriftContext] Checking WebSocket connection readiness...');
-
-      return new Promise((resolve) => {
-        const startTime = Date.now();
-
-        // Test WebSocket by attempting a simple subscription
-        const testInterval = setInterval(() => {
-          const elapsed = Date.now() - startTime;
-
-          if (elapsed > timeoutMs) {
-            console.warn('[DriftContext] WebSocket readiness check timed out');
-            clearInterval(testInterval);
-            resolve(false);
-            return;
-          }
-
-          // Check if connection has _rpcWebSocket and it's ready
-          try {
-            const ws = (connection as any)._rpcWebSocket;
-            if (ws && ws.readyState === 1) { // 1 = OPEN
-              console.log('[DriftContext] WebSocket is ready');
-              clearInterval(testInterval);
-              resolve(true);
-              return;
-            }
-          } catch (err) {
-            console.warn('[DriftContext] Error checking WebSocket state:', err);
-          }
-        }, 100);
-      });
-    };
-
     // Helper: Check if user account exists on-chain
     const checkUserAccountExists = async (
       connection: Connection,
@@ -408,15 +374,6 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
           // For initialization, we don't need subscription yet
           subscriptionType = 'polling'; // Use polling temporarily
           usePolling = true;
-        } else {
-          // Check WebSocket readiness
-          const wsReady = await waitForWebSocketReady(connection, 5000);
-
-          if (!wsReady) {
-            console.warn('[DriftContext] WebSocket not ready, falling back to polling');
-            subscriptionType = 'polling';
-            usePolling = true;
-          }
         }
 
         // Step 8: Create Drift client
@@ -853,10 +810,11 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       if (isFirstLoad) {
         setShowInitOverlay(true);
       }
-      setIsInitializing(true);
       setInitializationError(null);
 
       const pin = await requestPin();
+
+      setIsInitializing(true);
 
       let client = driftClientRef.current;
       if (!client) {
