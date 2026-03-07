@@ -237,8 +237,8 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
    * 5. Detailed error logging for debugging
    */
   const initializeDriftClient = useCallback(async (pin: string) => {
-    const MAX_RETRIES = 3;
-    const INITIAL_RETRY_DELAY = 1000; // 1 second
+    const MAX_RETRIES = 1;
+    const INITIAL_RETRY_DELAY = 1000;
 
     // Helper: Check if user account exists on-chain
     const checkUserAccountExists = async (
@@ -270,33 +270,37 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         accountSubscription: {
           type: 'websocket',
         },
+        perpMarketIndexes: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+        spotMarketIndexes: [0, 1, 2, 3, 4, 5],
+        oracleInfos: [],
       });
     };
+
+    // Pre-fetch wallet private key once before potentially retrying
+    let fetchedEncryptedKey = encryptedPrivateKey;
+
+    if (!fetchedEncryptedKey) {
+      console.log('[DriftContext] Fetching encrypted wallet key...');
+      const response = await fetch('/api/wallet/keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin })
+      });
+
+      const data = await response.json();
+
+      if (!data.success || !data.wallets?.solana?.encryptedPrivateKey) {
+        throw new Error(data.message || 'Failed to fetch wallet');
+      }
+
+      fetchedEncryptedKey = data.wallets.solana.encryptedPrivateKey;
+      setEncryptedPrivateKey(fetchedEncryptedKey);
+    }
 
     // Main initialization logic with retry
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       try {
         console.log(`[DriftContext] Initialization attempt ${attempt + 1}/${MAX_RETRIES}`);
-
-        // Step 1: Fetch encrypted wallet with PIN
-        let fetchedEncryptedKey = encryptedPrivateKey;
-
-        if (!fetchedEncryptedKey) {
-          const response = await fetch('/api/wallet/keys', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pin })
-          });
-
-          const data = await response.json();
-
-          if (!data.success || !data.wallets?.solana?.encryptedPrivateKey) {
-            throw new Error(data.message || 'Failed to fetch wallet');
-          }
-
-          fetchedEncryptedKey = data.wallets.solana.encryptedPrivateKey;
-          setEncryptedPrivateKey(fetchedEncryptedKey);
-        }
 
         // Step 2: Load SDK and decrypt private key
         await loadDriftSDK();
@@ -379,43 +383,57 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         if (!userAccountExists) {
           console.log('[DriftContext] Initializing user account...');
 
-          try {
-            const [txSig, newUserAccountPublicKey] = await client.initializeUserAccount(0, "worldstreet-user");
-            console.log('[DriftContext] User account initialized successfully');
-            console.log('[DriftContext] Init TX:', txSig);
-            console.log('[DriftContext] User account public key:', newUserAccountPublicKey.toBase58());
+          const balance = await connection.getBalance(keypair.publicKey);
+          const requiredLamports = 42561280; // ~0.0425 SOL (Minimum rent)
 
-            // Wait for account to be confirmed on-chain
-            await connection.confirmTransaction(txSig, 'confirmed');
-            console.log('[DriftContext] User account initialization confirmed');
+          if (balance < requiredLamports) {
+            const requiredSol = requiredLamports / 1e9;
+            const currentSol = balance / 1e9;
+            setSolBalanceInfo({
+              required: Math.ceil(requiredSol * 100) / 100,
+              current: currentSol,
+              address: keypair.publicKey.toBase58(),
+            });
+            setShowInsufficientSol(true);
+            console.warn(`[DriftContext] Insufficient SOL for initialization check. Current: ${currentSol}, Required: >${requiredSol}`);
+            // Return early! Client generated but account not initialized.
+          } else {
+            try {
+              const [txSig, newUserAccountPublicKey] = await client.initializeUserAccount(0, "worldstreet-user");
+              console.log('[DriftContext] User account initialized successfully');
+              console.log('[DriftContext] Init TX:', txSig);
+              console.log('[DriftContext] User account public key:', newUserAccountPublicKey.toBase58());
 
-          } catch (initErr: any) {
-            console.error('[DriftContext] Failed to initialize user account:', initErr);
+              // Wait for account to be confirmed on-chain
+              await connection.confirmTransaction(txSig, 'confirmed');
+              console.log('[DriftContext] User account initialization confirmed');
 
-            // Check if it's an insufficient SOL error
-            const errorMessage = initErr?.message || String(initErr);
-            if (
-              errorMessage.includes('insufficient lamports') ||
-              errorMessage.includes('Transfer: insufficient') ||
-              errorMessage.includes('Attempt to debit an account but found no record of a prior credit')
-            ) {
-              const match = errorMessage.match(/need (\d+)/);
-              const requiredLamports = match ? parseInt(match[1]) : 2561280;
-              const requiredSol = requiredLamports / 1e9;
+            } catch (initErr: any) {
+              console.error('[DriftContext] Failed to initialize user account:', initErr);
 
-              const balance = await connection.getBalance(keypair.publicKey);
-              const currentSol = balance / 1e9;
+              // Check if it's an insufficient SOL error
+              const errorMessage = initErr?.message || String(initErr);
+              if (
+                errorMessage.includes('insufficient lamports') ||
+                errorMessage.includes('Transfer: insufficient') ||
+                errorMessage.includes('Attempt to debit an account but found no record of a prior credit')
+              ) {
+                const match = errorMessage.match(/need (\d+)/);
+                const actualRequired = match ? parseInt(match[1]) : requiredLamports;
+                const requiredSol = actualRequired / 1e9;
+                const currentSol = balance / 1e9;
 
-              setSolBalanceInfo({
-                required: Math.ceil(requiredSol * 100) / 100,
-                current: currentSol,
-                address: keypair.publicKey.toBase58(),
-              });
-              setShowInsufficientSol(true);
-              console.warn(`[DriftContext] Insufficient SOL: Need at least ${Math.ceil(requiredSol * 100) / 100} SOL to initialize Drift account. Continuing with uninitialized client.`);
-              // Don't throw here! Let the client return uninitialized, so the UI can prompt the user to Initialize.
-            } else {
-              throw initErr;
+                setSolBalanceInfo({
+                  required: Math.ceil(requiredSol * 100) / 100,
+                  current: currentSol,
+                  address: keypair.publicKey.toBase58(),
+                });
+                setShowInsufficientSol(true);
+                console.warn(`[DriftContext] Insufficient SOL: Need at least ${Math.ceil(requiredSol * 100) / 100} SOL to initialize Drift account. Continuing with uninitialized client.`);
+                // Don't throw here! Let the client return uninitialized, so the UI can prompt the user to Initialize.
+              } else {
+                throw initErr;
+              }
             }
           }
         }
@@ -762,17 +780,32 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       }
       setInitializationError(null);
 
+      setIsInitializing(true); // Moved UI feedback earlier
       const pin = await requestPin();
 
-      setIsInitializing(true);
-
       let client = driftClientRef.current;
+      let bal = 0;
+
       if (!client) {
         console.log('[DriftContext] Initializing client for summary...');
         client = await initializeDriftClient(pin);
+
+        if (client.wallet?.publicKey) {
+          bal = await client.connection.getBalance(client.wallet.publicKey);
+        }
       } else {
+        // Parallelize refreshAccounts and getBalance
+        const balancePromise = client.wallet?.publicKey
+          ? client.connection.getBalance(client.wallet.publicKey)
+          : Promise.resolve(0);
+
         // Refresh accounts via WebSocket
-        await refreshAccounts();
+        const [_, fetchedBal] = await Promise.all([
+          refreshAccounts(),
+          balancePromise
+        ]);
+
+        bal = fetchedBal as number;
 
         // If the user manually triggered initialization via the "Initialize Account" button,
         // and they don't have an account on-chain, attempt to initialize it now.
@@ -784,44 +817,53 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         }
 
         if (needsInit) {
-          console.log('[DriftContext] User account still not initialized, attempting explicit manual initialization...');
-          try {
-            const [txSig] = await client.initializeUserAccount(0, "worldstreet-user");
-            await client.connection.confirmTransaction(txSig, 'confirmed');
-            console.log('[DriftContext] Explicit initialization successful');
-          } catch (initErr: any) {
-            console.error('[DriftContext] Failed to initialize user account during explicit action:', initErr);
-            const errorMessage = initErr?.message || String(initErr);
-            if (
-              errorMessage.includes('insufficient lamports') ||
-              errorMessage.includes('Transfer: insufficient') ||
-              errorMessage.includes('Attempt to debit an account but found no record of a prior credit')
-            ) {
-              const match = errorMessage.match(/need (\d+)/);
-              const requiredLamports = match ? parseInt(match[1]) : 2561280;
-              const requiredSol = requiredLamports / 1e9;
-              const balance = await client.connection.getBalance(client.wallet.payer.publicKey);
-              const currentSol = balance / 1e9;
+          const requiredLamports = 42561280; // ~0.0425 SOL (Minimum rent)
+          if (bal < requiredLamports) {
+            const requiredSol = requiredLamports / 1e9;
+            const currentSol = bal / 1e9;
+            setSolBalanceInfo({
+              required: Math.ceil(requiredSol * 100) / 100,
+              current: currentSol,
+              address: client.wallet.payer.publicKey.toBase58(),
+            });
+            setShowInsufficientSol(true);
+            console.warn(`[DriftContext] Insufficient SOL for explicit initialization. Current: ${currentSol}, Required: >${requiredSol}`);
+          } else {
+            console.log('[DriftContext] User account still not initialized, attempting explicit manual initialization...');
+            try {
+              const [txSig] = await client.initializeUserAccount(0, "worldstreet-user");
+              await client.connection.confirmTransaction(txSig, 'confirmed');
+              console.log('[DriftContext] Explicit initialization successful');
+            } catch (initErr: any) {
+              console.error('[DriftContext] Failed to initialize user account during explicit action:', initErr);
+              const errorMessage = initErr?.message || String(initErr);
+              if (
+                errorMessage.includes('insufficient lamports') ||
+                errorMessage.includes('Transfer: insufficient') ||
+                errorMessage.includes('Attempt to debit an account but found no record of a prior credit')
+              ) {
+                const match = errorMessage.match(/need (\d+)/);
+                const actualRequired = match ? parseInt(match[1]) : requiredLamports;
+                const requiredSol = actualRequired / 1e9;
+                const currentSol = bal / 1e9;
 
-              setSolBalanceInfo({
-                required: Math.ceil(requiredSol * 100) / 100,
-                current: currentSol,
-                address: client.wallet.payer.publicKey.toBase58(),
-              });
-              setShowInsufficientSol(true);
-              // Don't throw, let it fall through to setting initialized: false
-            } else {
-              throw initErr;
+                setSolBalanceInfo({
+                  required: Math.ceil(requiredSol * 100) / 100,
+                  current: currentSol,
+                  address: client.wallet.payer.publicKey.toBase58(),
+                });
+                setShowInsufficientSol(true);
+                // Don't throw, let it fall through to setting initialized: false
+              } else {
+                throw initErr;
+              }
             }
           }
         }
       }
 
-      // Fetch wallet balance (SOL)
-      if (client.wallet?.publicKey) {
-        const bal = await client.connection.getBalance(client.wallet.publicKey);
-        setWalletBalance(bal / 1e9);
-      }
+      // Proceed with setting native SOL balance
+      setWalletBalance(bal / 1e9);
 
       // SAFE: Try to get user account
       let driftUser;
