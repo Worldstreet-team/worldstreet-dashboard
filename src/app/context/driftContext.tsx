@@ -414,12 +414,11 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
                 address: keypair.publicKey.toBase58(),
               });
               setShowInsufficientSol(true);
-              setInitializationFailed(true);
-
-              throw new Error(`Insufficient SOL: Need at least ${Math.ceil(requiredSol * 100) / 100} SOL to initialize Drift account`);
+              console.warn(`[DriftContext] Insufficient SOL: Need at least ${Math.ceil(requiredSol * 100) / 100} SOL to initialize Drift account. Continuing with uninitialized client.`);
+              // Don't throw here! Let the client return uninitialized, so the UI can prompt the user to Initialize.
+            } else {
+              throw initErr;
             }
-
-            throw initErr;
           }
         }
 
@@ -469,14 +468,13 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
           throw subscribeErr;
         }
 
-        // Step 11: Verify user account is accessible
+        // Step 11: Verify user account is accessible (wrap in catch as it's fine if uninitialized)
         try {
           const user = client.getUser();
           const userAccount = user.getUserAccount();
           console.log('[DriftContext] User account verified:', userAccount.authority.toBase58());
         } catch (err) {
-          console.error('[DriftContext] Error accessing user account after subscription:', err);
-          throw new Error('User account not accessible after subscription');
+          console.log('[DriftContext] User account not initialized yet. This is expected if they have insufficient funds or are new.');
         }
 
         // Success!
@@ -823,6 +821,44 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       } else {
         // Refresh accounts via WebSocket
         await refreshAccounts();
+
+        // If the user manually triggered initialization via the "Initialize Account" button,
+        // and they don't have an account on-chain, attempt to initialize it now.
+        let needsInit = false;
+        try {
+          client.getUser().getUserAccount();
+        } catch (e) {
+          needsInit = true;
+        }
+
+        if (needsInit) {
+          console.log('[DriftContext] User account still not initialized, attempting explicit manual initialization...');
+          try {
+            const [txSig] = await client.initializeUserAccount(0, "worldstreet-user");
+            await client.connection.confirmTransaction(txSig, 'confirmed');
+            console.log('[DriftContext] Explicit initialization successful');
+          } catch (initErr: any) {
+            console.error('[DriftContext] Failed to initialize user account during explicit action:', initErr);
+            const errorMessage = initErr?.message || String(initErr);
+            if (errorMessage.includes('insufficient lamports') || errorMessage.includes('Transfer: insufficient')) {
+              const match = errorMessage.match(/need (\d+)/);
+              const requiredLamports = match ? parseInt(match[1]) : 2561280;
+              const requiredSol = requiredLamports / 1e9;
+              const balance = await client.connection.getBalance(client.wallet.payer.publicKey);
+              const currentSol = balance / 1e9;
+
+              setSolBalanceInfo({
+                required: Math.ceil(requiredSol * 100) / 100,
+                current: currentSol,
+                address: client.wallet.payer.publicKey.toBase58(),
+              });
+              setShowInsufficientSol(true);
+              // Don't throw, let it fall through to setting initialized: false
+            } else {
+              throw initErr;
+            }
+          }
+        }
       }
 
       // Fetch wallet balance (SOL)
