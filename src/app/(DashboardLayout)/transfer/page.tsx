@@ -3,234 +3,54 @@
 import React, { useState, useEffect } from 'react';
 import { Icon } from "@iconify/react";
 import Footer from "@/components/dashboard/Footer";
-import { useWallet } from "@/app/context/walletContext";
-import { useSolana } from "@/app/context/solanaContext";
-import { useEvm } from "@/app/context/evmContext";
-import { useTron } from "@/app/context/tronContext";
+import { useDrift } from "@/app/context/driftContext";
 import { useAuth } from "@/app/context/authContext";
+import { useSolana } from "@/app/context/solanaContext";
 import CryptoJS from "crypto-js";
 
-interface Balance {
-  asset: string;
-  chain: string;
-  available_balance: string;
-  locked_balance: string;
-  assetChain: string; // e.g., "USDT_EVM", "USDT_SOL"
-}
-
-interface SpotWallet {
-  asset: string;
-  chain: string;
-  public_address: string;
-  assetChain: string; // e.g., "USDT_EVM", "USDT_SOL"
-}
-
-const ASSET_ICONS: Record<string, string> = {
-  USDT: "https://cryptologos.cc/logos/tether-usdt-logo.png",
-  USDC: "https://cryptologos.cc/logos/usd-coin-usdc-logo.png",
-  ETH: "https://cryptologos.cc/logos/ethereum-eth-logo.png",
-  SOL: "https://cryptologos.cc/logos/solana-sol-logo.png",
-  TRX: "https://cryptologos.cc/logos/tron-trx-logo.png",
-};
-
-// Token addresses for finding balances
-const TOKEN_ADDRESSES = {
-  USDT: {
-    solana: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB", // USDT on Solana
-    ethereum: "0xdac17f958d2ee523a2206206994597c13d831ec7", // USDT on Ethereum
-    tron: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t", // USDT on Tron
-  },
-  USDC: {
-    solana: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", // USDC on Solana
-    ethereum: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", // USDC on Ethereum
-    tron: "TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8", // USDC on Tron
-  },
-};
+const USDC_ICON = "https://cryptologos.cc/logos/usd-coin-usdc-logo.png";
+const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 
 export default function TransferPage() {
   const { user } = useAuth();
-  const { addresses, getEncryptedKeys } = useWallet();
   const { 
-    balance: solBalance, 
-    tokenBalances: solTokens, 
-    fetchBalance: fetchSolBalance,
-    sendTransaction: sendSolTransaction,
+    summary, 
+    walletBalance,
+    isClientReady,
+    refreshSummary,
+  } = useDrift();
+  
+  const { 
+    tokenBalances: solTokens,
     sendTokenTransaction: sendSolTokenTransaction,
   } = useSolana();
-  const { 
-    balance: ethBalance, 
-    tokenBalances: ethTokens, 
-    fetchBalance: fetchEthBalance,
-    sendTransaction: sendEthTransaction,
-    sendTokenTransaction: sendEthTokenTransaction,
-  } = useEvm();
-  const { 
-    balance: trxBalance, 
-    tokenBalances: trxTokens, 
-    fetchBalance: fetchTrxBalance,
-    sendTransaction: sendTrxTransaction,
-    sendTokenTransaction: sendTrxTokenTransaction,
-  } = useTron();
 
-  const [direction, setDirection] = useState<'main-to-spot' | 'spot-to-main' | 'spot-to-futures' | 'futures-to-spot' | 'main-to-futures' | 'futures-to-main'>('main-to-spot');
-  const [selectedAsset, setSelectedAsset] = useState('USDT');
-  const [selectedChain, setSelectedChain] = useState<'sol' | 'evm' | 'tron'>('sol'); // Chain selection for stablecoins
   const [amount, setAmount] = useState('');
-  const [spotBalances, setSpotBalances] = useState<Balance[]>([]);
-  const [spotWallets, setSpotWallets] = useState<SpotWallet[]>([]);
   const [loading, setLoading] = useState(false);
-  const [balancesLoading, setBalancesLoading] = useState(true);
-  const [spotWalletsLoading, setSpotWalletsLoading] = useState(true);
-  const [futuresWalletAddress, setFuturesWalletAddress] = useState<string | null>(null);
-  const [futuresWalletLoading, setFuturesWalletLoading] = useState(false);
-  const [futuresBalance, setFuturesBalance] = useState<{ usdc: number; sol: number } | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [generatingWallet, setGeneratingWallet] = useState(false);
-
-  // PIN modal state
   const [showPinModal, setShowPinModal] = useState(false);
   const [pin, setPin] = useState(['', '', '', '', '', '']);
   const [pinError, setPinError] = useState('');
+  const [copiedAddress, setCopiedAddress] = useState(false);
 
   const userId = user?.userId || '';
-  const assets = ['USDT', 'USDC', 'ETH', 'SOL', 'TRX'];
-
-  // Determine if chain selection is needed (stablecoins)
-  const needsChainSelection = selectedAsset === 'USDT' || selectedAsset === 'USDC';
+  const driftAddress = summary?.publicAddress || '';
   
-  // Auto-set chain based on asset
-  useEffect(() => {
-    if (selectedAsset === 'SOL') {
-      setSelectedChain('sol');
-    } else if (selectedAsset === 'ETH') {
-      setSelectedChain('evm');
-    } else if (selectedAsset === 'TRX') {
-      setSelectedChain('tron');
-    }
-    // For USDT/USDC, keep user selection or default to 'sol'
-  }, [selectedAsset]);
+  // Get USDC balance from main wallet
+  const usdcToken = solTokens.find(t => 
+    t.address.toLowerCase() === USDC_MINT.toLowerCase()
+  );
+  const mainUsdcBalance = usdcToken?.amount || 0;
+  
+  // Get USDC balance from Drift (collateral)
+  const driftUsdcBalance = summary?.totalCollateral || 0;
 
-  // Fetch on-chain balances when addresses are available
-  useEffect(() => {
-    if (addresses?.solana && addresses?.ethereum && addresses?.tron) {
-      setBalancesLoading(true);
-      Promise.all([
-        fetchSolBalance(addresses.solana),
-        fetchEthBalance(addresses.ethereum),
-        fetchTrxBalance(addresses.tron),
-      ]).finally(() => setBalancesLoading(false));
-    }
-  }, [addresses, fetchSolBalance, fetchEthBalance, fetchTrxBalance]);
-
-  useEffect(() => {
-    if (userId) {
-      fetchSpotWallets();
-      fetchFuturesWallet();
-    }
-  }, [userId]);
-
-  const fetchFuturesWallet = async () => {
-    if (!userId) return;
-    
-    setFuturesWalletLoading(true);
-    try {
-      const response = await fetch(`/api/futures/wallet?chain=solana`);
-      if (response.ok) {
-        const data = await response.json();
-        setFuturesWalletAddress(data.address);
-        // Fetch futures balance
-        await fetchFuturesBalance(data.address);
-      } else if (response.status === 404) {
-        setFuturesWalletAddress(null);
-        setFuturesBalance(null);
-      }
-    } catch (err) {
-      console.error('Failed to fetch futures wallet:', err);
-    } finally {
-      setFuturesWalletLoading(false);
-    }
-  };
-
-  const fetchFuturesBalance = async (address?: string) => {
-    const walletAddress = address || futuresWalletAddress;
-    if (!walletAddress) return;
-
-    try {
-      const response = await fetch(`/api/futures/wallet/balance?address=${encodeURIComponent(walletAddress)}`);
-      if (response.ok) {
-        const data = await response.json();
-        setFuturesBalance({
-          usdc: data.usdcBalance || 0,
-          sol: data.solBalance || 0,
-        });
-      }
-    } catch (err) {
-      console.error('Failed to fetch futures balance:', err);
-    }
-  };
-
-  const fetchSpotWallets = async () => {
-    if (!userId) return;
-    
-    setSpotWalletsLoading(true);
-    try {
-      const response = await fetch(`/api/users/${userId}/spot-wallets`);
-      if (response.ok) {
-        const data = await response.json();
-        console.log('=== SPOT WALLETS API RESPONSE ===');
-        console.log('Raw response:', JSON.stringify(data, null, 2));
-        
-        // Backend now returns wallets with chain info
-        const walletsArray: SpotWallet[] = Array.isArray(data.wallets) ? data.wallets : [];
-        const balancesArray: Balance[] = Array.isArray(data.balances) ? data.balances : [];
-        
-        console.log('=== PROCESSED WALLETS ===');
-        console.log(JSON.stringify(walletsArray, null, 2));
-        console.log('=== BALANCES ===');
-        console.log(JSON.stringify(balancesArray, null, 2));
-        
-        setSpotWallets(walletsArray);
-        setSpotBalances(balancesArray);
-      } else {
-        console.error('Failed to fetch spot wallets:', response.status);
-        // If 404, wallets don't exist yet
-        if (response.status === 404) {
-          setSpotWallets([]);
-          setSpotBalances([]);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to fetch spot wallets:', err);
-    } finally {
-      setSpotWalletsLoading(false);
-    }
-  };
-
-  const handleGenerateWallets = async () => {
-    if (!userId) return;
-    
-    setGeneratingWallet(true);
-    setError('');
-    setSuccess('');
-
-    try {
-      const response = await fetch(`/api/users/${userId}/spot-wallets`, {
-        method: 'POST',
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setSuccess('Spot wallets generated successfully!');
-        await fetchSpotWallets();
-      } else {
-        setError(data.error || 'Failed to generate wallets');
-      }
-    } catch (err) {
-      setError('Network error. Please try again.');
-    } finally {
-      setGeneratingWallet(false);
+  const handleCopyAddress = () => {
+    if (driftAddress) {
+      navigator.clipboard.writeText(driftAddress);
+      setCopiedAddress(true);
+      setTimeout(() => setCopiedAddress(false), 2000);
     }
   };
 
@@ -245,41 +65,17 @@ export default function TransferPage() {
       return;
     }
 
-    // Validate futures transfers
-    if (direction === 'spot-to-futures' || direction === 'futures-to-spot' || direction === 'main-to-futures' || direction === 'futures-to-main') {
-      if (selectedAsset !== 'USDT' && selectedAsset !== 'USDC' && selectedAsset !== 'SOL') {
-        setError('Only USDT, USDC, and SOL can be transferred to/from futures wallet');
-        return;
-      }
-      if (selectedChain !== 'sol') {
-        setError('Futures transfers only support Solana network');
-        return;
-      }
-      if (!futuresWalletAddress) {
-        setError('Futures wallet not found. Please create one from the Futures page.');
-        return;
-      }
+    if (!driftAddress) {
+      setError('Drift wallet not initialized');
+      return;
     }
 
     setError('');
     setSuccess('');
-
-    if (direction === 'main-to-spot') {
-      // Main to Spot: Show PIN modal
-      setShowPinModal(true);
-    } else if (direction === 'main-to-futures') {
-      // Main to Futures: Show PIN modal
-      setShowPinModal(true);
-    } else if (direction === 'spot-to-futures' || direction === 'futures-to-spot') {
-      // Futures transfers: Execute via backend
-      await executeFuturesTransfer();
-    } else {
-      // Spot to Main or Futures to Main: Execute directly via backend
-      await executeSpotToMain();
-    }
+    setShowPinModal(true);
   };
 
-  const executeMainToSpot = async () => {
+  const executeTransfer = async () => {
     const pinString = pin.join('');
     if (pinString.length !== 6) return;
 
@@ -287,483 +83,47 @@ export default function TransferPage() {
     setPinError('');
 
     try {
-      // Determine destination address based on direction
-      let recipientAddress = '';
-      
-      if (direction === 'main-to-spot') {
-        // Get the spot wallet address for the selected asset and chain
-        const spotWallet = getSpotWallet(selectedAsset, selectedChain);
-        console.log('=== TRANSFER VALIDATION ===');
-        console.log('Selected asset:', selectedAsset);
-        console.log('Selected chain:', selectedChain);
-        console.log('All spot wallets:', JSON.stringify(spotWallets, null, 2));
-        console.log('Found spot wallet:', JSON.stringify(spotWallet, null, 2));
-        
-        if (!spotWallet) {
-          setPinError(`No spot wallet found for ${selectedAsset}. Please generate spot wallets first.`);
-          setLoading(false);
-          return;
-        }
+      // Fetch encrypted keys
+      const response = await fetch('/api/wallet/keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: pinString })
+      });
 
-        if (!spotWallet.public_address) {
-          setPinError(`Spot wallet for ${selectedAsset} has no address. Please regenerate spot wallets.`);
-          setLoading(false);
-          return;
-        }
+      const data = await response.json();
 
-        recipientAddress = spotWallet.public_address.trim();
-      } else if (direction === 'main-to-futures') {
-        // Get the futures wallet address
-        if (!futuresWalletAddress) {
-          setPinError('Futures wallet not found. Please create one from the Futures page.');
-          setLoading(false);
-          return;
-        }
-        recipientAddress = futuresWalletAddress.trim();
-      }
-
-      // Validate the address format
-      if (!recipientAddress) {
-        setPinError(`Invalid destination address for ${selectedAsset} (empty after trim)`);
+      if (!data.success || !data.wallets?.solana?.encryptedPrivateKey) {
+        setPinError('Invalid PIN or wallet not found');
         setLoading(false);
         return;
       }
 
-      // Additional validation for Solana addresses (base58 check)
-      if (selectedAsset === 'SOL' || selectedAsset === 'USDT' || selectedAsset === 'USDC') {
-        // Basic Solana address validation: should be 32-44 characters, base58
-        if (recipientAddress.length < 32 || recipientAddress.length > 44) {
-          setPinError(`Invalid Solana address length for ${selectedAsset}: ${recipientAddress.length} chars`);
-          setLoading(false);
-          return;
-        }
-        
-        // Check for invalid base58 characters
-        const base58Regex = /^[1-9A-HJ-NP-Za-km-z]+$/;
-        if (!base58Regex.test(recipientAddress)) {
-          setPinError(`Invalid Solana address format for ${selectedAsset}. Contains non-base58 characters.`);
-          setLoading(false);
-          return;
-        }
-      }
-
-      console.log('Validated recipient address:', recipientAddress);
-
-      // Get encrypted keys with PIN hash
-      const pinHash = CryptoJS.SHA256(pinString).toString();
-      const encryptedKeys = await getEncryptedKeys(pinHash);
-      if (!encryptedKeys) {
-        setPinError('Invalid PIN');
-        setLoading(false);
-        return;
-      }
-
-      let txHash = '';
+      const encryptedPrivateKey = data.wallets.solana.encryptedPrivateKey;
       const amountNum = parseFloat(amount);
 
-      // Determine which blockchain to use based on asset
-      if (selectedAsset === 'SOL') {
-        // Send SOL using Solana context
-        if (!encryptedKeys.solana?.encryptedPrivateKey) {
-          setPinError('Solana wallet not available');
-          setLoading(false);
-          return;
-        }
-        txHash = await sendSolTransaction(
-          encryptedKeys.solana.encryptedPrivateKey,
-          pinString,
-          recipientAddress,
-          amountNum
-        );
-      } else if (selectedAsset === 'ETH') {
-        // Send ETH using EVM context
-        if (!encryptedKeys.ethereum?.encryptedPrivateKey) {
-          setPinError('Ethereum wallet not available');
-          setLoading(false);
-          return;
-        }
-        txHash = await sendEthTransaction(
-          encryptedKeys.ethereum.encryptedPrivateKey,
-          pinString,
-          recipientAddress,
-          amountNum
-        );
-      } else if (selectedAsset === 'TRX') {
-        // Send TRX using Tron context
-        if (!encryptedKeys.tron?.encryptedPrivateKey) {
-          setPinError('Tron wallet not available');
-          setLoading(false);
-          return;
-        }
-        txHash = await sendTrxTransaction(
-          encryptedKeys.tron.encryptedPrivateKey,
-          pinString,
-          recipientAddress,
-          amountNum
-        );
-      } else if (selectedAsset === 'USDT' || selectedAsset === 'USDC') {
-        // For stablecoins, use selected chain
-        if (selectedChain === 'sol') {
-          const solToken = solTokens.find(t => 
-            t.address.toLowerCase() === TOKEN_ADDRESSES[selectedAsset].solana.toLowerCase()
-          );
-          if (!solToken || solToken.amount < amountNum) {
-            setPinError(`Insufficient ${selectedAsset} balance on Solana`);
-            setLoading(false);
-            return;
-          }
-          if (!encryptedKeys.solana?.encryptedPrivateKey) {
-            setPinError('Solana wallet not available');
-            setLoading(false);
-            return;
-          }
-          txHash = await sendSolTokenTransaction(
-            encryptedKeys.solana.encryptedPrivateKey,
-            pinString,
-            recipientAddress,
-            amountNum,
-            TOKEN_ADDRESSES[selectedAsset].solana,
-            solToken.decimals
-          );
-        } else if (selectedChain === 'evm') {
-          const ethToken = ethTokens.find(t => 
-            t.address.toLowerCase() === TOKEN_ADDRESSES[selectedAsset].ethereum.toLowerCase()
-          );
-          if (!ethToken || ethToken.amount < amountNum) {
-            setPinError(`Insufficient ${selectedAsset} balance on Ethereum`);
-            setLoading(false);
-            return;
-          }
-          if (!encryptedKeys.ethereum?.encryptedPrivateKey) {
-            setPinError('Ethereum wallet not available');
-            setLoading(false);
-            return;
-          }
-          txHash = await sendEthTokenTransaction(
-            encryptedKeys.ethereum.encryptedPrivateKey,
-            pinString,
-            recipientAddress,
-            amountNum,
-            TOKEN_ADDRESSES[selectedAsset].ethereum,
-            ethToken.decimals
-          );
-        } else if (selectedChain === 'tron') {
-          const trxToken = trxTokens.find(t => 
-            t.address.toLowerCase() === TOKEN_ADDRESSES[selectedAsset].tron.toLowerCase()
-          );
-          if (!trxToken || trxToken.amount < amountNum) {
-            setPinError(`Insufficient ${selectedAsset} balance on Tron`);
-            setLoading(false);
-            return;
-          }
-          if (!encryptedKeys.tron?.encryptedPrivateKey) {
-            setPinError('Tron wallet not available');
-            setLoading(false);
-            return;
-          }
-          txHash = await sendTrxTokenTransaction(
-            encryptedKeys.tron.encryptedPrivateKey,
-            pinString,
-            recipientAddress,
-            amountNum,
-            TOKEN_ADDRESSES[selectedAsset].tron,
-            trxToken.decimals
-          );
-        } else {
-          setPinError(`Insufficient ${selectedAsset} balance`);
-          setLoading(false);
-          return;
-        }
-      }
+      // Send USDC to Drift wallet
+      const txHash = await sendSolTokenTransaction(
+        encryptedPrivateKey,
+        pinString,
+        driftAddress,
+        amountNum,
+        USDC_MINT,
+        6 // USDC decimals
+      );
 
-      const destinationType = direction === 'main-to-spot' ? 'Spot' : 'Futures';
-      setSuccess(`Successfully transferred ${amount} ${selectedAsset} to ${destinationType}. TX: ${txHash.slice(0, 8)}...`);
+      setSuccess(`Successfully transferred ${amount} USDC to Trading Wallet. TX: ${txHash.slice(0, 8)}...`);
       setAmount('');
       setShowPinModal(false);
       setPin(['', '', '', '', '', '']);
       
-      // Refresh balances
-      if (addresses?.solana && addresses?.ethereum && addresses?.tron) {
-        await Promise.all([
-          fetchSolBalance(addresses.solana),
-          fetchEthBalance(addresses.ethereum),
-          fetchTrxBalance(addresses.tron),
-        ]);
-      }
-      await fetchSpotWallets();
-      if (direction === 'main-to-futures') {
-        await fetchFuturesBalance();
-      }
+      // Refresh Drift summary to show updated balance
+      await refreshSummary();
     } catch (err) {
       console.error('Transfer error:', err);
       setPinError(err instanceof Error ? err.message : 'Transfer failed');
     } finally {
       setLoading(false);
     }
-  };
-
-  const executeSpotToMain = async () => {
-    setLoading(true);
-
-    try {
-      // Get the main wallet address for the selected asset and chain
-      let destinationAddress = '';
-      if (selectedAsset === 'SOL') {
-        destinationAddress = addresses?.solana || '';
-      } else if (selectedAsset === 'ETH') {
-        destinationAddress = addresses?.ethereum || '';
-      } else if (selectedAsset === 'TRX') {
-        destinationAddress = addresses?.tron || '';
-      } else if (selectedAsset === 'USDT' || selectedAsset === 'USDC') {
-        // For stablecoins, use the selected chain
-        if (selectedChain === 'sol') {
-          destinationAddress = addresses?.solana || '';
-        } else if (selectedChain === 'evm') {
-          destinationAddress = addresses?.ethereum || '';
-        } else if (selectedChain === 'tron') {
-          destinationAddress = addresses?.tron || '';
-        }
-      }
-
-      if (!destinationAddress) {
-        setError('Main wallet address not found');
-        setLoading(false);
-        return;
-      }
-
-      // Determine endpoint and request body based on direction
-      let endpoint = '/api/transfer';
-      let requestBody: any = {};
-
-      if (direction === 'futures-to-main') {
-        // Use futures transfer endpoint
-        endpoint = '/api/futures/transfer';
-        requestBody = {
-          destinationAddress,
-          amount: parseFloat(amount),
-        };
-      } else {
-        // Use regular transfer endpoint for spot-to-main
-        requestBody = {
-          userId,
-          asset: selectedAsset,
-          amount: parseFloat(amount),
-          direction,
-          destinationAddress,
-        };
-      }
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        const sourceType = direction === 'futures-to-main' ? 'Futures' : 'Spot';
-        setSuccess(`Successfully transferred ${amount} ${selectedAsset} from ${sourceType} to Main. TX: ${data.txHash?.slice(0, 8)}...`);
-        setAmount('');
-        
-        // Refresh balances
-        if (addresses?.solana && addresses?.ethereum && addresses?.tron) {
-          await Promise.all([
-            fetchSolBalance(addresses.solana),
-            fetchEthBalance(addresses.ethereum),
-            fetchTrxBalance(addresses.tron),
-          ]);
-        }
-        await fetchSpotWallets();
-        if (direction === 'futures-to-main') {
-          await fetchFuturesBalance();
-        }
-      } else {
-        setError(data.error || 'Transfer failed');
-      }
-    } catch (err) {
-      console.error('Transfer error:', err);
-      setError(err instanceof Error ? err.message : 'Transfer failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const executeFuturesTransfer = async () => {
-    setLoading(true);
-
-    try {
-      let destinationAddress = '';
-      let endpoint = '';
-      let requestBody: any = {};
-      
-      if (direction === 'spot-to-futures') {
-        // Transferring from spot to futures - use /api/transfer
-        destinationAddress = futuresWalletAddress || '';
-        endpoint = '/api/transfer';
-        requestBody = {
-          userId,
-          asset: selectedAsset,
-          amount: parseFloat(amount),
-          direction: 'spot-to-futures',
-          destinationAddress,
-        };
-      } else {
-        // Transferring from futures to spot - use /api/futures/transfer
-        const spotWallet = getSpotWallet(selectedAsset, 'sol');
-        destinationAddress = spotWallet?.public_address || '';
-        endpoint = '/api/futures/transfer';
-        requestBody = {
-          destinationAddress,
-          amount: parseFloat(amount),
-        };
-      }
-
-      if (!destinationAddress) {
-        setError('Destination wallet address not found');
-        setLoading(false);
-        return;
-      }
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        const directionText = direction === 'spot-to-futures' ? 'to Futures' : 'to Spot';
-        setSuccess(`Successfully transferred ${amount} ${selectedAsset} ${directionText}. TX: ${data.txHash?.slice(0, 8)}...`);
-        setAmount('');
-        
-        // Refresh balances
-        await fetchSpotWallets();
-      } else {
-        setError(data.error || 'Transfer failed');
-      }
-    } catch (err) {
-      console.error('Futures transfer error:', err);
-      setError(err instanceof Error ? err.message : 'Transfer failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Get main wallet balance from on-chain data (Solana/EVM/Tron contexts)
-  const getMainBalance = (asset: string): number => {
-    if (asset === 'SOL') {
-      return solBalance;
-    } else if (asset === 'ETH') {
-      return ethBalance;
-    } else if (asset === 'TRX') {
-      return trxBalance;
-    } else if (asset === 'USDT' || asset === 'USDC') {
-      // Check selected chain first
-      if (selectedChain === 'sol') {
-        const solToken = solTokens.find(t => 
-          t.address.toLowerCase() === TOKEN_ADDRESSES[asset].solana.toLowerCase()
-        );
-        if (solToken) return solToken.amount;
-      } else if (selectedChain === 'evm') {
-        const ethToken = ethTokens.find(t => 
-          t.address.toLowerCase() === TOKEN_ADDRESSES[asset].ethereum.toLowerCase()
-        );
-        if (ethToken) return ethToken.amount;
-      } else if (selectedChain === 'tron') {
-        const trxToken = trxTokens.find(t => 
-          t.address.toLowerCase() === TOKEN_ADDRESSES[asset].tron.toLowerCase()
-        );
-        if (trxToken) return trxToken.amount;
-      }
-      
-      // Fallback: check all chains
-      const solToken = solTokens.find(t => 
-        t.address.toLowerCase() === TOKEN_ADDRESSES[asset].solana.toLowerCase()
-      );
-      if (solToken && solToken.amount > 0) {
-        return solToken.amount;
-      }
-      
-      const ethToken = ethTokens.find(t => 
-        t.address.toLowerCase() === TOKEN_ADDRESSES[asset].ethereum.toLowerCase()
-      );
-      if (ethToken && ethToken.amount > 0) {
-        return ethToken.amount;
-      }
-      
-      const trxToken = trxTokens.find(t => 
-        t.address.toLowerCase() === TOKEN_ADDRESSES[asset].tron.toLowerCase()
-      );
-      if (trxToken) {
-        return trxToken.amount;
-      }
-    }
-    return 0;
-  };
-
-  // Get spot wallet balance from backend (chain-specific)
-  const getSpotBalance = (asset: string, chain?: string): number => {
-    const targetChain = chain || selectedChain;
-    const assetChain = `${asset}_${targetChain.toUpperCase()}`;
-    const balance = spotBalances.find(b => b.assetChain === assetChain);
-    return balance ? parseFloat(balance.available_balance) : 0;
-  };
-
-  const getSpotWallet = (asset: string, chain?: string) => {
-    const targetChain = chain || selectedChain;
-    const assetChain = `${asset}_${targetChain.toUpperCase()}`;
-    return spotWallets.find(w => w.assetChain === assetChain);
-  };
-
-  // Get futures wallet balance
-  const getFuturesBalance = (asset: string): number => {
-    if (!futuresBalance) return 0;
-    if (asset === 'USDT' || asset === 'USDC') {
-      return futuresBalance.usdc;
-    } else if (asset === 'SOL') {
-      return futuresBalance.sol;
-    }
-    return 0;
-  };
-
-  const currentBalance = direction === 'main-to-spot' || direction === 'main-to-futures'
-    ? getMainBalance(selectedAsset)
-    : direction === 'spot-to-futures' || direction === 'spot-to-main'
-    ? getSpotBalance(selectedAsset)
-    : direction === 'futures-to-spot' || direction === 'futures-to-main'
-    ? getFuturesBalance(selectedAsset)
-    : getSpotBalance(selectedAsset);
-
-  const hasSpotWallets = spotWallets.length > 0;
-
-  // Check if user is sending a token and needs native token for gas
-  const isTokenTransfer = (asset: string, chain: string) => {
-    if (asset === 'USDT' || asset === 'USDC') return true;
-    return false;
-  };
-
-  const getNativeTokenBalance = (chain: string) => {
-    if (chain === 'sol') return solBalance;
-    if (chain === 'evm') return ethBalance;
-    return 0;
-  };
-
-  const getMinimumGasRequirement = (chain: string) => {
-    if (chain === 'sol') return { amount: 0.01, usdValue: 1 }; // At least $1 worth
-    if (chain === 'evm') return { amount: 0.001, usdValue: 2 }; // At least $2 worth
-    return { amount: 0, usdValue: 0 };
-  };
-
-  const showGasWarning = () => {
-    if (direction !== 'main-to-spot') return false;
-    if (!isTokenTransfer(selectedAsset, selectedChain)) return false;
-    
-    const nativeBalance = getNativeTokenBalance(selectedChain);
-    const minGas = getMinimumGasRequirement(selectedChain);
-    
-    return nativeBalance < minGas.amount;
   };
 
   // PIN handlers
@@ -787,199 +147,81 @@ export default function TransferPage() {
     <div className="space-y-6">
       {/* Page Header */}
       <div>
-        <h1 className="text-2xl font-bold text-dark dark:text-white">Transfer Funds</h1>
+        <h1 className="text-2xl font-bold text-dark dark:text-white">Transfer to Trading Wallet</h1>
         <p className="text-muted text-sm mt-1">
-          Move funds between your main wallet, spot trading wallet, and futures wallet
+          Deposit USDC to your unified trading wallet for Spot and Futures trading
         </p>
       </div>
 
-      {/* Wallet Setup Alert - Only show after loading completes */}
-      {!spotWalletsLoading && !hasSpotWallets && (
-        <div className="bg-gradient-to-br from-primary/5 to-secondary/5 rounded-2xl border border-border/50 dark:border-darkborder p-6 shadow-sm">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-              <Icon icon="ph:wallet" className="text-primary" width={24} />
-            </div>
-            <div className="flex-1">
-              <h3 className="font-semibold text-dark dark:text-white mb-1">Setup Spot Wallets</h3>
-              <p className="text-sm text-muted mb-4">
-                Generate dedicated spot trading wallets to start transferring funds
-              </p>
-              <button
-                onClick={handleGenerateWallets}
-                disabled={generatingWallet}
-                className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                {generatingWallet ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Icon icon="ph:plus-circle" width={18} />
-                    Generate Spot Wallets
-                  </>
-                )}
-              </button>
-            </div>
+      {/* Info Banner */}
+      <div className="bg-gradient-to-br from-primary/5 to-secondary/5 rounded-2xl border border-border/50 dark:border-darkborder p-6 shadow-sm">
+        <div className="flex items-start gap-4">
+          <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+            <Icon icon="ph:info" className="text-primary" width={24} />
+          </div>
+          <div className="flex-1">
+            <h3 className="font-semibold text-dark dark:text-white mb-1">Unified Trading Wallet</h3>
+            <p className="text-sm text-muted mb-2">
+              Your Spot and Futures trading share the same wallet powered by Drift Protocol on Solana.
+            </p>
+            <ul className="text-xs text-muted space-y-1">
+              <li>• Only USDC deposits are supported</li>
+              <li>• Funds are available for both Spot and Futures trading</li>
+              <li>• Transfers are processed on Solana network</li>
+            </ul>
           </div>
         </div>
-      )}
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Transfer Form */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Direction Selection */}
+          {/* Wallet Address Card */}
           <div className="bg-white dark:bg-black rounded-2xl border border-border/50 dark:border-darkborder p-6 shadow-sm">
-            <h3 className="font-semibold text-dark dark:text-white mb-4">Transfer Direction</h3>
+            <h3 className="font-semibold text-dark dark:text-white mb-4">Trading Wallet Address</h3>
             
-            <div className="relative">
-              <select
-                value={direction}
-                onChange={(e) => {
-                  const newDirection = e.target.value as typeof direction;
-                  setDirection(newDirection);
-                  
-                  // Auto-set to Solana for futures transfers
-                  if (newDirection.includes('futures')) {
-                    if (selectedAsset !== 'USDT' && selectedAsset !== 'USDC' && selectedAsset !== 'SOL') {
-                      setSelectedAsset('USDT');
-                    }
-                    setSelectedChain('sol');
-                  }
-                  
-                  setAmount('');
-                  setError('');
-                  setSuccess('');
-                }}
-                className="w-full px-4 py-3.5 bg-gradient-to-br from-primary/5 to-primary/10 border-2 border-primary/20 rounded-xl text-dark dark:text-white font-medium appearance-none cursor-pointer hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
-              >
-                <option value="main-to-spot">Main Wallet → Spot Wallet</option>
-                <option value="spot-to-main">Spot Wallet → Main Wallet</option>
-                <option value="main-to-futures">Main Wallet → Futures Wallet</option>
-                <option value="spot-to-futures">Spot Wallet → Futures Wallet</option>
-                <option value="futures-to-spot">Futures Wallet → Spot Wallet</option>
-                <option value="futures-to-main">Futures Wallet → Main Wallet</option>
-              </select>
-              
-              {/* Custom dropdown arrow */}
-              <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                <Icon icon="ph:caret-down" className="text-primary" width={20} />
-              </div>
-            </div>
-            
-            {/* Visual indicator */}
-            <div className="mt-4 flex items-center justify-center gap-3 p-3 bg-muted/20 dark:bg-white/5 rounded-lg">
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-black rounded-lg">
-                <Icon 
-                  icon={
-                    direction.startsWith('main') ? 'ph:wallet' :
-                    direction.startsWith('spot') ? 'ph:chart-line' :
-                    'ph:trend-up'
-                  } 
-                  width={16} 
-                  className="text-primary" 
-                />
-                <span className="text-xs font-medium text-dark dark:text-white">
-                  {direction.startsWith('main') ? 'Main' :
-                   direction.startsWith('spot') ? 'Spot' :
-                   'Futures'}
-                </span>
-              </div>
-              
-              <Icon icon="ph:arrow-right" width={20} className="text-primary" />
-              
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-black rounded-lg">
-                <Icon 
-                  icon={
-                    direction.endsWith('spot') ? 'ph:chart-line' :
-                    direction.endsWith('futures') ? 'ph:trend-up' :
-                    'ph:wallet'
-                  } 
-                  width={16} 
-                  className="text-primary" 
-                />
-                <span className="text-xs font-medium text-dark dark:text-white">
-                  {direction.endsWith('spot') ? 'Spot' :
-                   direction.endsWith('futures') ? 'Futures' :
-                   'Main'}
-                </span>
-              </div>
-            </div>
-            
-            {direction.includes('futures') && (
-              <div className="mt-3 p-2.5 bg-blue-500/10 border border-blue-500/20 rounded-lg flex items-center gap-2">
-                <Icon icon="ph:info" className="text-blue-500 shrink-0" width={14} />
-                <p className="text-xs text-blue-600 dark:text-blue-400">
-                  Futures transfers support USDT, USDC & SOL on Solana only
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Asset Selection */}
-          <div className="bg-white dark:bg-black rounded-2xl border border-border/50 dark:border-darkborder p-6 shadow-sm">
-            <h3 className="font-semibold text-dark dark:text-white mb-4">Select Asset</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {assets.map((asset) => (
-                <button
-                  key={asset}
-                  onClick={() => setSelectedAsset(asset)}
-                  className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${
-                    selectedAsset === asset
-                      ? 'border-primary bg-primary/5'
-                      : 'border-border/50 dark:border-darkborder hover:border-primary/50'
-                  }`}
-                >
-                  <img src={ASSET_ICONS[asset]} alt={asset} className="w-8 h-8 rounded-full" />
-                  <span className="font-semibold text-dark dark:text-white">{asset}</span>
-                </button>
-              ))}
-            </div>
-            
-            {/* Chain Selection for Stablecoins */}
-            {needsChainSelection && (
-              <div className="mt-6 pt-4 border-t border-border/50 dark:border-darkborder">
-                <h4 className="font-medium text-dark dark:text-white mb-3">Select Chain</h4>
-                <div className="grid grid-cols-3 gap-3">
-                  <button
-                    onClick={() => setSelectedChain('sol')}
-                    className={`py-3 px-4 rounded-xl border-2 transition-all flex items-center justify-center gap-2 ${
-                      selectedChain === 'sol'
-                        ? 'border-primary bg-primary/5 text-primary'
-                        : 'border-border/50 dark:border-darkborder text-muted hover:border-primary/50'
-                    }`}
-                  >
-                    <Icon icon="cryptocurrency:sol" width={20} />
-                    <span className="font-medium">Solana</span>
-                  </button>
-                  <button
-                    onClick={() => setSelectedChain('evm')}
-                    className={`py-3 px-4 rounded-xl border-2 transition-all flex items-center justify-center gap-2 ${
-                      selectedChain === 'evm'
-                        ? 'border-primary bg-primary/5 text-primary'
-                        : 'border-border/50 dark:border-darkborder text-muted hover:border-primary/50'
-                    }`}
-                  >
-                    <Icon icon="cryptocurrency:eth" width={20} />
-                    <span className="font-medium">Ethereum</span>
-                  </button>
-                  <button
-                    onClick={() => setSelectedChain('tron')}
-                    className={`py-3 px-4 rounded-xl border-2 transition-all flex items-center justify-center gap-2 ${
-                      selectedChain === 'tron'
-                        ? 'border-primary bg-primary/5 text-primary'
-                        : 'border-border/50 dark:border-darkborder text-muted hover:border-primary/50'
-                    }`}
-                  >
-                    <Icon icon="cryptocurrency:trx" width={20} />
-                    <span className="font-medium">Tron</span>
-                  </button>
+            {isClientReady && driftAddress ? (
+              <div className="space-y-3">
+                <div className="p-4 bg-muted/20 dark:bg-white/5 rounded-xl border border-border/50 dark:border-darkborder">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-muted font-medium">Solana Address</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-green-600 dark:text-green-400 bg-green-500/10 px-2 py-1 rounded">
+                        Active
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 text-sm font-mono text-dark dark:text-white break-all">
+                      {driftAddress}
+                    </code>
+                    <button
+                      onClick={handleCopyAddress}
+                      className="p-2 hover:bg-muted/30 dark:hover:bg-white/10 rounded-lg transition-colors"
+                      title="Copy address"
+                    >
+                      <Icon 
+                        icon={copiedAddress ? "ph:check" : "ph:copy"} 
+                        className={copiedAddress ? "text-green-500" : "text-muted"} 
+                        width={18} 
+                      />
+                    </button>
+                  </div>
                 </div>
-                <p className="text-xs text-muted mt-2">
-                  Choose which blockchain to transfer {selectedAsset} on
-                </p>
+
+                <div className="flex items-start gap-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                  <Icon icon="ph:warning" className="text-blue-500 shrink-0 mt-0.5" width={16} />
+                  <p className="text-xs text-blue-600 dark:text-blue-400">
+                    Send only USDC (SPL token) on Solana network to this address. Sending other tokens may result in permanent loss.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center py-8">
+                <div className="text-center">
+                  <div className="w-12 h-12 border-3 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                  <p className="text-sm text-muted">Initializing wallet...</p>
+                </div>
               </div>
             )}
           </div>
@@ -990,7 +232,7 @@ export default function TransferPage() {
             
             <div className="space-y-4">
               <div>
-                <label className="text-sm text-muted mb-2 block">Amount</label>
+                <label className="text-sm text-muted mb-2 block">Amount (USDC)</label>
                 <div className="relative">
                   <input
                     type="number"
@@ -1000,37 +242,37 @@ export default function TransferPage() {
                     className="w-full px-4 py-3 bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-darkborder rounded-xl text-dark dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50"
                   />
                   <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                    <img src={ASSET_ICONS[selectedAsset]} alt={selectedAsset} className="w-5 h-5 rounded-full" />
-                    <span className="font-semibold text-dark dark:text-white">{selectedAsset}</span>
+                    <img src={USDC_ICON} alt="USDC" className="w-5 h-5 rounded-full" />
+                    <span className="font-semibold text-dark dark:text-white">USDC</span>
                   </div>
                 </div>
                 <p className="text-xs text-muted mt-2">
-                  Available: {currentBalance.toFixed(6)} {selectedAsset}
+                  Available in Main Wallet: {mainUsdcBalance.toFixed(6)} USDC
                 </p>
               </div>
 
               {/* Quick Amount Buttons */}
               <div className="flex gap-2">
                 <button
-                  onClick={() => setAmount((currentBalance * 0.25).toString())}
+                  onClick={() => setAmount((mainUsdcBalance * 0.25).toString())}
                   className="flex-1 px-3 py-2 bg-muted/30 dark:bg-white/5 rounded-lg text-sm font-medium text-dark dark:text-white hover:bg-muted/40 dark:hover:bg-white/10 transition-colors"
                 >
                   25%
                 </button>
                 <button
-                  onClick={() => setAmount((currentBalance * 0.5).toString())}
+                  onClick={() => setAmount((mainUsdcBalance * 0.5).toString())}
                   className="flex-1 px-3 py-2 bg-muted/30 dark:bg-white/5 rounded-lg text-sm font-medium text-dark dark:text-white hover:bg-muted/40 dark:hover:bg-white/10 transition-colors"
                 >
                   50%
                 </button>
                 <button
-                  onClick={() => setAmount((currentBalance * 0.75).toString())}
+                  onClick={() => setAmount((mainUsdcBalance * 0.75).toString())}
                   className="flex-1 px-3 py-2 bg-muted/30 dark:bg-white/5 rounded-lg text-sm font-medium text-dark dark:text-white hover:bg-muted/40 dark:hover:bg-white/10 transition-colors"
                 >
                   75%
                 </button>
                 <button
-                  onClick={() => setAmount((currentBalance * 0.99).toString())}
+                  onClick={() => setAmount((mainUsdcBalance * 0.99).toString())}
                   className="flex-1 px-3 py-2 bg-primary/10 text-primary rounded-lg text-sm font-medium hover:bg-primary/20 transition-colors"
                 >
                   Max
@@ -1041,50 +283,13 @@ export default function TransferPage() {
               <div className="mt-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-start gap-2">
                 <Icon icon="ph:info" className="text-amber-500 shrink-0 mt-0.5" width={16} />
                 <div className="text-xs text-amber-600 dark:text-amber-400">
-                  <p className="font-semibold mb-1">Max is 99% of available balance</p>
-                  <p>The remaining 1% is reserved for potential gas fees to ensure successful transaction processing.</p>
+                  <p className="font-semibold mb-1">Transaction Fee Notice</p>
+                  <p>A small amount of SOL (~0.00001 SOL) is required for transaction fees. Make sure you have SOL in your main wallet.</p>
                 </div>
               </div>
             </div>
 
-            {/* Gas Fee Warning for Token Transfers */}
-            {showGasWarning() && (
-              <div className="mt-4 p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl flex items-start gap-3">
-                <Icon icon="ph:warning" className="text-orange-500 shrink-0" width={20} />
-                <div className="text-sm text-orange-600 dark:text-orange-400">
-                  <p className="font-semibold mb-1">Insufficient Gas Funds</p>
-                  <p className="mb-2">
-                    You need {selectedChain === 'sol' ? 'SOL' : 'ETH'} to pay for transaction fees when sending {selectedAsset}.
-                  </p>
-                  <p className="text-xs">
-                    Required: At least <span className="font-semibold">
-                      {selectedChain === 'sol' ? '0.01 SOL (~$1)' : '0.001 ETH (~$2)'}
-                    </span> in your wallet
-                  </p>
-                  <p className="text-xs mt-1">
-                    Current balance: <span className="font-semibold">
-                      {getNativeTokenBalance(selectedChain).toFixed(6)} {selectedChain === 'sol' ? 'SOL' : 'ETH'}
-                    </span>
-                  </p>
-                </div>
-              </div>
-            )}
-
             {/* Alerts */}
-            {(direction.includes('futures')) && (
-              <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-start gap-3">
-                <Icon icon="ph:info" className="text-blue-500 shrink-0" width={20} />
-                <div className="text-sm text-blue-600 dark:text-blue-400">
-                  <p className="font-semibold mb-1">Futures Transfer Requirements:</p>
-                  <ul className="list-disc list-inside space-y-1 text-xs">
-                    <li>Only USDT, USDC, and SOL on Solana network are supported</li>
-                    <li>Keep at least 0.01 SOL in your futures wallet for gas fees</li>
-                    <li>SOL is needed for transaction fees when trading futures</li>
-                  </ul>
-                </div>
-              </div>
-            )}
-            
             {error && (
               <div className="mt-4 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3">
                 <Icon icon="ph:warning-circle" className="text-red-500 shrink-0" width={20} />
@@ -1102,7 +307,7 @@ export default function TransferPage() {
             {/* Transfer Button */}
             <button
               onClick={handleTransfer}
-              disabled={loading || !hasSpotWallets || !amount}
+              disabled={loading || !amount || !isClientReady || !driftAddress}
               className="w-full mt-6 px-6 py-3 bg-primary text-white rounded-xl font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {loading ? (
@@ -1113,12 +318,7 @@ export default function TransferPage() {
               ) : (
                 <>
                   <Icon icon="ph:arrow-right" width={20} />
-                  {direction === 'main-to-spot' && 'Transfer Main → Spot'}
-                  {direction === 'spot-to-main' && 'Transfer Spot → Main'}
-                  {direction === 'main-to-futures' && 'Transfer Main → Futures'}
-                  {direction === 'spot-to-futures' && 'Transfer Spot → Futures'}
-                  {direction === 'futures-to-spot' && 'Transfer Futures → Spot'}
-                  {direction === 'futures-to-main' && 'Transfer Futures → Main'}
+                  Transfer to Trading Wallet
                 </>
               )}
             </button>
@@ -1135,283 +335,78 @@ export default function TransferPage() {
               </div>
               <div>
                 <h3 className="font-semibold text-dark dark:text-white">Main Wallet</h3>
-                <p className="text-xs text-muted">Available Balance</p>
+                <p className="text-xs text-muted">Solana Network</p>
               </div>
             </div>
             <div className="space-y-3">
-              {assets.map((asset) => {
-                // For stablecoins, show which chain has balance
-                if (asset === 'USDT' || asset === 'USDC') {
-                  const solBalance = solTokens.find(t => 
-                    t.address.toLowerCase() === TOKEN_ADDRESSES[asset].solana.toLowerCase()
-                  );
-                  const ethBalance = ethTokens.find(t => 
-                    t.address.toLowerCase() === TOKEN_ADDRESSES[asset].ethereum.toLowerCase()
-                  );
-                  
-                  return (
-                    <div key={asset} className="space-y-2">
-                      {/* Solana version */}
-                      {solBalance && solBalance.amount > 0 && (
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div className="relative">
-                              <img src={ASSET_ICONS[asset]} alt={asset} className="w-6 h-6 rounded-full" />
-                              <img 
-                                src="https://cryptologos.cc/logos/solana-sol-logo.png" 
-                                alt="Solana" 
-                                className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border border-white dark:border-black" 
-                              />
-                            </div>
-                            <span className="text-sm font-medium text-dark dark:text-white">{asset}</span>
-                            <span className="text-xs text-muted bg-muted/20 px-1.5 py-0.5 rounded">SOL</span>
-                          </div>
-                          <span className="text-sm font-semibold text-dark dark:text-white">
-                            {balancesLoading ? (
-                              <span className="text-muted">...</span>
-                            ) : (
-                              solBalance.amount.toFixed(6)
-                            )}
-                          </span>
-                        </div>
-                      )}
-                      {/* EVM version */}
-                      {ethBalance && ethBalance.amount > 0 && (
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div className="relative">
-                              <img src={ASSET_ICONS[asset]} alt={asset} className="w-6 h-6 rounded-full" />
-                              <img 
-                                src="https://cryptologos.cc/logos/ethereum-eth-logo.png" 
-                                alt="Ethereum" 
-                                className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border border-white dark:border-black" 
-                              />
-                            </div>
-                            <span className="text-sm font-medium text-dark dark:text-white">{asset}</span>
-                            <span className="text-xs text-muted bg-muted/20 px-1.5 py-0.5 rounded">ETH</span>
-                          </div>
-                          <span className="text-sm font-semibold text-dark dark:text-white">
-                            {balancesLoading ? (
-                              <span className="text-muted">...</span>
-                            ) : (
-                              ethBalance.amount.toFixed(6)
-                            )}
-                          </span>
-                        </div>
-                      )}
-                      {/* Show zero balance if neither chain has balance */}
-                      {(!solBalance || solBalance.amount === 0) && (!ethBalance || ethBalance.amount === 0) && (
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <img src={ASSET_ICONS[asset]} alt={asset} className="w-6 h-6 rounded-full" />
-                            <span className="text-sm font-medium text-dark dark:text-white">{asset}</span>
-                          </div>
-                          <span className="text-sm font-semibold text-dark dark:text-white">
-                            {balancesLoading ? (
-                              <span className="text-muted">...</span>
-                            ) : (
-                              '0.000000'
-                            )}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                } else {
-                  // For native tokens, show single version
-                  return (
-                    <div key={asset} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <img src={ASSET_ICONS[asset]} alt={asset} className="w-6 h-6 rounded-full" />
-                        <span className="text-sm font-medium text-dark dark:text-white">{asset}</span>
-                      </div>
-                      <span className="text-sm font-semibold text-dark dark:text-white">
-                        {balancesLoading ? (
-                          <span className="text-muted">...</span>
-                        ) : (
-                          getMainBalance(asset).toFixed(6)
-                        )}
-                      </span>
-                    </div>
-                  );
-                }
-              })}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <img src={USDC_ICON} alt="USDC" className="w-6 h-6 rounded-full" />
+                  <span className="text-sm font-medium text-dark dark:text-white">USDC</span>
+                </div>
+                <span className="text-sm font-semibold text-dark dark:text-white">
+                  {mainUsdcBalance.toFixed(6)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <img src="https://cryptologos.cc/logos/solana-sol-logo.png" alt="SOL" className="w-6 h-6 rounded-full" />
+                  <span className="text-sm font-medium text-dark dark:text-white">SOL</span>
+                  <span className="text-xs text-muted">(Gas)</span>
+                </div>
+                <span className="text-sm font-semibold text-dark dark:text-white">
+                  {walletBalance.toFixed(6)}
+                </span>
+              </div>
             </div>
           </div>
 
-          {/* Spot Wallet Balance */}
+          {/* Trading Wallet Balance */}
           <div className="bg-gradient-to-br from-purple-500/10 to-purple-600/5 rounded-2xl border border-border/50 dark:border-darkborder p-6 shadow-sm">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
                 <Icon icon="ph:chart-line" className="text-purple-500" width={20} />
               </div>
               <div>
-                <h3 className="font-semibold text-dark dark:text-white">Spot Wallet</h3>
-                <p className="text-xs text-muted">Trading Balance</p>
+                <h3 className="font-semibold text-dark dark:text-white">Trading Wallet</h3>
+                <p className="text-xs text-muted">Spot & Futures</p>
               </div>
             </div>
-            {spotWalletsLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
-              </div>
-            ) : hasSpotWallets ? (
+            {isClientReady ? (
               <div className="space-y-3">
-                {assets.map((asset) => {
-                  // For stablecoins, show both chains
-                  if (asset === 'USDT' || asset === 'USDC') {
-                    return (
-                      <div key={asset} className="space-y-2">
-                        {/* Solana version */}
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <div className="flex items-center gap-2">
-                              <img src={ASSET_ICONS[asset]} alt={asset} className="w-6 h-6 rounded-full" />
-                              <span className="text-sm font-medium text-dark dark:text-white">{asset}</span>
-                              <span className="text-xs text-muted bg-muted/20 px-2 py-0.5 rounded">SOL</span>
-                            </div>
-                            <span className="text-sm font-semibold text-dark dark:text-white">
-                              {getSpotBalance(asset, 'sol').toFixed(6)}
-                            </span>
-                          </div>
-                          {getSpotWallet(asset, 'sol') && (
-                            <p className="text-[10px] text-muted truncate ml-8">
-                              {getSpotWallet(asset, 'sol')?.public_address}
-                            </p>
-                          )}
-                        </div>
-                        {/* EVM version */}
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <div className="flex items-center gap-2">
-                              <img src={ASSET_ICONS[asset]} alt={asset} className="w-6 h-6 rounded-full" />
-                              <span className="text-sm font-medium text-dark dark:text-white">{asset}</span>
-                              <span className="text-xs text-muted bg-muted/20 px-2 py-0.5 rounded">ETH</span>
-                            </div>
-                            <span className="text-sm font-semibold text-dark dark:text-white">
-                              {getSpotBalance(asset, 'evm').toFixed(6)}
-                            </span>
-                          </div>
-                          {getSpotWallet(asset, 'evm') && (
-                            <p className="text-[10px] text-muted truncate ml-8">
-                              {getSpotWallet(asset, 'evm')?.public_address}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  } else {
-                    // For native tokens, show single version
-                    const chain = asset === 'SOL' ? 'sol' : 'evm';
-                    return (
-                      <div key={asset}>
-                        <div className="flex items-center justify-between mb-1">
-                          <div className="flex items-center gap-2">
-                            <img src={ASSET_ICONS[asset]} alt={asset} className="w-6 h-6 rounded-full" />
-                            <span className="text-sm font-medium text-dark dark:text-white">{asset}</span>
-                          </div>
-                          <span className="text-sm font-semibold text-dark dark:text-white">
-                            {getSpotBalance(asset, chain).toFixed(6)}
-                          </span>
-                        </div>
-                        {getSpotWallet(asset, chain) && (
-                          <p className="text-[10px] text-muted truncate ml-8">
-                            {getSpotWallet(asset, chain)?.public_address}
-                          </p>
-                        )}
-                      </div>
-                    );
-                  }
-                })}
-              </div>
-            ) : (
-              <p className="text-sm text-muted text-center py-4">No spot wallets generated</p>
-            )}
-          </div>
-
-          {/* Futures Wallet Balance */}
-          <div className="bg-gradient-to-br from-orange-500/10 to-orange-600/5 rounded-2xl border border-border/50 dark:border-darkborder p-6 shadow-sm">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center">
-                <Icon icon="ph:trend-up" className="text-orange-500" width={20} />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-dark dark:text-white">Futures Wallet</h3>
-                <p className="text-xs text-muted">Solana Only</p>
-              </div>
-              <button
-                onClick={() => fetchFuturesBalance()}
-                disabled={futuresWalletLoading || !futuresWalletAddress}
-                className="p-1 hover:bg-muted/20 dark:hover:bg-white/5 rounded transition-colors disabled:opacity-50"
-              >
-                <Icon 
-                  icon="ph:arrow-clockwise" 
-                  className={`text-muted dark:text-darklink ${futuresWalletLoading ? 'animate-spin' : ''}`} 
-                  height={16} 
-                />
-              </button>
-            </div>
-            {futuresWalletLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
-              </div>
-            ) : futuresWalletAddress ? (
-              <div className="space-y-3">
-                {/* USDT/USDC Balance */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2">
-                      <img src={ASSET_ICONS['USDC']} alt="USDC" className="w-6 h-6 rounded-full" />
-                      <span className="text-sm font-medium text-dark dark:text-white">USDC</span>
-                      <span className="text-xs text-muted bg-muted/20 px-2 py-0.5 rounded">SOL</span>
-                    </div>
-                    <span className="text-sm font-semibold text-dark dark:text-white">
-                      {(futuresBalance?.usdc || 0).toFixed(6)}
-                    </span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <img src={USDC_ICON} alt="USDC" className="w-6 h-6 rounded-full" />
+                    <span className="text-sm font-medium text-dark dark:text-white">USDC</span>
                   </div>
-                  <p className="text-[10px] text-muted truncate ml-8">
-                    {futuresWalletAddress}
-                  </p>
-                  <p className="text-[10px] text-muted ml-8 mt-0.5">
-                    USDT and USDC share the same balance
-                  </p>
+                  <span className="text-sm font-semibold text-dark dark:text-white">
+                    {driftUsdcBalance.toFixed(6)}
+                  </span>
                 </div>
-                {/* SOL Balance */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2">
-                      <img src={ASSET_ICONS['SOL']} alt="SOL" className="w-6 h-6 rounded-full" />
-                      <span className="text-sm font-medium text-dark dark:text-white">SOL</span>
-                      <span className="text-xs text-muted">(Gas)</span>
-                    </div>
-                    <span className={`text-sm font-semibold ${
-                      (futuresBalance?.sol || 0) < 0.01 ? 'text-error' : 'text-dark dark:text-white'
-                    }`}>
-                      {(futuresBalance?.sol || 0).toFixed(6)}
-                    </span>
-                  </div>
-                  {(futuresBalance?.sol || 0) < 0.01 && (
-                    <p className="text-[10px] text-error ml-8">
-                      ⚠️ Low balance - keep at least 0.01 SOL for gas
-                    </p>
-                  )}
+                <div className="p-3 bg-muted/20 dark:bg-white/5 rounded-lg">
+                  <p className="text-xs text-muted">
+                    This balance is shared between Spot and Futures trading
+                  </p>
                 </div>
               </div>
             ) : (
-              <p className="text-sm text-muted text-center py-4">No futures wallet found</p>
+              <div className="flex items-center justify-center py-4">
+                <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+              </div>
             )}
           </div>
 
           {/* Info Card */}
           <div className="bg-white dark:bg-black rounded-2xl border border-border/50 dark:border-darkborder p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-3">
-              <Icon icon="ph:info" className="text-primary" width={18} />
-              <h3 className="font-semibold text-dark dark:text-white text-sm">Transfer Info</h3>
+              <Icon icon="ph:lightbulb" className="text-primary" width={18} />
+              <h3 className="font-semibold text-dark dark:text-white text-sm">How it Works</h3>
             </div>
             <div className="space-y-2 text-xs text-muted">
-              <p>• Transfers are instant and free</p>
-              <p>• Spot wallets are used for trading only</p>
-              <p>• Main wallet is for general storage</p>
-              <p>• You can transfer back anytime</p>
+              <p>• Transfer USDC from your main wallet to trading wallet</p>
+              <p>• Use the same balance for both Spot and Futures</p>
+              <p>• Powered by Drift Protocol on Solana</p>
+              <p>• Instant transfers with low fees</p>
             </div>
           </div>
         </div>
@@ -1431,13 +426,11 @@ export default function TransferPage() {
               Confirm Transfer
             </h3>
             <p className="text-sm text-muted text-center mb-1">
-              Transferring <span className="font-semibold text-dark dark:text-white">{amount} {selectedAsset}</span>
+              Transferring <span className="font-semibold text-dark dark:text-white">{amount} USDC</span>
             </p>
             <p className="text-sm text-muted text-center mb-1">
               From <span className="font-semibold text-dark dark:text-white">Main Wallet</span> to{' '}
-              <span className="font-semibold text-dark dark:text-white">
-                {direction === 'main-to-spot' ? 'Spot Wallet' : 'Futures Wallet'}
-              </span>
+              <span className="font-semibold text-dark dark:text-white">Trading Wallet</span>
             </p>
             <p className="text-xs text-muted text-center mb-6">
               Enter your 6-digit PIN to authorize this transfer.
@@ -1476,7 +469,7 @@ export default function TransferPage() {
                 Cancel
               </button>
               <button
-                onClick={executeMainToSpot}
+                onClick={executeTransfer}
                 disabled={pin.some((d) => !d) || loading}
                 className="flex-1 py-3 px-4 bg-primary hover:bg-primary/90 text-white font-medium rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
