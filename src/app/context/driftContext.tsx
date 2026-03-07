@@ -377,11 +377,54 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         }
 
         // Step 8: Create Drift client
-        const client = await createDriftClient(connection, wallet, DRIFT_PROGRAM_ID, subscriptionType);
+        let client = await createDriftClient(connection, wallet, DRIFT_PROGRAM_ID, subscriptionType);
 
         console.log(`[DriftContext] DriftClient created with ${subscriptionType} subscription`);
 
-        // Step 9: Initialize user account if it doesn't exist
+        // Step 9: Subscribe to client (Must happen before initializeUserAccount)
+        try {
+          console.log('[DriftContext] Subscribing to DriftClient...');
+          await client.subscribe();
+          console.log('[DriftContext] Successfully subscribed to DriftClient');
+
+          // Verify subscription is active
+          if (!client.isSubscribed) {
+            throw new Error('Client subscription failed - isSubscribed is false');
+          }
+
+        } catch (subscribeErr: any) {
+          console.error('[DriftContext] Subscription error:', subscribeErr);
+
+          // Log detailed JSON-RPC error if available
+          if (subscribeErr.code) {
+            console.error('[DriftContext] JSON-RPC Error Code:', subscribeErr.code);
+          }
+          if (subscribeErr.data) {
+            console.error('[DriftContext] JSON-RPC Error Data:', subscribeErr.data);
+          }
+
+          // If WebSocket subscription failed, fall back to polling
+          if (!usePolling && subscriptionType === 'websocket') {
+            console.warn('[DriftContext] WebSocket subscription failed, falling back to polling');
+
+            // Unsubscribe current client
+            try {
+              await client.unsubscribe();
+            } catch (err) {
+              console.warn('[DriftContext] Error unsubscribing failed client:', err);
+            }
+
+            // Create new client with polling
+            client = await createDriftClient(connection, wallet, DRIFT_PROGRAM_ID, 'polling');
+            await client.subscribe();
+
+            console.log('[DriftContext] Successfully subscribed with polling mode');
+          } else {
+            throw subscribeErr;
+          }
+        }
+
+        // Step 10: Initialize user account if it doesn't exist
         if (!userAccountExists) {
           console.log('[DriftContext] Initializing user account...');
 
@@ -420,52 +463,6 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
               throw initErr;
             }
           }
-        }
-
-        // Step 10: Subscribe to client (now that account exists)
-        try {
-          console.log('[DriftContext] Subscribing to DriftClient...');
-          await client.subscribe();
-          console.log('[DriftContext] Successfully subscribed to DriftClient');
-
-          // Verify subscription is active
-          if (!client.isSubscribed) {
-            throw new Error('Client subscription failed - isSubscribed is false');
-          }
-
-        } catch (subscribeErr: any) {
-          console.error('[DriftContext] Subscription error:', subscribeErr);
-
-          // Log detailed JSON-RPC error if available
-          if (subscribeErr.code) {
-            console.error('[DriftContext] JSON-RPC Error Code:', subscribeErr.code);
-          }
-          if (subscribeErr.data) {
-            console.error('[DriftContext] JSON-RPC Error Data:', subscribeErr.data);
-          }
-
-          // If WebSocket subscription failed, fall back to polling
-          if (!usePolling && subscriptionType === 'websocket') {
-            console.warn('[DriftContext] WebSocket subscription failed, falling back to polling');
-
-            // Unsubscribe current client
-            try {
-              await client.unsubscribe();
-            } catch (err) {
-              console.warn('[DriftContext] Error unsubscribing failed client:', err);
-            }
-
-            // Create new client with polling
-            const pollingClient = await createDriftClient(connection, wallet, DRIFT_PROGRAM_ID, 'polling');
-            await pollingClient.subscribe();
-
-            console.log('[DriftContext] Successfully subscribed with polling mode');
-
-            driftClientRef.current = pollingClient;
-            return pollingClient;
-          }
-
-          throw subscribeErr;
         }
 
         // Step 11: Verify user account is accessible (wrap in catch as it's fine if uninitialized)
