@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useDrift } from '@/app/context/driftContext';
 
 /**
@@ -10,6 +10,12 @@ import { useDrift } from '@/app/context/driftContext';
  * - Use driftClient.getTokenAmount(marketIndex) to get balances
  * - Positive values = deposited tokens
  * - Negative values = borrowed tokens
+ * 
+ * IMPORTANT: USDC (market index 0) is special!
+ * - USDC is the collateral token in Drift
+ * - USDC balance comes from summary.freeCollateral, NOT spotPositions
+ * - freeCollateral = available USDC for trading (not locked as margin)
+ * - totalCollateral = total USDC deposited (including margin)
  */
 
 interface UseSpotBalancesReturn {
@@ -42,6 +48,7 @@ export function useSpotBalances(
     isClientReady,
     refreshPositions,
     getSpotMarketName,
+    summary,
   } = useDrift();
 
   const [baseBalance, setBaseBalance] = useState<number>(0);
@@ -82,24 +89,40 @@ export function useSpotBalances(
           console.log(`[useSpotBalances] Position: ${p.marketName} (index ${p.marketIndex}), amount: ${p.amount}, type: ${p.balanceType}`);
         });
 
-        // Find base token balance
-        const basePosition = spotPositions.find(p => p.marketIndex === baseMarketIndex);
-        if (basePosition) {
-          baseAmount = basePosition.amount;
-          baseBorrowed = basePosition.balanceType === 'borrow';
-          console.log(`[useSpotBalances] Base (${getSpotMarketName(baseMarketIndex)}):`, baseAmount, baseBorrowed ? '(borrowed)' : '(deposited)');
+        // SPECIAL CASE: USDC (market index 0) is collateral, not a spot balance
+        // Use freeCollateral from summary instead of spotPositions
+        if (baseMarketIndex === 0) {
+          baseAmount = summary?.freeCollateral ?? 0;
+          baseBorrowed = false; // Collateral is never borrowed
+          console.log(`[useSpotBalances] Base (USDC - Collateral):`, baseAmount, '(free collateral)');
         } else {
-          console.log(`[useSpotBalances] No base position found for market index ${baseMarketIndex}`);
+          // Find base token balance from spotPositions
+          const basePosition = spotPositions.find(p => p.marketIndex === baseMarketIndex);
+          if (basePosition) {
+            baseAmount = basePosition.amount;
+            baseBorrowed = basePosition.balanceType === 'borrow';
+            console.log(`[useSpotBalances] Base (${getSpotMarketName(baseMarketIndex)}):`, baseAmount, baseBorrowed ? '(borrowed)' : '(deposited)');
+          } else {
+            console.log(`[useSpotBalances] No base position found for market index ${baseMarketIndex}`);
+          }
         }
 
-        // Find quote token balance
-        const quotePosition = spotPositions.find(p => p.marketIndex === quoteMarketIndex);
-        if (quotePosition) {
-          quoteAmount = quotePosition.amount;
-          quoteBorrowed = quotePosition.balanceType === 'borrow';
-          console.log(`[useSpotBalances] Quote (${getSpotMarketName(quoteMarketIndex)}):`, quoteAmount, quoteBorrowed ? '(borrowed)' : '(deposited)');
+        // SPECIAL CASE: USDC (market index 0) is collateral, not a spot balance
+        // Use freeCollateral from summary instead of spotPositions
+        if (quoteMarketIndex === 0) {
+          quoteAmount = summary?.freeCollateral ?? 0;
+          quoteBorrowed = false; // Collateral is never borrowed
+          console.log(`[useSpotBalances] Quote (USDC - Collateral):`, quoteAmount, '(free collateral)');
         } else {
-          console.log(`[useSpotBalances] No quote position found for market index ${quoteMarketIndex}`);
+          // Find quote token balance from spotPositions
+          const quotePosition = spotPositions.find(p => p.marketIndex === quoteMarketIndex);
+          if (quotePosition) {
+            quoteAmount = quotePosition.amount;
+            quoteBorrowed = quotePosition.balanceType === 'borrow';
+            console.log(`[useSpotBalances] Quote (${getSpotMarketName(quoteMarketIndex)}):`, quoteAmount, quoteBorrowed ? '(borrowed)' : '(deposited)');
+          } else {
+            console.log(`[useSpotBalances] No quote position found for market index ${quoteMarketIndex}`);
+          }
         }
       } else {
         console.log('[useSpotBalances] No spotPositions available');
@@ -124,7 +147,7 @@ export function useSpotBalances(
     } finally {
       setLoading(false);
     }
-  }, [isClientReady, baseMarketIndex, quoteMarketIndex, spotPositions, getSpotMarketName]);
+  }, [isClientReady, baseMarketIndex, quoteMarketIndex, spotPositions, getSpotMarketName, summary]);
 
   // Fetch balances when dependencies change
   useEffect(() => {

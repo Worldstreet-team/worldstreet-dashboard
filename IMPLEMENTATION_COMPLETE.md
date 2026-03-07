@@ -49,6 +49,12 @@ All trading components now use the new `useSpotBalances` hook for consistent bal
 **Impact:** Crashes when market has no position
 **Fix:** Added null check: `if (position && position.scaledBalance && ...)`
 
+### Bug #4: USDC Collateral Not Recognized ✅
+**Issue:** USDC (market index 0) is collateral, not a spot position
+**Impact:** USDC balance always showed as 0 in trading forms
+**Fix:** Use `summary.freeCollateral` for USDC instead of `spotPositions`
+**Details:** See `USDC_COLLATERAL_EXPLANATION.md` for full explanation
+
 ## Architecture
 
 ### How Drift Stores Balances

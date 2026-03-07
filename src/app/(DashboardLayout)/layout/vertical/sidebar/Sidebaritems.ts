@@ -42,6 +42,13 @@ const SidebarContent: MenuItem[] = [
         url: "/",
       },
       {
+        name: "Portfolio",
+        icon: 'ph:briefcase-duotone',
+        id: uniqueId(),
+        url: "/portfolio",
+        subtitle: "Trading overview",
+      },
+      {
         name: "Assets",
         icon: 'ph:coins-duotone',
         id: uniqueId(),
