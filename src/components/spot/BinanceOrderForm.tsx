@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/app/context/authContext';
-import { usePairBalances } from '@/hooks/usePairBalances';
+import { useSpotBalances } from '@/hooks/useSpotBalances';
 import { useDrift } from '@/app/context/driftContext';
 import SpotSwapConfirmModal from './SpotSwapConfirmModal';
 import SpotDepositModal from './SpotDepositModal';
@@ -17,7 +17,7 @@ interface BinanceOrderFormProps {
 
 export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain, tokenAddress, initialSide = 'buy' }: BinanceOrderFormProps) {
   const { user } = useAuth();
-  const { placeSpotOrder, getSpotMarketIndexBySymbol, spotPositions: driftSpotPositions } = useDrift();
+  const { placeSpotOrder, getSpotMarketIndexBySymbol, spotPositions: driftSpotPositions, getSpotMarketName } = useDrift();
 
   const [activeTab, setActiveTab] = useState<'buy' | 'sell'>(initialSide);
   const [orderType, setOrderType] = useState<'market' | 'limit' | 'stop-limit'>('market');
@@ -34,19 +34,19 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
 
   const [baseAsset, quoteAsset] = selectedPair.split('-');
 
-  const [tokenIn, tokenOut] = selectedPair.split('-');
+  // Get Drift market indices for the pair
+  const baseMarketIndex = getSpotMarketIndexBySymbol(baseAsset);
+  const quoteMarketIndex = getSpotMarketIndexBySymbol(quoteAsset);
 
-  const effectiveChain = chain;
-
+  // Fetch balances from Drift using the new hook
   const {
-    tokenIn: baseBalance,  // Balance of base asset (BTC, ETH, SOL)
-    tokenOut: quoteBalance, // Balance of quote asset (USDT)
+    baseBalance,
+    quoteBalance,
+    isBorrowed,
     loading: loadingBalances,
     error: balanceError,
     refetch: refetchBalances
-  } = usePairBalances(user?.userId, selectedPair, effectiveChain, tokenAddress);
-
-  const { spotMarkets } = useDrift();
+  } = useSpotBalances(baseMarketIndex, quoteMarketIndex);
 
   useEffect(() => {
     const updatePrice = () => {
@@ -86,6 +86,8 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
   }, [amount, price, currentMarketPrice, orderType, activeTab]);
 
   const handlePercentage = (percent: number) => {
+    // For BUY: use quote balance (USDC/USDT)
+    // For SELL: use base balance (SOL/BTC/etc)
     const balance = activeTab === 'buy' ? quoteBalance : baseBalance;
     const calculatedAmount = (balance * percent) / 100;
     setAmount(calculatedAmount.toFixed(6));
@@ -156,8 +158,9 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
   };
 
   const currentBalance = activeTab === 'buy' ? quoteBalance : baseBalance;
-  const currentToken = activeTab === 'buy' ? tokenOut : tokenIn;
-  const equivalentToken = activeTab === 'buy' ? tokenIn : tokenOut;
+  const currentToken = activeTab === 'buy' ? quoteAsset : baseAsset;
+  const equivalentToken = activeTab === 'buy' ? baseAsset : quoteAsset;
+  const isCurrentBorrowed = activeTab === 'buy' ? isBorrowed.quote : isBorrowed.base;
 
   return (
     <div className="flex flex-col bg-[#181a20] text-white overflow-hidden">
@@ -177,7 +180,9 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
       <div className="max-h-[25vh] overflow-y-auto scrollbar-hide px-4 py-4 space-y-4">
         <div className="flex items-center justify-between text-xs">
           <div className="flex items-center gap-2">
-            <span className="text-[#848e9c]">Avbl</span>
+            <span className="text-[#848e9c]">
+              {isCurrentBorrowed ? 'Borrowed' : 'Avbl'}
+            </span>
             <button
               onClick={() => setShowDepositModal(true)}
               className="px-1.5 py-0.5 rounded bg-[#fcd535]/10 text-[#fcd535] text-[10px] hover:bg-[#fcd535]/20 font-bold transition-all transition-colors"
@@ -185,7 +190,9 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
               Deposit
             </button>
           </div>
-          <span className="text-white font-mono">{loadingBalances ? 'Loading...' : `${currentBalance.toFixed(6)} ${currentToken}`}</span>
+          <span className={`font-mono ${isCurrentBorrowed ? 'text-[#f6465d]' : 'text-white'}`}>
+            {loadingBalances ? 'Loading...' : `${currentBalance.toFixed(6)} ${currentToken}`}
+          </span>
         </div>
 
         {balanceError && <div className="p-2 bg-[#f6465d]/10 border border-[#f6465d] rounded text-xs text-[#f6465d]">{balanceError}</div>}
@@ -195,13 +202,15 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
             <label className="block text-xs text-[#848e9c] mb-2">Price</label>
             <div className="relative">
               <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" className="w-full px-3 py-2 bg-[#2b3139] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#fcd535]" />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#848e9c]">{tokenOut}</span>
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#848e9c]">{quoteAsset}</span>
             </div>
           </div>
         )}
 
         <div>
-          <label className="block text-xs text-[#848e9c] mb-2">{activeTab === 'buy' ? `Amount (${tokenOut})` : `Amount (${tokenIn})`}</label>
+          <label className="block text-xs text-[#848e9c] mb-2">
+            {activeTab === 'buy' ? `Amount (${quoteAsset})` : `Amount (${baseAsset})`}
+          </label>
           <div className="relative">
             <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="w-full px-3 py-2 bg-[#2b3139] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#fcd535]" />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#848e9c]">{currentToken}</span>
@@ -224,7 +233,7 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
 
       <div className="p-4 border-t border-[#2b3139]">
         <button onClick={executeTrade} disabled={executing || !amount} className={`w-full py-3 rounded font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${activeTab === 'buy' ? 'bg-[#0ecb81] hover:bg-[#0ecb81]/90' : 'bg-[#f6465d] hover:bg-[#f6465d]/90'} text-white`}>
-          {executing ? 'Executing...' : `${activeTab === 'buy' ? 'Buy' : 'Sell'} ${tokenIn}`}
+          {executing ? 'Executing...' : `${activeTab === 'buy' ? 'Buy' : 'Sell'} ${baseAsset}`}
         </button>
       </div>
 

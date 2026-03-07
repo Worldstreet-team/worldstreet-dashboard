@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { Icon } from '@iconify/react';
 import { useAuth } from '@/app/context/authContext';
-import { usePairBalances } from '@/hooks/usePairBalances';
+import { useSpotBalances } from '@/hooks/useSpotBalances';
+import { useDrift } from '@/app/context/driftContext';
 
 interface MobileTradingFormProps {
   selectedPair: string;
@@ -13,6 +14,7 @@ interface MobileTradingFormProps {
 
 export default function MobileTradingForm({ selectedPair, chain, tokenAddress }: MobileTradingFormProps) {
   const { user } = useAuth();
+  const { getSpotMarketIndexBySymbol } = useDrift();
   
   const [side, setSide] = useState<'buy' | 'sell'>('buy');
   const [amount, setAmount] = useState('');
@@ -23,20 +25,26 @@ export default function MobileTradingForm({ selectedPair, chain, tokenAddress }:
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const [tokenIn, tokenOut] = selectedPair.split('-');
-  const currentToken = side === 'buy' ? tokenOut : tokenIn;
+  const [baseAsset, quoteAsset] = selectedPair.split('-');
 
-  // Use the custom hook to fetch pair balances from backend
-  const { 
-    tokenIn: baseBalance,
-    tokenOut: quoteBalance,
+  // Get Drift market indices for the pair
+  const baseMarketIndex = getSpotMarketIndexBySymbol(baseAsset);
+  const quoteMarketIndex = getSpotMarketIndexBySymbol(quoteAsset);
+
+  // Fetch balances from Drift using the new hook
+  const {
+    baseBalance,
+    quoteBalance,
+    isBorrowed,
     loading: loadingBalances,
     error: balanceError,
-    refetch: refetchBalances 
-  } = usePairBalances(user?.userId, selectedPair, chain, tokenAddress);
+    refetch: refetchBalances
+  } = useSpotBalances(baseMarketIndex, quoteMarketIndex);
 
   // Current balance based on buy/sell side
   const balance = side === 'buy' ? quoteBalance : baseBalance;
+  const currentToken = side === 'buy' ? quoteAsset : baseAsset;
+  const isCurrentBorrowed = side === 'buy' ? isBorrowed.quote : isBorrowed.base;
 
   const handleSetMax = () => {
     setAmount(balance.toString());
@@ -97,8 +105,8 @@ export default function MobileTradingForm({ selectedPair, chain, tokenAddress }:
       
       // Get token addresses based on buy/sell
       // Use tokenAddress prop if available, otherwise fall back to TOKEN_META
-      let fromTokenMeta = side === 'buy' ? chainMeta[tokenOut] : chainMeta[tokenIn];
-      let toTokenMeta = side === 'buy' ? chainMeta[tokenIn] : chainMeta[tokenOut];
+      let fromTokenMeta = side === 'buy' ? chainMeta[quoteAsset] : chainMeta[baseAsset];
+      let toTokenMeta = side === 'buy' ? chainMeta[baseAsset] : chainMeta[quoteAsset];
       
       // Override with tokenAddress if provided (for base asset)
       // For custom tokens, we need to fetch the actual decimals
@@ -305,19 +313,19 @@ export default function MobileTradingForm({ selectedPair, chain, tokenAddress }:
       {/* Available / Max / Fee Section */}
       <div className="flex flex-col text-[10px] text-muted gap-0.5">
         <div className="flex justify-between">
-          <span>Avbl</span>
-          <span className="text-dark dark:text-white font-mono">
-            {balance.toFixed(4)} {currentToken}
-            <Icon icon="ph:warning" width={10} className="inline ml-0.5 text-warning" />
+          <span>{isCurrentBorrowed ? 'Borrowed' : 'Avbl'}</span>
+          <span className={`font-mono ${isCurrentBorrowed ? 'text-error' : 'text-dark dark:text-white'}`}>
+            {loadingBalances ? 'Loading...' : `${balance.toFixed(4)} ${currentToken}`}
+            {!loadingBalances && <Icon icon="ph:warning" width={10} className="inline ml-0.5 text-warning" />}
           </span>
         </div>
         <div className="flex justify-between">
-          <span>Max Buy</span>
-          <span className="text-dark dark:text-white font-mono">0 BTC</span>
+          <span>Max {side === 'buy' ? 'Buy' : 'Sell'}</span>
+          <span className="text-dark dark:text-white font-mono">{balance.toFixed(4)} {currentToken}</span>
         </div>
         <div className="flex justify-between">
           <span>Est. Fee</span>
-          <span className="text-dark dark:text-white font-mono">-- BTC</span>
+          <span className="text-dark dark:text-white font-mono">-- {currentToken}</span>
         </div>
       </div>
 
@@ -345,7 +353,7 @@ export default function MobileTradingForm({ selectedPair, chain, tokenAddress }:
             : 'bg-error hover:bg-error/90 text-white'
         }`}
       >
-        {executing ? 'Processing...' : `${side === 'buy' ? 'Buy' : 'Sell'} ${tokenIn}`}
+        {executing ? 'Processing...' : `${side === 'buy' ? 'Buy' : 'Sell'} ${baseAsset}`}
       </button>
     </div>
   );
