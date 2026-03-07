@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 import { useAuth } from '@/app/context/authContext';
+import { usePathname } from 'next/navigation';
 import { PinUnlockModal } from '@/components/wallet/PinUnlockModal';
 
 // Dynamic imports for Drift SDK
@@ -214,6 +215,19 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       }
     }
   }, [user?.userId]);
+
+  const pathname = usePathname();
+  const isTradingPage = pathname?.includes('/futures') || pathname?.includes('/spot');
+
+  // If we start initializing in the background (e.g. on Dashboard)
+  // but then navigate to a trading page while still initializing,
+  // we should show the overlay on that page.
+  useEffect(() => {
+    if (isInitializing && isTradingPage && !showInitOverlay) {
+      console.log('[DriftContext] Navigated to trading page during init, showing overlay');
+      setShowInitOverlay(true);
+    }
+  }, [isInitializing, isTradingPage, showInitOverlay]);
 
   // Fetch encrypted wallet on mount
   useEffect(() => {
@@ -756,7 +770,6 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         resolve(cachedPin);
         return;
       }
-
       // If modal is already showing, don't show it again
       if (showPinUnlock) {
         console.log('[DriftContext] PIN modal already showing, waiting...');
@@ -793,8 +806,8 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     }
 
     try {
-      // Only show overlay on first load
-      if (isFirstLoad) {
+      // Only show overlay on first load and ONLY on trading pages
+      if (isFirstLoad && isTradingPage) {
         setShowInitOverlay(true);
       }
       setInitializationError(null);
@@ -1806,12 +1819,12 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
 
   // Initialize data when user logs in
   useEffect(() => {
-    if (user?.userId && !isClientReady) {
+    if (user?.userId && !isClientReady && !isInitializing) {
       console.log('[DriftContext] Fetching initial data');
       refreshSummary();
       refreshPositions();
     }
-  }, [user?.userId, isClientReady, refreshSummary, refreshPositions]);
+  }, [user?.userId, isClientReady]); // Fix infinite loop by removing unstable deps
 
   // Cleanup on unmount
   useEffect(() => {

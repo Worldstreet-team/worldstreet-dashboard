@@ -27,10 +27,10 @@ export const DriftInitializationOverlay: React.FC<DriftInitializationOverlayProp
                 {/* Outer spinning ring */}
                 <div className="absolute inset-0 border-4 border-[#fcd535]/20 rounded-full"></div>
                 <div className="absolute inset-0 border-4 border-transparent border-t-[#fcd535] rounded-full animate-spin"></div>
-                
+
                 {/* Inner pulsing circle */}
                 <div className="absolute inset-3 bg-[#fcd535]/10 rounded-full animate-pulse"></div>
-                
+
                 {/* Center icon */}
                 <div className="absolute inset-0 flex items-center justify-center">
                   <Icon icon="ph:rocket-launch" className="text-[#fcd535]" width={32} />
@@ -40,7 +40,7 @@ export const DriftInitializationOverlay: React.FC<DriftInitializationOverlayProp
               <h3 className="text-xl font-bold text-white mb-2">
                 Initializing Drift Protocol
               </h3>
-              
+
               <p className="text-sm text-[#848e9c] mb-4">
                 Setting up your trading environment...
               </p>
@@ -74,7 +74,7 @@ export const DriftInitializationOverlay: React.FC<DriftInitializationOverlayProp
               <h3 className="text-xl font-bold text-white mb-2">
                 Initialization Failed
               </h3>
-              
+
               <p className="text-sm text-[#848e9c] mb-4">
                 We encountered an issue while setting up your trading environment.
               </p>
@@ -95,7 +95,7 @@ export const DriftInitializationOverlay: React.FC<DriftInitializationOverlayProp
                     Try Again
                   </button>
                 )}
-                
+
                 <button
                   onClick={() => window.location.reload()}
                   className="w-full py-3 bg-[#2b3139] hover:bg-[#2b3139]/80 text-white rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"
