@@ -256,39 +256,21 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       }
     };
 
-    // Helper: Create Drift client with specified subscription type
+    // Helper: Create Drift client with websocket subscription
     const createDriftClient = async (
       connection: Connection,
       wallet: any,
-      programId: PublicKey,
-      subscriptionType: 'websocket' | 'polling'
+      programId: PublicKey
     ) => {
-      console.log(`[DriftContext] Creating DriftClient with ${subscriptionType} subscription`);
-
-      if (subscriptionType === 'polling') {
-        // Import BulkAccountLoader for polling mode
-        const { BulkAccountLoader } = await import('@drift-labs/sdk');
-        const accountLoader = new BulkAccountLoader(connection as any, 'confirmed', 1000);
-
-        return new DriftClient({
-          connection,
-          wallet,
-          programID: programId,
-          accountSubscription: {
-            type: 'polling',
-            accountLoader,
-          },
-        });
-      } else {
-        return new DriftClient({
-          connection,
-          wallet,
-          programID: programId,
-          accountSubscription: {
-            type: 'websocket',
-          },
-        });
-      }
+      console.log(`[DriftContext] Creating DriftClient with websocket subscription`);
+      return new DriftClient({
+        connection,
+        wallet,
+        programID: programId,
+        accountSubscription: {
+          type: 'websocket',
+        },
+      });
     };
 
     // Main initialization logic with retry
@@ -365,21 +347,8 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         // Step 6: Check if user account exists on-chain
         const userAccountExists = await checkUserAccountExists(connection, userAccountPubkey);
 
-        // Step 7: Decide subscription type based on WebSocket readiness
-        let subscriptionType: 'websocket' | 'polling' = 'websocket';
-        let usePolling = false;
-
-        if (!userAccountExists) {
-          console.log('[DriftContext] User account does not exist yet - will initialize first');
-          // For initialization, we don't need subscription yet
-          subscriptionType = 'polling'; // Use polling temporarily
-          usePolling = true;
-        }
-
         // Step 8: Create Drift client
-        let client = await createDriftClient(connection, wallet, DRIFT_PROGRAM_ID, subscriptionType);
-
-        console.log(`[DriftContext] DriftClient created with ${subscriptionType} subscription`);
+        let client = await createDriftClient(connection, wallet, DRIFT_PROGRAM_ID);
 
         // Step 9: Subscribe to client (Must happen before initializeUserAccount)
         try {
@@ -403,25 +372,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
             console.error('[DriftContext] JSON-RPC Error Data:', subscribeErr.data);
           }
 
-          // If WebSocket subscription failed, fall back to polling
-          if (!usePolling && subscriptionType === 'websocket') {
-            console.warn('[DriftContext] WebSocket subscription failed, falling back to polling');
-
-            // Unsubscribe current client
-            try {
-              await client.unsubscribe();
-            } catch (err) {
-              console.warn('[DriftContext] Error unsubscribing failed client:', err);
-            }
-
-            // Create new client with polling
-            client = await createDriftClient(connection, wallet, DRIFT_PROGRAM_ID, 'polling');
-            await client.subscribe();
-
-            console.log('[DriftContext] Successfully subscribed with polling mode');
-          } else {
-            throw subscribeErr;
-          }
+          throw subscribeErr;
         }
 
         // Step 10: Initialize user account if it doesn't exist
@@ -443,7 +394,11 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
 
             // Check if it's an insufficient SOL error
             const errorMessage = initErr?.message || String(initErr);
-            if (errorMessage.includes('insufficient lamports') || errorMessage.includes('Transfer: insufficient')) {
+            if (
+              errorMessage.includes('insufficient lamports') ||
+              errorMessage.includes('Transfer: insufficient') ||
+              errorMessage.includes('Attempt to debit an account but found no record of a prior credit')
+            ) {
               const match = errorMessage.match(/need (\d+)/);
               const requiredLamports = match ? parseInt(match[1]) : 2561280;
               const requiredSol = requiredLamports / 1e9;
@@ -837,7 +792,11 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
           } catch (initErr: any) {
             console.error('[DriftContext] Failed to initialize user account during explicit action:', initErr);
             const errorMessage = initErr?.message || String(initErr);
-            if (errorMessage.includes('insufficient lamports') || errorMessage.includes('Transfer: insufficient')) {
+            if (
+              errorMessage.includes('insufficient lamports') ||
+              errorMessage.includes('Transfer: insufficient') ||
+              errorMessage.includes('Attempt to debit an account but found no record of a prior credit')
+            ) {
               const match = errorMessage.match(/need (\d+)/);
               const requiredLamports = match ? parseInt(match[1]) : 2561280;
               const requiredSol = requiredLamports / 1e9;
