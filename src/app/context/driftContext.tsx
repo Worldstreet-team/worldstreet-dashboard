@@ -1667,7 +1667,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       console.log('=== DRIFT SPOT ORDER DEBUG ===');
       console.log('[DriftContext] Market Index:', marketIndex);
       console.log('[DriftContext] Direction:', direction);
-      console.log('[DriftContext] Amount (input):', amount);
+      console.log('[DriftContext] Amount (input - USDC value):', amount);
       console.log('[DriftContext] Order Type:', orderType);
 
       // Get USDC collateral (market index 0)
@@ -1704,14 +1704,95 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         };
       }
 
-      // Get market price for notional value calculation
-      const oracleData = client.getOracleDataForSpotMarket(marketIndex);
-      const marketPrice = oracleData.price.toNumber() / 1e6;
-      console.log('[DriftContext] Market Price:', marketPrice);
+      // === CRITICAL FIX: Interpret amount as USDC (quote currency) ===
+      // The 'amount' parameter represents the USDC value the user wants to trade
+      const quoteAmount = amount; // USDC value user wants to trade
+      console.log('[DriftContext] Quote Amount (USDC):', quoteAmount);
 
-      // Calculate notional value of the order
-      const notionalValue = amount * marketPrice;
-      console.log('[DriftContext] Notional Value:', notionalValue);
+      // Minimum order value check (prevent dust orders)
+      if (quoteAmount < 1) {
+        console.error('[DriftContext] ORDER TOO SMALL: Minimum order value is $1');
+        return {
+          success: false,
+          error: 'Minimum order value is $1 USDC'
+        };
+      }
+
+      // Get target market account for decimals and min order size
+      const targetMarket = client.getSpotMarketAccount(marketIndex);
+      console.log('[DriftContext] Target Market:', {
+        index: marketIndex,
+        decimals: targetMarket.decimals,
+        minOrderSize: targetMarket.minOrderSize?.toString()
+      });
+
+      // Get current market price from oracle
+      const oracleData = client.getOracleDataForSpotMarket(marketIndex);
+      const marketPrice = oracleData.price.toNumber() / 1e6; // Convert from 6 decimals
+      console.log('[DriftContext] Market Price (USDC per token):', marketPrice);
+
+      if (marketPrice <= 0) {
+        console.error('[DriftContext] INVALID MARKET PRICE:', marketPrice);
+        return {
+          success: false,
+          error: 'Unable to get market price. Please try again.'
+        };
+      }
+
+      // === CONVERT USDC TO BASE ASSET AMOUNT ===
+      // Example: If SOL = $81 and user wants to buy $1 worth:
+      // baseAmount = 1 / 81 = 0.0123 SOL
+      const baseAmount = quoteAmount / marketPrice;
+      console.log('[DriftContext] Base Amount (tokens):', baseAmount);
+
+      // Convert to Drift precision (BN with proper decimals)
+      // This scales the amount to the token's native precision
+      const baseAssetAmount = client.convertToSpotPrecision(marketIndex, baseAmount);
+      console.log('[DriftContext] Base Asset Amount (BN):', baseAssetAmount.toString());
+
+      // Verify precision conversion (sanity check)
+      const humanReadableAmount = baseAssetAmount.toNumber() / Math.pow(10, targetMarket.decimals);
+      console.log('[DriftContext] Human Readable Amount (verification):', humanReadableAmount);
+
+      // Check precision conversion accuracy (allow 1% tolerance for rounding)
+      if (Math.abs(humanReadableAmount - baseAmount) > baseAmount * 0.01) {
+        console.error('[DriftContext] PRECISION MISMATCH DETECTED');
+        console.error('[DriftContext] Expected:', baseAmount, 'Got:', humanReadableAmount);
+        return {
+          success: false,
+          error: 'Order size precision error. Please try again.'
+        };
+      }
+
+      // === MINIMUM ORDER SIZE VALIDATION ===
+      // Drift enforces minimum order sizes at the protocol level
+      // This prevents spam and ensures orders are economically viable
+      if (targetMarket.minOrderSize) {
+        const minOrderSizeBN = targetMarket.minOrderSize;
+        console.log('[DriftContext] Min Order Size (BN):', minOrderSizeBN.toString());
+        
+        const minOrderSizeHuman = minOrderSizeBN.toNumber() / Math.pow(10, targetMarket.decimals);
+        console.log('[DriftContext] Min Order Size (human):', minOrderSizeHuman);
+
+        // Check if order meets minimum size requirement
+        if (baseAssetAmount.lt(minOrderSizeBN)) {
+          const minOrderValueUSDC = minOrderSizeHuman * marketPrice;
+          
+          console.error('[DriftContext] ORDER BELOW MINIMUM SIZE');
+          console.error('[DriftContext] Order size:', humanReadableAmount, 'tokens');
+          console.error('[DriftContext] Min required:', minOrderSizeHuman, 'tokens');
+          console.error('[DriftContext] Min value:', minOrderValueUSDC, 'USDC');
+          
+          return {
+            success: false,
+            error: `Order size too small. Minimum order size is ${minOrderSizeHuman.toFixed(6)} tokens (~$${minOrderValueUSDC.toFixed(2)} USDC)`
+          };
+        }
+      }
+
+      // Calculate notional value for collateral check
+      const notionalValue = quoteAmount;
+      console.log('[DriftContext] Notional Value (USDC):', notionalValue);
 
       // Estimate required margin (spot orders typically need ~100% margin for buys)
       const estimatedMarginRequired = direction === 'buy' ? notionalValue : 0;
@@ -1724,25 +1805,6 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         return {
           success: false,
           error: `Insufficient collateral. Order requires ${estimatedMarginRequired.toFixed(2)} USDC but you only have ${freeCollateral.toFixed(2)} USDC available.`
-        };
-      }
-
-      // === PRECISION CONVERSION: Critical for correct order sizing ===
-      const baseAssetAmount = client.convertToSpotPrecision(marketIndex, amount);
-      console.log('[DriftContext] Base Asset Amount (BN):', baseAssetAmount.toString());
-      console.log('[DriftContext] Base Asset Amount (human check):', baseAssetAmount.toNumber());
-
-      // Verify precision conversion didn't create an absurdly large order
-      const targetMarket = client.getSpotMarketAccount(marketIndex);
-      const humanReadableAmount = baseAssetAmount.toNumber() / Math.pow(10, targetMarket.decimals);
-      console.log('[DriftContext] Human Readable Amount (verification):', humanReadableAmount);
-
-      if (Math.abs(humanReadableAmount - amount) > amount * 0.01) {
-        console.error('[DriftContext] PRECISION MISMATCH DETECTED');
-        console.error('[DriftContext] Expected:', amount, 'Got:', humanReadableAmount);
-        return {
-          success: false,
-          error: 'Order size precision error. Please try again.'
         };
       }
 
