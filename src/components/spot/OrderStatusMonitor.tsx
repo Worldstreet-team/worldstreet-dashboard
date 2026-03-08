@@ -13,7 +13,7 @@ export default function OrderStatusMonitor({
   autoRefresh = true, 
   refreshInterval = 5000 
 }: OrderStatusMonitorProps) {
-  const { getAllOrders, cancelOrder, getSpotMarketName, isClientReady } = useDrift();
+  const { getOpenOrders, cancelOrder, getSpotMarketName, isClientReady } = useDrift();
   const [allOrders, setAllOrders] = useState<any[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [cancellingOrderIndex, setCancellingOrderIndex] = useState<number | null>(null);
@@ -24,7 +24,7 @@ export default function OrderStatusMonitor({
 
     const refresh = async () => {
       setIsRefreshing(true);
-      const orders = await getAllOrders();
+      const orders = await getOpenOrders();
       setAllOrders(orders);
       setIsRefreshing(false);
     };
@@ -33,7 +33,7 @@ export default function OrderStatusMonitor({
     const interval = setInterval(refresh, refreshInterval);
 
     return () => clearInterval(interval);
-  }, [isClientReady, autoRefresh, refreshInterval, getAllOrders]);
+  }, [isClientReady, autoRefresh, refreshInterval, getOpenOrders]);
 
   const handleCancelOrder = async (orderIndex: number) => {
     setCancellingOrderIndex(orderIndex);
@@ -41,7 +41,7 @@ export default function OrderStatusMonitor({
       const result = await cancelOrder(orderIndex);
       if (result.success) {
         console.log('Order cancelled successfully');
-        const orders = await getAllOrders();
+        const orders = await getOpenOrders();
         setAllOrders(orders);
       } else {
         console.error('Failed to cancel order:', result.error);
@@ -55,7 +55,7 @@ export default function OrderStatusMonitor({
 
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
-    const orders = await getAllOrders();
+    const orders = await getOpenOrders();
     setAllOrders(orders);
     setIsRefreshing(false);
   };
@@ -114,8 +114,8 @@ export default function OrderStatusMonitor({
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-[#2b3139]">
         <div className="flex items-center gap-2">
-          <Icon icon="ph:list" className="text-[#fcd535]" width={20} />
-          <h3 className="text-sm font-semibold text-white">Order History</h3>
+          <Icon icon="ph:clock" className="text-[#fcd535]" width={20} />
+          <h3 className="text-sm font-semibold text-white">Open Orders</h3>
           <span className="px-2 py-0.5 bg-[#fcd535]/10 text-[#fcd535] text-xs font-medium rounded">
             {allOrders.length}
           </span>
@@ -172,38 +172,32 @@ export default function OrderStatusMonitor({
                     )}
                   </div>
                 </div>
-                {order.status === 'open' && (
-                  <button
-                    onClick={() => handleCancelOrder(order.orderIndex)}
-                    disabled={isCancelling}
-                    className="px-3 py-1.5 bg-[#f6465d]/10 hover:bg-[#f6465d]/20 text-[#f6465d] text-xs font-medium rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isCancelling ? (
-                      <Icon icon="ph:spinner" className="animate-spin" width={14} />
-                    ) : (
-                      'Cancel'
-                    )}
-                  </button>
-                )}
+                <button
+                  onClick={() => handleCancelOrder(order.orderIndex)}
+                  disabled={isCancelling}
+                  className="px-3 py-1.5 bg-[#f6465d]/10 hover:bg-[#f6465d]/20 text-[#f6465d] text-xs font-medium rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isCancelling ? (
+                    <Icon icon="ph:spinner" className="animate-spin" width={14} />
+                  ) : (
+                    'Cancel'
+                  )}
+                </button>
               </div>
 
-              {/* Status Info */}
-              {order.status === 'open' && (
-                <>
-                  <div className="flex items-center gap-2 text-xs">
-                    <div className="flex items-center gap-1 text-[#fcd535]">
-                      <Icon icon="ph:clock" width={14} />
-                      <span>Waiting for keeper to fill</span>
-                    </div>
-                  </div>
+              {/* Status Info - Always show for open orders */}
+              <div className="flex items-center gap-2 text-xs">
+                <div className="flex items-center gap-1 text-[#fcd535]">
+                  <Icon icon="ph:clock" width={14} />
+                  <span>Waiting for keeper to fill</span>
+                </div>
+              </div>
 
-                  {/* Info Banner */}
-                  <div className="mt-3 p-2 bg-[#2b3139] rounded text-xs text-[#848e9c]">
-                    <Icon icon="ph:info" className="inline mr-1" width={12} />
-                    Market orders are filled by external keepers. This typically takes 30s-2min depending on network conditions.
-                  </div>
-                </>
-              )}
+              {/* Info Banner */}
+              <div className="mt-3 p-2 bg-[#2b3139] rounded text-xs text-[#848e9c]">
+                <Icon icon="ph:info" className="inline mr-1" width={12} />
+                Orders are filled by Drift Protocol's keeper network. This typically takes 30s-2min depending on network conditions.
+              </div>
             </div>
           );
         })}
