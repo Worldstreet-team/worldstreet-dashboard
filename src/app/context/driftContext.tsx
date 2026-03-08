@@ -171,6 +171,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   const [initializationError, setInitializationError] = useState<string | null>(null);
   const [isFirstLoad, setIsFirstLoad] = useState(true); // Track if this is the first initialization
   const [showInitOverlay, setShowInitOverlay] = useState(false); // Control overlay visibility
+  const [hasInitializedOnce, setHasInitializedOnce] = useState(false); // Track if initialization has ever completed successfully
 
   // PIN unlock state
   const [showPinUnlock, setShowPinUnlock] = useState(false);
@@ -217,6 +218,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       setPositions([]);
       setEncryptedPrivateKey(null);
       setInitializationFailed(false);
+      setHasInitializedOnce(false); // Reset initialization flag on logout
       if (driftClientRef.current) {
         // Unsubscribe from polling
         try {
@@ -237,12 +239,13 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   // If we start initializing in the background (e.g. on Dashboard)
   // but then navigate to a trading page while still initializing,
   // we should show the overlay on that page.
+  // BUT only if we haven't successfully initialized before
   useEffect(() => {
-    if (isInitializing && isTradingPage && !showInitOverlay) {
+    if (isInitializing && isTradingPage && !showInitOverlay && !hasInitializedOnce) {
       console.log('[DriftContext] Navigated to trading page during init, showing overlay');
       setShowInitOverlay(true);
     }
-  }, [isInitializing, isTradingPage, showInitOverlay]);
+  }, [isInitializing, isTradingPage, showInitOverlay, hasInitializedOnce]);
 
   // Fetch encrypted wallet on mount
   useEffect(() => {
@@ -740,11 +743,15 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     return undefined;
   }, [spotMarkets]);
   /**
+   * Refresh Drift account data from on-chain state
+   * 
+   * CRITICAL: This function must be called after every transaction to get latest balances
+   * The Drift SDK caches account data and requires explicit fetchAccounts() calls
    * 
    * Handles:
    * - WebSocket disconnection detection
    * - Automatic resubscription
-   * - Graceful fallback to polling if WebSocket fails
+   * - Explicit account data refresh via fetchAccounts()
    */
   const refreshAccounts = useCallback(async () => {
     const client = driftClientRef.current;
@@ -778,11 +785,13 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         }
       }
 
-      // Fetch latest account data
+      // CRITICAL: Fetch latest account data from on-chain
+      // This is required after every transaction to get updated balances
       const driftUser = client.getUser();
       if (driftUser && driftUser.fetchAccounts) {
+        console.log('[DriftContext] Fetching latest account data from blockchain...');
         await driftUser.fetchAccounts();
-        console.log('[DriftContext] User accounts fetched successfully');
+        console.log('[DriftContext] Account data refreshed successfully');
       }
 
       console.log('[DriftContext] Accounts refreshed successfully');
@@ -854,8 +863,9 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     }
 
     try {
-      // Only show overlay on first load and ONLY on trading pages
-      if (isFirstLoad && isTradingPage) {
+      // Only show overlay on first load, ONLY on trading pages, and ONLY if never initialized before
+      if (isFirstLoad && isTradingPage && !hasInitializedOnce) {
+        console.log('[DriftContext] First initialization on trading page, showing overlay');
         setShowInitOverlay(true);
       }
       setInitializationError(null);
@@ -975,6 +985,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         setIsInitializing(false);
         setShowInitOverlay(false); // Hide overlay - account just needs initialization
         setIsFirstLoad(false); // Mark first load as complete
+        setHasInitializedOnce(true); // Mark successful initialization (even if account not initialized)
         return;
       }
 
@@ -1045,6 +1056,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       setIsInitializing(false);
       setShowInitOverlay(false); // Hide overlay on success
       setIsFirstLoad(false); // Mark first load as complete
+      setHasInitializedOnce(true); // Mark that we've successfully initialized at least once
     } catch (err) {
       console.error('[DriftContext] Error refreshing summary:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to refresh summary';
@@ -1054,7 +1066,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       setIsInitializing(false);
       // Keep overlay visible on error so user can retry
     }
-  }, [user?.userId, requestPin, initializeDriftClient, refreshAccounts, initializationFailed, isFirstLoad]);
+  }, [user?.userId, requestPin, initializeDriftClient, refreshAccounts, initializationFailed, isFirstLoad, isTradingPage, hasInitializedOnce]);
 
   // Refresh positions from Drift client (with WebSocket)
   const refreshPositions = useCallback(async () => {
@@ -1068,7 +1080,8 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         console.log('[DriftContext] Initializing client for positions...');
         client = await initializeDriftClient(pin);
       } else {
-        // Refresh accounts via WebSocket
+        // CRITICAL: Refresh accounts to get latest on-chain data
+        console.log('[DriftContext] Refreshing accounts before fetching positions...');
         await refreshAccounts();
       }
 
@@ -1082,6 +1095,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       } catch (err) {
         console.log('[DriftContext] User account not initialized, no positions');
         setPositions([]);
+        setSpotPositions([]);
         return;
       }
 
@@ -1955,17 +1969,27 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       const txSignature = await client.placeSpotOrder(orderParams, txOptions);
       console.log('[DriftContext] Spot order sent:', txSignature);
 
+      // Wait for transaction confirmation
       await pollTransactionStatus(client.connection, txSignature, 30, 2000);
+      console.log('[DriftContext] Transaction confirmed on-chain');
       
-      // Small delay to ensure blockchain state is updated
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // CRITICAL: Small delay to ensure blockchain state is fully propagated
+      // This prevents reading stale data before the state update is complete
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
-      // Force refresh accounts to get latest balances
+      // CRITICAL: Force refresh account data from blockchain
+      // This fetches the latest balances after the transaction
+      console.log('[DriftContext] Refreshing account data after transaction...');
       await refreshAccounts();
       
-      // Refresh summary and positions
-      await refreshSummary();
-      await refreshPositions();
+      // Refresh summary and positions to update UI
+      console.log('[DriftContext] Refreshing positions and summary...');
+      await Promise.all([
+        refreshSummary(),
+        refreshPositions()
+      ]);
+      
+      console.log('[DriftContext] All data refreshed successfully');
 
       return { success: true, txSignature };
     } catch (err: any) {
@@ -2235,6 +2259,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     setInitializationError(null);
     setIsFirstLoad(true); // Treat retry as first load to show overlay
     setShowInitOverlay(true); // Show overlay for retry
+    setHasInitializedOnce(false); // Reset initialization flag to allow overlay on retry
     console.log('[DriftContext] Reset initialization failure flag');
   }, []);
 
