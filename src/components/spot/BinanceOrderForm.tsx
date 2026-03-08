@@ -6,6 +6,7 @@ import { useSpotBalances } from '@/hooks/useSpotBalances';
 import { useDrift } from '@/app/context/driftContext';
 import SpotSwapConfirmModal from './SpotSwapConfirmModal';
 import SpotDepositModal from './SpotDepositModal';
+import SpotOrderProcessingModal from './SpotOrderProcessingModal';
 
 interface BinanceOrderFormProps {
   selectedPair: string;
@@ -31,6 +32,10 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [executing, setExecuting] = useState(false);
+  const [showProcessingModal, setShowProcessingModal] = useState(false);
+  const [processingStatus, setProcessingStatus] = useState<'processing' | 'success' | 'error'>('processing');
+  const [processingError, setProcessingError] = useState<string>('');
+  const [txSignature, setTxSignature] = useState<string>('');
 
   const [baseAsset, quoteAsset] = selectedPair.split('-');
 
@@ -120,6 +125,13 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
     setError(null);
     setSuccess(null);
     setExecuting(true);
+    
+    // Close confirm modal and show processing modal immediately
+    setShowConfirmModal(false);
+    setShowProcessingModal(true);
+    setProcessingStatus('processing');
+    setProcessingError('');
+    setTxSignature('');
 
     try {
       const [baseAsset] = selectedPair.split('-');
@@ -138,19 +150,29 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
 
       if (!result.success) throw new Error(result.error || 'Drift spot order failed');
 
+      // Success!
+      setProcessingStatus('success');
+      setTxSignature(result.txSignature || '');
       setSuccess(`${activeTab === 'buy' ? 'Buy' : 'Sell'} order executed successfully!`);
-      setShowConfirmModal(false);
+      
       setAmount('');
       setPrice('');
       setTotal('');
       setSliderValue(0);
 
-      await refetchBalances();
+      // Refresh balances in background
+      refetchBalances();
       if (onTradeExecuted) onTradeExecuted();
 
-      setTimeout(() => setSuccess(null), 5000);
+      // Auto-close success modal after 3 seconds
+      setTimeout(() => {
+        setShowProcessingModal(false);
+        setSuccess(null);
+      }, 3000);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to execute trade';
+      setProcessingStatus('error');
+      setProcessingError(errorMsg);
       setError(errorMsg);
     } finally {
       setExecuting(false);
@@ -238,6 +260,17 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
       </div>
 
       <SpotSwapConfirmModal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} quote={null} pair={selectedPair} side={activeTab} onConfirm={handleConfirmSwap} executing={executing} />
+
+      <SpotOrderProcessingModal
+        isOpen={showProcessingModal}
+        onClose={() => setShowProcessingModal(false)}
+        status={processingStatus}
+        side={activeTab}
+        pair={selectedPair}
+        amount={amount}
+        error={processingError}
+        txSignature={txSignature}
+      />
 
       <SpotDepositModal
         isOpen={showDepositModal}

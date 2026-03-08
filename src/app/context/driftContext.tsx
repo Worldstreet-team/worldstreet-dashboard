@@ -1131,6 +1131,9 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       const spotPositionsList = [];
       try {
         const spotMarketAccounts = client.getSpotMarketAccounts();
+        
+        console.log('[DriftContext] Refreshing spot positions for', spotMarketAccounts.length, 'markets');
+        
         for (const marketAccount of spotMarketAccounts) {
           const marketIndex = marketAccount.marketIndex;
           const position = driftUser.getSpotPosition(marketIndex);
@@ -1181,6 +1184,9 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
             value: amount * price
           });
         }
+        
+        console.log('[DriftContext] Total spot positions fetched:', spotPositionsList.length);
+        console.log('[DriftContext] Non-zero positions:', spotPositionsList.filter(p => p.amount > 0).length);
       } catch (spotErr) {
         console.warn('[DriftContext] Error getting spot positions:', spotErr);
       }
@@ -1950,6 +1956,14 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       console.log('[DriftContext] Spot order sent:', txSignature);
 
       await pollTransactionStatus(client.connection, txSignature, 30, 2000);
+      
+      // Small delay to ensure blockchain state is updated
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Force refresh accounts to get latest balances
+      await refreshAccounts();
+      
+      // Refresh summary and positions
       await refreshSummary();
       await refreshPositions();
 

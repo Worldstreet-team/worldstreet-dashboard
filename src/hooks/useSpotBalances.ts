@@ -154,6 +154,14 @@ export function useSpotBalances(
     fetchBalances();
   }, [fetchBalances]);
 
+  // Also refetch when spotPositions change (after trades)
+  useEffect(() => {
+    if (spotPositions && spotPositions.length > 0) {
+      console.log('[useSpotBalances] Spot positions updated, refetching balances');
+      fetchBalances();
+    }
+  }, [spotPositions?.length]); // Only trigger on length change to avoid infinite loops
+
   // Refetch function
   const handleRefetch = useCallback(async () => {
     await refreshPositions();

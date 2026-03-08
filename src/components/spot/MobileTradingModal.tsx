@@ -5,6 +5,7 @@ import { Icon } from '@iconify/react';
 import { useAuth } from '@/app/context/authContext';
 import { useSpotBalances } from '@/hooks/useSpotBalances';
 import { useDrift } from '@/app/context/driftContext';
+import SpotOrderProcessingModal from './SpotOrderProcessingModal';
 
 interface MobileTradingModalProps {
   isOpen: boolean;
@@ -32,6 +33,10 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [executing, setExecuting] = useState(false);
+  const [showProcessingModal, setShowProcessingModal] = useState(false);
+  const [processingStatus, setProcessingStatus] = useState<'processing' | 'success' | 'error'>('processing');
+  const [processingError, setProcessingError] = useState<string>('');
+  const [txSignature, setTxSignature] = useState<string>('');
 
   const [tokenIn, tokenOut] = selectedPair.split('-');
   const effectiveChain = chain;
@@ -127,6 +132,14 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
     }
 
     setExecuting(true);
+    
+    // Show processing modal immediately
+    setShowQuote(false);
+    setShowProcessingModal(true);
+    setProcessingStatus('processing');
+    setProcessingError('');
+    setTxSignature('');
+    
     try {
       const [baseAsset] = selectedPair.split('-');
       const marketIndex = getSpotMarketIndexBySymbol(baseAsset);
@@ -144,6 +157,9 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
 
       if (!result.success) throw new Error(result.error || 'Drift spot order failed');
 
+      // Success!
+      setProcessingStatus('success');
+      setTxSignature(result.txSignature || '');
       setSuccess(`${side === 'buy' ? 'Buy' : 'Sell'} order executed successfully!`);
 
       await refreshPositions();
@@ -155,12 +171,16 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
       setSliderValue(0);
       setPin('');
 
+      // Auto-close and return to main view after 3 seconds
       setTimeout(() => {
+        setShowProcessingModal(false);
         setSuccess(null);
         onClose();
       }, 3000);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to execute trade';
+      setProcessingStatus('error');
+      setProcessingError(errorMsg);
       setError(errorMsg);
       setPinError(errorMsg);
     } finally {
@@ -395,6 +415,22 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
           )}
         </div>
       </div>
+
+      <SpotOrderProcessingModal
+        isOpen={showProcessingModal}
+        onClose={() => {
+          setShowProcessingModal(false);
+          if (processingStatus === 'success') {
+            onClose();
+          }
+        }}
+        status={processingStatus}
+        side={side}
+        pair={selectedPair}
+        amount={amount}
+        error={processingError}
+        txSignature={txSignature}
+      />
     </div>
   );
 }
