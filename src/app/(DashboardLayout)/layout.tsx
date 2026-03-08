@@ -22,7 +22,7 @@ import { PinSetupModal, WalletAddressSync } from "@/components/wallet";
 import DashboardVividProvider from "@/components/dashboard/DashboardVividProvider";
 
 // Routes that render full-screen without sidebar/header chrome
-const FULLSCREEN_ROUTES = ["/vivid", "/spot", "/futures"];
+const FULLSCREEN_ROUTES = ["/vivid", "/spot", "/futures", "/portfolio"];
 
 const LOGIN_URL = "https://www.worldstreetgold.com/login";
 
