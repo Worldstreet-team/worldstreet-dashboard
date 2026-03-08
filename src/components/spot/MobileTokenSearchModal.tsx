@@ -52,51 +52,43 @@ export default function MobileTokenSearchModal({
   const fetchMarkets = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/kucoin/markets');
-      const data = await response.json();
 
-      if (data.success) {
-        let finalMarkets: MarketData[] = data.data;
+      let finalMarkets: MarketData[] = [];
 
-        // If Drift is ready, include ALL 60 Drift spot markets
-        if (isClientReady && spotMarkets.size > 0) {
-          const driftList: MarketData[] = [];
+      // Build market list from ALL 60 Drift spot markets
+      if (isClientReady && spotMarkets.size > 0) {
+        console.log('[MobileTokenSearchModal] Building market list from', spotMarkets.size, 'Drift markets');
 
-          spotMarkets.forEach((info: SpotMarketInfo, index: number) => {
-            // Skip stablecoins as base assets (unless pool-specific)
-            if (info.symbol === 'USDC' || info.symbol === 'USDT' || info.symbol === 'USDS' || 
-                info.symbol === 'PYUSD' || info.symbol === 'USDe' || info.symbol === 'USDY' ||
-                info.symbol === 'AUSD' || info.symbol === 'EURC') {
-              if (!info.symbol.includes('-')) return;
-            }
+        spotMarkets.forEach((info: SpotMarketInfo, index: number) => {
+          // Skip stablecoins as base assets (they're quote assets)
+          const isStablecoin = ['USDC', 'USDT', 'USDS', 'PYUSD', 'USDe', 'USDY', 'AUSD', 'EURC'].includes(info.symbol);
+          
+          // Only skip if they're in pool 0 (primary pool)
+          // Pool-specific versions (like USDC-1, USDC-4) should be included
+          if (isStablecoin && !info.symbol.includes('-')) {
+            return;
+          }
 
-            const baseSymbol = info.symbol.split('-')[0];
-            const existing = finalMarkets.find(m => m.baseAsset === baseSymbol || m.baseAsset === info.symbol);
-            const driftPrice = getMarketPrice(index, 'spot');
+          const driftPrice = getMarketPrice(index, 'spot');
 
-            if (existing) {
-              existing.chain = 'solana';
-              existing.marketIndex = index;
-              if (driftPrice > 0) existing.price = driftPrice;
-            } else {
-              driftList.push({
-                symbol: `${info.symbol}-USDT`,
-                baseAsset: info.symbol,
-                quoteAsset: 'USDT',
-                price: driftPrice || 0,
-                change24h: 0,
-                volume24h: 0,
-                chain: 'solana',
-                marketIndex: index,
-              });
-            }
+          finalMarkets.push({
+            symbol: `${info.symbol}-USDT`,
+            baseAsset: info.symbol,
+            quoteAsset: 'USDT',
+            price: driftPrice || 0,
+            change24h: 0, // Drift doesn't provide 24h change
+            volume24h: 0, // Drift doesn't provide volume
+            chain: 'solana',
+            marketIndex: index,
           });
+        });
 
-          finalMarkets = [...finalMarkets, ...driftList];
-        }
-
-        setMarkets(finalMarkets);
+        console.log('[MobileTokenSearchModal] Built', finalMarkets.length, 'markets from Drift');
+      } else {
+        console.log('[MobileTokenSearchModal] Drift not ready yet, showing empty list');
       }
+
+      setMarkets(finalMarkets);
     } catch (error) {
       console.error('Error fetching markets:', error);
     } finally {

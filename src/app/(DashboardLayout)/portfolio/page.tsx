@@ -6,6 +6,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useDrift } from '@/app/context/driftContext';
 import { DriftAccountStatus } from '@/components/futures/DriftAccountStatus';
+import { PaginatedSpotPositions } from '@/components/spot/PaginatedSpotPositions';
 
 export default function PortfolioPage() {
   const {
@@ -391,97 +392,18 @@ export default function PortfolioPage() {
             <div className="px-6 py-4 border-b border-[#1e2329]">
               <div className="flex items-center gap-2">
                 <Icon icon="ph:coins-duotone" className="text-[#fcd535]" height={20} />
-                <h2 className="text-lg font-semibold text-white">Spot Balances</h2>
+                <h2 className="text-lg font-semibold text-white">Spot Positions</h2>
+                <span className="text-xs text-[#848e9c]">
+                  ({spotPositions.length + 1} total)
+                </span>
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-[#1e2329]">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-[#848e9c] uppercase tracking-wider">
-                      Token
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-[#848e9c] uppercase tracking-wider">
-                      Type
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-semibold text-[#848e9c] uppercase tracking-wider">
-                      Balance
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-semibold text-[#848e9c] uppercase tracking-wider">
-                      Price
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-semibold text-[#848e9c] uppercase tracking-wider">
-                      USD Value
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#1e2329]">
-                  {/* USDC from freeCollateral */}
-                  <tr className="hover:bg-[#1e2329] transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm font-medium text-white">USDC</span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#0ecb81]/10 text-[#0ecb81]">
-                        Collateral
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">
-                      {formatNumber(summary?.freeCollateral || 0, 2)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">
-                      {formatUSD(1.00)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">
-                      {formatUSD(summary?.freeCollateral || 0)}
-                    </td>
-                  </tr>
-
-                  {/* Other spot positions (filter out USDC index 0 and zero balances) */}
-                  {spotPositions
-                    .filter(pos => pos.marketIndex !== 0 && pos.amount > 0)
-                    .map((position, index) => (
-                      <tr key={index} className="hover:bg-[#1e2329] transition-colors">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="text-sm font-medium text-white">
-                            {position.marketName}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span
-                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              position.balanceType === 'deposit'
-                                ? 'bg-[#0ecb81]/10 text-[#0ecb81]'
-                                : 'bg-[#f6465d]/10 text-[#f6465d]'
-                            }`}
-                          >
-                            {position.balanceType === 'deposit' ? 'Deposit' : 'Borrow'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">
-                          {formatNumber(position.amount, 4)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">
-                          {formatUSD(position.price)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">
-                          {formatUSD(position.value)}
-                        </td>
-                      </tr>
-                    ))}
-
-                  {/* Empty state if no other spot balances */}
-                  {spotPositions.filter(pos => pos.marketIndex !== 0 && pos.amount > 0).length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="px-6 py-8 text-center">
-                        <p className="text-[#848e9c] text-sm">No other spot balances</p>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <PaginatedSpotPositions 
+              itemsPerPage={10}
+              showUSDC={true}
+              compact={false}
+            />
           </div>
         </div>
       </div>

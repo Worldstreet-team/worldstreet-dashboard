@@ -69,6 +69,17 @@ interface DriftSpotPosition {
   price: number;
 }
 
+interface DriftOrder {
+  marketIndex: number;
+  marketType: 'perp' | 'spot';
+  orderType: 'market' | 'limit';
+  direction: 'long' | 'short' | 'buy' | 'sell';
+  baseAssetAmount: string;
+  price: string;
+  status: 'init' | 'open' | 'filled' | 'canceled';
+  orderIndex: number;
+}
+
 interface DriftContextValue {
   // Client state
   isClientReady: boolean;
@@ -89,6 +100,11 @@ interface DriftContextValue {
   // Positions
   positions: DriftPosition[];
   spotPositions: DriftSpotPosition[];
+
+  // Orders
+  openOrders: DriftOrder[];
+  getOpenOrders: () => Promise<DriftOrder[]>;
+  cancelOrder: (orderIndex: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
 
   // Loading/error states
   isLoading: boolean;
@@ -159,6 +175,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   const [summary, setSummary] = useState<DriftAccountSummary | null>(null);
   const [positions, setPositions] = useState<DriftPosition[]>([]);
   const [spotPositions, setSpotPositions] = useState<DriftSpotPosition[]>([]);
+  const [openOrders, setOpenOrders] = useState<DriftOrder[]>([]);
 
   // Market data - stable mapping from marketIndex to market info
   const [perpMarkets, setPerpMarkets] = useState<Map<number, PerpMarketInfo>>(new Map());
@@ -2070,6 +2087,121 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     }
   }, [user?.userId, requestPin, initializeDriftClient, refreshSummary, refreshPositions, refreshAccounts, getSpotMarketName]);
 
+  /**
+   * Get all open orders for the user
+   * 
+   * Returns orders with status 'open' that are waiting to be filled by keepers
+   */
+  const getOpenOrders = useCallback(async (): Promise<DriftOrder[]> => {
+    const client = driftClientRef.current;
+    if (!client) {
+      console.log('[DriftContext] No client available to get orders');
+      return [];
+    }
+
+    try {
+      const driftUser = client.getUser();
+      const userAccount = driftUser.getUserAccount();
+      
+      // Import OrderStatus enum
+      const { OrderStatus, MarketType } = await import('@drift-labs/sdk');
+      
+      // Filter for open orders
+      const orders: DriftOrder[] = [];
+      
+      for (let i = 0; i < userAccount.orders.length; i++) {
+        const order = userAccount.orders[i];
+        
+        // Skip if order is not open
+        if (order.status !== OrderStatus.Open) continue;
+        
+        // Map order data to our interface
+        const marketType = order.marketType === MarketType.SPOT ? 'spot' : 'perp';
+        const orderType = order.orderType === 0 ? 'market' : 'limit';
+        
+        // Determine direction based on market type and position direction
+        let direction: 'long' | 'short' | 'buy' | 'sell';
+        if (marketType === 'spot') {
+          direction = order.direction === 0 ? 'buy' : 'sell';
+        } else {
+          direction = order.direction === 0 ? 'long' : 'short';
+        }
+        
+        orders.push({
+          marketIndex: order.marketIndex,
+          marketType,
+          orderType,
+          direction,
+          baseAssetAmount: order.baseAssetAmount.toString(),
+          price: order.price.toString(),
+          status: 'open',
+          orderIndex: i,
+        });
+      }
+      
+      console.log(`[DriftContext] Found ${orders.length} open orders`);
+      setOpenOrders(orders);
+      return orders;
+      
+    } catch (err) {
+      console.error('[DriftContext] Error getting open orders:', err);
+      return [];
+    }
+  }, []);
+
+  /**
+   * Cancel an open order
+   * 
+   * @param orderIndex - Index of the order in the user's orders array
+   */
+  const cancelOrder = useCallback(async (
+    orderIndex: number
+  ): Promise<{ success: boolean; txSignature?: string; error?: string }> => {
+    if (!user?.userId) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    try {
+      setIsLoading(true);
+      const pin = await requestPin();
+
+      let client = driftClientRef.current;
+      if (!client) {
+        client = await initializeDriftClient(pin);
+      }
+
+      console.log(`[DriftContext] Cancelling order at index ${orderIndex}`);
+
+      // Cancel the order
+      const txSignature = await client.cancelOrder(orderIndex);
+
+      console.log('[DriftContext] Cancel order transaction sent:', txSignature);
+
+      // Wait for confirmation
+      await pollTransactionStatus(client.connection, txSignature, 30, 2000);
+      console.log('[DriftContext] Order cancelled:', txSignature);
+
+      // Refresh orders list
+      await getOpenOrders();
+
+      return { success: true, txSignature };
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to cancel order';
+      console.error('[DriftContext] Cancel order error:', err);
+
+      let friendlyError = 'Failed to cancel order';
+      if (errorMessage.includes('Order not found')) {
+        friendlyError = 'Order not found or already filled';
+      } else if (errorMessage.includes('Invalid order')) {
+        friendlyError = 'Invalid order index';
+      }
+
+      return { success: false, error: friendlyError };
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user?.userId, requestPin, initializeDriftClient, getOpenOrders]);
+
   // Helper to get current oracle price from Drift
   const getMarketPrice = useCallback((marketIndex: number, type: 'perp' | 'spot' = 'perp'): number => {
     if (!driftClientRef.current) return 0;
@@ -2315,6 +2447,9 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     spotMarkets,
     positions,
     spotPositions,
+    openOrders,
+    getOpenOrders,
+    cancelOrder,
     walletBalance,
     getSpotMarketIndexBySymbol,
     getMarketName,

@@ -49,58 +49,41 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
         setLoading(true);
         setError(null);
 
-        // Fetch from KuCoin for decorative data (24h change/volume)
-        const response = await fetch('/api/kucoin/markets');
-        const data = await response.json();
+        let finalMarkets: MarketData[] = [];
 
-        if (!data.success) {
-          throw new Error(data.error || 'Failed to fetch market data');
-        }
-
-        let finalMarkets: MarketData[] = data.data;
-
-        // If Drift is ready, ensure we include ALL 60 Drift spot markets
+        // If Drift is ready, build market list from ALL 60 Drift spot markets
         if (isClientReady && spotMarkets.size > 0) {
-          const driftList: MarketData[] = [];
+          console.log('[BinanceMarketList] Building market list from', spotMarkets.size, 'Drift markets');
 
           spotMarkets.forEach((info: SpotMarketInfo, index: number) => {
             // Skip stablecoins as base assets (they're quote assets)
-            if (info.symbol === 'USDC' || info.symbol === 'USDT' || info.symbol === 'USDS' || 
-                info.symbol === 'PYUSD' || info.symbol === 'USDe' || info.symbol === 'USDY' ||
-                info.symbol === 'AUSD' || info.symbol === 'EURC') {
-              // Only skip if they're in pool 0 (primary pool)
-              // Pool-specific versions (like USDC-1, USDC-4) should be included
-              if (!info.symbol.includes('-')) return;
+            const isStablecoin = ['USDC', 'USDT', 'USDS', 'PYUSD', 'USDe', 'USDY', 'AUSD', 'EURC'].includes(info.symbol);
+            
+            // Only skip if they're in pool 0 (primary pool)
+            // Pool-specific versions (like USDC-1, USDC-4) should be included
+            if (isStablecoin && !info.symbol.includes('-')) {
+              return;
             }
 
-            // Look for existing KuCoin record for this symbol
-            const baseSymbol = info.symbol.split('-')[0]; // Handle pool-specific symbols
-            const existing = finalMarkets.find(m => m.baseAsset === baseSymbol || m.baseAsset === info.symbol);
             const driftPrice = getMarketPrice(index, 'spot');
 
-            if (existing) {
-              // Augment existing record with Drift info and oracle price if available
-              existing.chain = 'solana';
-              existing.marketIndex = index;
-              if (driftPrice > 0) existing.price = driftPrice;
-            } else {
-              // Create new record for Drift market not in KuCoin list
-              driftList.push({
-                symbol: `${info.symbol}-USDT`,
-                baseAsset: info.symbol,
-                quoteAsset: 'USDT',
-                price: driftPrice || 0,
-                change24h: 0,
-                volume24h: 0,
-                high24h: 0,
-                low24h: 0,
-                chain: 'solana',
-                marketIndex: index,
-              });
-            }
+            finalMarkets.push({
+              symbol: `${info.symbol}-USDT`,
+              baseAsset: info.symbol,
+              quoteAsset: 'USDT',
+              price: driftPrice || 0,
+              change24h: 0, // Drift doesn't provide 24h change
+              volume24h: 0, // Drift doesn't provide volume
+              high24h: 0,
+              low24h: 0,
+              chain: 'solana',
+              marketIndex: index,
+            });
           });
 
-          finalMarkets = [...finalMarkets, ...driftList];
+          console.log('[BinanceMarketList] Built', finalMarkets.length, 'markets from Drift');
+        } else {
+          console.log('[BinanceMarketList] Drift not ready yet, showing empty list');
         }
 
         setMarkets(finalMarkets);
@@ -114,8 +97,8 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
 
     fetchMarketData();
 
-    // Refresh every 3 minutes
-    const interval = setInterval(fetchMarketData, 180000);
+    // Refresh every 10 seconds to update prices
+    const interval = setInterval(fetchMarketData, 10000);
     return () => clearInterval(interval);
   }, [isClientReady, spotMarkets, getMarketPrice]);
 

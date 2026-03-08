@@ -16,6 +16,11 @@ import { useDrift } from '@/app/context/driftContext';
  * - USDC balance comes from summary.freeCollateral, NOT spotPositions
  * - freeCollateral = available USDC for trading (not locked as margin)
  * - totalCollateral = total USDC deposited (including margin)
+ * 
+ * CRITICAL: Pending Orders
+ * - Market orders may take 30s-2min to fill
+ * - Balance changes only happen AFTER order fills
+ * - Use openOrders to detect pending orders
  */
 
 interface UseSpotBalancesReturn {
@@ -27,6 +32,8 @@ interface UseSpotBalancesReturn {
     base: boolean;
     quote: boolean;
   };
+  hasPendingOrders: boolean;
+  pendingOrderCount: number;
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
@@ -37,7 +44,7 @@ interface UseSpotBalancesReturn {
  * 
  * @param baseMarketIndex - Drift spot market index for base token (e.g., SOL = 1)
  * @param quoteMarketIndex - Drift spot market index for quote token (e.g., USDC = 0)
- * @returns Balances for both tokens
+ * @returns Balances for both tokens + pending order status
  */
 export function useSpotBalances(
   baseMarketIndex: number | undefined,
@@ -49,6 +56,8 @@ export function useSpotBalances(
     refreshPositions,
     getSpotMarketName,
     summary,
+    openOrders,
+    getOpenOrders,
   } = useDrift();
 
   const [baseBalance, setBaseBalance] = useState<number>(0);
@@ -56,6 +65,8 @@ export function useSpotBalances(
   const [baseBalanceBN, setBaseBalanceBN] = useState<any | null>(null);
   const [quoteBalanceBN, setQuoteBalanceBN] = useState<any | null>(null);
   const [isBorrowed, setIsBorrowed] = useState({ base: false, quote: false });
+  const [hasPendingOrders, setHasPendingOrders] = useState(false);
+  const [pendingOrderCount, setPendingOrderCount] = useState(0);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,6 +78,8 @@ export function useSpotBalances(
       setBaseBalanceBN(null);
       setQuoteBalanceBN(null);
       setIsBorrowed({ base: false, quote: false });
+      setHasPendingOrders(false);
+      setPendingOrderCount(0);
       return;
     }
 
@@ -76,6 +89,18 @@ export function useSpotBalances(
     try {
       console.log('[useSpotBalances] Fetching balances for markets:', { baseMarketIndex, quoteMarketIndex });
       console.log('[useSpotBalances] Available spotPositions:', spotPositions?.length || 0);
+      
+      // Check for pending orders
+      const orders = await getOpenOrders();
+      const marketOrders = orders.filter(
+        o => o.marketIndex === baseMarketIndex || o.marketIndex === quoteMarketIndex
+      );
+      setHasPendingOrders(marketOrders.length > 0);
+      setPendingOrderCount(marketOrders.length);
+      
+      if (marketOrders.length > 0) {
+        console.log(`[useSpotBalances] Found ${marketOrders.length} pending orders for these markets`);
+      }
       
       // Find balances from spotPositions (which are populated by DriftContext)
       let baseAmount = 0;
@@ -147,7 +172,7 @@ export function useSpotBalances(
     } finally {
       setLoading(false);
     }
-  }, [isClientReady, baseMarketIndex, quoteMarketIndex, spotPositions, getSpotMarketName, summary]);
+  }, [isClientReady, baseMarketIndex, quoteMarketIndex, spotPositions, getSpotMarketName, summary, getOpenOrders]);
 
   // Fetch balances when dependencies change
   useEffect(() => {
@@ -176,6 +201,8 @@ export function useSpotBalances(
     baseBalanceBN,
     quoteBalanceBN,
     isBorrowed,
+    hasPendingOrders,
+    pendingOrderCount,
     loading,
     error,
     refetch: handleRefetch,
