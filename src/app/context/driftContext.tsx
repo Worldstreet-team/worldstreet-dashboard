@@ -1968,7 +1968,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         marketIndex,
         direction: positionDirection,
         baseAssetAmount,
-        price: price ? client.convertToPricePrecision(price) : new BN(1),
+        price: new BN(0),
       };
 
       console.log('[DriftContext] Order Params:', {
