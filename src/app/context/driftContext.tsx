@@ -1962,26 +1962,47 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         ? PositionDirection.LONG
         : PositionDirection.SHORT;
 
+      // === CRITICAL FIX: Use limit orders to prevent revertFill errors ===
+      // Market orders are susceptible to keeper timing issues where the filler's
+      // last_active_slot doesn't match the current slot, causing revertFill.
+      // Solution: Always use limit orders at current oracle price for reliable execution.
+      
+      // Get current oracle price for limit order
+      const oracleData = client.getOracleDataForSpotMarket(marketIndex);
+      const oraclePrice = oracleData.price.toNumber() / 1e6;
+      
+      // Add 0.5% buffer for buys (higher price) and sells (lower price) to ensure fill
+      const priceBuffer = direction === 'buy' ? 1.005 : 0.995;
+      const limitPrice = oraclePrice * priceBuffer;
+      
+      // Convert price to Drift precision (6 decimals for USDC-quoted markets)
+      const limitPriceBN = new BN(Math.floor(limitPrice * 1e6));
+      
+      console.log('[DriftContext] Oracle Price:', oraclePrice);
+      console.log('[DriftContext] Limit Price (with buffer):', limitPrice);
+      console.log('[DriftContext] Using LIMIT order to prevent revertFill errors');
+
       const orderParams = {
-        orderType: orderType === 'market' ? OrderType.MARKET : OrderType.LIMIT,
+        orderType: OrderType.LIMIT, // Always use LIMIT orders
         marketType: MarketType.SPOT,
         marketIndex,
         direction: positionDirection,
         baseAssetAmount,
-        price: new BN(0),
+        price: limitPriceBN, // Set explicit price at oracle + buffer
       };
 
       console.log('[DriftContext] Order Params:', {
         ...orderParams,
         baseAssetAmount: orderParams.baseAssetAmount.toString(),
         price: orderParams.price.toString(),
+        humanReadablePrice: limitPrice,
       });
       console.log('=== END DEBUG ===');
 
-      // Add transaction options for faster confirmation
+      // Add transaction options for faster confirmation with increased priority
       const txOptions = {
         computeUnits: 500_000, // Sufficient compute units
-        computeUnitsPrice: 100_000, // Priority fee in micro-lamports
+        computeUnitsPrice: 200_000, // Doubled priority fee to reduce slot-spanning (0.0002 SOL per CU)
       };
 
       const txSignature = await client.placeSpotOrder(orderParams, txOptions);
@@ -1991,9 +2012,11 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       await pollTransactionStatus(client.connection, txSignature, 30, 2000);
       console.log('[DriftContext] Transaction confirmed on-chain');
       
-      // CRITICAL: Small delay to ensure blockchain state is fully propagated
-      // This prevents reading stale data before the state update is complete
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // CRITICAL: Slot buffer delay to prevent revertFill timing issues
+      // This ensures the keeper's last_active_slot matches the validation slot
+      // Increased from 1500ms to 2500ms for better slot synchronization
+      console.log('[DriftContext] Waiting for slot synchronization...');
+      await new Promise(resolve => setTimeout(resolve, 2500));
       
       // CRITICAL: Force refresh account data from blockchain
       // This fetches the latest balances after the transaction
@@ -2191,7 +2214,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       const allOrders = userAccount.orders.filter((order: any) =>
         order.status !== OrderStatus.INIT // Skip uninitialized orders
       );
-      
+
       console.log("ALL DRIFT ORDERS: ", allOrders)
 
       const orders: DriftOrder[] = [];
