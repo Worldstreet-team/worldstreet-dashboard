@@ -439,36 +439,36 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         // Step 8: Create Drift client
         let client = await createDriftClient(connection, wallet, DRIFT_PROGRAM_ID);
 
-        // Step 9: Subscribe to client (Must happen before initializeUserAccount)
-        try {
-          console.log('[DriftContext] Subscribing to DriftClient...');
-          await client.subscribe();
-          console.log('[DriftContext] Successfully subscribed to DriftClient');
+        // Step 9: Subscribe to client (Must happen AFTER checking account existence)
+        // CRITICAL: Only subscribe if account exists to avoid accountSubscribe errors
+        if (userAccountExists) {
+          try {
+            console.log('[DriftContext] User account exists, subscribing to DriftClient via WebSocket...');
+            await client.subscribe();
+            console.log('[DriftContext] Successfully subscribed to DriftClient via WebSocket');
 
-          // Verify subscription is active
-          if (!client.isSubscribed) {
-            console.warn('[DriftContext] Client subscription finished, but isSubscribed is false. Proceeding anyway.');
-          }
+            // Verify subscription is active
+            if (!client.isSubscribed) {
+              console.warn('[DriftContext] Client subscription finished, but isSubscribed is false. Proceeding anyway.');
+            }
 
-        } catch (subscribeErr: any) {
-          console.error('[DriftContext] Subscription error:', subscribeErr);
+          } catch (subscribeErr: any) {
+            console.error('[DriftContext] WebSocket subscription error:', subscribeErr);
 
-          // Log detailed JSON-RPC error if available
-          if (subscribeErr.code) {
-            console.error('[DriftContext] JSON-RPC Error Code:', subscribeErr.code);
-          }
-          if (subscribeErr.data) {
-            console.error('[DriftContext] JSON-RPC Error Data:', subscribeErr.data);
-          }
+            // Log detailed JSON-RPC error if available
+            if (subscribeErr.code) {
+              console.error('[DriftContext] JSON-RPC Error Code:', subscribeErr.code);
+            }
+            if (subscribeErr.data) {
+              console.error('[DriftContext] JSON-RPC Error Data:', subscribeErr.data);
+            }
 
-          // If it's a JSON-RPC error about accountSubscribe (happens when the user account doesn't exist yet)
-          // we can safely ignore it and proceed to initialize the user account.
-          const errString = String(subscribeErr?.message || subscribeErr);
-          if (errString.includes('accountSubscribe') || errString.includes('Invalid parameter')) {
-            console.warn('[DriftContext] Received accountSubscribe RPC error. Continuing since this is expected for uninitialized accounts.');
-          } else {
-            throw subscribeErr;
+            // WebSocket subscription failed - this is critical since we require WebSocket
+            console.error('[DriftContext] CRITICAL: WebSocket subscription failed. Drift Protocol requires WebSocket for real-time updates.');
+            throw new Error('WebSocket subscription failed. Please check your network connection and RPC endpoint.');
           }
+        } else {
+          console.log('[DriftContext] User account does not exist yet, skipping subscription until after initialization');
         }
 
         // Step 10: Initialize user account if it doesn't exist
@@ -499,6 +499,16 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
               // Wait for account to be confirmed on-chain
               await connection.confirmTransaction(txSig, 'confirmed');
               console.log('[DriftContext] User account initialization confirmed');
+
+              // NOW subscribe to the newly created account via WebSocket
+              try {
+                console.log('[DriftContext] Subscribing to newly initialized account via WebSocket...');
+                await client.subscribe();
+                console.log('[DriftContext] Successfully subscribed to new account via WebSocket');
+              } catch (subErr: any) {
+                console.error('[DriftContext] Failed to subscribe after initialization:', subErr);
+                // Don't throw - account is initialized, subscription can be retried
+              }
 
             } catch (initErr: any) {
               console.error('[DriftContext] Failed to initialize user account:', initErr);

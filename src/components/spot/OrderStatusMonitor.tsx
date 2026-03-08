@@ -90,21 +90,105 @@ export default function OrderStatusMonitor({
     }
   };
 
-  if (!isClientReady) {
+  // Loading skeleton
+  if (!isClientReady || (isRefreshing && allOrders.length === 0)) {
     return (
-      <div className="bg-[#1e2329] rounded-lg p-6 text-center">
-        <Icon icon="ph:spinner" className="mx-auto mb-2 text-[#fcd535] animate-spin" width={32} />
-        <p className="text-sm text-[#848e9c]">Connecting to Drift Protocol...</p>
+      <div className="bg-[#1e2329] rounded-lg overflow-hidden">
+        {/* Header Skeleton */}
+        <div className="flex items-center justify-between p-4 border-b border-[#2b3139]">
+          <div className="flex items-center gap-2">
+            <div className="w-5 h-5 bg-[#2b3139] rounded animate-pulse" />
+            <div className="w-24 h-4 bg-[#2b3139] rounded animate-pulse" />
+            <div className="w-8 h-5 bg-[#2b3139] rounded animate-pulse" />
+          </div>
+          <div className="w-8 h-8 bg-[#2b3139] rounded animate-pulse" />
+        </div>
+
+        {/* Order Skeletons */}
+        <div className="divide-y divide-[#2b3139]">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="p-4">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-16 h-4 bg-[#2b3139] rounded animate-pulse" />
+                    <div className="w-12 h-5 bg-[#2b3139] rounded animate-pulse" />
+                    <div className="w-14 h-5 bg-[#2b3139] rounded animate-pulse" />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-32 h-3 bg-[#2b3139] rounded animate-pulse" />
+                    <div className="w-24 h-3 bg-[#2b3139] rounded animate-pulse" />
+                  </div>
+                </div>
+                <div className="w-16 h-7 bg-[#2b3139] rounded animate-pulse" />
+              </div>
+              <div className="w-full h-8 bg-[#2b3139] rounded animate-pulse" />
+            </div>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 bg-[#2b3139]/50 border-t border-[#2b3139]">
+          <div className="flex items-start gap-2">
+            <div className="w-4 h-4 bg-[#2b3139] rounded animate-pulse flex-shrink-0 mt-0.5" />
+            <div className="flex-1 space-y-2">
+              <div className="w-full h-3 bg-[#2b3139] rounded animate-pulse" />
+              <div className="w-3/4 h-3 bg-[#2b3139] rounded animate-pulse" />
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
 
+  // Empty state
   if (allOrders.length === 0) {
     return (
-      <div className="bg-[#1e2329] rounded-lg p-6 text-center">
-        <Icon icon="ph:check-circle" className="mx-auto mb-2 text-[#0ecb81]" width={48} />
-        <p className="text-sm text-white mb-1">No Orders</p>
-        <p className="text-xs text-[#848e9c]">You haven't placed any orders yet</p>
+      <div className="bg-[#1e2329] rounded-lg overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-[#2b3139]">
+          <div className="flex items-center gap-2">
+            <Icon icon="ph:clock" className="text-[#fcd535]" width={20} />
+            <h3 className="text-sm font-semibold text-white">Open Orders</h3>
+            <span className="px-2 py-0.5 bg-[#fcd535]/10 text-[#fcd535] text-xs font-medium rounded">
+              0
+            </span>
+          </div>
+          <button
+            onClick={handleManualRefresh}
+            disabled={isRefreshing}
+            className="p-2 hover:bg-[#2b3139] rounded-lg transition-colors disabled:opacity-50"
+            title="Refresh orders"
+          >
+            <Icon 
+              icon="ph:arrow-clockwise" 
+              className={`text-[#848e9c] ${isRefreshing ? 'animate-spin' : ''}`} 
+              width={18} 
+            />
+          </button>
+        </div>
+
+        {/* Empty State Content */}
+        <div className="p-12 text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-[#2b3139] rounded-full mb-4">
+            <Icon icon="ph:clock" className="text-[#848e9c]" width={32} />
+          </div>
+          <p className="text-sm font-medium text-white mb-1">No Open Orders</p>
+          <p className="text-xs text-[#848e9c] max-w-xs mx-auto">
+            You don't have any pending orders. Place a market or limit order to see it here.
+          </p>
+        </div>
+
+        {/* Footer Info */}
+        <div className="p-4 bg-[#2b3139]/50 border-t border-[#2b3139]">
+          <div className="flex items-start gap-2 text-xs text-[#848e9c]">
+            <Icon icon="ph:lightbulb" className="flex-shrink-0 mt-0.5" width={14} />
+            <div>
+              <p className="mb-1">Orders are filled by Drift Protocol's keeper network.</p>
+              <p>Filled orders will appear in your spot positions automatically.</p>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
