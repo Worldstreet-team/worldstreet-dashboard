@@ -143,7 +143,7 @@ interface DriftContextValue {
   withdrawCollateral: (amount: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
   openPosition: (marketIndex: number, direction: 'long' | 'short', size: number, leverage: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
   closePosition: (marketIndex: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
-  placeSpotOrder: (marketIndex: number, direction: 'buy' | 'sell', amount: number, orderType?: 'market' | 'limit', price?: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
+  placeSpotOrder: (marketIndex: number, direction: 'buy' | 'sell', amount: number, orderType?: 'market' | 'limit' | 'stop-limit', price?: number, triggerPrice?: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
   previewTrade: (marketIndex: number, direction: 'long' | 'short', size: number, leverage: number) => Promise<any>;
   getMarketPrice: (marketIndex: number, type?: 'perp' | 'spot') => number;
 
@@ -1740,17 +1740,25 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   }, [user?.userId, requestPin, initializeDriftClient, refreshSummary, refreshPositions]);
 
   /**
-   * Place a spot market or limit order
+   * Place a spot market, limit, or stop-limit order
    * 
    * CRITICAL: This function must use proper Drift precision and verify collateral
    * before placing orders to avoid InsufficientCollateral errors.
+   * 
+   * @param marketIndex - Drift spot market index
+   * @param direction - 'buy' or 'sell'
+   * @param amount - Amount in USDC (quote currency)
+   * @param orderType - 'market', 'limit', or 'stop-limit'
+   * @param price - Limit price (required for limit and stop-limit orders)
+   * @param triggerPrice - Trigger price (required for stop-limit orders)
    */
   const placeSpotOrder = useCallback(async (
     marketIndex: number,
     direction: 'buy' | 'sell',
     amount: number,
-    orderType: 'market' | 'limit' = 'market',
-    price?: number
+    orderType: 'market' | 'limit' | 'stop-limit' = 'market',
+    price?: number,
+    triggerPrice?: number
   ): Promise<{ success: boolean; txSignature?: string; error?: string }> => {
     if (!user?.userId) {
       return { success: false, error: 'User not authenticated' };
@@ -1962,40 +1970,136 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         ? PositionDirection.LONG
         : PositionDirection.SHORT;
 
-      // === CRITICAL FIX: Use limit orders to prevent revertFill errors ===
-      // Market orders are susceptible to keeper timing issues where the filler's
-      // last_active_slot doesn't match the current slot, causing revertFill.
-      // Solution: Always use limit orders at current oracle price for reliable execution.
-      
-      // Get current oracle price for limit order
-      const oracleData = client.getOracleDataForSpotMarket(marketIndex);
-      const oraclePrice = oracleData.price.toNumber() / 1e6;
-      
-      // Add 0.5% buffer for buys (higher price) and sells (lower price) to ensure fill
-      const priceBuffer = direction === 'buy' ? 1.005 : 0.995;
-      const limitPrice = oraclePrice * priceBuffer;
-      
-      // Convert price to Drift precision (6 decimals for USDC-quoted markets)
-      const limitPriceBN = new BN(Math.floor(limitPrice * 1e6));
-      
-      console.log('[DriftContext] Oracle Price:', oraclePrice);
-      console.log('[DriftContext] Limit Price (with buffer):', limitPrice);
-      console.log('[DriftContext] Using LIMIT order to prevent revertFill errors');
+      // === ORDER TYPE HANDLING ===
+      let orderTypeEnum: any;
+      let orderPrice: any;
+      let triggerPriceBN: any = undefined;
 
-      const orderParams = {
-        orderType: OrderType.LIMIT, // Always use LIMIT orders
+      if (orderType === 'market') {
+        // === MARKET ORDERS: Use limit orders at oracle price to prevent revertFill ===
+        // Market orders are susceptible to keeper timing issues where the filler's
+        // last_active_slot doesn't match the current slot, causing revertFill.
+        // Solution: Use limit orders at current oracle price with buffer for reliable execution.
+        
+        orderTypeEnum = OrderType.LIMIT;
+        
+        // Add 0.5% buffer for buys (higher price) and sells (lower price) to ensure fill
+        const priceBuffer = direction === 'buy' ? 1.005 : 0.995;
+        const limitPrice = marketPrice * priceBuffer;
+        
+        // Convert price to Drift precision (6 decimals for USDC-quoted markets)
+        orderPrice = new BN(Math.floor(limitPrice * 1e6));
+        
+        console.log('[DriftContext] Market order → Using LIMIT at oracle price');
+        console.log('[DriftContext] Oracle Price:', marketPrice);
+        console.log('[DriftContext] Limit Price (with buffer):', limitPrice);
+        
+      } else if (orderType === 'limit') {
+        // === LIMIT ORDERS: User-specified price ===
+        if (!price || price <= 0) {
+          return {
+            success: false,
+            error: 'Limit price is required for limit orders'
+          };
+        }
+        
+        orderTypeEnum = OrderType.LIMIT;
+        
+        // Convert user price to Drift precision
+        orderPrice = new BN(Math.floor(price * 1e6));
+        
+        console.log('[DriftContext] Limit order at user price:', price);
+        
+      } else if (orderType === 'stop-limit') {
+        // === STOP-LIMIT ORDERS: Trigger price + limit price ===
+        if (!triggerPrice || triggerPrice <= 0) {
+          return {
+            success: false,
+            error: 'Trigger price is required for stop-limit orders'
+          };
+        }
+        
+        if (!price || price <= 0) {
+          return {
+            success: false,
+            error: 'Limit price is required for stop-limit orders'
+          };
+        }
+        
+        // Validate trigger price vs limit price
+        if (direction === 'buy') {
+          // For buy stop-limit: trigger >= current market, limit >= trigger
+          if (triggerPrice < marketPrice) {
+            return {
+              success: false,
+              error: 'Buy stop-limit trigger price must be above current market price'
+            };
+          }
+          if (price < triggerPrice) {
+            return {
+              success: false,
+              error: 'Buy stop-limit price must be at or above trigger price'
+            };
+          }
+        } else {
+          // For sell stop-limit: trigger <= current market, limit <= trigger
+          if (triggerPrice > marketPrice) {
+            return {
+              success: false,
+              error: 'Sell stop-limit trigger price must be below current market price'
+            };
+          }
+          if (price > triggerPrice) {
+            return {
+              success: false,
+              error: 'Sell stop-limit price must be at or below trigger price'
+            };
+          }
+        }
+        
+        orderTypeEnum = OrderType.TRIGGER_LIMIT;
+        
+        // Convert prices to Drift precision
+        orderPrice = new BN(Math.floor(price * 1e6));
+        triggerPriceBN = new BN(Math.floor(triggerPrice * 1e6));
+        
+        console.log('[DriftContext] Stop-limit order');
+        console.log('[DriftContext] Trigger Price:', triggerPrice);
+        console.log('[DriftContext] Limit Price:', price);
+        
+      } else {
+        return {
+          success: false,
+          error: `Unsupported order type: ${orderType}`
+        };
+      }
+
+      const orderParams: any = {
+        orderType: orderTypeEnum,
         marketType: MarketType.SPOT,
         marketIndex,
         direction: positionDirection,
         baseAssetAmount,
-        price: limitPriceBN, // Set explicit price at oracle + buffer
+        price: orderPrice,
       };
 
+      // Add trigger price for stop-limit orders
+      if (orderType === 'stop-limit' && triggerPriceBN) {
+        orderParams.triggerPrice = triggerPriceBN;
+        orderParams.triggerCondition = direction === 'buy' 
+          ? 'above' // Trigger when price goes above trigger
+          : 'below'; // Trigger when price goes below trigger
+      }
+
       console.log('[DriftContext] Order Params:', {
-        ...orderParams,
+        orderType: orderType,
+        marketIndex,
+        direction,
         baseAssetAmount: orderParams.baseAssetAmount.toString(),
         price: orderParams.price.toString(),
-        humanReadablePrice: limitPrice,
+        triggerPrice: triggerPriceBN?.toString(),
+        humanReadablePrice: orderType === 'market' ? marketPrice * (direction === 'buy' ? 1.005 : 0.995) : price,
+        humanReadableTrigger: triggerPrice,
       });
       console.log('=== END DEBUG ===');
 

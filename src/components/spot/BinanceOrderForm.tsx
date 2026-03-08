@@ -23,6 +23,7 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
   const [activeTab, setActiveTab] = useState<'buy' | 'sell'>(initialSide);
   const [orderType, setOrderType] = useState<'market' | 'limit' | 'stop-limit'>('market');
   const [price, setPrice] = useState('');
+  const [stopPrice, setStopPrice] = useState(''); // Trigger price for stop-limit
   const [amount, setAmount] = useState('');
   const [total, setTotal] = useState('');
   const [sliderValue, setSliderValue] = useState(0);
@@ -108,9 +109,48 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
       return;
     }
 
-    if (orderType !== 'market') {
-      setError('Only market orders are supported currently');
-      return;
+    // Validate limit price for limit orders
+    if (orderType === 'limit') {
+      if (!price || parseFloat(price) <= 0) {
+        setError('Please enter a valid limit price');
+        return;
+      }
+    }
+
+    // Validate stop-limit prices
+    if (orderType === 'stop-limit') {
+      if (!stopPrice || parseFloat(stopPrice) <= 0) {
+        setError('Please enter a valid stop price');
+        return;
+      }
+      if (!price || parseFloat(price) <= 0) {
+        setError('Please enter a valid limit price');
+        return;
+      }
+      
+      // Validate price relationship
+      const stopPriceNum = parseFloat(stopPrice);
+      const limitPriceNum = parseFloat(price);
+      
+      if (activeTab === 'buy') {
+        if (stopPriceNum < currentMarketPrice) {
+          setError('Buy stop price must be above current market price');
+          return;
+        }
+        if (limitPriceNum < stopPriceNum) {
+          setError('Buy limit price must be at or above stop price');
+          return;
+        }
+      } else {
+        if (stopPriceNum > currentMarketPrice) {
+          setError('Sell stop price must be below current market price');
+          return;
+        }
+        if (limitPriceNum > stopPriceNum) {
+          setError('Sell limit price must be at or below stop price');
+          return;
+        }
+      }
     }
 
     if (parseFloat(amount) > (activeTab === 'buy' ? quoteBalance : baseBalance)) {
@@ -142,10 +182,16 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
       }
 
       const amountNum = parseFloat(amount);
+      const priceNum = price ? parseFloat(price) : undefined;
+      const stopPriceNum = stopPrice ? parseFloat(stopPrice) : undefined;
+      
       const result = await placeSpotOrder(
         marketIndex,
         activeTab === 'buy' ? 'buy' : 'sell',
-        amountNum
+        amountNum,
+        orderType,
+        priceNum,
+        stopPriceNum
       );
 
       if (!result.success) throw new Error(result.error || 'Drift spot order failed');
@@ -153,10 +199,11 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
       // Success!
       setProcessingStatus('success');
       setTxSignature(result.txSignature || '');
-      setSuccess(`${activeTab === 'buy' ? 'Buy' : 'Sell'} order executed successfully!`);
+      setSuccess(`${activeTab === 'buy' ? 'Buy' : 'Sell'} ${orderType} order placed successfully!`);
       
       setAmount('');
       setPrice('');
+      setStopPrice('');
       setTotal('');
       setSliderValue(0);
 
@@ -219,13 +266,41 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
 
         {balanceError && <div className="p-2 bg-[#f6465d]/10 border border-[#f6465d] rounded text-xs text-[#f6465d]">{balanceError}</div>}
 
+        {/* Stop Price Input (for stop-limit orders) */}
+        {orderType === 'stop-limit' && (
+          <div>
+            <label className="block text-xs text-[#848e9c] mb-2">Stop Price</label>
+            <div className="relative">
+              <input 
+                type="number" 
+                value={stopPrice} 
+                onChange={(e) => setStopPrice(e.target.value)} 
+                placeholder="0.00" 
+                className="w-full px-3 py-2 bg-[#2b3139] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#fcd535]" 
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#848e9c]">{quoteAsset}</span>
+            </div>
+            <div className="mt-1 text-[10px] text-[#848e9c]">
+              Order triggers when market reaches this price
+            </div>
+          </div>
+        )}
+
+        {/* Limit Price Input (for limit and stop-limit orders) */}
         {orderType !== 'market' && (
           <div>
-            <label className="block text-xs text-[#848e9c] mb-2">Price</label>
+            <label className="block text-xs text-[#848e9c] mb-2">
+              {orderType === 'stop-limit' ? 'Limit Price' : 'Price'}
+            </label>
             <div className="relative">
               <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" className="w-full px-3 py-2 bg-[#2b3139] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#fcd535]" />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#848e9c]">{quoteAsset}</span>
             </div>
+            {orderType === 'stop-limit' && (
+              <div className="mt-1 text-[10px] text-[#848e9c]">
+                Order executes at this price after trigger
+              </div>
+            )}
           </div>
         )}
 

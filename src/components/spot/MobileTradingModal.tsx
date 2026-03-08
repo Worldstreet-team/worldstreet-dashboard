@@ -20,8 +20,9 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
   const { user } = useAuth();
   const { placeSpotOrder, getSpotMarketIndexBySymbol, refreshPositions } = useDrift();
 
-  const [orderType, setOrderType] = useState<'market' | 'limit'>('market');
+  const [orderType, setOrderType] = useState<'market' | 'limit' | 'stop-limit'>('market');
   const [price, setPrice] = useState('');
+  const [stopPrice, setStopPrice] = useState(''); // Trigger price for stop-limit
   const [amount, setAmount] = useState('');
   const [total, setTotal] = useState('');
   const [sliderValue, setSliderValue] = useState(0);
@@ -116,6 +117,50 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
       return;
     }
 
+    // Validate limit price for limit orders
+    if (orderType === 'limit') {
+      if (!price || parseFloat(price) <= 0) {
+        setError('Please enter a valid limit price');
+        return;
+      }
+    }
+
+    // Validate stop-limit prices
+    if (orderType === 'stop-limit') {
+      if (!stopPrice || parseFloat(stopPrice) <= 0) {
+        setError('Please enter a valid stop price');
+        return;
+      }
+      if (!price || parseFloat(price) <= 0) {
+        setError('Please enter a valid limit price');
+        return;
+      }
+      
+      // Validate price relationship
+      const stopPriceNum = parseFloat(stopPrice);
+      const limitPriceNum = parseFloat(price);
+      
+      if (side === 'buy') {
+        if (stopPriceNum < currentMarketPrice) {
+          setError('Buy stop price must be above current market price');
+          return;
+        }
+        if (limitPriceNum < stopPriceNum) {
+          setError('Buy limit price must be at or above stop price');
+          return;
+        }
+      } else {
+        if (stopPriceNum > currentMarketPrice) {
+          setError('Sell stop price must be below current market price');
+          return;
+        }
+        if (limitPriceNum > stopPriceNum) {
+          setError('Sell limit price must be at or below stop price');
+          return;
+        }
+      }
+    }
+
     if (parseFloat(amount) > currentBalance) {
       setError(`Insufficient ${currentToken} balance`);
       return;
@@ -149,10 +194,16 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
       }
 
       const amountNum = parseFloat(amount);
+      const priceNum = price ? parseFloat(price) : undefined;
+      const stopPriceNum = stopPrice ? parseFloat(stopPrice) : undefined;
+      
       const result = await placeSpotOrder(
         marketIndex,
         side === 'buy' ? 'buy' : 'sell',
-        amountNum
+        amountNum,
+        orderType,
+        priceNum,
+        stopPriceNum
       );
 
       if (!result.success) throw new Error(result.error || 'Drift spot order failed');
@@ -160,13 +211,14 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
       // Success!
       setProcessingStatus('success');
       setTxSignature(result.txSignature || '');
-      setSuccess(`${side === 'buy' ? 'Buy' : 'Sell'} order executed successfully!`);
+      setSuccess(`${side === 'buy' ? 'Buy' : 'Sell'} ${orderType} order placed successfully!`);
 
       await refreshPositions();
       await refetchBalances();
 
       setAmount('');
       setPrice('');
+      setStopPrice('');
       setTotal('');
       setSliderValue(0);
       setPin('');
@@ -231,13 +283,21 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
                 </button>
                 <button
                   onClick={() => setOrderType('limit')}
-                  disabled
-                  className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors opacity-50 cursor-not-allowed ${orderType === 'limit'
+                  className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${orderType === 'limit'
                     ? 'bg-[#181a20] text-white'
                     : 'text-[#848e9c]'
                     }`}
                 >
                   Limit
+                </button>
+                <button
+                  onClick={() => setOrderType('stop-limit')}
+                  className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${orderType === 'stop-limit'
+                    ? 'bg-[#181a20] text-white'
+                    : 'text-[#848e9c]'
+                    }`}
+                >
+                  Stop-Limit
                 </button>
               </div>
 
@@ -259,6 +319,54 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
               {balanceError && (
                 <div className="p-3 bg-[rgba(246,70,93,0.12)] border border-[#f6465d] rounded-lg text-xs text-[#f6465d]">
                   {balanceError}
+                </div>
+              )}
+
+              {/* Stop Price Input (for stop-limit orders) */}
+              {orderType === 'stop-limit' && (
+                <div>
+                  <label className="block text-sm text-[#848e9c] mb-2">Stop Price</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={stopPrice}
+                      onChange={(e) => setStopPrice(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full px-4 py-3 bg-[#2b3139] border border-[#2b3139] rounded-lg text-base text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#fcd535]"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[#848e9c]">
+                      {tokenOut}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-xs text-[#848e9c]">
+                    Order triggers when market reaches this price
+                  </div>
+                </div>
+              )}
+
+              {/* Limit Price Input (for limit and stop-limit orders) */}
+              {orderType !== 'market' && (
+                <div>
+                  <label className="block text-sm text-[#848e9c] mb-2">
+                    {orderType === 'stop-limit' ? 'Limit Price' : 'Price'}
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={price}
+                      onChange={(e) => setPrice(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full px-4 py-3 bg-[#2b3139] border border-[#2b3139] rounded-lg text-base text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#fcd535]"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[#848e9c]">
+                      {tokenOut}
+                    </span>
+                  </div>
+                  {orderType === 'stop-limit' && (
+                    <div className="mt-1 text-xs text-[#848e9c]">
+                      Order executes at this price after trigger
+                    </div>
+                  )}
                 </div>
               )}
 
