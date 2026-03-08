@@ -2182,6 +2182,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     try {
       const driftUser = client.getUser();
       const userAccount = driftUser.getUserAccount();
+      console.log("USER ACCOUNT: ", userAccount)
 
       // Import all required enums
       const { OrderStatus, MarketType, OrderType, PositionDirection } = await import('@drift-labs/sdk');
@@ -2190,6 +2191,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       const allOrders = userAccount.orders.filter((order: any) =>
         order.status !== OrderStatus.INIT // Skip uninitialized orders
       );
+      
       console.log("ALL DRIFT ORDERS: ", allOrders)
 
       const orders: DriftOrder[] = [];
