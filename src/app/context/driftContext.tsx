@@ -5,6 +5,7 @@ import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 import { useAuth } from '@/app/context/authContext';
 import { usePathname } from 'next/navigation';
 import { PinUnlockModal } from '@/components/wallet/PinUnlockModal';
+import { DriftErrorModal } from '@/components/drift/DriftErrorModal';
 
 // Dynamic imports for Drift SDK
 let DriftClient: any;
@@ -182,6 +183,20 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     required: number;
     current: number;
     address: string;
+  } | null>(null);
+
+  // Error modal state
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorModalData, setErrorModalData] = useState<{
+    title: string;
+    message: string;
+    details?: {
+      orderSize?: string;
+      minRequired?: string;
+      minValue?: string;
+      available?: string;
+      required?: string;
+    };
   } | null>(null);
 
   // Track initialization failure to prevent auto-retry
@@ -1712,6 +1727,17 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       // Minimum order value check (prevent dust orders)
       if (quoteAmount < 1) {
         console.error('[DriftContext] ORDER TOO SMALL: Minimum order value is $1');
+        
+        setErrorModalData({
+          title: 'Order Too Small',
+          message: 'The minimum order value for spot trading is $1 USDC.',
+          details: {
+            orderSize: `$${quoteAmount.toFixed(2)} USDC`,
+            minRequired: '$1.00 USDC',
+          }
+        });
+        setShowErrorModal(true);
+        
         return {
           success: false,
           error: 'Minimum order value is $1 USDC'
@@ -1777,11 +1803,23 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         // Check if order meets minimum size requirement
         if (baseAssetAmount.lt(minOrderSizeBN)) {
           const minOrderValueUSDC = minOrderSizeHuman * marketPrice;
+          const marketName = getSpotMarketName(marketIndex);
           
           console.error('[DriftContext] ORDER BELOW MINIMUM SIZE');
           console.error('[DriftContext] Order size:', humanReadableAmount, 'tokens');
           console.error('[DriftContext] Min required:', minOrderSizeHuman, 'tokens');
           console.error('[DriftContext] Min value:', minOrderValueUSDC, 'USDC');
+          
+          setErrorModalData({
+            title: 'Order Below Minimum Size',
+            message: `Your order is below the minimum size required for ${marketName}. Please increase your order amount.`,
+            details: {
+              orderSize: `${humanReadableAmount.toFixed(6)} ${marketName}`,
+              minRequired: `${minOrderSizeHuman.toFixed(6)} ${marketName}`,
+              minValue: `~$${minOrderValueUSDC.toFixed(2)} USDC`,
+            }
+          });
+          setShowErrorModal(true);
           
           return {
             success: false,
@@ -1802,6 +1840,17 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       if (direction === 'buy' && estimatedMarginRequired > freeCollateral) {
         console.error('[DriftContext] INSUFFICIENT COLLATERAL FOR ORDER');
         console.error('[DriftContext] Required:', estimatedMarginRequired, 'Available:', freeCollateral);
+        
+        setErrorModalData({
+          title: 'Insufficient Collateral',
+          message: 'You don\'t have enough free collateral to place this order. Please deposit more USDC or reduce your order size.',
+          details: {
+            required: `${estimatedMarginRequired.toFixed(2)} USDC`,
+            available: `${freeCollateral.toFixed(2)} USDC`,
+          }
+        });
+        setShowErrorModal(true);
+        
         return {
           success: false,
           error: `Insufficient collateral. Order requires ${estimatedMarginRequired.toFixed(2)} USDC but you only have ${freeCollateral.toFixed(2)} USDC available.`
@@ -1853,43 +1902,66 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
 
       // Sanitize error messages for user-friendly display
       let friendlyError = 'Failed to place spot order';
+      let errorTitle = 'Order Failed';
+      let errorDetails: any = undefined;
 
       // Check for specific error patterns
       if (errorMessage.includes('InsufficientCollateral') || errorMessage.includes('0x1773')) {
-        friendlyError = 'Insufficient collateral. You need more USDC to place this order.';
+        errorTitle = 'Insufficient Collateral';
+        friendlyError = 'You need more USDC collateral to place this order.';
+        // Note: freeCollateral and estimatedMarginRequired are out of scope here
+        // They would need to be captured before the try block if needed in error details
       } else if (errorMessage.includes('MarketPlaceOrderPaused') || errorMessage.includes('Market is in settlement mode')) {
-        friendlyError = 'Market is currently in settlement mode. Please try again in a few moments.';
+        errorTitle = 'Market Unavailable';
+        friendlyError = 'This market is currently in settlement mode. Please try again in a few moments.';
       } else if (errorMessage.includes('insufficient') || errorMessage.includes('Insufficient')) {
-        friendlyError = 'Insufficient balance to place this order';
+        errorTitle = 'Insufficient Balance';
+        friendlyError = 'You don\'t have enough balance to place this order.';
       } else if (errorMessage.includes('InvalidOracle') || errorMessage.includes('oracle')) {
-        friendlyError = 'Market oracle is temporarily unavailable. Please try again.';
+        errorTitle = 'Oracle Error';
+        friendlyError = 'Market price data is temporarily unavailable. Please try again.';
       } else if (errorMessage.includes('slippage')) {
-        friendlyError = 'Price moved too much. Please try again.';
+        errorTitle = 'Price Movement';
+        friendlyError = 'Price moved significantly. Please adjust your order and try again.';
       } else if (errorMessage.includes('0x17a8') || errorMessage.includes('InvalidOrderMinOrderSize')) {
-        friendlyError = 'Order size is too small for this market. Please increase your order size.';
+        errorTitle = 'Order Too Small';
+        friendlyError = 'Your order size is below the minimum required for this market.';
       } else if (errorMessage.includes('Transaction simulation failed')) {
         // Extract the actual error from simulation logs if possible
         const logs = err.logs || (typeof err.getLogs === 'function' ? err.getLogs() : []);
         const insufficientCollateralLog = logs.find((l: string) => l.includes('InsufficientCollateral'));
         
         if (insufficientCollateralLog || errorMessage.includes('0x1773')) {
-          friendlyError = 'Insufficient collateral. You need more USDC to place this order.';
+          errorTitle = 'Insufficient Collateral';
+          friendlyError = 'You need more USDC collateral to place this order.';
         } else {
+          errorTitle = 'Simulation Failed';
           friendlyError = 'Transaction simulation failed. Please check your balance and try again.';
         }
       } else if (errorMessage.includes('blockhash not found')) {
-        friendlyError = 'Network congestion. Please try again.';
+        errorTitle = 'Network Congestion';
+        friendlyError = 'The Solana network is congested. Please try again.';
       } else if (errorMessage.includes('timeout') || errorMessage.includes('timed out')) {
+        errorTitle = 'Transaction Timeout';
         friendlyError = 'Transaction timed out. Please try again.';
       } else if (errorMessage.includes('User rejected')) {
-        friendlyError = 'Transaction was cancelled';
+        errorTitle = 'Transaction Cancelled';
+        friendlyError = 'You cancelled the transaction.';
       }
+
+      // Show error modal
+      setErrorModalData({
+        title: errorTitle,
+        message: friendlyError,
+        details: errorDetails,
+      });
+      setShowErrorModal(true);
 
       return { success: false, error: friendlyError };
     } finally {
       setIsLoading(false);
     }
-  }, [user?.userId, requestPin, initializeDriftClient, refreshSummary, refreshPositions]);
+  }, [user?.userId, requestPin, initializeDriftClient, refreshSummary, refreshPositions, refreshAccounts, getSpotMarketName]);
 
   // Helper to get current oracle price from Drift
   const getMarketPrice = useCallback((marketIndex: number, type: 'perp' | 'spot' = 'perp'): number => {
@@ -2152,6 +2224,14 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         isOpen={showPinUnlock}
         onUnlock={handlePinUnlock}
         onClose={() => setShowPinUnlock(false)}
+      />
+      <DriftErrorModal
+        isOpen={showErrorModal}
+        onClose={() => {
+          setShowErrorModal(false);
+          setErrorModalData(null);
+        }}
+        error={errorModalData}
       />
     </DriftContext.Provider>
   );
