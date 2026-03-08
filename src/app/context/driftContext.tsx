@@ -1968,7 +1968,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         marketIndex,
         direction: positionDirection,
         baseAssetAmount,
-        price: price ? client.convertToPricePrecision(price) : new BN(0),
+        price: price ? client.convertToPricePrecision(price) : new BN(1),
       };
 
       console.log('[DriftContext] Order Params:', {
@@ -1980,8 +1980,8 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
 
       // Add transaction options for faster confirmation
       const txOptions = {
-        computeUnits: 300_000, // Sufficient compute units
-        computeUnitsPrice: 50_000, // Priority fee in micro-lamports
+        computeUnits: 500_000, // Sufficient compute units
+        computeUnitsPrice: 100_000, // Priority fee in micro-lamports
       };
 
       const txSignature = await client.placeSpotOrder(orderParams, txOptions);
@@ -2190,6 +2190,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       const allOrders = userAccount.orders.filter((order: any) =>
         order.status !== OrderStatus.INIT // Skip uninitialized orders
       );
+      console.log("ALL DRIFT ORDERS: ", allOrders)
 
       const orders: DriftOrder[] = [];
 
