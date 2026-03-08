@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Icon } from '@iconify/react';
+import { useDrift, type SpotMarketInfo } from '@/app/context/driftContext';
 
 type Chain = 'solana' | 'ethereum' | 'bitcoin';
 
@@ -15,6 +16,7 @@ interface MarketData {
   chain?: Chain;
   mintAddress?: string;
   logoURI?: string;
+  marketIndex?: number;
 }
 
 interface MobileTokenSearchModalProps {
@@ -23,6 +25,8 @@ interface MobileTokenSearchModalProps {
   onSelectPair: (pair: string, chain?: Chain, tokenAddress?: string) => void;
   selectedPair: string;
 }
+
+const ITEMS_PER_PAGE = 20;
 
 export default function MobileTokenSearchModal({
   isOpen,
@@ -35,12 +39,15 @@ export default function MobileTokenSearchModal({
   const [markets, setMarkets] = useState<MarketData[]>([]);
   const [loading, setLoading] = useState(false);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const { spotMarkets, getMarketPrice, isClientReady } = useDrift();
 
   useEffect(() => {
     if (isOpen) {
       fetchMarkets();
     }
-  }, [isOpen]);
+  }, [isOpen, isClientReady, spotMarkets]);
 
   const fetchMarkets = async () => {
     try {
@@ -49,7 +56,46 @@ export default function MobileTokenSearchModal({
       const data = await response.json();
 
       if (data.success) {
-        setMarkets(data.data);
+        let finalMarkets: MarketData[] = data.data;
+
+        // If Drift is ready, include ALL 60 Drift spot markets
+        if (isClientReady && spotMarkets.size > 0) {
+          const driftList: MarketData[] = [];
+
+          spotMarkets.forEach((info: SpotMarketInfo, index: number) => {
+            // Skip stablecoins as base assets (unless pool-specific)
+            if (info.symbol === 'USDC' || info.symbol === 'USDT' || info.symbol === 'USDS' || 
+                info.symbol === 'PYUSD' || info.symbol === 'USDe' || info.symbol === 'USDY' ||
+                info.symbol === 'AUSD' || info.symbol === 'EURC') {
+              if (!info.symbol.includes('-')) return;
+            }
+
+            const baseSymbol = info.symbol.split('-')[0];
+            const existing = finalMarkets.find(m => m.baseAsset === baseSymbol || m.baseAsset === info.symbol);
+            const driftPrice = getMarketPrice(index, 'spot');
+
+            if (existing) {
+              existing.chain = 'solana';
+              existing.marketIndex = index;
+              if (driftPrice > 0) existing.price = driftPrice;
+            } else {
+              driftList.push({
+                symbol: `${info.symbol}-USDT`,
+                baseAsset: info.symbol,
+                quoteAsset: 'USDT',
+                price: driftPrice || 0,
+                change24h: 0,
+                volume24h: 0,
+                chain: 'solana',
+                marketIndex: index,
+              });
+            }
+          });
+
+          finalMarkets = [...finalMarkets, ...driftList];
+        }
+
+        setMarkets(finalMarkets);
       }
     } catch (error) {
       console.error('Error fetching markets:', error);
@@ -58,14 +104,30 @@ export default function MobileTokenSearchModal({
     }
   };
 
-  const filteredMarkets = markets.filter(market => {
-    const matchesSearch = searchQuery === '' || 
-      market.baseAsset.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      market.symbol.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesChain = selectedChain === 'all' || market.chain === selectedChain;
-    
-    return matchesSearch && matchesChain && market.quoteAsset === 'USDT';
-  });
+  const filteredMarkets = useMemo(() => {
+    return markets.filter(market => {
+      const matchesSearch = searchQuery === '' || 
+        market.baseAsset.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        market.symbol.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesChain = selectedChain === 'all' || market.chain === selectedChain;
+      
+      return matchesSearch && matchesChain && market.quoteAsset === 'USDT';
+    });
+  }, [markets, searchQuery, selectedChain]);
+
+  // Paginated markets
+  const paginatedMarkets = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    return filteredMarkets.slice(startIndex, endIndex);
+  }, [filteredMarkets, currentPage]);
+
+  const totalPages = Math.ceil(filteredMarkets.length / ITEMS_PER_PAGE);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedChain]);
 
   const toggleFavorite = (symbol: string) => {
     setFavorites(prev => {
@@ -167,71 +229,99 @@ export default function MobileTokenSearchModal({
             <p className="text-xs text-[#848e9c] mt-1">Try a different search term</p>
           </div>
         ) : (
-          <div className="divide-y divide-[#2b3139]">
-            {filteredMarkets.map((market) => {
-              const isSelected = market.symbol === selectedPair;
-              const isPositive = market.change24h >= 0;
-              const isFav = favorites.has(market.symbol);
+          <>
+            <div className="divide-y divide-[#2b3139]">
+              {paginatedMarkets.map((market) => {
+                const isSelected = market.symbol === selectedPair;
+                const isPositive = market.change24h >= 0;
+                const isFav = favorites.has(market.symbol);
 
-              return (
-                <button
-                  key={market.symbol}
-                  onClick={() => handleSelectPair(market)}
-                  className={`w-full px-4 py-3 text-left transition-colors ${
-                    isSelected ? 'bg-[#2b3139]' : 'hover:bg-[#2b3139]'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleFavorite(market.symbol);
-                        }}
-                        className="flex-shrink-0"
-                      >
-                        <Icon
-                          icon={isFav ? 'ph:star-fill' : 'ph:star'}
-                          width={16}
-                          className={isFav ? 'text-[#fcd535]' : 'text-[#848e9c]'}
-                        />
-                      </button>
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        {market.chain && (
+                return (
+                  <button
+                    key={market.symbol}
+                    onClick={() => handleSelectPair(market)}
+                    className={`w-full px-4 py-3 text-left transition-colors ${
+                      isSelected ? 'bg-[#2b3139]' : 'hover:bg-[#2b3139]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleFavorite(market.symbol);
+                          }}
+                          className="flex-shrink-0"
+                        >
                           <Icon
-                            icon={
-                              market.chain === 'solana'
-                                ? 'cryptocurrency:sol'
-                                : market.chain === 'ethereum'
-                                ? 'cryptocurrency:eth'
-                                : 'cryptocurrency:btc'
-                            }
+                            icon={isFav ? 'ph:star-fill' : 'ph:star'}
                             width={16}
-                            className="flex-shrink-0"
+                            className={isFav ? 'text-[#fcd535]' : 'text-[#848e9c]'}
                           />
-                        )}
-                        <span className="text-sm font-semibold text-white truncate">
-                          {market.baseAsset}
-                        </span>
-                        <span className="text-xs text-[#848e9c]">/USDT</span>
+                        </button>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {market.chain && (
+                            <Icon
+                              icon={
+                                market.chain === 'solana'
+                                  ? 'cryptocurrency:sol'
+                                  : market.chain === 'ethereum'
+                                  ? 'cryptocurrency:eth'
+                                  : 'cryptocurrency:btc'
+                              }
+                              width={16}
+                              className="flex-shrink-0"
+                            />
+                          )}
+                          <span className="text-sm font-semibold text-white truncate">
+                            {market.baseAsset}
+                          </span>
+                          <span className="text-xs text-[#848e9c]">/USDT</span>
+                        </div>
+                      </div>
+                      <div className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                        isPositive ? 'bg-[#0ecb81]/10 text-[#0ecb81]' : 'bg-[#f6465d]/10 text-[#f6465d]'
+                      }`}>
+                        {isPositive ? '+' : ''}{market.change24h.toFixed(2)}%
                       </div>
                     </div>
-                    <div className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                      isPositive ? 'bg-[#0ecb81]/10 text-[#0ecb81]' : 'bg-[#f6465d]/10 text-[#f6465d]'
-                    }`}>
-                      {isPositive ? '+' : ''}{market.change24h.toFixed(2)}%
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-white font-mono">${formatPrice(market.price)}</span>
+                      <span className="text-[#848e9c]">
+                        Vol {market.volume24h >= 1e6 ? `${(market.volume24h / 1e6).toFixed(2)}M` : `${(market.volume24h / 1e3).toFixed(2)}K`}
+                      </span>
                     </div>
-                  </div>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-white font-mono">${formatPrice(market.price)}</span>
-                    <span className="text-[#848e9c]">
-                      Vol {market.volume24h >= 1e6 ? `${(market.volume24h / 1e6).toFixed(2)}M` : `${(market.volume24h / 1e3).toFixed(2)}K`}
-                    </span>
-                  </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="sticky bottom-0 bg-[#181a20] border-t border-[#2b3139] p-4 flex items-center justify-between">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className="px-4 py-2 text-sm font-medium rounded-lg bg-[#2b3139] text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#3b4149] transition-colors"
+                >
+                  <Icon icon="ph:caret-left" width={16} className="inline" />
                 </button>
-              );
-            })}
-          </div>
+                
+                <div className="text-sm text-[#848e9c]">
+                  Page {currentPage} of {totalPages}
+                  <span className="block text-xs mt-0.5">{filteredMarkets.length} markets</span>
+                </div>
+                
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-4 py-2 text-sm font-medium rounded-lg bg-[#2b3139] text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#3b4149] transition-colors"
+                >
+                  <Icon icon="ph:caret-right" width={16} className="inline" />
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

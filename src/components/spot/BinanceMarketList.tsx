@@ -18,12 +18,15 @@ interface MarketData {
   chain?: Chain;
   mintAddress?: string;
   logoURI?: string;
+  marketIndex?: number; // Drift market index
 }
 
 interface BinanceMarketListProps {
   selectedPair: string;
   onSelectPair: (pair: string, chain?: Chain, tokenAddress?: string) => void;
 }
+
+const ITEMS_PER_PAGE = 20;
 
 export default function BinanceMarketList({ selectedPair, onSelectPair }: BinanceMarketListProps) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -35,6 +38,7 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
   const [markets, setMarkets] = useState<MarketData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const { spotMarkets, getMarketPrice, isClientReady } = useDrift();
 
@@ -55,21 +59,29 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
 
         let finalMarkets: MarketData[] = data.data;
 
-        // If Drift is ready, ensure we include ALL Drift spot markets 
-        // even if they aren't on KuCoin's main list (though they usually are)
+        // If Drift is ready, ensure we include ALL 60 Drift spot markets
         if (isClientReady && spotMarkets.size > 0) {
           const driftList: MarketData[] = [];
 
           spotMarkets.forEach((info: SpotMarketInfo, index: number) => {
-            if (info.symbol === 'USDC' || info.symbol === 'USDT') return; // Skip quote assets as bases
+            // Skip stablecoins as base assets (they're quote assets)
+            if (info.symbol === 'USDC' || info.symbol === 'USDT' || info.symbol === 'USDS' || 
+                info.symbol === 'PYUSD' || info.symbol === 'USDe' || info.symbol === 'USDY' ||
+                info.symbol === 'AUSD' || info.symbol === 'EURC') {
+              // Only skip if they're in pool 0 (primary pool)
+              // Pool-specific versions (like USDC-1, USDC-4) should be included
+              if (!info.symbol.includes('-')) return;
+            }
 
             // Look for existing KuCoin record for this symbol
-            const existing = finalMarkets.find(m => m.baseAsset === info.symbol);
+            const baseSymbol = info.symbol.split('-')[0]; // Handle pool-specific symbols
+            const existing = finalMarkets.find(m => m.baseAsset === baseSymbol || m.baseAsset === info.symbol);
             const driftPrice = getMarketPrice(index, 'spot');
 
             if (existing) {
               // Augment existing record with Drift info and oracle price if available
               existing.chain = 'solana';
+              existing.marketIndex = index;
               if (driftPrice > 0) existing.price = driftPrice;
             } else {
               // Create new record for Drift market not in KuCoin list
@@ -83,6 +95,7 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
                 high24h: 0,
                 low24h: 0,
                 chain: 'solana',
+                marketIndex: index,
               });
             }
           });
@@ -127,6 +140,20 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
 
     return filtered;
   }, [markets, searchQuery, selectedQuote, selectedTab, selectedChain, favorites, sortBy]);
+
+  // Paginated markets
+  const paginatedMarkets = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    return filteredMarkets.slice(startIndex, endIndex);
+  }, [filteredMarkets, currentPage]);
+
+  const totalPages = Math.ceil(filteredMarkets.length / ITEMS_PER_PAGE);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedQuote, selectedTab, selectedChain, sortBy]);
 
   const toggleFavorite = (symbol: string) => {
     setFavorites(prev => {
@@ -273,79 +300,106 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
             <p className="text-xs text-[#848e9c]">No markets found</p>
           </div>
         ) : (
-          filteredMarkets.map((market) => {
-            const isSelected = market.symbol === selectedPair;
-            const isPositive = market.change24h >= 0;
-            const isFav = favorites.has(market.symbol);
+          <>
+            {paginatedMarkets.map((market) => {
+              const isSelected = market.symbol === selectedPair;
+              const isPositive = market.change24h >= 0;
+              const isFav = favorites.has(market.symbol);
 
-            return (
-              <div
-                key={market.symbol}
-                onClick={() => onSelectPair(market.symbol, market.chain, market.mintAddress)}
-                className={`px-3 py-2 cursor-pointer transition-colors ${isSelected
-                  ? 'bg-[#1e2329]'
-                  : 'hover:bg-[#1e2329]'
-                  }`}
-              >
-                <div className="grid grid-cols-[1fr_auto_auto] gap-2 items-center">
-                  {/* Pair */}
-                  <div className="flex items-center gap-2 min-w-0">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleFavorite(market.symbol);
-                      }}
-                      className="flex-shrink-0"
-                    >
-                      <Icon
-                        icon={isFav ? 'ph:star-fill' : 'ph:star'}
-                        width={12}
-                        className={isFav ? 'text-[#f0b90b]' : 'text-[#848e9c] hover:text-[#f0b90b]'}
-                      />
-                    </button>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs font-medium text-white flex items-center gap-1">
-                        {market.chain && (
-                          <Icon
-                            icon={
-                              market.chain === 'solana'
-                                ? 'cryptocurrency:sol'
-                                : market.chain === 'ethereum'
-                                  ? 'cryptocurrency:eth'
-                                  : 'cryptocurrency:btc'
-                            }
-                            width={10}
-                            className="flex-shrink-0"
-                          />
-                        )}
-                        {market.baseAsset}<span className="text-[#848e9c]">/{market.quoteAsset}</span>
-                      </div>
-                      <div className="text-[9px] text-[#848e9c]">
-                        Vol {formatVolume(market.volume24h)}
+              return (
+                <div
+                  key={market.symbol}
+                  onClick={() => onSelectPair(market.symbol, market.chain, market.mintAddress)}
+                  className={`px-3 py-2 cursor-pointer transition-colors ${isSelected
+                    ? 'bg-[#1e2329]'
+                    : 'hover:bg-[#1e2329]'
+                    }`}
+                >
+                  <div className="grid grid-cols-[1fr_auto_auto] gap-2 items-center">
+                    {/* Pair */}
+                    <div className="flex items-center gap-2 min-w-0">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFavorite(market.symbol);
+                        }}
+                        className="flex-shrink-0"
+                      >
+                        <Icon
+                          icon={isFav ? 'ph:star-fill' : 'ph:star'}
+                          width={12}
+                          className={isFav ? 'text-[#f0b90b]' : 'text-[#848e9c] hover:text-[#f0b90b]'}
+                        />
+                      </button>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-medium text-white flex items-center gap-1">
+                          {market.chain && (
+                            <Icon
+                              icon={
+                                market.chain === 'solana'
+                                  ? 'cryptocurrency:sol'
+                                  : market.chain === 'ethereum'
+                                    ? 'cryptocurrency:eth'
+                                    : 'cryptocurrency:btc'
+                              }
+                              width={10}
+                              className="flex-shrink-0"
+                            />
+                          )}
+                          {market.baseAsset}<span className="text-[#848e9c]">/{market.quoteAsset}</span>
+                        </div>
+                        <div className="text-[9px] text-[#848e9c]">
+                          Vol {formatVolume(market.volume24h)}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Price */}
-                  <div className="text-right">
-                    <div className="text-xs font-mono text-white">
-                      {formatPrice(market.price)}
+                    {/* Price */}
+                    <div className="text-right">
+                      <div className="text-xs font-mono text-white">
+                        {formatPrice(market.price)}
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Change */}
-                  <div className="text-right min-w-[60px]">
-                    <div className={`text-xs font-semibold px-2 py-0.5 rounded ${isPositive ? 'bg-[rgba(14,203,129,0.12)] text-[#0ecb81]' : 'bg-[rgba(246,70,93,0.12)] text-[#f6465d]'
-                      }`}>
-                      {isPositive ? '+' : ''}{market.change24h.toFixed(2)}%
+                    {/* Change */}
+                    <div className="text-right min-w-[60px]">
+                      <div className={`text-xs font-semibold px-2 py-0.5 rounded ${isPositive ? 'bg-[rgba(14,203,129,0.12)] text-[#0ecb81]' : 'bg-[rgba(246,70,93,0.12)] text-[#f6465d]'
+                        }`}>
+                        {isPositive ? '+' : ''}{market.change24h.toFixed(2)}%
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            );
-          })
+              );
+            })}
+          </>
         )}
       </div>
+
+      {/* Pagination */}
+      {!loading && !error && filteredMarkets.length > 0 && totalPages > 1 && (
+        <div className="border-t border-[#1e2329] p-3 flex items-center justify-between">
+          <button
+            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+            disabled={currentPage === 1}
+            className="px-3 py-1.5 text-xs font-medium rounded bg-[#1e2329] text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#2b3139] transition-colors"
+          >
+            <Icon icon="ph:caret-left" width={12} className="inline" />
+          </button>
+          
+          <div className="text-xs text-[#848e9c]">
+            Page {currentPage} of {totalPages} ({filteredMarkets.length} markets)
+          </div>
+          
+          <button
+            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+            disabled={currentPage === totalPages}
+            className="px-3 py-1.5 text-xs font-medium rounded bg-[#1e2329] text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#2b3139] transition-colors"
+          >
+            <Icon icon="ph:caret-right" width={12} className="inline" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -302,7 +302,8 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
           type: 'websocket',
         },
         perpMarketIndexes: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
-        spotMarketIndexes: [0, 1, 2, 3, 4, 5],
+        // Subscribe to all 60 mainnet spot markets (0-59)
+        spotMarketIndexes: Array.from({ length: 60 }, (_, i) => i),
         oracleInfos: [],
       });
     };
