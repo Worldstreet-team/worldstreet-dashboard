@@ -2293,7 +2293,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         };
       });
       
-      console.log(`[DriftContext] Found ${orders.length} open orders`);
+      console.log(`[DriftContext] Found ${orders.length} total open orders (${orders.filter(o => o.marketType === 'spot').length} spot, ${orders.filter(o => o.marketType === 'perp').length} perp)`);
       setOpenOrders(orders);
       return orders;
       

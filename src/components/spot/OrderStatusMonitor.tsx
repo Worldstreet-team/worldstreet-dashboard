@@ -13,7 +13,7 @@ export default function OrderStatusMonitor({
   autoRefresh = true, 
   refreshInterval = 5000 
 }: OrderStatusMonitorProps) {
-  const { getOpenOrders, cancelOrder, getSpotMarketName, isClientReady } = useDrift();
+  const { getOpenOrders, cancelOrder, getSpotMarketName, getMarketName, isClientReady } = useDrift();
   const [allOrders, setAllOrders] = useState<any[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [cancellingOrderIndex, setCancellingOrderIndex] = useState<number | null>(null);
@@ -25,6 +25,8 @@ export default function OrderStatusMonitor({
     const refresh = async () => {
       setIsRefreshing(true);
       const orders = await getOpenOrders();
+      // Show ALL orders (both spot and perp) - don't filter
+      console.log('[OrderStatusMonitor] Received orders:', orders);
       setAllOrders(orders);
       setIsRefreshing(false);
     };
@@ -56,6 +58,7 @@ export default function OrderStatusMonitor({
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
     const orders = await getOpenOrders();
+    console.log('[OrderStatusMonitor] Manual refresh - received orders:', orders);
     setAllOrders(orders);
     setIsRefreshing(false);
   };
@@ -222,9 +225,11 @@ export default function OrderStatusMonitor({
       <div className="divide-y divide-[#2b3139]">
         {allOrders.map((order, index) => {
           const isCancelling = cancellingOrderIndex === order.orderIndex;
+          
+          // Get market name based on market type
           const marketName = order.marketType === 'spot' 
             ? getSpotMarketName(order.marketIndex)
-            : `Market ${order.marketIndex}`;
+            : getMarketName(order.marketIndex);
           
           const isBuy = order.direction === 'buy' || order.direction === 'long';
           const directionColor = isBuy ? 'text-[#0ecb81]' : 'text-[#f6465d]';
@@ -243,6 +248,9 @@ export default function OrderStatusMonitor({
                     </span>
                     <span className="px-2 py-0.5 bg-[#2b3139] text-[#848e9c] text-xs font-medium rounded">
                       {order.orderType.toUpperCase()}
+                    </span>
+                    <span className="px-2 py-0.5 bg-[#2b3139] text-[#848e9c] text-xs font-medium rounded">
+                      {order.marketType.toUpperCase()}
                     </span>
                     <span className={`px-2 py-0.5 text-xs font-medium rounded flex items-center gap-1 ${statusStyle.bg} ${statusStyle.text}`}>
                       <Icon icon={statusStyle.icon} width={12} />
