@@ -2102,65 +2102,48 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
 
     try {
       const driftUser = client.getUser();
-      const userAccount = driftUser.getUserAccount();
       
-      // Import OrderStatus enum
-      const { OrderStatus, MarketType } = await import('@drift-labs/sdk');
+      // Use the built-in method to get open orders
+      const openOrders = driftUser.getOpenOrders();
+      
+      // Import required enums
+      const { OrderStatus, MarketType, OrderType, PositionDirection } = await import('@drift-labs/sdk');
       
       // Get current slot for auction timing
       const currentSlot = await client.connection.getSlot();
       
-      // Filter for open orders
-      const orders: DriftOrder[] = [];
-      
-      for (let i = 0; i < userAccount.orders.length; i++) {
-        const order = userAccount.orders[i];
-        
-        // Skip if order is not open
-        if (order.status !== OrderStatus.OPEN) continue;
-        
-        // Map order data to our interface
+      const orders: DriftOrder[] = openOrders.map((order: any) => {
+        // Use proper enum comparisons instead of hardcoded values
         const marketType = order.marketType === MarketType.SPOT ? 'spot' : 'perp';
-        const orderType = order.orderType === 0 ? 'market' : 'limit';
+        const orderType = order.orderType === OrderType.MARKET ? 'market' : 'limit';
         
-        // Determine direction based on market type and position direction
+        // Use proper enum for direction
         let direction: 'long' | 'short' | 'buy' | 'sell';
         if (marketType === 'spot') {
-          direction = order.direction === 0 ? 'buy' : 'sell';
+          direction = order.direction === PositionDirection.LONG ? 'buy' : 'sell';
         } else {
-          direction = order.direction === 0 ? 'long' : 'short';
+          direction = order.direction === PositionDirection.LONG ? 'long' : 'short';
         }
         
         // Calculate fill progress
         const totalAmount = order.baseAssetAmount.toNumber();
-        const filledAmount = order.baseAssetAmountFilled?.toNumber() || 0;
-        const remainingAmount = totalAmount - filledAmount;
+        const filledAmount = order.baseAssetAmountFilled.toNumber();
         const fillPercentage = totalAmount > 0 ? (filledAmount / totalAmount) * 100 : 0;
         
         // Check auction status
-        const orderSlot = order.slot?.toNumber() || 0;
-        const auctionDuration = order.auctionDuration || 0;
-        const auctionEndSlot = orderSlot + auctionDuration;
+        const auctionEndSlot = order.slot.toNumber() + order.auctionDuration;
         const isInAuction = currentSlot < auctionEndSlot;
-        const slotsUntilAuctionEnd = Math.max(0, auctionEndSlot - currentSlot);
         
-        // Log detailed order info
-        console.log(`[DriftContext] Order ${i}:`, {
+        console.log(`[DriftContext] Order ${order.orderId}:`, {
           marketIndex: order.marketIndex,
           marketType,
           direction,
-          totalAmount,
-          filledAmount,
-          remainingAmount,
           fillPercentage: fillPercentage.toFixed(2) + '%',
           isInAuction,
-          slotsUntilAuctionEnd,
-          orderSlot,
-          currentSlot,
-          auctionEndSlot,
+          slotsUntilAuctionEnd: Math.max(0, auctionEndSlot - currentSlot),
         });
         
-        orders.push({
+        return {
           marketIndex: order.marketIndex,
           marketType,
           orderType,
@@ -2168,9 +2151,9 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
           baseAssetAmount: order.baseAssetAmount.toString(),
           price: order.price.toString(),
           status: 'open',
-          orderIndex: i,
-        });
-      }
+          orderIndex: order.orderId, // Use orderId instead of array index
+        };
+      });
       
       console.log(`[DriftContext] Found ${orders.length} open orders`);
       setOpenOrders(orders);
