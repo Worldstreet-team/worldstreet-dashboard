@@ -1,15 +1,7 @@
 "use client";
 
 import React from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { AlertCircle, XCircle } from 'lucide-react';
+import { Icon } from '@iconify/react';
 
 interface DriftErrorModalProps {
   isOpen: boolean;
@@ -32,87 +24,102 @@ export const DriftErrorModal: React.FC<DriftErrorModalProps> = ({
   onClose,
   error,
 }) => {
-  if (!error) return null;
+  if (!isOpen || !error) return null;
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-red-100 dark:bg-red-900/20 rounded-full">
-              <XCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
+    <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-[#2b3139] rounded-lg w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden border border-[#3a4149]">
+        {/* Header */}
+        <div className="p-4 sm:p-6 border-b border-[#3a4149] flex-shrink-0">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3 flex-1">
+              <div className="w-10 h-10 rounded-lg bg-[#f6465d]/10 flex items-center justify-center flex-shrink-0">
+                <Icon icon="ph:x-circle" className="text-[#f6465d]" width={20} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base sm:text-lg font-bold text-white">
+                  {error.title}
+                </h3>
+                <p className="text-xs sm:text-sm text-[#848e9c] mt-1">
+                  {error.message}
+                </p>
+              </div>
             </div>
-            <DialogTitle className="text-xl font-semibold text-red-600 dark:text-red-400">
-              {error.title}
-            </DialogTitle>
+            <button
+              onClick={onClose}
+              className="text-[#848e9c] hover:text-white transition-colors p-1 flex-shrink-0"
+            >
+              <Icon icon="ph:x" width={20} />
+            </button>
           </div>
-          <DialogDescription className="text-base text-gray-700 dark:text-gray-300 pt-2">
-            {error.message}
-          </DialogDescription>
-        </DialogHeader>
+        </div>
 
+        {/* Scrollable Content */}
         {error.details && (
-          <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-            <div className="flex items-start gap-2 mb-3">
-              <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Order Details
-              </p>
-            </div>
-            <div className="space-y-2 text-sm">
-              {error.details.orderSize && (
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Your Order Size:</span>
-                  <span className="font-mono font-medium text-gray-900 dark:text-gray-100">
-                    {error.details.orderSize}
-                  </span>
-                </div>
-              )}
-              {error.details.minRequired && (
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Minimum Required:</span>
-                  <span className="font-mono font-medium text-amber-600 dark:text-amber-400">
-                    {error.details.minRequired}
-                  </span>
-                </div>
-              )}
-              {error.details.minValue && (
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Minimum Value:</span>
-                  <span className="font-mono font-medium text-amber-600 dark:text-amber-400">
-                    {error.details.minValue}
-                  </span>
-                </div>
-              )}
-              {error.details.available && (
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Available:</span>
-                  <span className="font-mono font-medium text-gray-900 dark:text-gray-100">
-                    {error.details.available}
-                  </span>
-                </div>
-              )}
-              {error.details.required && (
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Required:</span>
-                  <span className="font-mono font-medium text-red-600 dark:text-red-400">
-                    {error.details.required}
-                  </span>
-                </div>
-              )}
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+            <div className="bg-[#1e2329] p-3 sm:p-4 rounded-lg border border-[#3a4149]">
+              <div className="flex items-start gap-2 mb-3">
+                <Icon icon="ph:info" className="text-[#fcd535] flex-shrink-0 mt-0.5" width={16} />
+                <p className="text-xs sm:text-sm font-semibold text-white">
+                  Order Details
+                </p>
+              </div>
+              <div className="space-y-2.5">
+                {error.details.orderSize && (
+                  <div className="flex justify-between items-center gap-3">
+                    <span className="text-xs sm:text-sm text-[#848e9c]">Your Order Size:</span>
+                    <span className="font-mono text-xs sm:text-sm font-medium text-white">
+                      {error.details.orderSize}
+                    </span>
+                  </div>
+                )}
+                {error.details.minRequired && (
+                  <div className="flex justify-between items-center gap-3">
+                    <span className="text-xs sm:text-sm text-[#848e9c]">Minimum Required:</span>
+                    <span className="font-mono text-xs sm:text-sm font-medium text-[#fcd535]">
+                      {error.details.minRequired}
+                    </span>
+                  </div>
+                )}
+                {error.details.minValue && (
+                  <div className="flex justify-between items-center gap-3">
+                    <span className="text-xs sm:text-sm text-[#848e9c]">Minimum Value:</span>
+                    <span className="font-mono text-xs sm:text-sm font-medium text-[#fcd535]">
+                      {error.details.minValue}
+                    </span>
+                  </div>
+                )}
+                {error.details.available && (
+                  <div className="flex justify-between items-center gap-3">
+                    <span className="text-xs sm:text-sm text-[#848e9c]">Available:</span>
+                    <span className="font-mono text-xs sm:text-sm font-medium text-white">
+                      {error.details.available}
+                    </span>
+                  </div>
+                )}
+                {error.details.required && (
+                  <div className="flex justify-between items-center gap-3">
+                    <span className="text-xs sm:text-sm text-[#848e9c]">Required:</span>
+                    <span className="font-mono text-xs sm:text-sm font-medium text-[#f6465d]">
+                      {error.details.required}
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
 
-        <div className="mt-6 flex justify-end">
-          <Button
-            onClick={onClose}
-            className="bg-primary hover:bg-primary/90"
+        {/* Footer */}
+        <div className="flex-shrink-0 flex justify-end p-4 sm:p-6 border-t border-[#3a4149]">
+          <button 
+            onClick={onClose} 
+            className="w-full sm:w-auto px-6 py-2.5 bg-[#fcd535] hover:bg-[#fcd535]/90 text-[#181a20] rounded transition-colors text-sm font-semibold"
           >
             Got it
-          </Button>
+          </button>
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   );
 };
