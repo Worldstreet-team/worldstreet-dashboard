@@ -287,13 +287,31 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       }
     };
 
-    // Helper: Create Drift client with websocket subscription
+    // Helper: Create Drift client with websocket subscription and optimized transaction handling
     const createDriftClient = async (
       connection: Connection,
       wallet: any,
       programId: PublicKey
     ) => {
-      console.log(`[DriftContext] Creating DriftClient with websocket subscription`);
+      console.log(`[DriftContext] Creating DriftClient with websocket subscription and optimized tx handling`);
+      
+      // Import transaction sender classes
+      const { WhileValidTxSender } = await import('@drift-labs/sdk');
+      
+      // Create optimized transaction sender with retry logic
+      const txSender = new WhileValidTxSender({
+        connection,
+        wallet,
+        opts: { 
+          commitment: 'confirmed',
+          preflightCommitment: 'confirmed',
+          skipPreflight: false,
+        },
+        retrySleep: 2000, // Retry every 2 seconds
+        timeout: 60000,   // Total timeout of 60 seconds
+        additionalConnections: [], // Can add backup RPC endpoints here
+      });
+
       return new DriftClient({
         connection,
         wallet,
@@ -305,6 +323,20 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         // Subscribe to all 60 mainnet spot markets (0-59)
         spotMarketIndexes: Array.from({ length: 60 }, (_, i) => i),
         oracleInfos: [],
+        // Use optimized transaction sender with retry logic
+        txSender,
+        // Enable transaction metrics for monitoring
+        enableMetricsEvents: true,
+        trackTxLandRate: true,
+        // Configure transaction handler with blockhash caching
+        txHandlerConfig: {
+          blockhashCachingEnabled: true,
+          blockhashCachingConfig: {
+            retryCount: 5,
+            retrySleepTimeMs: 100,
+            staleCacheTimeMs: 1000,
+          },
+        },
       });
     };
 
@@ -1160,7 +1192,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     }
   }, [user?.userId, requestPin, initializeDriftClient, refreshAccounts, getMarketName, getSpotMarketName]);
 
-  // Poll transaction status using getSignatureStatus
+  // Poll transaction status with improved blockhash handling
   const pollTransactionStatus = async (
     connection: any,
     signature: string,
@@ -1170,9 +1202,12 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     console.log(`[DriftContext] Waiting for transaction confirmation: ${signature}`);
 
     try {
-      // Use confirmTransaction with finalized commitment for reliable confirmation
+      // Get latest blockhash with finalized commitment for stability
       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
 
+      console.log(`[DriftContext] Confirming with blockhash: ${blockhash}, lastValidBlockHeight: ${lastValidBlockHeight}`);
+
+      // Use confirmTransaction with extended timeout
       const confirmation = await connection.confirmTransaction(
         {
           signature,
@@ -1189,8 +1224,29 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
 
       console.log(`[DriftContext] Transaction confirmed: ${signature}`);
       return true;
-    } catch (err) {
+    } catch (err: any) {
       console.error(`[DriftContext] Error confirming transaction:`, err);
+      
+      // If blockhash expired, check if transaction actually landed
+      if (err.message?.includes('block height exceeded')) {
+        console.log(`[DriftContext] Blockhash expired, checking if transaction landed...`);
+        
+        try {
+          // Check transaction status directly
+          const status = await connection.getSignatureStatus(signature);
+          
+          if (status?.value?.confirmationStatus === 'confirmed' || 
+              status?.value?.confirmationStatus === 'finalized') {
+            console.log(`[DriftContext] Transaction actually confirmed despite blockhash expiry`);
+            return true;
+          }
+          
+          console.error(`[DriftContext] Transaction not found or failed`);
+        } catch (statusErr) {
+          console.error(`[DriftContext] Error checking transaction status:`, statusErr);
+        }
+      }
+      
       throw err;
     }
   };
@@ -1476,7 +1532,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       // Convert size to proper precision using SDK method
       const baseAssetAmount = client.convertToPerpPrecision(size);
 
-      // Construct order parameters with correct SDK enums
+      // Construct order parameters with correct SDK enums and compute unit optimization
       const orderParams = {
         orderType: OrderType.MARKET,
         marketType: MarketType.PERP,
@@ -1486,7 +1542,13 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         price: new BN(0),
       };
 
-      const txSignature = await client.placePerpOrder(orderParams);
+      // Add transaction options for faster confirmation
+      const txOptions = {
+        computeUnits: 300_000, // Sufficient compute units
+        computeUnitsPrice: 50_000, // Priority fee in micro-lamports (0.00005 SOL per CU)
+      };
+
+      const txSignature = await client.placePerpOrder(orderParams, txOptions);
 
       console.log('[DriftContext] Order transaction sent:', txSignature);
 
@@ -1878,7 +1940,13 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       });
       console.log('=== END DEBUG ===');
 
-      const txSignature = await client.placeSpotOrder(orderParams);
+      // Add transaction options for faster confirmation
+      const txOptions = {
+        computeUnits: 300_000, // Sufficient compute units
+        computeUnitsPrice: 50_000, // Priority fee in micro-lamports
+      };
+
+      const txSignature = await client.placeSpotOrder(orderParams, txOptions);
       console.log('[DriftContext] Spot order sent:', txSignature);
 
       await pollTransactionStatus(client.connection, txSignature, 30, 2000);
