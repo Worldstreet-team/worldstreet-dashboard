@@ -400,7 +400,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
 
         // Step 3: Initialize connection with configurable endpoints
         const wsUrl = process.env.NEXT_PUBLIC_SOLANA_WS_URL ||
-          'wss://solana-mainnet.core.chainstack.com/6b2efd9b0b11d871382ce7bf3c7c0d89';
+          'wss://solana-mainnet.core.chainstack.com/0d3fce8e4d9cc83e58aba7abcd2458f9';
         const rpcUrl = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ||
           'https://api.mainnet-beta.solana.com';
 
