@@ -1188,6 +1188,9 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       try {
         setIsLoading(true);
 
+        console.log('=== DRIFT DEPOSIT DEBUG ===');
+        console.log('[DriftContext] Deposit amount requested:', amount);
+
         // Ensure wallet is unlocked / PIN provided
         const pin = await requestPin();
 
@@ -1201,6 +1204,22 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         if (!client.isSubscribed) {
           await client.subscribe();
         }
+
+        // Get pre-deposit balance for verification
+        const driftUser = client.getUser();
+        const preDepositPosition = driftUser.getSpotPosition(0);
+        const usdcMarket = client.getSpotMarketAccount(0);
+        
+        let preDepositBalance = 0;
+        if (preDepositPosition && preDepositPosition.scaledBalance && !preDepositPosition.scaledBalance.isZero()) {
+          const tokenAmount = client.getTokenAmount(
+            preDepositPosition.scaledBalance,
+            usdcMarket,
+            preDepositPosition.balanceType
+          );
+          preDepositBalance = tokenAmount.toNumber();
+        }
+        console.log('[DriftContext] Pre-deposit Drift balance:', preDepositBalance);
 
         // Calculate fee (5%) and net amount
         const { calculateFee } = await import('@/config/drift');
@@ -1283,11 +1302,37 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         // Refresh accounts after deposit
         await refreshAccounts();
 
+        // Verify deposit was successful by checking balance
+        const postDepositUser = client.getUser();
+        const postDepositPosition = postDepositUser.getSpotPosition(0);
+        
+        let postDepositBalance = 0;
+        if (postDepositPosition && postDepositPosition.scaledBalance && !postDepositPosition.scaledBalance.isZero()) {
+          const tokenAmount = client.getTokenAmount(
+            postDepositPosition.scaledBalance,
+            usdcMarket,
+            postDepositPosition.balanceType
+          );
+          postDepositBalance = tokenAmount.toNumber();
+        }
+
+        console.log('[DriftContext] Post-deposit Drift balance:', postDepositBalance);
+        console.log('[DriftContext] Balance increase:', postDepositBalance - preDepositBalance);
+        console.log('=== END DEPOSIT DEBUG ===');
+
+        // Verify the deposit actually increased the balance
+        if (postDepositBalance <= preDepositBalance) {
+          console.warn('[DriftContext] WARNING: Deposit did not increase balance as expected!');
+          console.warn('[DriftContext] Expected increase:', netAmount);
+          console.warn('[DriftContext] Actual increase:', postDepositBalance - preDepositBalance);
+        }
+
         // Refresh summary after success
         await refreshSummary();
 
         return { success: true, txSignature };
       } catch (err) {
+        console.log('=== DEPOSIT ERROR ===');
         const errorMessage = err instanceof Error ? err.message : 'Failed to deposit collateral';
         console.error('[DriftContext] Deposit error:', err);
 
@@ -1580,6 +1625,9 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
 
   /**
    * Place a spot market or limit order
+   * 
+   * CRITICAL: This function must use proper Drift precision and verify collateral
+   * before placing orders to avoid InsufficientCollateral errors.
    */
   const placeSpotOrder = useCallback(async (
     marketIndex: number,
@@ -1601,13 +1649,106 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         client = await initializeDriftClient(pin);
       }
 
+      // Ensure client is subscribed to get latest account data
+      if (!client.isSubscribed) {
+        await client.subscribe();
+      }
+
+      // Refresh accounts to get latest balances
+      await refreshAccounts();
+
       const { BN, OrderType, MarketType, PositionDirection } = await import('@drift-labs/sdk');
+
+      // Get user account for margin checks
+      const driftUser = client.getUser();
+      const userAccount = driftUser.getUserAccount();
+
+      // === DIAGNOSTIC LOGGING: Pre-Order State ===
+      console.log('=== DRIFT SPOT ORDER DEBUG ===');
+      console.log('[DriftContext] Market Index:', marketIndex);
+      console.log('[DriftContext] Direction:', direction);
+      console.log('[DriftContext] Amount (input):', amount);
+      console.log('[DriftContext] Order Type:', orderType);
+
+      // Get USDC collateral (market index 0)
+      const usdcPosition = driftUser.getSpotPosition(0);
+      const usdcMarket = client.getSpotMarketAccount(0);
+      
+      let usdcBalance = 0;
+      if (usdcPosition && usdcPosition.scaledBalance && !usdcPosition.scaledBalance.isZero()) {
+        const tokenAmount = client.getTokenAmount(
+          usdcPosition.scaledBalance,
+          usdcMarket,
+          usdcPosition.balanceType
+        );
+        usdcBalance = tokenAmount.toNumber();
+      }
+
+      console.log('[DriftContext] USDC Balance (from Drift):', usdcBalance);
+
+      // Get margin info
+      const totalCollateral = driftUser.getTotalCollateral ? driftUser.getTotalCollateral().toNumber() / 1e6 : 0;
+      const freeCollateral = driftUser.getFreeCollateral ? driftUser.getFreeCollateral().toNumber() / 1e6 : 0;
+      const initialMarginReq = driftUser.getInitialMarginRequirement ? driftUser.getInitialMarginRequirement().toNumber() / 1e6 : 0;
+
+      console.log('[DriftContext] Total Collateral:', totalCollateral);
+      console.log('[DriftContext] Free Collateral:', freeCollateral);
+      console.log('[DriftContext] Initial Margin Requirement:', initialMarginReq);
+
+      // === SAFETY CHECK: Verify sufficient collateral ===
+      if (freeCollateral <= 0) {
+        console.error('[DriftContext] INSUFFICIENT COLLATERAL: Free collateral is', freeCollateral);
+        return { 
+          success: false, 
+          error: `Insufficient collateral. You have ${freeCollateral.toFixed(2)} USDC free collateral. Please deposit USDC first.` 
+        };
+      }
+
+      // Get market price for notional value calculation
+      const oracleData = client.getOracleDataForSpotMarket(marketIndex);
+      const marketPrice = oracleData.price.toNumber() / 1e6;
+      console.log('[DriftContext] Market Price:', marketPrice);
+
+      // Calculate notional value of the order
+      const notionalValue = amount * marketPrice;
+      console.log('[DriftContext] Notional Value:', notionalValue);
+
+      // Estimate required margin (spot orders typically need ~100% margin for buys)
+      const estimatedMarginRequired = direction === 'buy' ? notionalValue : 0;
+      console.log('[DriftContext] Estimated Margin Required:', estimatedMarginRequired);
+
+      // Check if user has enough free collateral
+      if (direction === 'buy' && estimatedMarginRequired > freeCollateral) {
+        console.error('[DriftContext] INSUFFICIENT COLLATERAL FOR ORDER');
+        console.error('[DriftContext] Required:', estimatedMarginRequired, 'Available:', freeCollateral);
+        return {
+          success: false,
+          error: `Insufficient collateral. Order requires ${estimatedMarginRequired.toFixed(2)} USDC but you only have ${freeCollateral.toFixed(2)} USDC available.`
+        };
+      }
+
+      // === PRECISION CONVERSION: Critical for correct order sizing ===
+      const baseAssetAmount = client.convertToSpotPrecision(marketIndex, amount);
+      console.log('[DriftContext] Base Asset Amount (BN):', baseAssetAmount.toString());
+      console.log('[DriftContext] Base Asset Amount (human check):', baseAssetAmount.toNumber());
+
+      // Verify precision conversion didn't create an absurdly large order
+      const targetMarket = client.getSpotMarketAccount(marketIndex);
+      const humanReadableAmount = baseAssetAmount.toNumber() / Math.pow(10, targetMarket.decimals);
+      console.log('[DriftContext] Human Readable Amount (verification):', humanReadableAmount);
+
+      if (Math.abs(humanReadableAmount - amount) > amount * 0.01) {
+        console.error('[DriftContext] PRECISION MISMATCH DETECTED');
+        console.error('[DriftContext] Expected:', amount, 'Got:', humanReadableAmount);
+        return {
+          success: false,
+          error: 'Order size precision error. Please try again.'
+        };
+      }
 
       const positionDirection = direction === 'buy'
         ? PositionDirection.LONG
         : PositionDirection.SHORT;
-
-      const baseAssetAmount = client.convertToSpotPrecision(marketIndex, amount);
 
       const orderParams = {
         orderType: orderType === 'market' ? OrderType.MARKET : OrderType.LIMIT,
@@ -1617,6 +1758,13 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         baseAssetAmount,
         price: price ? client.convertToPricePrecision(price) : new BN(0),
       };
+
+      console.log('[DriftContext] Order Params:', {
+        ...orderParams,
+        baseAssetAmount: orderParams.baseAssetAmount.toString(),
+        price: orderParams.price.toString(),
+      });
+      console.log('=== END DEBUG ===');
 
       const txSignature = await client.placeSpotOrder(orderParams);
       console.log('[DriftContext] Spot order sent:', txSignature);
