@@ -68,6 +68,34 @@ const orders = await getOpenOrders();
 - Cancel button with loading state
 - Info banners explaining keeper network
 
+## Where It's Used
+
+The `OrderStatusMonitor` component is currently integrated in:
+
+### 1. Portfolio Page (`src/app/(DashboardLayout)/portfolio/page.tsx`)
+- Displays between Account Metrics and Futures Positions sections
+- Only shows when there are open orders (`openOrders.length > 0`)
+- Auto-refreshes every 5 seconds
+- Allows users to cancel pending orders
+
+```tsx
+{/* Open Orders Monitor - Only show if there are open orders */}
+{openOrders.length > 0 && (
+  <OrderStatusMonitor 
+    autoRefresh={true}
+    refreshInterval={5000}
+  />
+)}
+```
+
+### Potential Additional Locations
+
+You can also add it to:
+- **Spot Trading Page** - Show pending orders while trading
+- **Futures Trading Page** - Monitor perp orders
+- **Dashboard** - Quick overview of all pending orders
+- **Mobile Trading Modal** - Show orders in mobile view
+
 ## How to Use
 
 ### In Your Portfolio Page

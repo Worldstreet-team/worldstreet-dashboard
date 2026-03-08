@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useDrift } from '@/app/context/driftContext';
 import { DriftAccountStatus } from '@/components/futures/DriftAccountStatus';
 import { PaginatedSpotPositions } from '@/components/spot/PaginatedSpotPositions';
+import OrderStatusMonitor from '@/components/spot/OrderStatusMonitor';
 
 export default function PortfolioPage() {
   const {
@@ -20,6 +21,7 @@ export default function PortfolioPage() {
     refreshSummary,
     refreshPositions,
     getMarketPrice,
+    openOrders,
   } = useDrift();
 
   // Force dark background immediately on mount
@@ -292,6 +294,14 @@ export default function PortfolioPage() {
               </p>
             </div>
           </div>
+
+          {/* Open Orders Monitor - Only show if there are open orders */}
+          {openOrders.length > 0 && (
+            <OrderStatusMonitor 
+              autoRefresh={true}
+              refreshInterval={5000}
+            />
+          )}
 
           {/* Futures Positions */}
           <div className="bg-[#2b3139] border border-[#2b3139] rounded-lg overflow-hidden">
