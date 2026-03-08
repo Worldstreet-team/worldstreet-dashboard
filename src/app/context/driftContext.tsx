@@ -2088,9 +2088,10 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   }, [user?.userId, requestPin, initializeDriftClient, refreshSummary, refreshPositions, refreshAccounts, getSpotMarketName]);
 
   /**
-   * Get all open orders for the user
+   * Get all open orders for the user with detailed status information
    * 
    * Returns orders with status 'open' that are waiting to be filled by keepers
+   * Includes auction status, fill progress, and timing information
    */
   const getOpenOrders = useCallback(async (): Promise<DriftOrder[]> => {
     const client = driftClientRef.current;
@@ -2106,6 +2107,9 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       // Import OrderStatus enum
       const { OrderStatus, MarketType } = await import('@drift-labs/sdk');
       
+      // Get current slot for auction timing
+      const currentSlot = await client.connection.getSlot();
+      
       // Filter for open orders
       const orders: DriftOrder[] = [];
       
@@ -2113,7 +2117,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         const order = userAccount.orders[i];
         
         // Skip if order is not open
-        if (order.status !== OrderStatus.Open) continue;
+        if (order.status !== OrderStatus.OPEN) continue;
         
         // Map order data to our interface
         const marketType = order.marketType === MarketType.SPOT ? 'spot' : 'perp';
@@ -2126,6 +2130,35 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         } else {
           direction = order.direction === 0 ? 'long' : 'short';
         }
+        
+        // Calculate fill progress
+        const totalAmount = order.baseAssetAmount.toNumber();
+        const filledAmount = order.baseAssetAmountFilled?.toNumber() || 0;
+        const remainingAmount = totalAmount - filledAmount;
+        const fillPercentage = totalAmount > 0 ? (filledAmount / totalAmount) * 100 : 0;
+        
+        // Check auction status
+        const orderSlot = order.slot?.toNumber() || 0;
+        const auctionDuration = order.auctionDuration || 0;
+        const auctionEndSlot = orderSlot + auctionDuration;
+        const isInAuction = currentSlot < auctionEndSlot;
+        const slotsUntilAuctionEnd = Math.max(0, auctionEndSlot - currentSlot);
+        
+        // Log detailed order info
+        console.log(`[DriftContext] Order ${i}:`, {
+          marketIndex: order.marketIndex,
+          marketType,
+          direction,
+          totalAmount,
+          filledAmount,
+          remainingAmount,
+          fillPercentage: fillPercentage.toFixed(2) + '%',
+          isInAuction,
+          slotsUntilAuctionEnd,
+          orderSlot,
+          currentSlot,
+          auctionEndSlot,
+        });
         
         orders.push({
           marketIndex: order.marketIndex,
