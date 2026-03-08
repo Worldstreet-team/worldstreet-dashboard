@@ -104,6 +104,7 @@ interface DriftContextValue {
   // Orders
   openOrders: DriftOrder[];
   getOpenOrders: () => Promise<DriftOrder[]>;
+  getAllOrders: () => Promise<DriftOrder[]>;
   cancelOrder: (orderIndex: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
 
   // Loading/error states
@@ -2166,6 +2167,93 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   }, []);
 
   /**
+   * Get ALL orders (open, filled, cancelled) for the user
+   * 
+   * Returns all orders from user account, excluding only INIT status orders
+   * Includes status information for each order
+   */
+  const getAllOrders = useCallback(async (): Promise<DriftOrder[]> => {
+    const client = driftClientRef.current;
+    if (!client) {
+      console.log('[DriftContext] No client available to get orders');
+      return [];
+    }
+
+    try {
+      const driftUser = client.getUser();
+      const userAccount = driftUser.getUserAccount();
+
+      // Import all required enums
+      const { OrderStatus, MarketType, OrderType, PositionDirection } = await import('@drift-labs/sdk');
+
+      // Get ALL orders from user account (not just open ones)
+      const allOrders = userAccount.orders.filter((order: any) =>
+        order.status !== OrderStatus.INIT // Skip uninitialized orders
+      );
+
+      const orders: DriftOrder[] = [];
+
+      for (let i = 0; i < allOrders.length; i++) {
+        const order = allOrders[i];
+
+        // Map status to human-readable string
+        let statusText: 'open' | 'filled' | 'canceled' | 'init';
+        switch (order.status) {
+          case OrderStatus.OPEN:
+            statusText = 'open';
+            break;
+          case OrderStatus.FILLED:
+            statusText = 'filled';
+            break;
+          case OrderStatus.CANCELED:
+            statusText = 'canceled';
+            break;
+          default:
+            statusText = 'init';
+        }
+
+        // Only include spot orders (filter out perp orders)
+        if (order.marketType !== MarketType.SPOT) continue;
+
+        const marketType = 'spot';
+        const orderType = order.orderType === OrderType.MARKET ? 'market' : 'limit';
+        const direction = order.direction === PositionDirection.LONG ? 'buy' : 'sell';
+
+        // Calculate fill progress
+        const totalAmount = order.baseAssetAmount.toNumber();
+        const filledAmount = order.baseAssetAmountFilled.toNumber();
+        const fillPercentage = totalAmount > 0 ? (filledAmount / totalAmount) * 100 : 0;
+
+        console.log(`[DriftContext] Order ${order.orderId} (${statusText}):`, {
+          marketIndex: order.marketIndex,
+          direction,
+          totalAmount,
+          filledAmount,
+          fillPercentage: fillPercentage.toFixed(2) + '%',
+          status: order.status,
+        });
+
+        orders.push({
+          marketIndex: order.marketIndex,
+          marketType,
+          orderType,
+          direction,
+          baseAssetAmount: order.baseAssetAmount.toString(),
+          price: order.price.toString(),
+          status: statusText,
+          orderIndex: order.orderId,
+        });
+      }
+
+      console.log(`[DriftContext] Found ${orders.length} total spot orders`);
+      return orders;
+    } catch (err) {
+      console.error('[DriftContext] Error getting all orders:', err);
+      return [];
+    }
+  }, []);
+
+  /**
    * Cancel an open order
    * 
    * @param orderIndex - Index of the order in the user's orders array
@@ -2465,6 +2553,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     spotPositions,
     openOrders,
     getOpenOrders,
+    getAllOrders,
     cancelOrder,
     walletBalance,
     getSpotMarketIndexBySymbol,
