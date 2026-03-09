@@ -2230,18 +2230,24 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       return { success: true, txSignature };
     } catch (err: any) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      console.error('[DriftContext] Spot order error:', err);
+      console.error('[DriftContext] ❌ Spot order error:', err);
+      console.error('[DriftContext] ❌ Error type:', typeof err);
+      console.error('[DriftContext] ❌ Error constructor:', err?.constructor?.name);
 
       // Extract logs if available (for SendTransactionError)
       if (err.logs) {
-        console.log('[DriftContext] Transaction Logs:', err.logs);
+        console.error('[DriftContext] 📋 Transaction Logs:', err.logs);
       } else if (typeof err.getLogs === 'function') {
         try {
-          console.log('[DriftContext] Transaction Logs:', err.getLogs());
+          const logs = err.getLogs();
+          console.error('[DriftContext] 📋 Transaction Logs:', logs);
         } catch (logErr) {
           console.warn('[DriftContext] Could not fetch logs:', logErr);
         }
       }
+      
+      // Log full error object for debugging
+      console.error('[DriftContext] 📋 Full error object:', JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
 
       // Sanitize error messages for user-friendly display
       let friendlyError = 'Failed to place spot order';
