@@ -7,13 +7,13 @@ import { useFuturesData } from '@/hooks/useFuturesData';
 import { FuturesChart } from '@/components/futures/FuturesChart';
 import BinanceOrderBook from '@/components/spot/BinanceOrderBook';
 import BinanceMarketList from '@/components/spot/BinanceMarketList';
+import FuturesOrderForm from '@/components/futures/FuturesOrderForm';
 import { PositionPanel } from '@/components/futures/PositionPanel';
 import { CollateralPanel } from '@/components/futures/CollateralPanel';
 import { FuturesWalletBalance } from '@/components/futures/FuturesWalletBalance';
 import { RiskPanel } from '@/components/futures/RiskPanel';
 import { WalletModal } from '@/components/futures/WalletModal';
 import { DriftAccountStatus } from '@/components/futures/DriftAccountStatus';
-import { FuturesOrderModal } from '@/components/futures/FuturesOrderModal';
 import { InsufficientSolModal } from '@/components/futures/InsufficientSolModal';
 
 type OrderSide = 'long' | 'short';
@@ -42,8 +42,6 @@ export default function BinanceFuturesPage() {
   const [showMarketDropdown, setShowMarketDropdown] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [walletChecked, setWalletChecked] = useState(false);
-  const [showOrderModal, setShowOrderModal] = useState(false);
-  const [orderSide, setOrderSide] = useState<OrderSide>('long');
   const [initializing, setInitializing] = useState(false);
   const [isLoadingMarkets, setIsLoadingMarkets] = useState(true);
 
@@ -110,11 +108,6 @@ export default function BinanceFuturesPage() {
   const handleSelectMarket = (marketIndex: number) => {
     setSelectedMarketIndex(marketIndex);
     setShowMarketDropdown(false);
-  };
-
-  const handleOpenOrderModal = (side: OrderSide) => {
-    setOrderSide(side);
-    setShowOrderModal(true);
   };
 
   // Get current market data
@@ -301,21 +294,10 @@ export default function BinanceFuturesPage() {
         </div>
 
         {/* Fixed Bottom Action Buttons */}
-        <div className="flex-shrink-0 flex gap-2 p-3 bg-[#181a20] border-t border-[#2b3139]">
-          <button 
-            onClick={() => handleOpenOrderModal('long')}
-            disabled={!isInitialized}
-            className="flex-1 py-3 bg-success hover:bg-success/90 active:bg-success/80 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Long
-          </button>
-          <button 
-            onClick={() => handleOpenOrderModal('short')}
-            disabled={!isInitialized}
-            className="flex-1 py-3 bg-error hover:bg-error/90 active:bg-error/80 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Short
-          </button>
+        <div className="flex-shrink-0 p-3 bg-[#181a20] border-t border-[#2b3139]">
+          <div className="text-xs text-center text-[#848e9c] mb-2">
+            Use desktop for trading
+          </div>
         </div>
       </div>
 
@@ -442,26 +424,11 @@ export default function BinanceFuturesPage() {
             {/* Scrollable Actions & Info - Takes 40% of height */}
             <div className="h-[40%] overflow-y-auto custom-scrollbar">
               <div className="p-4 space-y-3">
-                {/* Quick Actions */}
-                <div className="bg-[#0d0d0d] rounded-xl border border-white/5 p-4">
-                  <h3 className="text-xs font-bold text-white mb-3 uppercase tracking-wide">Quick Actions</h3>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      onClick={() => handleOpenOrderModal('long')}
-                      disabled={!isInitialized}
-                      className="py-3 bg-gradient-to-br from-success to-success/80 hover:from-success/90 hover:to-success/70 text-white font-bold rounded-lg transition-all duration-200 shadow-lg shadow-success/20 hover:shadow-xl hover:shadow-success/30 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                    >
-                      Long
-                    </button>
-                    <button
-                      onClick={() => handleOpenOrderModal('short')}
-                      disabled={!isInitialized}
-                      className="py-3 bg-gradient-to-br from-error to-error/80 hover:from-error/90 hover:to-error/70 text-white font-bold rounded-lg transition-all duration-200 shadow-lg shadow-error/20 hover:shadow-xl hover:shadow-error/30 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                    >
-                      Short
-                    </button>
-                  </div>
-                </div>
+                {/* Order Form */}
+                <FuturesOrderForm 
+                  marketIndex={selectedMarketIndex ?? 0}
+                  marketName={currentMarketName}
+                />
 
                 <DriftAccountStatus />
                 <PositionPanel />
@@ -475,14 +442,6 @@ export default function BinanceFuturesPage() {
         isOpen={showWalletModal}
         onClose={() => setShowWalletModal(false)}
         onWalletCreated={handleWalletCreated}
-      />
-
-      <FuturesOrderModal
-        isOpen={showOrderModal}
-        onClose={() => setShowOrderModal(false)}
-        side={orderSide}
-        marketIndex={selectedMarketIndex ?? 0}
-        onSuccess={() => setShowOrderModal(false)}
       />
 
       {solBalanceInfo && (

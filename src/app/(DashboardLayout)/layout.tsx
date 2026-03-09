@@ -85,28 +85,26 @@ export default function Layout({
                             {/* Syncs wallet addresses to chain contexts */}
                             <WalletAddressSync />
                             <DashboardVividProvider>
-                            <div className={`flex w-full h-screen overflow-hidden ${isFullscreen ? 'bg-[#181a20]' : ''}`}>
-                              <div className={`${isFullscreen ? '' : 'page-wrapper'} flex w-full h-full ${isFullscreen ? 'bg-[#181a20]' : ''}`}>
-                                {/* Header/sidebar - Hide for fullscreen routes */}
-                                {!isFullscreen && activeLayout == "vertical" ? <Sidebar /> : null}
-                                <div className={`body-wrapper w-full h-full flex flex-col overflow-hidden ${isFullscreen ? 'bg-[#181a20]' : ''}`}>
-                                  {/* Top Header - Hide for fullscreen routes */}
-                                  {!isFullscreen && (
-                                    activeLayout == "horizontal" ? (
+                            {isFullscreen ? (
+                              // Fullscreen routes - completely independent, no wrapper padding
+                              <div className="fixed inset-0 bg-[#181a20]">
+                                {children}
+                              </div>
+                            ) : (
+                              // Normal dashboard layout with sidebar and header
+                              <div className="flex w-full h-screen overflow-hidden">
+                                <div className="page-wrapper flex w-full h-full">
+                                  {/* Sidebar */}
+                                  {activeLayout == "vertical" ? <Sidebar /> : null}
+                                  <div className="body-wrapper w-full h-full flex flex-col overflow-hidden">
+                                    {/* Top Header */}
+                                    {activeLayout == "horizontal" ? (
                                       <Header layoutType="horizontal" />
                                     ) : (
                                       <Header layoutType="vertical" />
-                                    )
-                                  )}
+                                    )}
 
-                                  {/* Body Content - Scrollable or Fullscreen */}
-                                  {isFullscreen ? (
-                                    // Fullscreen mode - no padding, no scroll wrapper
-                                    <div className="relative z-0 flex-1 w-full h-full overflow-hidden bg-[#181a20]">
-                                      {children}
-                                    </div>
-                                  ) : (
-                                    // Normal mode - with padding and scroll
+                                    {/* Body Content - with padding and scroll */}
                                     <div className="relative z-0 flex-1 bg-herobg dark:bg-dark transition-colors duration-300 overflow-y-auto overflow-x-hidden">
                                       {/* Subtle ambient glow */}
                                       <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/5 blur-[120px] rounded-full -translate-y-1/2 translate-x-1/3 pointer-events-none" />
@@ -123,12 +121,12 @@ export default function Layout({
                                         </div>
                                       </div>
                                     </div>
-                                  )}
-                                  {!isFullscreen && <Customizer />}
-                                  {!isFullscreen && <ProfileDrawer />}
+                                    <Customizer />
+                                    <ProfileDrawer />
+                                  </div>
                                 </div>
                               </div>
-                            </div>
+                            )}
                         
                             {/* Wallet PIN Setup Modal */}
                             <PinSetupModal />
