@@ -207,11 +207,11 @@ export default function BinanceFuturesPage() {
   return (
     <>
       {/* MOBILE LAYOUT */}
-      <div className="md:hidden flex flex-col h-screen bg-white dark:bg-darkgray">
+      <div className="md:hidden flex flex-col h-screen bg-[#181a20]">
         {/* Mobile Header */}
-        <div className="flex-shrink-0 px-3 py-2 bg-gradient-to-r from-primary/10 to-warning/10 border-b border-border dark:border-darkborder">
+        <div className="flex-shrink-0 px-3 py-2 bg-gradient-to-r from-primary/10 to-warning/10 border-b border-[#2b3139]">
           <div className="flex items-center justify-between">
-            <h1 className="text-xs font-bold text-dark dark:text-white">WorldStreet Futures</h1>
+            <h1 className="text-xs font-bold text-white">WorldStreet Futures</h1>
             {isInitialized && (
               <div className="flex items-center gap-1 px-2 py-0.5 bg-success/10 rounded-full">
                 <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
@@ -222,34 +222,34 @@ export default function BinanceFuturesPage() {
         </div>
         
         {/* Market Info Bar */}
-        <div className="flex-shrink-0 px-3 py-2 bg-white dark:bg-darkgray border-b border-border dark:border-darkborder">
+        <div className="flex-shrink-0 px-3 py-2 bg-[#181a20] border-b border-[#2b3139]">
           <div className="flex items-center justify-between">
             <div className="relative z-30">
               <button 
                 onClick={() => setShowMarketDropdown(!showMarketDropdown)}
-                className="flex items-center gap-1 px-2 py-1 rounded active:bg-muted/20"
+                className="flex items-center gap-1 px-2 py-1 rounded active:bg-white/5"
               >
-                <span className="text-sm font-bold text-dark dark:text-white">
+                <span className="text-sm font-bold text-white">
                   {selectedMarket?.symbol || 'Select'}
                 </span>
-                <Icon icon="ph:caret-down" width={12} className="text-muted" />
+                <Icon icon="ph:caret-down" width={12} className="text-gray-400" />
               </button>
               
               {showMarketDropdown && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowMarketDropdown(false)} />
-                  <div className="absolute top-full left-0 mt-1 bg-white dark:bg-darkgray border border-border dark:border-darkborder rounded-lg shadow-xl z-50 min-w-[120px] max-h-[250px] overflow-y-auto">
+                  <div className="absolute top-full left-0 mt-1 bg-[#1e2329] border border-[#2b3139] rounded-lg shadow-xl z-50 min-w-[120px] max-h-[250px] overflow-y-auto">
                     {markets.map((market) => (
                       <button
                         key={market.id}
                         onClick={() => handleSelectMarket(market)}
                         className={`w-full text-left px-3 py-2 text-xs ${
-                          selectedMarket?.id === market.id ? 'bg-primary/10 text-primary font-medium' : 'text-dark dark:text-white'
+                          selectedMarket?.id === market.id ? 'bg-primary/10 text-primary font-medium' : 'text-white'
                         }`}
                       >
                         <div className="flex justify-between items-center">
                           <span>{market.symbol}</span>
-                          <span className="text-[10px] text-muted">${market.markPrice.toFixed(2)}</span>
+                          <span className="text-[10px] text-gray-400">${(Number(market.markPrice) || 0).toFixed(2)}</span>
                         </div>
                       </button>
                     ))}
@@ -270,15 +270,15 @@ export default function BinanceFuturesPage() {
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex-shrink-0 flex items-center gap-4 px-3 py-2 border-b border-border dark:border-darkborder bg-white dark:bg-darkgray">
+        <div className="flex-shrink-0 flex items-center gap-4 px-3 py-2 border-b border-[#2b3139] bg-[#181a20]">
           {['chart', 'positions', 'info'].map((tab) => (
             <button 
               key={tab}
               onClick={() => setMobileActiveTab(tab as any)}
               className={`pb-1 text-xs font-medium capitalize ${
                 mobileActiveTab === tab 
-                  ? 'text-dark dark:text-white border-b-2 border-warning' 
-                  : 'text-muted'
+                  ? 'text-white border-b-2 border-warning' 
+                  : 'text-gray-400'
               }`}
             >
               {tab}
@@ -289,7 +289,7 @@ export default function BinanceFuturesPage() {
         {/* Scrollable Content Area */}
         <div className="flex-1 overflow-y-auto">
           {mobileActiveTab === 'chart' && (
-            <div className="h-[400px] bg-white dark:bg-darkgray">
+            <div className="h-[400px] bg-[#181a20]">
               <FuturesChart symbol={selectedMarket?.symbol} isDarkMode={true} />
             </div>
           )}
@@ -303,11 +303,11 @@ export default function BinanceFuturesPage() {
           {mobileActiveTab === 'info' && (
             <div className="p-3 space-y-3 pb-24">
               {/* Drift Account Status */}
-              <div className="bg-white dark:bg-darkgray rounded-xl border border-border dark:border-darkborder p-3">
-                <h3 className="text-xs font-bold text-dark dark:text-white mb-2 uppercase">Drift Account</h3>
+              <div className="bg-[#1e2329] rounded-xl border border-[#2b3139] p-3">
+                <h3 className="text-xs font-bold text-white mb-2 uppercase">Drift Account</h3>
                 {needsInitialization ? (
                   <div className="space-y-2">
-                    <p className="text-xs text-muted dark:text-gray-400">Account not initialized</p>
+                    <p className="text-xs text-gray-400">Account not initialized</p>
                     <button
                       onClick={handleInitialize}
                       disabled={initializing}
@@ -319,25 +319,25 @@ export default function BinanceFuturesPage() {
                 ) : isInitialized && summary ? (
                   <div className="space-y-2">
                     <div className="grid grid-cols-2 gap-2">
-                      <div className="bg-muted/10 dark:bg-white/5 rounded-lg p-2">
-                        <p className="text-[9px] text-muted dark:text-gray-400 mb-0.5">Total Collateral</p>
-                        <p className="text-xs font-bold text-dark dark:text-white">${summary.totalCollateral.toFixed(2)}</p>
+                      <div className="bg-white/5 rounded-lg p-2">
+                        <p className="text-[9px] text-gray-400 mb-0.5">Total Collateral</p>
+                        <p className="text-xs font-bold text-white">${summary.totalCollateral.toFixed(2)}</p>
                       </div>
-                      <div className="bg-muted/10 dark:bg-white/5 rounded-lg p-2">
-                        <p className="text-[9px] text-muted dark:text-gray-400 mb-0.5">Available</p>
+                      <div className="bg-white/5 rounded-lg p-2">
+                        <p className="text-[9px] text-gray-400 mb-0.5">Available</p>
                         <p className="text-xs font-bold text-success">${summary.freeCollateral.toFixed(2)}</p>
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      <div className="bg-muted/10 dark:bg-white/5 rounded-lg p-2">
-                        <p className="text-[9px] text-muted dark:text-gray-400 mb-0.5">Unrealized PnL</p>
+                      <div className="bg-white/5 rounded-lg p-2">
+                        <p className="text-[9px] text-gray-400 mb-0.5">Unrealized PnL</p>
                         <p className={`text-xs font-bold ${summary.unrealizedPnl >= 0 ? 'text-success' : 'text-error'}`}>
                           {summary.unrealizedPnl >= 0 ? '+' : ''}${summary.unrealizedPnl.toFixed(2)}
                         </p>
                       </div>
-                      <div className="bg-muted/10 dark:bg-white/5 rounded-lg p-2">
-                        <p className="text-[9px] text-muted dark:text-gray-400 mb-0.5">Open Positions</p>
-                        <p className="text-xs font-bold text-dark dark:text-white">{summary.openPositions}</p>
+                      <div className="bg-white/5 rounded-lg p-2">
+                        <p className="text-[9px] text-gray-400 mb-0.5">Open Positions</p>
+                        <p className="text-xs font-bold text-white">{summary.openPositions}</p>
                       </div>
                     </div>
                   </div>
@@ -361,7 +361,7 @@ export default function BinanceFuturesPage() {
         </div>
 
         {/* Fixed Bottom Action Buttons */}
-        <div className="flex-shrink-0 flex gap-2 p-3 bg-white dark:bg-darkgray border-t border-border dark:border-darkborder">
+        <div className="flex-shrink-0 flex gap-2 p-3 bg-[#181a20] border-t border-[#2b3139]">
           <button 
             onClick={() => handleOpenOrderModal('long')}
             disabled={!isInitialized}
@@ -380,45 +380,45 @@ export default function BinanceFuturesPage() {
       </div>
 
       {/* DESKTOP LAYOUT - Professional Two-Column Trading Interface */}
-      <div className="hidden md:block fixed inset-0 top-[64px] left-0 xl:left-[260px] bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-[#0a0a0a] dark:via-[#111111] dark:to-[#0a0a0a]">
+      <div className="hidden md:block fixed inset-0 top-[64px] left-0 xl:left-[260px] bg-[#0a0a0a]">
         
         {/* Premium Header Bar - Market Info Only */}
-        <div className="h-20 px-8 py-4 bg-white/80 dark:bg-black/40 backdrop-blur-xl border-b border-gray-200/50 dark:border-white/5">
+        <div className="h-20 px-8 py-4 bg-black/40 backdrop-blur-xl border-b border-white/5">
           <div className="flex items-center gap-6 h-full">
             {/* Market Selector */}
             <div className="relative">
               <button 
                 onClick={() => setShowMarketDropdown(!showMarketDropdown)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200/50 dark:border-white/10 transition-all duration-200 group"
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all duration-200 group"
               >
-                <span className="text-xl font-bold text-dark dark:text-white tracking-tight">
+                <span className="text-xl font-bold text-white tracking-tight">
                   {selectedMarket?.symbol || 'Select Market'}
                 </span>
                 <Icon 
                   icon="ph:caret-down" 
                   width={18} 
-                  className="text-muted dark:text-gray-400 group-hover:text-dark dark:group-hover:text-white transition-colors" 
+                  className="text-gray-400 group-hover:text-white transition-colors" 
                 />
               </button>
               
               {showMarketDropdown && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowMarketDropdown(false)} />
-                  <div className="absolute top-full left-0 mt-2 bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl shadow-black/10 dark:shadow-black/50 z-50 min-w-[200px] max-h-[400px] overflow-y-auto backdrop-blur-xl">
+                  <div className="absolute top-full left-0 mt-2 bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl shadow-black/50 z-50 min-w-[200px] max-h-[400px] overflow-y-auto backdrop-blur-xl">
                     <div className="p-2">
                       {markets.map((market) => (
                         <button
                           key={market.id}
                           onClick={() => handleSelectMarket(market)}
-                          className={`w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 dark:hover:bg-white/5 text-sm font-medium transition-all duration-150 ${
+                          className={`w-full text-left px-4 py-3 rounded-xl hover:bg-white/5 text-sm font-medium transition-all duration-150 ${
                             selectedMarket?.id === market.id 
-                              ? 'bg-primary/10 text-primary dark:bg-primary/20' 
-                              : 'text-dark dark:text-white'
+                              ? 'bg-primary/10 text-primary' 
+                              : 'text-white'
                           }`}
                         >
                           <div className="flex justify-between items-center">
                             <span>{market.symbol}</span>
-                            <span className="text-xs text-muted">${market.markPrice.toFixed(2)}</span>
+                            <span className="text-xs text-gray-400">${(Number(market.markPrice) || 0).toFixed(2)}</span>
                           </div>
                         </button>
                       ))}
@@ -435,7 +435,7 @@ export default function BinanceFuturesPage() {
           
           {/* LEFT COLUMN (70%): Chart Only */}
           <div className="w-[70%] h-full p-6 pr-3">
-            <div className="h-full bg-white dark:bg-[#0d0d0d] rounded-2xl border border-gray-200/50 dark:border-white/5 shadow-lg shadow-black/5 dark:shadow-black/20 overflow-hidden">
+            <div className="h-full bg-[#0d0d0d] rounded-2xl border border-white/5 shadow-lg shadow-black/20 overflow-hidden">
               <FuturesChart symbol={selectedMarket?.symbol} isDarkMode={true} />
             </div>
           </div>
@@ -445,8 +445,8 @@ export default function BinanceFuturesPage() {
             <div className="flex flex-col gap-4">
               
               {/* 1. Quick Actions */}
-              <div className="bg-white dark:bg-[#0d0d0d] rounded-2xl border border-gray-200/50 dark:border-white/5 shadow-lg shadow-black/5 dark:shadow-black/20 p-6">
-                <h3 className="text-sm font-bold text-dark dark:text-white mb-4 uppercase tracking-wide">Quick Actions</h3>
+              <div className="bg-[#0d0d0d] rounded-2xl border border-white/5 shadow-lg shadow-black/20 p-6">
+                <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wide">Quick Actions</h3>
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     onClick={() => handleOpenOrderModal('long')}
