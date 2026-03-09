@@ -1,0 +1,240 @@
+'use client';
+
+import { useState, useEffect, useMemo } from 'react';
+import { Icon } from '@iconify/react';
+import { useDrift } from '@/app/context/driftContext';
+
+interface MarketData {
+  marketIndex: number;
+  symbol: string;
+  baseAsset: string;
+  price: number;
+  change24h: number;
+  volume24h: number;
+  fundingRate: number;
+}
+
+interface FuturesMarketListProps {
+  selectedMarketIndex: number | null;
+  onSelectMarket: (marketIndex: number) => void;
+}
+
+export default function FuturesMarketList({ selectedMarketIndex, onSelectMarket }: FuturesMarketListProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [favorites, setFavorites] = useState<Set<number>>(new Set());
+  const [sortBy, setSortBy] = useState<'symbol' | 'price' | 'change'>('change');
+  const [markets, setMarkets] = useState<MarketData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const { perpMarkets, getMarketPrice, isClientReady } = useDrift();
+
+  // Build market list from Drift perp markets
+  useEffect(() => {
+    if (!isClientReady || perpMarkets.size === 0) {
+      setLoading(true);
+      return;
+    }
+
+    console.log('[FuturesMarketList] Building market list from', perpMarkets.size, 'Drift perp markets');
+
+    const marketList: MarketData[] = [];
+
+    // CRITICAL: Only take first 10 perp markets
+    Array.from(perpMarkets.entries())
+      .sort(([a], [b]) => a - b)
+      .slice(0, 10)
+      .forEach(([marketIndex, info]) => {
+        const price = getMarketPrice(marketIndex, 'perp') || 0;
+
+        marketList.push({
+          marketIndex,
+          symbol: info.symbol,
+          baseAsset: info.baseAssetSymbol,
+          price,
+          change24h: 0, // Drift doesn't provide 24h change
+          volume24h: 0, // Drift doesn't provide volume
+          fundingRate: 0, // Would need to fetch from market account
+        });
+      });
+
+    console.log('[FuturesMarketList] Built', marketList.length, 'markets');
+    setMarkets(marketList);
+    setLoading(false);
+  }, [isClientReady, perpMarkets, getMarketPrice]);
+
+  // Update prices periodically
+  useEffect(() => {
+    if (!isClientReady || perpMarkets.size === 0) return;
+
+    const interval = setInterval(() => {
+      setMarkets(prev => prev.map(market => ({
+        ...market,
+        price: getMarketPrice(market.marketIndex, 'perp') || market.price,
+      })));
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [isClientReady, perpMarkets, getMarketPrice]);
+
+  const filteredMarkets = useMemo(() => {
+    let filtered = markets.filter(market => {
+      const matchesSearch = searchQuery === '' ||
+        market.baseAsset.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        market.symbol.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesSearch;
+    });
+
+    // Sort markets
+    filtered.sort((a, b) => {
+      if (sortBy === 'change') return Math.abs(b.change24h) - Math.abs(a.change24h);
+      if (sortBy === 'price') return b.price - a.price;
+      return a.baseAsset.localeCompare(b.baseAsset);
+    });
+
+    return filtered;
+  }, [markets, searchQuery, sortBy]);
+
+  const toggleFavorite = (marketIndex: number) => {
+    setFavorites(prev => {
+      const newFavorites = new Set(prev);
+      if (newFavorites.has(marketIndex)) {
+        newFavorites.delete(marketIndex);
+      } else {
+        newFavorites.add(marketIndex);
+      }
+      return newFavorites;
+    });
+  };
+
+  const formatPrice = (price: number): string => {
+    if (price >= 1000) return price.toFixed(2);
+    if (price >= 1) return price.toFixed(4);
+    return price.toFixed(6);
+  };
+
+  const formatVolume = (vol: number): string => {
+    if (vol >= 1e9) return `${(vol / 1e9).toFixed(2)}B`;
+    if (vol >= 1e6) return `${(vol / 1e6).toFixed(2)}M`;
+    return `${(vol / 1e3).toFixed(2)}K`;
+  };
+
+  return (
+    <div className="h-full flex flex-col bg-[#0b0e11] text-white overflow-hidden">
+      {/* Search Bar */}
+      <div className="p-3 border-b border-[#1e2329]">
+        <div className="relative">
+          <Icon
+            icon="ph:magnifying-glass"
+            width={16}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-[#848e9c]"
+          />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search markets"
+            className="w-full pl-9 pr-3 py-2 bg-[#1e2329] border border-[#2b3139] rounded text-xs text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f0b90b]"
+          />
+        </div>
+      </div>
+
+      {/* Header */}
+      <div className="px-3 py-2 border-b border-[#1e2329]">
+        <h3 className="text-xs font-bold text-white uppercase">Perpetual Futures</h3>
+        <p className="text-[10px] text-[#848e9c] mt-0.5">Top 10 markets</p>
+      </div>
+
+      {/* Column Headers */}
+      <div className="px-3 py-2 border-b border-[#1e2329] grid grid-cols-[1fr_auto_auto] gap-2 text-[10px] text-[#848e9c] font-medium">
+        <button onClick={() => setSortBy('symbol')} className="text-left hover:text-white flex items-center gap-1">
+          Market
+          {sortBy === 'symbol' && <Icon icon="ph:caret-down" width={10} />}
+        </button>
+        <button onClick={() => setSortBy('price')} className="text-right hover:text-white flex items-center justify-end gap-1">
+          Mark Price
+          {sortBy === 'price' && <Icon icon="ph:caret-down" width={10} />}
+        </button>
+        <button onClick={() => setSortBy('change')} className="text-right hover:text-white flex items-center justify-end gap-1">
+          24h Change
+          {sortBy === 'change' && <Icon icon="ph:caret-down" width={10} />}
+        </button>
+      </div>
+
+      {/* Market List */}
+      <div className="flex-1 overflow-y-auto scrollbar-hide">
+        {loading ? (
+          <div className="p-6 text-center">
+            <Icon icon="ph:spinner" className="mx-auto mb-2 text-[#848e9c] animate-spin" width={32} />
+            <p className="text-xs text-[#848e9c]">Loading markets...</p>
+          </div>
+        ) : filteredMarkets.length === 0 ? (
+          <div className="p-6 text-center">
+            <Icon icon="ph:magnifying-glass" className="mx-auto mb-2 text-[#848e9c]" width={32} />
+            <p className="text-xs text-[#848e9c]">No markets found</p>
+          </div>
+        ) : (
+          filteredMarkets.map((market) => {
+            const isSelected = market.marketIndex === selectedMarketIndex;
+            const isPositive = market.change24h >= 0;
+            const isFav = favorites.has(market.marketIndex);
+
+            return (
+              <div
+                key={market.marketIndex}
+                onClick={() => onSelectMarket(market.marketIndex)}
+                className={`px-3 py-2 cursor-pointer transition-colors ${
+                  isSelected ? 'bg-[#1e2329]' : 'hover:bg-[#1e2329]'
+                }`}
+              >
+                <div className="grid grid-cols-[1fr_auto_auto] gap-2 items-center">
+                  {/* Market */}
+                  <div className="flex items-center gap-2 min-w-0">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleFavorite(market.marketIndex);
+                      }}
+                      className="flex-shrink-0"
+                    >
+                      <Icon
+                        icon={isFav ? 'ph:star-fill' : 'ph:star'}
+                        width={12}
+                        className={isFav ? 'text-[#f0b90b]' : 'text-[#848e9c] hover:text-[#f0b90b]'}
+                      />
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-medium text-white">
+                        {market.baseAsset}<span className="text-[#848e9c]">-PERP</span>
+                      </div>
+                      <div className="text-[9px] text-[#848e9c]">
+                        Vol {formatVolume(market.volume24h)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Price */}
+                  <div className="text-right">
+                    <div className="text-xs font-mono text-white">
+                      {formatPrice(market.price)}
+                    </div>
+                  </div>
+
+                  {/* Change */}
+                  <div className="text-right min-w-[60px]">
+                    <div className={`text-xs font-semibold px-2 py-0.5 rounded ${
+                      isPositive 
+                        ? 'bg-[rgba(14,203,129,0.12)] text-[#0ecb81]' 
+                        : 'bg-[rgba(246,70,93,0.12)] text-[#f6465d]'
+                    }`}>
+                      {isPositive ? '+' : ''}{market.change24h.toFixed(2)}%
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}

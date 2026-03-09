@@ -638,8 +638,8 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       for (const market of perpMarketAccounts) {
         const marketIndex = market.marketIndex;
 
-        // Extract market symbol from the name buffer
-        // Market names are stored as fixed-size byte arrays
+        // CRITICAL: Extract market symbol ONLY from the on-chain name buffer
+        // NEVER use market.symbol or market.baseAssetSymbol - they are unstable SDK metadata
         const nameBytes = market.name;
         let symbol = 'UNKNOWN';
 
@@ -656,7 +656,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         }
 
         // Extract base asset symbol (e.g., "SOL" from "SOL-PERP")
-        const baseAssetSymbol = symbol.split('-')[0] || symbol;
+        const baseAssetSymbol = symbol.replace('-PERP', '').replace('-perp', '');
 
         marketMap.set(marketIndex, {
           marketIndex,
