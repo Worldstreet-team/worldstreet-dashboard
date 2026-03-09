@@ -50,10 +50,16 @@ export const OrderPanel: React.FC = () => {
 
     const fetchPreview = async () => {
       try {
+        // CRITICAL: Use getMarketIndexBySymbol to find the on-chain market
+        // This searches the perpMarkets Map which contains only subscribed markets
         const marketIndex = getMarketIndexBySymbol(selectedMarket.symbol);
+        
         if (marketIndex === undefined) {
-          throw new Error(`Market ${selectedMarket.symbol} not found on-chain`);
+          console.error(`[OrderPanel] Market ${selectedMarket.symbol} not found in subscribed markets`);
+          throw new Error(`Market ${selectedMarket.symbol} is not available. Please select a different market.`);
         }
+
+        console.log(`[OrderPanel] Found market ${selectedMarket.symbol} at index ${marketIndex}`);
 
         const preview = await previewTrade(
           marketIndex,
@@ -65,7 +71,7 @@ export const OrderPanel: React.FC = () => {
         setPreviewData(preview);
         setError({ type: null, message: '' });
       } catch (error) {
-        console.error('Preview error:', error);
+        console.error('[OrderPanel] Preview error:', error);
         setPreviewData(null);
         const errorMessage = error instanceof Error ? error.message : 'Failed to calculate preview. Please try again.';
         const parsedError = parseError('', errorMessage);
@@ -74,7 +80,7 @@ export const OrderPanel: React.FC = () => {
     };
 
     fetchPreview();
-  }, [selectedMarket, debouncedSize, leverage, side, markets, previewTrade]);
+  }, [selectedMarket, debouncedSize, leverage, side, getMarketIndexBySymbol, previewTrade]);
 
   // Retry countdown effect
   useEffect(() => {
@@ -220,16 +226,19 @@ export const OrderPanel: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      // Determine marketIndex using stable symbol mapping
+      // CRITICAL: Use getMarketIndexBySymbol to find the on-chain market
+      // This ensures we're using the correct marketIndex from subscribed markets
       const marketIndex = getMarketIndexBySymbol(selectedMarket.symbol);
 
       if (marketIndex === undefined) {
-        throw new Error(`Market ${selectedMarket.symbol} not available on Drift`);
+        throw new Error(`Market ${selectedMarket.symbol} is not available. Please select a different market.`);
       }
+
+      console.log(`[OrderPanel] Opening position for ${selectedMarket.symbol} (marketIndex: ${marketIndex})`);
 
       // Use client-side openPosition
       const result = await openPositionClient(
-        marketIndex >= 0 ? marketIndex : 0,
+        marketIndex,
         side,
         parseFloat(size),
         leverage

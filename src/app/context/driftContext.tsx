@@ -348,9 +348,11 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         accountSubscription: {
           type: 'websocket',
         },
-        perpMarketIndexes: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
-        // Subscribe to all 60 mainnet spot markets (0-59)
-        spotMarketIndexes: Array.from({ length: 60 }, (_, i) => i),
+        // CRITICAL: Only subscribe to first 10 markets to avoid overwhelming the client
+        // Drift Protocol has 60+ markets but we only need the most liquid ones
+        perpMarketIndexes: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], // First 10 perp markets
+        // Subscribe to first 10 spot markets (USDC, SOL, mSOL, wBTC, wETH, USDT, jitoSOL, PYTH, bSOL, JTO)
+        spotMarketIndexes: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], // First 10 spot markets
         oracleInfos: [],
         // Use optimized transaction sender with retry logic
         txSender,
@@ -601,6 +603,9 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   /**
    * Build stable mapping of marketIndex → market info
    * 
+   * CRITICAL: This function loads markets directly from the Drift client
+   * Only markets that were subscribed to during initialization will be available
+   * 
    * This ensures market names remain consistent regardless of:
    * - SDK array order changes
    * - Session restarts
@@ -609,19 +614,26 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
    * The marketIndex is the on-chain unique identifier and never changes.
    */
   const buildPerpMarketMapping = useCallback(async (client: any): Promise<Map<number, PerpMarketInfo>> => {
-    console.log('[DriftContext] Building perp market mapping...');
+    console.log('[DriftContext] 🔧 Building perp market mapping from on-chain data...');
 
     try {
       const marketMap = new Map<number, PerpMarketInfo>();
 
-      // Get all perp market accounts from the client
+      // CRITICAL: Get markets directly from the Drift client
+      // This returns ONLY the markets we subscribed to during initialization
       const perpMarketAccounts = client.getPerpMarketAccounts();
 
+      console.log('[DriftContext] 📊 Raw perp market accounts:', perpMarketAccounts?.length || 0);
+
       if (!perpMarketAccounts || perpMarketAccounts.length === 0) {
-        console.warn('[DriftContext] No perp markets found');
+        console.error('[DriftContext] ❌ NO PERP MARKETS FOUND!');
+        console.error('[DriftContext] This means the client did not subscribe to any perp markets');
+        console.error('[DriftContext] Check perpMarketIndexes in client config');
         return marketMap;
       }
 
+      console.log('[DriftContext] 📋 Processing perp markets:');
+      
       // Build mapping using marketIndex as the stable key
       for (const market of perpMarketAccounts) {
         const marketIndex = market.marketIndex;
@@ -653,14 +665,17 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
           initialized: true,
         });
 
-        console.log(`[DriftContext] Market ${marketIndex}: ${symbol}`);
+        console.log(`[DriftContext]   ✅ Perp Market ${marketIndex}: ${symbol}`);
       }
 
-      console.log(`[DriftContext] Built mapping for ${marketMap.size} perp markets`);
+      console.log(`[DriftContext] 🎉 Built mapping for ${marketMap.size} perp markets`);
+      console.log('[DriftContext] 📝 Perp market indices:', Array.from(marketMap.keys()).sort((a, b) => a - b));
+      console.log('[DriftContext] 📝 Perp market symbols:', Array.from(marketMap.values()).map(m => m.symbol));
+
       return marketMap;
 
     } catch (err) {
-      console.error('[DriftContext] Error building perp market mapping:', err);
+      console.error('[DriftContext] ❌ Error building perp market mapping:', err);
       return new Map();
     }
   }, []);
@@ -750,15 +765,26 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   /**
    * Helper function to find marketIndex by symbol/id
    * Essential for mapping external API markets to on-chain Drift indices
+   * 
+   * CRITICAL: This searches the perpMarkets Map which is built from actual on-chain data
+   * Only markets that were subscribed to during client initialization will be available
    */
   const getMarketIndexBySymbol = useCallback((symbol: string): number | undefined => {
-    if (!symbol) return undefined;
+    if (!symbol) {
+      console.warn('[DriftContext] getMarketIndexBySymbol called with empty symbol');
+      return undefined;
+    }
+    
     const cleanSymbol = symbol.toUpperCase().trim();
     const cleanBase = cleanSymbol.split('-')[0];
+
+    console.log(`[DriftContext] 🔍 Searching for perp market: "${cleanSymbol}"`);
+    console.log(`[DriftContext] Available perp markets:`, Array.from(perpMarkets.entries()).map(([idx, info]) => `${idx}: ${info.symbol}`));
 
     // 1. Try exact match in mapping (e.g., "SOL-PERP")
     for (const [index, info] of perpMarkets.entries()) {
       if (info.symbol.toUpperCase() === cleanSymbol) {
+        console.log(`[DriftContext] ✅ Found exact match: ${cleanSymbol} → marketIndex ${index}`);
         return index;
       }
     }
@@ -766,6 +792,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     // 2. Try base asset match (e.g., "SOL" matches "SOL-PERP")
     for (const [index, info] of perpMarkets.entries()) {
       if (info.baseAssetSymbol.toUpperCase() === cleanBase) {
+        console.log(`[DriftContext] ✅ Found base asset match: ${cleanBase} → ${info.symbol} → marketIndex ${index}`);
         return index;
       }
     }
@@ -773,10 +800,14 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     // 3. Last resort: partial string match
     for (const [index, info] of perpMarkets.entries()) {
       if (info.symbol.toUpperCase().includes(cleanBase) || cleanSymbol.includes(info.baseAssetSymbol.toUpperCase())) {
+        console.log(`[DriftContext] ✅ Found partial match: ${cleanSymbol} → ${info.symbol} → marketIndex ${index}`);
         return index;
       }
     }
 
+    console.error(`[DriftContext] ❌ Market NOT FOUND: ${cleanSymbol}`);
+    console.error(`[DriftContext] This market is either not subscribed or doesn't exist on Drift`);
+    console.error(`[DriftContext] Available markets:`, Array.from(perpMarkets.values()).map(m => m.symbol).join(', '));
     return undefined;
   }, [perpMarkets]);
 

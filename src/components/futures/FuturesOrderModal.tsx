@@ -44,10 +44,15 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
 
     const fetchPreview = async () => {
       try {
+        // CRITICAL: Use getMarketIndexBySymbol to find the on-chain market
         const marketIndex = getMarketIndexBySymbol(selectedMarket.symbol);
+        
         if (marketIndex === undefined) {
-          throw new Error(`Market ${selectedMarket.symbol} not found on-chain`);
+          console.error(`[FuturesOrderModal] Market ${selectedMarket.symbol} not found in subscribed markets`);
+          throw new Error(`Market ${selectedMarket.symbol} is not available. Please select a different market.`);
         }
+
+        console.log(`[FuturesOrderModal] Found market ${selectedMarket.symbol} at index ${marketIndex}`);
 
         const preview = await previewTrade(
           marketIndex,
@@ -59,7 +64,7 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
         setPreviewData(preview);
         setError(null);
       } catch (error) {
-        console.error('Preview error:', error);
+        console.error('[FuturesOrderModal] Preview error:', error);
         setPreviewData(null);
         const errorMessage = error instanceof Error ? error.message : 'Failed to calculate preview';
         if (errorMessage.includes('subscribe') || errorMessage.includes('not authenticated')) {
@@ -71,7 +76,7 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
     };
 
     fetchPreview();
-  }, [selectedMarket, debouncedSize, leverage, side, markets, previewTrade]);
+  }, [selectedMarket, debouncedSize, leverage, side, getMarketIndexBySymbol, previewTrade]);
 
   const handleSubmit = async () => {
     if (!selectedMarket || !size || !previewData || !previewData.marginCheckPassed) return;
@@ -79,11 +84,14 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
     setError(null);
 
     try {
+      // CRITICAL: Use getMarketIndexBySymbol to find the on-chain market
       const marketIndex = getMarketIndexBySymbol(selectedMarket.symbol);
 
       if (marketIndex === undefined) {
-        throw new Error(`Market ${selectedMarket.symbol} not available on Drift`);
+        throw new Error(`Market ${selectedMarket.symbol} is not available. Please select a different market.`);
       }
+
+      console.log(`[FuturesOrderModal] Opening position for ${selectedMarket.symbol} (marketIndex: ${marketIndex})`);
 
       // Use the hook instead of direct API call
       const result = await openPosition(
