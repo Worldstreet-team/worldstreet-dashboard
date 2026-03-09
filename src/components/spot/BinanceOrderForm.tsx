@@ -178,8 +178,17 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
       const marketIndex = getSpotMarketIndexBySymbol(baseAsset);
 
       if (marketIndex === undefined) {
-        throw new Error(`Market not found on Drift: ${baseAsset}`);
+        throw new Error(`Spot market not found on Drift: ${baseAsset}. Please check if this market is available.`);
       }
+
+      console.log('[BinanceOrderForm] Placing SPOT order:', {
+        selectedPair,
+        baseAsset,
+        marketIndex,
+        direction: activeTab === 'buy' ? 'buy' : 'sell',
+        amount,
+        orderType,
+      });
 
       const amountNum = parseFloat(amount);
       const priceNum = price ? parseFloat(price) : undefined;
