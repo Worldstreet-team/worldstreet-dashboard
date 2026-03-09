@@ -170,7 +170,7 @@ export default function BinanceFuturesPage() {
                 className="flex items-center gap-1 px-2 py-1 rounded active:bg-white/5"
               >
                 <span className="text-sm font-bold text-white">
-                  {selectedMarket?.symbol || 'Select'}
+                  {currentMarketName}
                 </span>
                 <Icon icon="ph:caret-down" width={12} className="text-gray-400" />
               </button>
@@ -179,17 +179,17 @@ export default function BinanceFuturesPage() {
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowMarketDropdown(false)} />
                   <div className="absolute top-full left-0 mt-1 bg-[#1e2329] border border-[#2b3139] rounded-lg shadow-xl z-50 min-w-[120px] max-h-[250px] overflow-y-auto">
-                    {markets.map((market) => (
+                    {topMarkets.map(([marketIndex, market]) => (
                       <button
-                        key={market.id}
-                        onClick={() => handleSelectMarket(market)}
+                        key={marketIndex}
+                        onClick={() => handleSelectMarket(marketIndex)}
                         className={`w-full text-left px-3 py-2 text-xs ${
-                          selectedMarket?.id === market.id ? 'bg-primary/10 text-primary font-medium' : 'text-white'
+                          selectedMarketIndex === marketIndex ? 'bg-[#f0b90b]/10 text-[#f0b90b] font-medium' : 'text-white hover:bg-[#2b3139]'
                         }`}
                       >
                         <div className="flex justify-between items-center">
                           <span>{market.symbol}</span>
-                          <span className="text-[10px] text-gray-400">${(Number(market.markPrice) || 0).toFixed(2)}</span>
+                          <span className="text-[10px] text-gray-400">${(getMarketPrice(marketIndex, 'perp') || 0).toFixed(2)}</span>
                         </div>
                       </button>
                     ))}
@@ -229,8 +229,8 @@ export default function BinanceFuturesPage() {
         {/* Scrollable Content Area */}
         <div className="flex-1 overflow-y-auto">
           {mobileActiveTab === 'chart' && (
-            <div className="h-[400px] bg-[#181a20]">
-              <FuturesChart symbol={selectedMarket?.symbol} isDarkMode={true} />
+            <div className="h-[400px] bg-[#0b0e11]">
+              <FuturesChart symbol={currentMarketName} isDarkMode={true} />
             </div>
           )}
 
@@ -332,7 +332,7 @@ export default function BinanceFuturesPage() {
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all duration-200 group"
               >
                 <span className="text-xl font-bold text-white tracking-tight">
-                  {selectedMarket?.symbol || 'Select Market'}
+                  {currentMarketName}
                 </span>
                 <Icon 
                   icon="ph:caret-down" 
@@ -346,19 +346,19 @@ export default function BinanceFuturesPage() {
                   <div className="fixed inset-0 z-40" onClick={() => setShowMarketDropdown(false)} />
                   <div className="absolute top-full left-0 mt-2 bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl shadow-black/50 z-50 min-w-[200px] max-h-[400px] overflow-y-auto backdrop-blur-xl">
                     <div className="p-2">
-                      {markets.map((market) => (
+                      {topMarkets.map(([marketIndex, market]) => (
                         <button
-                          key={market.id}
-                          onClick={() => handleSelectMarket(market)}
+                          key={marketIndex}
+                          onClick={() => handleSelectMarket(marketIndex)}
                           className={`w-full text-left px-4 py-3 rounded-xl hover:bg-white/5 text-sm font-medium transition-all duration-150 ${
-                            selectedMarket?.id === market.id 
+                            selectedMarketIndex === marketIndex 
                               ? 'bg-primary/10 text-primary' 
                               : 'text-white'
                           }`}
                         >
                           <div className="flex justify-between items-center">
                             <span>{market.symbol}</span>
-                            <span className="text-xs text-gray-400">${(Number(market.markPrice) || 0).toFixed(2)}</span>
+                            <span className="text-xs text-gray-400">${(getMarketPrice(marketIndex, 'perp') || 0).toFixed(2)}</span>
                           </div>
                         </button>
                       ))}
@@ -376,7 +376,7 @@ export default function BinanceFuturesPage() {
           {/* LEFT COLUMN (70%): Chart Only */}
           <div className="w-[70%] h-full p-6 pr-3">
             <div className="h-full bg-[#0d0d0d] rounded-2xl border border-white/5 shadow-lg shadow-black/20 overflow-hidden">
-              <FuturesChart symbol={selectedMarket?.symbol} isDarkMode={true} />
+              <FuturesChart symbol={currentMarketName} isDarkMode={true} />
             </div>
           </div>
 
