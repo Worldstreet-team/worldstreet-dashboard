@@ -54,7 +54,22 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
   const fetchOrderBook = async (pair: string) => {
     try {
       const symbol = formatSymbol(pair);
-      const response = await fetch(`/api/orderbook?symbol=${symbol?.split("_")[0] || symbol}`);
+      
+      // Normalize symbol to always use _USDT format
+      // Examples: SOL-PERP -> SOL_USDT, BTC_ETH -> BTC_USDT, ETH_USDT -> ETH_USDT
+      let normalizedSymbol = symbol;
+      if (symbol.includes('_')) {
+        const [base, quote] = symbol.split('_');
+        // If quote is not USDT, replace it with USDT
+        if (quote.toUpperCase() !== 'USDT') {
+          normalizedSymbol = `${base}_USDT`;
+        }
+      } else {
+        // No underscore, just add _USDT
+        normalizedSymbol = `${symbol}_USDT`;
+      }
+      
+      const response = await fetch(`/api/orderbook?symbol=${normalizedSymbol.split("_")[0]}`);
       
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
