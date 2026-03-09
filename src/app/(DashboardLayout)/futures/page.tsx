@@ -17,11 +17,14 @@ import { RiskPanel } from '@/components/futures/RiskPanel';
 import { WalletModal } from '@/components/futures/WalletModal';
 import { DriftAccountStatus } from '@/components/futures/DriftAccountStatus';
 import { InsufficientSolModal } from '@/components/futures/InsufficientSolModal';
+import FuturesTradingModal from '@/components/futures/FuturesTradingModal';
 
 type OrderSide = 'long' | 'short';
 
 export default function BinanceFuturesPage() {
   const [selectedMarketIndex, setSelectedMarketIndex] = useState<number | null>(null);
+  const [tradingSide, setTradingSide] = useState<OrderSide>('long');
+  const [showTradingModal, setShowTradingModal] = useState(false);
   const {
     isInitialized,
     startAutoRefresh,
@@ -199,7 +202,7 @@ export default function BinanceFuturesPage() {
               {showMarketDropdown && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowMarketDropdown(false)} />
-                  <div className="absolute top-full left-0 mt-1 bg-[#1e2329] border border-[#2b3139] rounded-lg shadow-xl z-50 min-w-[120px] max-h-[250px] overflow-y-auto">
+                  <div className="absolute top-full left-0 mt-1 bg-[#1e2329] border border-[#2b3139] rounded-lg shadow-xl z-50 min-w-[120px] max-h-[250px] overflow-y-auto scrollbar-hide">
                     {topMarkets.map(([marketIndex, market]) => (
                       <button
                         key={marketIndex}
@@ -323,8 +326,25 @@ export default function BinanceFuturesPage() {
 
         {/* Fixed Bottom Action Buttons */}
         <div className="flex-shrink-0 p-3 bg-[#181a20] border-t border-[#2b3139]">
-          <div className="text-xs text-center text-[#848e9c] mb-2">
-            Use desktop for trading
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => {
+                setTradingSide('long');
+                setShowTradingModal(true);
+              }}
+              className="py-4 bg-[#0ecb81] hover:bg-[#0ecb81]/90 text-white font-semibold text-base rounded-lg transition-colors"
+            >
+              Long
+            </button>
+            <button
+              onClick={() => {
+                setTradingSide('short');
+                setShowTradingModal(true);
+              }}
+              className="py-4 bg-[#f6465d] hover:bg-[#f6465d]/90 text-white font-semibold text-base rounded-lg transition-colors"
+            >
+              Short
+            </button>
           </div>
         </div>
       </div>
@@ -376,7 +396,7 @@ export default function BinanceFuturesPage() {
               {showMarketDropdown && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowMarketDropdown(false)} />
-                  <div className="absolute top-full left-0 mt-2 bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl shadow-black/50 z-50 min-w-[200px] max-h-[400px] overflow-y-auto backdrop-blur-xl">
+                  <div className="absolute top-full left-0 mt-2 bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl shadow-black/50 z-50 min-w-[200px] max-h-[400px] overflow-y-auto scrollbar-hide backdrop-blur-xl">
                     <div className="p-2">
                       {topMarkets.map(([marketIndex, market]) => (
                         <button
@@ -505,6 +525,14 @@ export default function BinanceFuturesPage() {
           walletAddress={solBalanceInfo.address}
         />
       )}
+
+      <FuturesTradingModal
+        isOpen={showTradingModal}
+        onClose={() => setShowTradingModal(false)}
+        side={tradingSide}
+        marketIndex={selectedMarketIndex ?? 0}
+        marketName={currentMarketName}
+      />
     </>
   );
 }
