@@ -2239,6 +2239,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     const client = driftClientRef.current;
     if (!client) {
       console.log('[DriftContext] No client available to get orders');
+      alert('❌ No Drift client available to get orders');
       return [];
     }
 
@@ -2248,13 +2249,16 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       // Use the built-in method to get open orders
       const openOrders = driftUser.getOpenOrders();
       
+      console.log(`[DriftContext] Raw open orders from SDK:`, openOrders);
+      alert(`🔍 Found ${openOrders.length} raw open orders from Drift SDK`);
+      
       // Import required enums
       const { OrderStatus, MarketType, OrderType, PositionDirection } = await import('@drift-labs/sdk');
       
       // Get current slot for auction timing
       const currentSlot = await client.connection.getSlot();
       
-      const orders: DriftOrder[] = openOrders.map((order: any) => {
+      const orders: DriftOrder[] = openOrders.map((order: any, index: number) => {
         // Use proper enum comparisons instead of hardcoded values
         const marketType = order.marketType === MarketType.SPOT ? 'spot' : 'perp';
         const orderType = order.orderType === OrderType.MARKET ? 'market' : 'limit';
@@ -2275,15 +2279,44 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         // Check auction status
         const auctionEndSlot = order.slot.toNumber() + order.auctionDuration;
         const isInAuction = currentSlot < auctionEndSlot;
+        const slotsRemaining = Math.max(0, auctionEndSlot - currentSlot);
         
-        console.log(`[DriftContext] Order ${order.orderId}:`, {
+        // Get market name
+        const marketName = marketType === 'spot' 
+          ? getSpotMarketName(order.marketIndex)
+          : getMarketName(order.marketIndex);
+        
+        const orderDetails = {
+          orderNumber: index + 1,
+          orderId: order.orderId,
           marketIndex: order.marketIndex,
+          marketName,
           marketType,
+          orderType,
           direction,
+          totalAmount,
+          filledAmount,
           fillPercentage: fillPercentage.toFixed(2) + '%',
           isInAuction,
-          slotsUntilAuctionEnd: Math.max(0, auctionEndSlot - currentSlot),
-        });
+          slotsRemaining,
+          currentSlot,
+          auctionEndSlot,
+          status: order.status,
+        };
+        
+        console.log(`[DriftContext] Order ${index + 1}/${openOrders.length}:`, orderDetails);
+        
+        // Show detailed alert for each order
+        alert(
+          `📋 ORDER ${index + 1}/${openOrders.length}\n\n` +
+          `Market: ${marketName} (${marketType})\n` +
+          `Type: ${orderType} ${direction}\n` +
+          `Amount: ${totalAmount}\n` +
+          `Filled: ${filledAmount} (${fillPercentage.toFixed(2)}%)\n` +
+          `Status: ${isInAuction ? '⏳ IN AUCTION' : '✅ READY FOR FILL'}\n` +
+          `Slots Remaining: ${slotsRemaining}\n` +
+          `Order ID: ${order.orderId}`
+        );
         
         return {
           marketIndex: order.marketIndex,
@@ -2297,15 +2330,28 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         };
       });
       
-      console.log(`[DriftContext] Found ${orders.length} total open orders (${orders.filter(o => o.marketType === 'spot').length} spot, ${orders.filter(o => o.marketType === 'perp').length} perp)`);
+      const spotOrders = orders.filter(o => o.marketType === 'spot');
+      const perpOrders = orders.filter(o => o.marketType === 'perp');
+      
+      console.log(`[DriftContext] Found ${orders.length} total open orders (${spotOrders.length} spot, ${perpOrders.length} perp)`);
+      
+      alert(
+        `✅ OPEN ORDERS SUMMARY\n\n` +
+        `Total: ${orders.length}\n` +
+        `Spot: ${spotOrders.length}\n` +
+        `Perp: ${perpOrders.length}\n\n` +
+        `Check console for detailed logs`
+      );
+      
       setOpenOrders(orders);
       return orders;
       
     } catch (err) {
       console.error('[DriftContext] Error getting open orders:', err);
+      alert(`❌ ERROR getting open orders:\n\n${err instanceof Error ? err.message : String(err)}`);
       return [];
     }
-  }, []);
+  }, [getSpotMarketName, getMarketName]);
 
   /**
    * Get ALL orders (open, filled, cancelled) for the user
@@ -2317,6 +2363,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     const client = driftClientRef.current;
     if (!client) {
       console.log('[DriftContext] No client available to get orders');
+      alert('❌ No Drift client available to get all orders');
       return [];
     }
 
@@ -2333,9 +2380,12 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         order.status !== OrderStatus.INIT // Skip uninitialized orders
       );
 
-      console.log("ALL DRIFT ORDERS: ", allOrders)
+      console.log("ALL DRIFT ORDERS (non-INIT): ", allOrders);
+      alert(`🔍 Found ${allOrders.length} total orders (all types) in user account`);
 
       const orders: DriftOrder[] = [];
+      let spotOrderCount = 0;
+      let perpOrderCount = 0;
 
       for (let i = 0; i < allOrders.length; i++) {
         const order = allOrders[i];
@@ -2356,8 +2406,16 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
             statusText = 'init';
         }
 
+        const isSpot = order.marketType === MarketType.SPOT;
+        
+        if (isSpot) {
+          spotOrderCount++;
+        } else {
+          perpOrderCount++;
+        }
+
         // Only include spot orders (filter out perp orders)
-        if (order.marketType !== MarketType.SPOT) continue;
+        if (!isSpot) continue;
 
         const marketType = 'spot';
         const orderType = order.orderType === OrderType.MARKET ? 'market' : 'limit';
@@ -2368,14 +2426,32 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         const filledAmount = order.baseAssetAmountFilled.toNumber();
         const fillPercentage = totalAmount > 0 ? (filledAmount / totalAmount) * 100 : 0;
 
-        console.log(`[DriftContext] Order ${order.orderId} (${statusText}):`, {
+        const marketName = getSpotMarketName(order.marketIndex);
+
+        const orderDetails = {
+          orderId: order.orderId,
           marketIndex: order.marketIndex,
+          marketName,
           direction,
+          orderType,
           totalAmount,
           filledAmount,
           fillPercentage: fillPercentage.toFixed(2) + '%',
-          status: order.status,
-        });
+          status: statusText,
+        };
+
+        console.log(`[DriftContext] Spot Order ${spotOrderCount} (${statusText}):`, orderDetails);
+
+        // Show alert for each spot order
+        alert(
+          `📋 SPOT ORDER ${spotOrderCount}\n\n` +
+          `Market: ${marketName}\n` +
+          `Type: ${orderType} ${direction}\n` +
+          `Amount: ${totalAmount}\n` +
+          `Filled: ${filledAmount} (${fillPercentage.toFixed(2)}%)\n` +
+          `Status: ${statusText.toUpperCase()}\n` +
+          `Order ID: ${order.orderId}`
+        );
 
         orders.push({
           marketIndex: order.marketIndex,
@@ -2389,13 +2465,23 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         });
       }
 
-      console.log(`[DriftContext] Found ${orders.length} total spot orders`);
+      console.log(`[DriftContext] Found ${orders.length} spot orders (${spotOrderCount} spot, ${perpOrderCount} perp total)`);
+      
+      alert(
+        `✅ ALL ORDERS SUMMARY\n\n` +
+        `Total Orders: ${allOrders.length}\n` +
+        `Spot Orders: ${spotOrderCount}\n` +
+        `Perp Orders: ${perpOrderCount}\n` +
+        `Returned: ${orders.length} spot orders`
+      );
+      
       return orders;
     } catch (err) {
       console.error('[DriftContext] Error getting all orders:', err);
+      alert(`❌ ERROR getting all orders:\n\n${err instanceof Error ? err.message : String(err)}`);
       return [];
     }
-  }, []);
+  }, [getSpotMarketName]);
 
   /**
    * Cancel an open order
