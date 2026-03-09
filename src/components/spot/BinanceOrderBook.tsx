@@ -54,7 +54,7 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
   const fetchOrderBook = async (pair: string) => {
     try {
       const symbol = formatSymbol(pair);
-      const response = await fetch(`/api/orderbook?symbol=${symbol}`);
+      const response = await fetch(`/api/orderbook?symbol=${symbol?.split("_")[0] || symbol}`);
       
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
