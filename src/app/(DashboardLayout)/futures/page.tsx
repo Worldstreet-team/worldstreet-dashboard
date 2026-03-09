@@ -5,8 +5,8 @@ import { Icon } from '@iconify/react';
 import { useDrift } from '@/app/context/driftContext';
 import { useFuturesData } from '@/hooks/useFuturesData';
 import { FuturesChart } from '@/components/futures/FuturesChart';
-import { FuturesOrderBook } from '@/components/futures/FuturesOrderBook';
-import { FuturesMarketList } from '@/components/futures/FuturesMarketList';
+import BinanceOrderBook from '@/components/spot/BinanceOrderBook';
+import BinanceMarketList from '@/components/spot/BinanceMarketList';
 import { PositionPanel } from '@/components/futures/PositionPanel';
 import { CollateralPanel } from '@/components/futures/CollateralPanel';
 import { FuturesWalletBalance } from '@/components/futures/FuturesWalletBalance';
@@ -319,24 +319,24 @@ export default function BinanceFuturesPage() {
         </div>
       </div>
 
-      {/* DESKTOP LAYOUT - Professional Two-Column Trading Interface */}
+      {/* DESKTOP LAYOUT - Professional Three-Column Trading Interface */}
       <div className="hidden md:block fixed inset-0 top-[64px] left-0 xl:left-[260px] bg-[#0a0a0a]">
         
         {/* Premium Header Bar - Market Info Only */}
-        <div className="h-20 px-8 py-4 bg-black/40 backdrop-blur-xl border-b border-white/5">
+        <div className="h-16 px-6 py-3 bg-black/40 backdrop-blur-xl border-b border-white/5">
           <div className="flex items-center gap-6 h-full">
             {/* Market Selector */}
             <div className="relative">
               <button 
                 onClick={() => setShowMarketDropdown(!showMarketDropdown)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all duration-200 group"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all duration-200 group"
               >
-                <span className="text-xl font-bold text-white tracking-tight">
+                <span className="text-lg font-bold text-white tracking-tight">
                   {currentMarketName}
                 </span>
                 <Icon 
                   icon="ph:caret-down" 
-                  width={18} 
+                  width={16} 
                   className="text-gray-400 group-hover:text-white transition-colors" 
                 />
               </button>
@@ -367,57 +367,86 @@ export default function BinanceFuturesPage() {
                 </>
               )}
             </div>
+
+            {/* Price Display */}
+            <div className="flex items-center gap-4">
+              <div className="flex flex-col">
+                <span className="text-xs text-gray-400">Last Price</span>
+                <span className={`text-lg font-bold ${isPositive ? 'text-success' : 'text-error'}`}>
+                  ${currentPrice.toFixed(2)}
+                </span>
+              </div>
+              <div className={`px-3 py-1 rounded-lg ${isPositive ? 'bg-success/10 text-success' : 'bg-error/10 text-error'}`}>
+                <span className="text-sm font-semibold">
+                  {isPositive ? '+' : ''}{priceChange.toFixed(2)}%
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Two-Column Layout: 70/30 Split */}
-        <div className="h-[calc(100%-80px)] flex">
+        {/* Three-Column Layout: Market List | Chart | Order Book & Actions */}
+        <div className="h-[calc(100%-64px)] flex">
           
-          {/* LEFT COLUMN (70%): Chart Only */}
-          <div className="w-[70%] h-full p-6 pr-3">
-            <div className="h-full bg-[#0d0d0d] rounded-2xl border border-white/5 shadow-lg shadow-black/20 overflow-hidden">
-              <FuturesChart symbol={currentMarketName} isDarkMode={true} />
+          {/* LEFT COLUMN (20%): Market List */}
+          <div className="w-[20%] h-full border-r border-white/5">
+            <BinanceMarketList 
+              selectedPair={currentMarketName}
+              onSelectPair={(pair) => {
+                // Find market index by symbol
+                const market = Array.from(perpMarkets.entries()).find(([_, info]) => 
+                  info.symbol === pair || `${info.symbol}-PERP` === pair
+                );
+                if (market) {
+                  handleSelectMarket(market[0]);
+                }
+              }}
+            />
+          </div>
+
+          {/* CENTER COLUMN (50%): Chart */}
+          <div className="w-[50%] h-full flex flex-col">
+            <div className="flex-1 p-4">
+              <div className="h-full bg-[#0d0d0d] rounded-xl border border-white/5 shadow-lg shadow-black/20 overflow-hidden">
+                <FuturesChart symbol={currentMarketName} isDarkMode={true} />
+              </div>
             </div>
           </div>
 
-          {/* RIGHT COLUMN (30%): Scrollable Info & Actions */}
-          <div className="w-[30%] h-full overflow-y-auto pl-3 pr-6 py-6 custom-scrollbar">
-            <div className="flex flex-col gap-4">
-              
-              {/* 1. Quick Actions */}
-              <div className="bg-[#0d0d0d] rounded-2xl border border-white/5 shadow-lg shadow-black/20 p-6">
-                <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wide">Quick Actions</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => handleOpenOrderModal('long')}
-                    disabled={!isInitialized}
-                    className="group relative overflow-hidden py-4 bg-gradient-to-br from-success to-success/80 hover:from-success/90 hover:to-success/70 text-white font-bold rounded-xl transition-all duration-200 shadow-lg shadow-success/20 hover:shadow-xl hover:shadow-success/30 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                    <div className="relative flex flex-col items-center gap-1">
-                      <Icon icon="ph:arrow-up-bold" width={20} />
-                      <span className="text-sm">Open Long</span>
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => handleOpenOrderModal('short')}
-                    disabled={!isInitialized}
-                    className="group relative overflow-hidden py-4 bg-gradient-to-br from-error to-error/80 hover:from-error/90 hover:to-error/70 text-white font-bold rounded-xl transition-all duration-200 shadow-lg shadow-error/20 hover:shadow-xl hover:shadow-error/30 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                    <div className="relative flex flex-col items-center gap-1">
-                      <Icon icon="ph:arrow-down-bold" width={20} />
-                      <span className="text-sm">Open Short</span>
-                    </div>
-                  </button>
-                </div>
-              </div>
+          {/* RIGHT COLUMN (30%): Order Book & Actions */}
+          <div className="w-[30%] h-full border-l border-white/5 flex flex-col">
+            {/* Order Book - Takes 60% of height */}
+            <div className="h-[60%] border-b border-white/5">
+              <BinanceOrderBook selectedPair={currentMarketName} />
+            </div>
 
-              <DriftAccountStatus />
-              <PositionPanel />
-              <FuturesWalletBalance />
-              <CollateralPanel />
-              <RiskPanel />
+            {/* Scrollable Actions & Info - Takes 40% of height */}
+            <div className="h-[40%] overflow-y-auto custom-scrollbar">
+              <div className="p-4 space-y-3">
+                {/* Quick Actions */}
+                <div className="bg-[#0d0d0d] rounded-xl border border-white/5 p-4">
+                  <h3 className="text-xs font-bold text-white mb-3 uppercase tracking-wide">Quick Actions</h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => handleOpenOrderModal('long')}
+                      disabled={!isInitialized}
+                      className="py-3 bg-gradient-to-br from-success to-success/80 hover:from-success/90 hover:to-success/70 text-white font-bold rounded-lg transition-all duration-200 shadow-lg shadow-success/20 hover:shadow-xl hover:shadow-success/30 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                    >
+                      Long
+                    </button>
+                    <button
+                      onClick={() => handleOpenOrderModal('short')}
+                      disabled={!isInitialized}
+                      className="py-3 bg-gradient-to-br from-error to-error/80 hover:from-error/90 hover:to-error/70 text-white font-bold rounded-lg transition-all duration-200 shadow-lg shadow-error/20 hover:shadow-xl hover:shadow-error/30 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                    >
+                      Short
+                    </button>
+                  </div>
+                </div>
+
+                <DriftAccountStatus />
+                <PositionPanel />
+              </div>
             </div>
           </div>
         </div>
