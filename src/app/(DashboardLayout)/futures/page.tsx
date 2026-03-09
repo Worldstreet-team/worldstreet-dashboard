@@ -319,12 +319,12 @@ export default function BinanceFuturesPage() {
         </div>
       </div>
 
-      {/* DESKTOP LAYOUT - Professional Three-Column Trading Interface */}
-      <div className="hidden md:block fixed inset-0 top-[64px] left-0 xl:left-[260px] bg-[#0a0a0a]">
+      {/* DESKTOP LAYOUT - Fullscreen Trading Interface */}
+      <div className="hidden md:block fixed inset-0 bg-[#0a0a0a]">
         
-        {/* Premium Header Bar - Market Info Only */}
-        <div className="h-16 px-6 py-3 bg-black/40 backdrop-blur-xl border-b border-white/5">
-          <div className="flex items-center gap-6 h-full">
+        {/* Custom Trading Header - Replaces main app header */}
+        <div className="h-14 px-6 py-3 bg-black/40 backdrop-blur-xl border-b border-white/5 flex items-center justify-between">
+          <div className="flex items-center gap-6">
             {/* Market Selector */}
             <div className="relative">
               <button 
@@ -383,10 +383,29 @@ export default function BinanceFuturesPage() {
               </div>
             </div>
           </div>
+
+          {/* Right side - Account status */}
+          <div className="flex items-center gap-4">
+            {isInitialized && summary && (
+              <div className="flex items-center gap-3 text-xs">
+                <div className="flex flex-col items-end">
+                  <span className="text-gray-400">Available</span>
+                  <span className="text-white font-semibold">${summary.freeCollateral.toFixed(2)}</span>
+                </div>
+                <div className="w-px h-8 bg-white/10" />
+                <div className="flex flex-col items-end">
+                  <span className="text-gray-400">PnL</span>
+                  <span className={`font-semibold ${summary.unrealizedPnl >= 0 ? 'text-success' : 'text-error'}`}>
+                    {summary.unrealizedPnl >= 0 ? '+' : ''}${summary.unrealizedPnl.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Three-Column Layout: Market List | Chart | Order Book & Actions */}
-        <div className="h-[calc(100%-64px)] flex">
+        <div className="h-[calc(100%-56px)] flex">
           
           {/* LEFT COLUMN (20%): Market List */}
           <div className="w-[20%] h-full border-r border-white/5">
