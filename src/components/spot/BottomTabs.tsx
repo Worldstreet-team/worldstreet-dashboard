@@ -31,7 +31,7 @@ export default function BottomTabs({
   ];
 
   return (
-    <div className="bg-white dark:bg-darkgray h-full flex flex-col">
+    <div className="bg-white dark:bg-darkgray h-full flex flex-col scrollbar-hide">
       {/* Tab Headers */}
       <div className="flex items-center px-4 md:px-0 md:border-b md:border-border md:dark:border-darkborder flex-shrink-0">
         {tabs.map((tab) => (

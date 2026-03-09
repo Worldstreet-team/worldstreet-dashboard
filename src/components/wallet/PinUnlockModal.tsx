@@ -9,9 +9,9 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { decryptWithPIN } from "@/lib/wallet/encryption";
+import { Icon } from "@iconify/react";
 
-// Modern PIN input with glow effect
+// Mobile-optimized PIN input with show/hide functionality
 function PinInput({
   value,
   onChange,
@@ -20,6 +20,7 @@ function PinInput({
   inputRefs,
   disabled = false,
   error = false,
+  showPin = false,
 }: {
   value: string[];
   onChange: (index: number, val: string) => void;
@@ -28,14 +29,15 @@ function PinInput({
   inputRefs: React.MutableRefObject<(HTMLInputElement | null)[]>;
   disabled?: boolean;
   error?: boolean;
+  showPin?: boolean;
 }) {
   return (
-    <div className="flex justify-center gap-3">
+    <div className="flex justify-center gap-2 sm:gap-3">
       {value.map((digit, index) => (
-        <div key={index} className="relative group">
+        <div key={index} className="relative">
           <input
             ref={(el) => { inputRefs.current[index] = el; }}
-            type="password"
+            type={showPin ? "text" : "password"}
             inputMode="numeric"
             maxLength={1}
             value={digit}
@@ -44,27 +46,28 @@ function PinInput({
             onPaste={onPaste}
             disabled={disabled}
             className={`
-              w-14 h-16 text-center text-2xl font-semibold
+              w-10 h-12 sm:w-12 sm:h-14 md:w-14 md:h-16
+              text-center text-xl sm:text-2xl font-bold
               bg-white dark:bg-gray-800/50
-              border-2 rounded-xl
-              transition-all duration-200 ease-out
+              border-2 rounded-lg sm:rounded-xl
+              transition-all duration-200
               outline-none
-              ${digit ? "border-blue-500 dark:border-blue-400" : "border-gray-200 dark:border-gray-700"}
-              ${error ? "border-red-400 dark:border-red-500 animate-shake" : ""}
-              focus:border-blue-500 dark:focus:border-blue-400
-              focus:ring-4 focus:ring-blue-500/20 dark:focus:ring-blue-400/20
+              ${digit ? "border-primary dark:border-primary" : "border-gray-200 dark:border-gray-700"}
+              ${error ? "border-error dark:border-error animate-shake" : ""}
+              focus:border-primary dark:focus:border-primary
+              focus:ring-2 focus:ring-primary/20 dark:focus:ring-primary/20
               focus:scale-105
               disabled:opacity-50 disabled:cursor-not-allowed
-              placeholder:text-gray-300
+              touch-manipulation
             `}
             style={{
-              caretColor: "transparent",
+              caretColor: showPin ? "auto" : "transparent",
             }}
           />
-          {/* Dot indicator when filled */}
-          {digit && (
+          {/* Dot indicator when filled and hidden */}
+          {digit && !showPin && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-3 h-3 rounded-full bg-gray-800 dark:bg-white animate-in fade-in zoom-in duration-150" />
+              <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-gray-800 dark:bg-white" />
             </div>
           )}
         </div>
@@ -91,6 +94,7 @@ export function PinUnlockModal({
   const [pin, setPin] = useState<string[]>(["", "", "", "", "", ""]);
   const [error, setError] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [showPin, setShowPin] = useState(false);
   
   const pinInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -101,6 +105,7 @@ export function PinUnlockModal({
         setPin(["", "", "", "", "", ""]);
         setError(null);
         setIsVerifying(false);
+        setShowPin(false);
       }, 300);
     } else {
       // Auto-focus first input when modal opens
@@ -124,7 +129,7 @@ export function PinUnlockModal({
     if (index === 5 && value) {
       const fullPin = [...newPin].join("");
       if (fullPin.length >= 4) {
-        handleUnlock(fullPin);
+        setTimeout(() => handleUnlock(fullPin), 100);
       }
     }
   };
@@ -151,9 +156,13 @@ export function PinUnlockModal({
       }
       setPin(newPin);
       
+      // Focus last filled input
+      const lastIndex = Math.min(pastedData.length - 1, 5);
+      setTimeout(() => pinInputRefs.current[lastIndex]?.focus(), 0);
+      
       // Auto-submit if full PIN pasted
       if (pastedData.length >= 4) {
-        handleUnlock(pastedData);
+        setTimeout(() => handleUnlock(pastedData), 100);
       }
     }
   };
@@ -168,43 +177,47 @@ export function PinUnlockModal({
     setError(null);
 
     try {
-      // Verify PIN by attempting to decrypt a test value
-      // The actual verification happens when trying to use the PIN
       onUnlock(pinValue);
     } catch (err) {
       setError("Incorrect PIN");
       setPin(["", "", "", "", "", ""]);
       pinInputRefs.current[0]?.focus();
-    } finally {
       setIsVerifying(false);
     }
   };
 
   const getPinValue = () => pin.join("");
 
+  const handleClear = () => {
+    setPin(["", "", "", "", "", ""]);
+    setError(null);
+    pinInputRefs.current[0]?.focus();
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && !isVerifying && onClose()}>
       <DialogContent 
-        className="sm:max-w-md p-0 overflow-hidden bg-white dark:bg-gray-900 border-0 shadow-2xl" 
+        className="w-[95vw] max-w-md p-0 overflow-hidden !bg-white dark:!bg-gray-900 border-0 shadow-2xl" 
         showCloseButton={!isVerifying}
       >
-        <div className="p-8">
-          <div className="w-20 h-20 rounded-2xl bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center mx-auto mb-6 animate-in fade-in zoom-in-75 duration-500">
-            <svg className="w-10 h-10 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-            </svg>
+        <div className="p-4 sm:p-6 md:p-8">
+          {/* Icon */}
+          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center mx-auto mb-4 sm:mb-6">
+            <Icon icon="ph:lock-key-duotone" className="text-primary" height={40} width={40} />
           </div>
 
-          <DialogHeader className="text-center mb-8">
-            <DialogTitle className="text-2xl font-semibold tracking-tight">
+          {/* Header */}
+          <DialogHeader className="text-center mb-6 sm:mb-8">
+            <DialogTitle className="text-xl sm:text-2xl font-bold tracking-tight text-dark dark:text-white">
               {title}
             </DialogTitle>
-            <DialogDescription className="text-base text-gray-500 dark:text-gray-400 mt-2">
+            <DialogDescription className="text-sm sm:text-base text-muted dark:text-gray-400 mt-2">
               {description}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-6">
+          {/* PIN Input */}
+          <div className="space-y-4 sm:space-y-6">
             <PinInput
               value={pin}
               onChange={handlePinChange}
@@ -213,41 +226,83 @@ export function PinUnlockModal({
               inputRefs={pinInputRefs}
               disabled={isVerifying}
               error={!!error}
+              showPin={showPin}
             />
 
+            {/* Show/Hide PIN Toggle */}
+            <div className="flex items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowPin(!showPin)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-muted/10 dark:hover:bg-white/5 transition-colors text-sm text-muted dark:text-gray-400 touch-manipulation"
+              >
+                <Icon 
+                  icon={showPin ? "ph:eye-slash" : "ph:eye"} 
+                  height={18} 
+                  width={18}
+                />
+                <span>{showPin ? "Hide" : "Show"} PIN</span>
+              </button>
+              
+              {getPinValue().length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClear}
+                  disabled={isVerifying}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-muted/10 dark:hover:bg-white/5 transition-colors text-sm text-muted dark:text-gray-400 touch-manipulation disabled:opacity-50"
+                >
+                  <Icon icon="ph:x-circle" height={18} width={18} />
+                  <span>Clear</span>
+                </button>
+              )}
+            </div>
+
+            {/* Error Message */}
             {error && (
-              <p className="text-red-500 text-sm text-center animate-in fade-in slide-in-from-top-2 duration-300">
-                {error}
-              </p>
+              <div className="flex items-center justify-center gap-2 p-3 bg-error/10 border border-error/20 rounded-lg">
+                <Icon icon="ph:warning-circle" className="text-error flex-shrink-0" height={18} />
+                <p className="text-error text-sm font-medium">{error}</p>
+              </div>
             )}
 
+            {/* Verifying State */}
             {isVerifying && (
-              <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
-                <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              <div className="flex items-center justify-center gap-2 text-sm text-muted dark:text-gray-400">
+                <Icon icon="svg-spinners:ring-resize" height={20} />
                 <span>Verifying...</span>
               </div>
             )}
           </div>
 
-          <div className="flex gap-3 mt-8">
+          {/* Action Buttons */}
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mt-6 sm:mt-8">
             <Button
               variant="outline"
               onClick={onClose}
               disabled={isVerifying}
-              className="flex-1 h-12 rounded-xl border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              className="flex-1 h-11 sm:h-12 rounded-xl border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors touch-manipulation"
             >
               Cancel
             </Button>
             <Button
               onClick={() => handleUnlock(getPinValue())}
               disabled={getPinValue().length < 4 || isVerifying}
-              className="flex-1 h-12 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white font-medium transition-all hover:scale-[1.02] active:scale-[0.98] disabled:hover:scale-100"
+              className="flex-1 h-11 sm:h-12 rounded-xl bg-primary hover:bg-primary/90 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white font-semibold transition-all touch-manipulation disabled:cursor-not-allowed"
             >
-              {isVerifying ? "Verifying..." : "Unlock"}
+              {isVerifying ? (
+                <span className="flex items-center gap-2">
+                  <Icon icon="svg-spinners:ring-resize" height={18} />
+                  Verifying...
+                </span>
+              ) : (
+                "Unlock"
+              )}
             </Button>
           </div>
 
-          <p className="text-xs text-center text-gray-400 mt-6">
+          {/* Security Note */}
+          <p className="text-xs text-center text-muted dark:text-gray-500 mt-4 sm:mt-6">
+            <Icon icon="ph:shield-check" className="inline mr-1" height={14} />
             Your PIN is never sent to our servers
           </p>
         </div>

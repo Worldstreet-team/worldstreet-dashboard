@@ -4,6 +4,7 @@ import { MasterWalletManager } from './MasterWalletManager';
 import DriftSubaccount from '@/models/DriftSubaccount';
 import FeeAuditLog from '@/models/FeeAuditLog';
 import { DepositResult } from '@/types/drift-master-wallet';
+import { pollTransactionConfirmation } from '@/lib/solana/pollTransactionConfirmation';
 import {
   ValidationError,
   NotFoundError,
@@ -14,18 +15,18 @@ import {
 class Mutex {
   private locked = false;
   private queue: Array<() => void> = [];
-  
+
   async acquire(): Promise<void> {
     if (!this.locked) {
       this.locked = true;
       return;
     }
-    
+
     return new Promise<void>((resolve) => {
       this.queue.push(resolve);
     });
   }
-  
+
   release(): void {
     if (this.queue.length > 0) {
       const resolve = this.queue.shift()!;
@@ -34,7 +35,7 @@ class Mutex {
       this.locked = false;
     }
   }
-  
+
   async runExclusive<T>(fn: () => Promise<T>): Promise<T> {
     await this.acquire();
     try {
@@ -50,7 +51,7 @@ export class DepositManager {
   private masterWalletManager: MasterWalletManager;
   private userLocks: Map<string, Mutex>;
   private feePercentage: number;
-  
+
   constructor(
     clientManager: ClientManager,
     masterWalletManager: MasterWalletManager
@@ -60,13 +61,13 @@ export class DepositManager {
     this.userLocks = new Map();
     this.feePercentage = parseFloat(process.env.FEE_PERCENTAGE || '5');
   }
-  
+
   async depositCollateral(userId: string, amount: number): Promise<DepositResult> {
     // 1. Validate amount
     if (amount <= 0) {
       throw new ValidationError('Deposit amount must be greater than zero');
     }
-    
+
     const feeAmount = this.calculateFee(amount);
     if (feeAmount < 0.000001) {
       throw new ValidationError(
@@ -74,54 +75,54 @@ export class DepositManager {
         { amount, feeAmount }
       );
     }
-    
+
     // 2. Get or create per-user lock
     if (!this.userLocks.has(userId)) {
       this.userLocks.set(userId, new Mutex());
     }
     const lock = this.userLocks.get(userId)!;
-    
+
     // 3. Acquire lock and process deposit
     return await lock.runExclusive(async () => {
       return await this.processDeposit(userId, amount, feeAmount);
     });
   }
-  
+
   private async processDeposit(
     userId: string,
     amount: number,
     feeAmount: number
   ): Promise<DepositResult> {
     const collateralAmount = amount - feeAmount;
-    
+
     console.log(`[DepositManager] Processing deposit for ${userId}:`, {
       total: amount,
       fee: feeAmount,
       collateral: collateralAmount
     });
-    
+
     // 1. Get user's Drift client
     const userClient = await this.clientManager.getUserClient(userId);
     if (!userClient) {
       throw new NotFoundError('Drift client', userId);
     }
-    
+
     // 2. Verify user has sufficient balance
     const userBalance = await userClient.connection.getBalance(
       userClient.wallet.publicKey
     );
     const userBalanceSOL = userBalance / LAMPORTS_PER_SOL;
-    
+
     if (userBalanceSOL < amount + 0.01) { // +0.01 for tx fees
       throw new ValidationError(
         `Insufficient balance. Have: ${userBalanceSOL} SOL, Need: ${amount + 0.01} SOL`
       );
     }
-    
+
     // 3. Transfer fee to master wallet
     const masterAddress = this.masterWalletManager.getAddress();
     let feeSignature: string;
-    
+
     try {
       const feeTransaction = new Transaction().add(
         SystemProgram.transfer({
@@ -130,14 +131,25 @@ export class DepositManager {
           lamports: Math.floor(feeAmount * LAMPORTS_PER_SOL)
         })
       );
-      
+
       feeSignature = await userClient.connection.sendTransaction(
         feeTransaction,
         [userClient.wallet.payer]
       );
-      
-      await userClient.connection.confirmTransaction(feeSignature);
-      
+
+      // Confirm via HTTP polling (no WebSocket needed)
+      const confirm = await pollTransactionConfirmation(
+        userClient.connection,
+        feeSignature,
+        { commitment: 'confirmed', timeoutMs: 60_000, intervalMs: 2000 }
+      );
+      if (confirm.confirmed && confirm.err) {
+        throw new Error(`Fee transfer failed on-chain: ${JSON.stringify(confirm.err)}`);
+      }
+      if (!confirm.confirmed) {
+        console.warn('[DepositManager] Fee confirmation timed out, proceeding...');
+      }
+
       console.log(`[DepositManager] Fee transferred: ${feeSignature}`);
     } catch (error) {
       console.error('[DepositManager] Fee transfer failed:', error);
@@ -147,10 +159,10 @@ export class DepositManager {
         error as Error
       );
     }
-    
+
     // 4. Deposit collateral to Drift subaccount
     let depositSignature: string;
-    
+
     try {
       // Note: Actual Drift deposit would use the SDK
       // For now, we'll simulate with a placeholder
@@ -158,7 +170,7 @@ export class DepositManager {
         userClient,
         collateralAmount
       );
-      
+
       console.log(`[DepositManager] Collateral deposited: ${depositSignature}`);
     } catch (error) {
       console.error('[DepositManager] Collateral deposit failed:', error);
@@ -169,13 +181,13 @@ export class DepositManager {
         error as Error
       );
     }
-    
+
     // 5. Update database
     await DriftSubaccount.updateOne(
       { userId },
       { $set: { updatedAt: new Date() } }
     );
-    
+
     // 6. Log to audit trail
     await FeeAuditLog.create({
       timestamp: new Date(),
@@ -188,7 +200,7 @@ export class DepositManager {
       feeSignature,
       depositSignature
     });
-    
+
     return {
       success: true,
       feeAmount,
@@ -198,11 +210,11 @@ export class DepositManager {
       totalAmount: amount
     };
   }
-  
+
   calculateFee(amount: number): number {
     return amount * (this.feePercentage / 100);
   }
-  
+
   private async depositToDrift(
     userClient: any,
     amount: number
@@ -214,7 +226,7 @@ export class DepositManager {
     //   0, // USDC market index
     //   userClient.wallet.publicKey
     // );
-    
+
     console.log(`[DepositManager] Drift deposit placeholder: ${amount} SOL`);
     return 'placeholder_deposit_signature';
   }

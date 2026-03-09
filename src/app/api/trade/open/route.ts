@@ -1,12 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthUser } from '@/lib/auth';
+import { auth } from '@clerk/nextjs/server';
 
 const BACKEND_URL = 'https://trading.watchup.site';
 
+/**
+ * POST /api/trade/open
+ * Opens a new spot trade position
+ * 
+ * Request body:
+ * {
+ *   "chain": "ETH" | "SOL",
+ *   "tokenIn": "USDT",
+ *   "tokenOut": "ETH",
+ *   "amountIn": "1000000000000000000", // smallest unit (18 decimals)
+ *   "side": "BUY" | "SELL",
+ *   "slippage": 0.005 // optional, default 0.5%
+ * }
+ */
 export async function POST(request: NextRequest) {
   try {
-    const authUser = await getAuthUser();
-    if (!authUser) {
+    const { userId } = await auth();
+    
+    if (!userId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -14,39 +29,26 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const {
-      chain,
-      tokenIn,
-      tokenOut,
-      amountIn,
-      side,
-      slippage = 0.005
-    } = body;
+    const { chain, tokenIn, tokenOut, amountIn, side, slippage = 0.005 } = body;
 
-    // Validation
+    // Validate required fields
     if (!chain || !tokenIn || !tokenOut || !amountIn || !side) {
       return NextResponse.json(
-        { error: 'Missing required fields', details: ['chain, tokenIn, tokenOut, amountIn, and side are required'] },
+        { error: 'Missing required fields: chain, tokenIn, tokenOut, amountIn, side' },
         { status: 400 }
       );
     }
 
-    if (!['BUY', 'SELL'].includes(side.toUpperCase())) {
+    // Validate slippage
+    if (slippage < 0 || slippage > 0.5) {
       return NextResponse.json(
-        { error: 'Invalid side', details: ['side must be BUY or SELL'] },
+        { error: 'Slippage must be between 0 and 0.5 (0-50%)' },
         { status: 400 }
       );
     }
 
-    if (typeof slippage !== 'number' || slippage < 0 || slippage > 0.5) {
-      return NextResponse.json(
-        { error: 'Invalid slippage', details: ['slippage must be between 0 and 0.5'] },
-        { status: 400 }
-      );
-    }
-
-    console.log('[Open Trade] Request:', {
-      userId: authUser.userId,
+    console.log('[Trade Open API] Opening trade:', {
+      userId,
       chain,
       tokenIn,
       tokenOut,
@@ -55,48 +57,39 @@ export async function POST(request: NextRequest) {
       slippage
     });
 
-    // Call backend
-    const response = await fetch(`${BACKEND_URL}/api/trade/open`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: authUser.userId,
-        chain,
-        tokenIn,
-        tokenOut,
-        amountIn,
-        side: side.toUpperCase(),
-        slippage
-      })
-    });
+    const response = await fetch(
+      `${BACKEND_URL}/api/trade/open`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          chain,
+          tokenIn,
+          tokenOut,
+          amountIn,
+          side,
+          slippage
+        })
+      }
+    );
 
     const data = await response.json();
 
-    console.log('[Open Trade] Backend response:', {
-      status: response.status,
-      success: response.ok,
-      tradeId: data.trade?.id
-    });
-
     if (!response.ok) {
+      console.error('[Trade Open API] Backend error:', data);
       return NextResponse.json(
-        { 
-          error: data.error || 'Failed to open trade',
-          message: data.message,
-          details: data.details
-        },
+        { error: data.error || 'Failed to open trade', message: data.message },
         { status: response.status }
       );
     }
 
-    return NextResponse.json(data, { status: 201 });
+    console.log('[Trade Open API] Trade opened successfully:', data);
+    return NextResponse.json(data);
   } catch (error) {
-    console.error('[Open Trade] Error:', error);
+    console.error('[Trade Open API] Error:', error);
     return NextResponse.json(
-      { 
-        error: 'Internal server error',
-        message: (error as Error).message
-      },
+      { error: 'Internal server error', message: (error as Error).message },
       { status: 500 }
     );
   }

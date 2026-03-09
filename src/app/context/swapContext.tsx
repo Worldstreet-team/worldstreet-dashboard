@@ -431,7 +431,7 @@ export function SwapProvider({ children }: { children: ReactNode }) {
                 }
               );
 
-              // Wait for ATA creation to confirm with blockhash strategy
+              // Wait for ATA creation confirmation
               await connection.confirmTransaction(
                 {
                   signature: ataSignature,
@@ -475,10 +475,6 @@ export function SwapProvider({ children }: { children: ReactNode }) {
 
           transaction.sign([keypair]);
 
-          // Get a fresh blockhash for confirmation tracking
-          const { blockhash: sendBlockhash, lastValidBlockHeight: sendBlockHeight } =
-            await connection.getLatestBlockhash("confirmed");
-
           // Send the transaction
           const signature = await connection.sendTransaction(transaction, {
             maxRetries: 5,
@@ -487,48 +483,18 @@ export function SwapProvider({ children }: { children: ReactNode }) {
 
           console.log(`[Swap] Solana TX sent: ${signature}`);
 
-          // Wait for on-chain confirmation (with timeout fallback)
-          // This ensures the token balance actually reflects before we report success.
-          try {
-            const confirmResult = await connection.confirmTransaction(
-              {
-                signature,
-                blockhash: sendBlockhash,
-                lastValidBlockHeight: sendBlockHeight,
-              },
-              "confirmed"
-            );
-
-            if (confirmResult.value.err) {
-              console.error(
-                "[Swap] Transaction confirmed but failed on-chain:",
-                confirmResult.value.err
-              );
-              throw new Error(
-                `Transaction confirmed but failed on-chain: ${JSON.stringify(confirmResult.value.err)}`
-              );
-            }
-
-            console.log(`[Swap] Solana TX confirmed: ${signature}`);
-          } catch (confirmErr: unknown) {
-            // If confirmation times out, the TX may still succeed.
-            // We return the signature and let Li.Fi polling track it.
-            const errMsg =
-              confirmErr instanceof Error ? confirmErr.message : String(confirmErr);
-            if (
-              errMsg.includes("TransactionExpiredTimeoutError") ||
-              errMsg.includes("TransactionExpiredBlockheightExceededError") ||
-              errMsg.includes("block height exceeded") ||
-              errMsg.includes("was not confirmed")
-            ) {
-              console.warn(
-                `[Swap] Confirmation timed out for ${signature}, but TX was broadcast. Li.Fi will track it.`
-              );
-            } else {
-              // Re-throw non-timeout errors
-              throw confirmErr;
-            }
-          }
+          // Wait for transaction confirmation
+          const { blockhash, lastValidBlockHeight } =
+            await connection.getLatestBlockhash("finalized");
+          await connection.confirmTransaction(
+            {
+              signature,
+              blockhash,
+              lastValidBlockHeight,
+            },
+            "confirmed"
+          );
+          console.log(`[Swap] Solana TX confirmed: ${signature}`);
 
           return signature;
         } else {
@@ -575,6 +541,8 @@ export function SwapProvider({ children }: { children: ReactNode }) {
                 swapQuote.transactionRequest.to,
                 ethers.MaxUint256
               );
+              
+              // Wait for approval confirmation
               await approveTx.wait();
               console.log("[Swap] ERC20 approval confirmed");
             }
@@ -592,11 +560,8 @@ export function SwapProvider({ children }: { children: ReactNode }) {
 
           console.log(`[Swap] EVM TX sent: ${tx.hash}`);
 
-          // Wait for 1 confirmation
-          const receipt = await tx.wait(1);
-          if (receipt && receipt.status === 0) {
-            throw new Error("Transaction reverted on-chain");
-          }
+          // Wait for transaction confirmation
+          await tx.wait();
           console.log(`[Swap] EVM TX confirmed: ${tx.hash}`);
 
           return tx.hash;

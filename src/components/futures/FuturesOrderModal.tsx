@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { useFuturesStore, OrderSide, OrderType } from '@/store/futuresStore';
 import { useDebounce } from '@/hooks/useFuturesPolling';
-import { useDriftTrading } from '@/hooks/useDriftTrading';
+import { useDrift } from '@/app/context/driftContext';
 
 interface FuturesOrderModalProps {
   isOpen: boolean;
@@ -19,9 +19,11 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
   side,
   onSuccess,
 }) => {
-  const { selectedMarket, selectedChain, setPreviewData, previewData, markets } = useFuturesStore();
-  const { openPosition, loading: driftLoading } = useDriftTrading();
-  
+  const { selectedMarket, markets } = useFuturesStore();
+  const { openPosition, isLoading: driftLoading, previewTrade, getMarketIndexBySymbol } = useDrift();
+
+  const [previewData, setPreviewData] = useState<any>(null);
+
   const [orderType, setOrderType] = useState<OrderType>('market');
   const [size, setSize] = useState('');
   const [leverage, setLeverage] = useState(1);
@@ -42,38 +44,34 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
 
     const fetchPreview = async () => {
       try {
-        const response = await fetch('/api/futures/preview', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chain: selectedChain,
-            market: selectedMarket.symbol,
-            side,
-            size: parseFloat(debouncedSize),
-            leverage,
-            orderType,
-            limitPrice: debouncedLimitPrice ? parseFloat(debouncedLimitPrice) : undefined,
-          }),
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-          setPreviewData(data);
-          setError(null);
-        } else {
-          setPreviewData(null);
-          setError(data.message || 'Failed to calculate preview');
+        const marketIndex = getMarketIndexBySymbol(selectedMarket.symbol);
+        if (marketIndex === undefined) {
+          throw new Error(`Market ${selectedMarket.symbol} not found on-chain`);
         }
+
+        const preview = await previewTrade(
+          marketIndex,
+          side,
+          parseFloat(debouncedSize),
+          leverage
+        );
+
+        setPreviewData(preview);
+        setError(null);
       } catch (error) {
         console.error('Preview error:', error);
         setPreviewData(null);
-        setError('Failed to calculate preview');
+        const errorMessage = error instanceof Error ? error.message : 'Failed to calculate preview';
+        if (errorMessage.includes('subscribe') || errorMessage.includes('not authenticated')) {
+          setError('Please unlock your wallet to preview trades');
+        } else {
+          setError(errorMessage);
+        }
       }
     };
 
     fetchPreview();
-  }, [selectedMarket, debouncedSize, leverage, side, orderType, debouncedLimitPrice, selectedChain, setPreviewData]);
+  }, [selectedMarket, debouncedSize, leverage, side, markets, previewTrade]);
 
   const handleSubmit = async () => {
     if (!selectedMarket || !size || !previewData || !previewData.marginCheckPassed) return;
@@ -81,20 +79,22 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
     setError(null);
 
     try {
-      const marketIndex = markets.findIndex(m => m.id === selectedMarket.id);
-      
+      const marketIndex = getMarketIndexBySymbol(selectedMarket.symbol);
+
+      if (marketIndex === undefined) {
+        throw new Error(`Market ${selectedMarket.symbol} not available on Drift`);
+      }
+
       // Use the hook instead of direct API call
       const result = await openPosition(
-        marketIndex >= 0 ? marketIndex : 0,
+        marketIndex,
         side,
         parseFloat(size),
-        leverage,
-        orderType,
-        limitPrice ? parseFloat(limitPrice) : undefined
+        leverage
       );
 
       setSuccessMessage(`Position opened! TX: ${result.txSignature?.slice(0, 8)}...`);
-      
+
       // Close modal after success
       setTimeout(() => {
         onSuccess?.();
@@ -125,33 +125,34 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
 
   if (!isOpen) return null;
 
-  const canSubmit = selectedMarket && 
-    size && 
-    parseFloat(size) > 0 && 
+  const canSubmit = selectedMarket &&
+    size &&
+    parseFloat(size) > 0 &&
     previewData &&
     previewData.marginCheckPassed &&
+    !previewData.sizeTooSmall &&
     !driftLoading;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center animate-fadeIn">
       {/* Backdrop */}
-      <div 
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
       />
-      
+
       {/* Modal */}
-      <div className="relative w-full md:w-[500px] bg-white dark:bg-[#0d0d0d] rounded-t-2xl md:rounded-2xl shadow-2xl border border-gray-200/50 dark:border-white/5 max-h-[90vh] overflow-y-auto">
+      <div className="relative w-full md:w-[500px] bg-[#181a20] rounded-t-2xl md:rounded-2xl shadow-2xl border border-[#2b3139] max-h-[90vh] overflow-y-auto animate-slideUp">
         {/* Header */}
-        <div className="sticky top-0 bg-white dark:bg-[#0d0d0d] border-b border-gray-200/50 dark:border-white/5 px-6 py-4 flex items-center justify-between z-10 backdrop-blur-xl">
-          <h3 className="text-lg font-bold text-dark dark:text-white">
+        <div className="sticky top-0 bg-[#181a20] border-b border-[#2b3139] px-6 py-4 flex items-center justify-between z-10 backdrop-blur-xl">
+          <h3 className="text-lg font-bold text-white">
             Open {side === 'long' ? 'Long' : 'Short'} Position
           </h3>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-all duration-200"
+            className="p-2 hover:bg-[#2b3139] active:bg-[#2b3139]/80 rounded-xl transition-all duration-200 active:scale-95 min-h-[44px] min-w-[44px] flex items-center justify-center touch-feedback"
           >
-            <Icon icon="ph:x" width={20} className="text-muted dark:text-gray-400" />
+            <Icon icon="ph:x" width={20} className="text-[#848e9c]" />
           </button>
         </div>
 
@@ -170,25 +171,23 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
 
           {/* Order Type */}
           <div>
-            <label className="block text-sm font-bold text-dark dark:text-white mb-2 uppercase tracking-wide">Order Type</label>
+            <label className="block text-sm font-bold text-white mb-2 uppercase tracking-wide">Order Type</label>
             <div className="flex gap-2">
               <button
                 onClick={() => setOrderType('market')}
-                className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 ${
-                  orderType === 'market'
-                    ? 'bg-primary text-white shadow-lg shadow-primary/20'
-                    : 'bg-gray-100 dark:bg-white/5 text-dark dark:text-white hover:bg-gray-200 dark:hover:bg-white/10'
-                }`}
+                className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all duration-200 active:scale-95 min-h-[44px] touch-feedback ${orderType === 'market'
+                  ? 'bg-[#fcd535] text-[#181a20] shadow-lg shadow-[#fcd535]/20'
+                  : 'bg-[#2b3139] text-white hover:bg-[#2b3139]/80'
+                  }`}
               >
                 Market
               </button>
               <button
                 onClick={() => setOrderType('limit')}
-                className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 ${
-                  orderType === 'limit'
-                    ? 'bg-primary text-white shadow-lg shadow-primary/20'
-                    : 'bg-gray-100 dark:bg-white/5 text-dark dark:text-white hover:bg-gray-200 dark:hover:bg-white/10'
-                }`}
+                className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all duration-200 active:scale-95 min-h-[44px] touch-feedback ${orderType === 'limit'
+                  ? 'bg-[#fcd535] text-[#181a20] shadow-lg shadow-[#fcd535]/20'
+                  : 'bg-[#2b3139] text-white hover:bg-[#2b3139]/80'
+                  }`}
               >
                 Limit
               </button>
@@ -262,9 +261,8 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
                   ${(Number(previewData?.totalRequired) || 0).toFixed(2)}
                 </span>
               </div>
-              <div className={`flex justify-between text-sm ${
-                previewData?.marginCheckPassed ? 'text-success' : 'text-error'
-              }`}>
+              <div className={`flex justify-between text-sm ${previewData?.marginCheckPassed ? 'text-success' : 'text-error'
+                }`}>
                 <span className="font-semibold">Your Available:</span>
                 <span className="font-bold font-mono">
                   ${(Number(previewData?.freeCollateral) || 0).toFixed(2)}
@@ -277,6 +275,12 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
                     ${(Number(previewData?.estimatedLiquidationPrice) || 0).toFixed(2)}
                   </span>
                 </div>
+                {previewData.sizeTooSmall && (
+                  <div className="flex justify-between text-xs text-error animate-pulse">
+                    <span className="font-bold">Min Order Size:</span>
+                    <span className="font-bold font-mono">{previewData.minOrderSize} {selectedMarket?.symbol?.split('-')[0]}</span>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -303,13 +307,12 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
           <button
             onClick={handleSubmit}
             disabled={!canSubmit}
-            className={`w-full py-4 rounded-xl font-bold text-lg transition-all duration-200 ${
-              canSubmit
-                ? side === 'long'
-                  ? 'bg-gradient-to-br from-success to-success/80 hover:from-success/90 hover:to-success/70 text-white shadow-lg shadow-success/20 hover:shadow-xl hover:shadow-success/30 hover:-translate-y-0.5'
-                  : 'bg-gradient-to-br from-error to-error/80 hover:from-error/90 hover:to-error/70 text-white shadow-lg shadow-error/20 hover:shadow-xl hover:shadow-error/30 hover:-translate-y-0.5'
-                : 'bg-gray-200 dark:bg-white/10 text-gray-400 dark:text-gray-600 cursor-not-allowed'
-            }`}
+            className={`w-full py-4 rounded-xl font-bold text-lg transition-all duration-200 active:scale-95 min-h-[56px] touch-feedback ${canSubmit
+              ? side === 'long'
+                ? 'bg-gradient-to-br from-[#0ecb81] to-[#0ecb81]/80 hover:from-[#0ecb81]/90 hover:to-[#0ecb81]/70 text-white shadow-lg shadow-[#0ecb81]/20 hover:shadow-xl hover:shadow-[#0ecb81]/30'
+                : 'bg-gradient-to-br from-[#f6465d] to-[#f6465d]/80 hover:from-[#f6465d]/90 hover:to-[#f6465d]/70 text-white shadow-lg shadow-[#f6465d]/20 hover:shadow-xl hover:shadow-[#f6465d]/30'
+              : 'bg-[#2b3139] text-[#848e9c] cursor-not-allowed'
+              }`}
           >
             {driftLoading ? (
               <span className="flex items-center justify-center gap-2">

@@ -82,17 +82,17 @@ export const CollateralDepositModal: React.FC<CollateralDepositModalProps> = ({
         <DialogHeader>
           <DialogTitle>Deposit Collateral</DialogTitle>
           <DialogDescription>
-            Deposit SOL to your Drift subaccount for trading. A {feePercentage}% platform fee will be deducted.
+            Deposit USDC to your Drift account for trading. A {feePercentage}% platform fee will be deducted and sent to the master wallet.
           </DialogDescription>
         </DialogHeader>
         
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label htmlFor="amount">Amount (SOL)</Label>
+            <Label htmlFor="amount">Amount (USDC)</Label>
             <Input
               id="amount"
               type="number"
-              step="0.001"
+              step="0.01"
               min="0"
               placeholder="0.00"
               value={amount}
@@ -102,31 +102,36 @@ export const CollateralDepositModal: React.FC<CollateralDepositModalProps> = ({
           </div>
           
           {amountNum > 0 && (
-            <div className="space-y-2 p-3 bg-gray-50 rounded-lg text-sm">
+            <div className="space-y-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-600">Total Amount:</span>
-                <span className="font-medium">{amountNum.toFixed(4)} SOL</span>
+                <span className="text-gray-600 dark:text-gray-400">Total Amount:</span>
+                <span className="font-medium text-dark dark:text-white">{amountNum.toFixed(2)} USDC</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Platform Fee ({feePercentage}%):</span>
-                <span className="font-medium text-red-600">-{feeAmount.toFixed(4)} SOL</span>
+                <span className="text-gray-600 dark:text-gray-400">Platform Fee ({feePercentage}%):</span>
+                <span className="font-medium text-red-600">-{feeAmount.toFixed(2)} USDC</span>
               </div>
-              <div className="flex justify-between border-t pt-2">
-                <span className="font-semibold">Net Collateral:</span>
-                <span className="font-semibold text-green-600">{collateralAmount.toFixed(4)} SOL</span>
+              <div className="flex justify-between border-t border-gray-200 dark:border-gray-700 pt-2">
+                <span className="font-semibold text-dark dark:text-white">Net Collateral:</span>
+                <span className="font-semibold text-green-600">{collateralAmount.toFixed(2)} USDC</span>
+              </div>
+              <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Note: SOL is used for transaction fees on Solana network
+                </p>
               </div>
             </div>
           )}
           
           {error && (
-            <div className="text-sm text-red-500 p-2 bg-red-50 rounded">
+            <div className="text-sm text-red-500 p-2 bg-red-50 dark:bg-red-900/20 rounded">
               {error}
             </div>
           )}
           
           {success && (
-            <div className="text-sm text-green-600 p-2 bg-green-50 rounded">
-              Deposit successful! Collateral has been added to your account.
+            <div className="text-sm text-green-600 dark:text-green-400 p-2 bg-green-50 dark:bg-green-900/20 rounded">
+              Deposit successful! {collateralAmount.toFixed(2)} USDC has been added to your Drift account.
             </div>
           )}
         </div>

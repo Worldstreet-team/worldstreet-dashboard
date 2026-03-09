@@ -1,7 +1,9 @@
-"use client";
+'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
+import Image from 'next/image';
+import Link from 'next/link';
 import { useFuturesStore } from '@/store/futuresStore';
 import { useDrift } from '@/app/context/driftContext';
 import { useFuturesData } from '@/hooks/useFuturesData';
@@ -13,20 +15,50 @@ import { RiskPanel } from '@/components/futures/RiskPanel';
 import { WalletModal } from '@/components/futures/WalletModal';
 import { DriftAccountStatus } from '@/components/futures/DriftAccountStatus';
 import { FuturesOrderModal } from '@/components/futures/FuturesOrderModal';
+import { InsufficientSolModal } from '@/components/futures/InsufficientSolModal';
+import { DriftInitializationOverlay } from '@/components/futures/DriftInitializationOverlay';
 import type { OrderSide } from '@/store/futuresStore';
 
-export default function FuturesPage() {
+export default function BinanceFuturesPage() {
   const { selectedMarket, markets, setSelectedMarket } = useFuturesStore();
-  const { isInitialized, startAutoRefresh, stopAutoRefresh } = useDrift();
+  const {
+    isInitialized,
+    startAutoRefresh,
+    stopAutoRefresh,
+    showPinUnlock,
+    setShowPinUnlock,
+    handlePinUnlock,
+    showInsufficientSol,
+    setShowInsufficientSol,
+    solBalanceInfo,
+    resetInitializationFailure,
+    refreshSummary,
+    summary,
+    needsInitialization,
+    isInitializing,
+    initializationError,
+  } = useDrift();
   const { fetchWallet } = useFuturesData();
-  
+
   const [mobileActiveTab, setMobileActiveTab] = useState<'chart' | 'positions' | 'info'>('chart');
   const [showMarketDropdown, setShowMarketDropdown] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [walletChecked, setWalletChecked] = useState(false);
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [orderSide, setOrderSide] = useState<OrderSide>('long');
-  const [selectedTimeframe, setSelectedTimeframe] = useState('1H');
+  const [initializing, setInitializing] = useState(false);
+
+  const handleInitialize = async () => {
+    setInitializing(true);
+    resetInitializationFailure();
+    await refreshSummary();
+    setInitializing(false);
+  };
+
+  const handleRetryInitialization = async () => {
+    resetInitializationFailure();
+    await refreshSummary();
+  };
 
   useEffect(() => {
     if (markets.length > 0 && !selectedMarket) {
@@ -74,10 +106,10 @@ export default function FuturesPage() {
 
   if (!walletChecked) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen bg-[#181a20]">
         <div className="text-center">
-          <Icon icon="svg-spinners:ring-resize" className="mx-auto mb-4 text-primary" height={48} />
-          <p className="text-muted dark:text-darklink">Loading futures trading...</p>
+          <Icon icon="svg-spinners:ring-resize" className="mx-auto mb-4 text-[#fcd535]" height={48} />
+          <p className="text-white text-sm">Loading futures trading...</p>
         </div>
       </div>
     );
@@ -86,232 +118,317 @@ export default function FuturesPage() {
   const currentPrice = selectedMarket?.markPrice || 0;
   const priceChange = 0;
   const isPositive = priceChange >= 0;
-  const formatPrice = (price: number | undefined | null) => (Number(price) || 0).toFixed(2);
-  const formatPercentage = (percent: number | undefined | null) => (Number(percent) || 0).toFixed(2);
-  
-  const timeframes = ['1m', '5m', '15m', '1H', '4H', '1D'];
 
   return (
-    <>
-      {/* MOBILE LAYOUT */}
-      <div className="md:hidden fixed inset-0 flex flex-col bg-white dark:bg-darkgray">
-        <div className="flex-shrink-0 px-4 py-3 bg-gradient-to-r from-primary/10 to-warning/10 border-b border-border dark:border-darkborder">
-          <h1 className="text-sm font-bold text-dark dark:text-white">WorldStreet Futures</h1>
-        </div>
-        
-        <div className="flex-1 overflow-y-auto pb-20">
-          <div className="px-4 py-2 bg-white dark:bg-darkgray border-b border-border dark:border-darkborder">
-            <div className="flex items-center justify-between mb-1">
-              <div className="relative">
-                <button 
-                  onClick={() => setShowMarketDropdown(!showMarketDropdown)}
-                  className="flex items-center gap-1 hover:bg-muted/10 px-1 py-0.5 rounded"
-                >
-                  <span className="text-base font-bold text-dark dark:text-white">
-                    {selectedMarket?.symbol || 'Select Market'}
-                  </span>
-                  <Icon icon="ph:caret-down" width={14} className="text-muted" />
-                </button>
-                
-                {showMarketDropdown && (
-                  <div className="absolute top-full left-0 mt-1 bg-white dark:bg-darkgray border border-border dark:border-darkborder rounded-lg shadow-lg z-20 min-w-[150px] max-h-[300px] overflow-y-auto">
-                    {markets.map((market) => (
-                      <button
-                        key={market.id}
-                        onClick={() => handleSelectMarket(market)}
-                        className={`w-full text-left px-4 py-2 hover:bg-muted/10 text-sm ${
-                          selectedMarket?.id === market.id ? 'bg-muted/20 text-primary' : 'text-dark dark:text-white'
-                        }`}
-                      >
-                        {market.symbol}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <DriftAccountStatus />
-            </div>
-            
-            <div className="flex items-baseline gap-2">
-              <span className={`text-lg font-bold ${isPositive ? 'text-success' : 'text-error'}`}>
-                ${formatPrice(currentPrice)}
-              </span>
-              <span className={`text-xs ${isPositive ? 'text-success' : 'text-error'}`}>
-                {isPositive ? '+' : ''}{formatPercentage(priceChange)}%
-              </span>
-              <span className="text-xs text-warning">PERP</span>
-            </div>
+    <div className="fixed inset-0 flex flex-col bg-[#181a20] overflow-hidden">
+      {/* Top Header Bar - Desktop Only */}
+      <div className="hidden md:flex h-12 items-center justify-between px-4 border-b border-[#2b3139] bg-[#181a20] shrink-0">
+        {/* Left: Logo + Nav */}
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2">
+            <Image
+              src="/worldstreet-logo/WorldStreet4x.png"
+              alt="WorldStreet"
+              width={28}
+              height={28}
+            />
+            <span className="text-base font-semibold text-white">WorldStreet</span>
           </div>
-
-          <div className="flex items-center gap-4 px-4 py-2 border-b border-border dark:border-darkborder bg-white dark:bg-darkgray">
-            {['chart', 'positions', 'info'].map((tab) => (
-              <button 
-                key={tab}
-                onClick={() => setMobileActiveTab(tab as any)}
-                className={`pb-1 text-xs font-medium capitalize ${
-                  mobileActiveTab === tab 
-                    ? 'text-dark dark:text-white border-b-2 border-warning' 
-                    : 'text-muted'
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
-
-          {mobileActiveTab === 'chart' && (
-            <div className="h-[50vh] bg-white dark:bg-darkgray">
-              <FuturesChart symbol={selectedMarket?.symbol} isDarkMode={true} />
-            </div>
-          )}
-
-          {mobileActiveTab === 'positions' && (
-            <div className="bg-white dark:bg-darkgray p-4">
-              <PositionPanel />
-            </div>
-          )}
-
-          {mobileActiveTab === 'info' && (
-            <div className="bg-white dark:bg-darkgray p-4 space-y-4">
-              <FuturesWalletBalance />
-              <CollateralPanel />
-              <RiskPanel />
-            </div>
-          )}
-
-          <div className="border-t border-border dark:border-darkborder bg-white dark:bg-darkgray p-4">
-            <PositionPanel />
-          </div>
+          <nav className="flex items-center gap-5">
+            <Link href="/assets" className="text-[13px] text-[#848e9c] hover:text-white transition-colors">
+              Assets
+            </Link>
+            <Link href="/spot" className="text-[13px] text-[#848e9c] hover:text-white transition-colors">
+              Spot
+            </Link>
+            <Link href="/futures" className="text-[13px] text-[#fcd535] font-medium">
+              Futures
+            </Link>
+          </nav>
         </div>
 
-        <div className="fixed bottom-0 left-0 right-0 flex gap-3 p-4 bg-white dark:bg-darkgray border-t border-border dark:border-darkborder z-10">
-          <button 
-            onClick={() => handleOpenOrderModal('long')}
-            className="flex-1 py-3 bg-success hover:bg-success/90 text-white font-semibold rounded-lg transition-colors"
-          >
-            Long
-          </button>
-          <button 
-            onClick={() => handleOpenOrderModal('short')}
-            className="flex-1 py-3 bg-error hover:bg-error/90 text-white font-semibold rounded-lg transition-colors"
-          >
-            Short
-          </button>
+        {/* Right: Account */}
+        <div className="flex items-center gap-3">
+          <Link href="/" className="px-3.5 py-1.5 bg-transparent hover:bg-[#2b3139] text-white rounded text-[13px] font-semibold transition-colors">
+            Dashboard
+          </Link>
+          <Link href="/tron-swap" className="px-3.5 py-1.5 bg-[#fcd535] hover:bg-[#fcd535]/90 text-[#181a20] rounded text-[13px] font-semibold transition-colors">
+            Tron-swap
+          </Link>
         </div>
       </div>
 
-      {/* DESKTOP LAYOUT - Professional Two-Column Trading Interface */}
-      <div className="hidden md:block fixed inset-0 top-[64px] left-0 xl:left-[260px] bg-gradient-to-br from-gray-50 via-white to-gray-50 dark:from-[#0a0a0a] dark:via-[#111111] dark:to-[#0a0a0a]">
-        
-        {/* Premium Header Bar - Market Info Only */}
-        <div className="h-20 px-8 py-4 bg-white/80 dark:bg-black/40 backdrop-blur-xl border-b border-gray-200/50 dark:border-white/5">
-          <div className="flex items-center gap-6 h-full">
-            {/* Market Selector */}
-            <div className="relative">
-              <button 
-                onClick={() => setShowMarketDropdown(!showMarketDropdown)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gray-50 dark:bg-white/5 hover:bg-gray-100 dark:hover:bg-white/10 border border-gray-200/50 dark:border-white/10 transition-all duration-200 group"
-              >
-                <span className="text-xl font-bold text-dark dark:text-white tracking-tight">
-                  {selectedMarket?.symbol || 'Select Market'}
-                </span>
-                <Icon 
-                  icon="ph:caret-down" 
-                  width={18} 
-                  className="text-muted dark:text-gray-400 group-hover:text-dark dark:group-hover:text-white transition-colors" 
-                />
-              </button>
-              
-              {showMarketDropdown && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowMarketDropdown(false)} />
-                  <div className="absolute top-full left-0 mt-2 bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl shadow-black/10 dark:shadow-black/50 z-50 min-w-[200px] max-h-[400px] overflow-y-auto backdrop-blur-xl">
-                    <div className="p-2">
+      {/* Mobile Header */}
+      <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-[#2b3139] bg-[#181a20]">
+        <div className="flex items-center gap-2">
+          <Image
+            src="/worldstreet-logo/WorldStreet4x.png"
+            alt="WorldStreet"
+            width={24}
+            height={24}
+          />
+          <span className="text-sm font-semibold text-white">WorldStreet</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <Link href="/assets" className="p-2">
+            <Icon icon="ph:wallet" width={20} className="text-[#848e9c] hover:text-white transition-colors" />
+          </Link>
+          <Link href="/spot" className="p-2">
+            <Icon icon="ph:chart-line" width={20} className="text-[#848e9c] hover:text-white transition-colors" />
+          </Link>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        {/* Desktop Layout */}
+        <div className="hidden md:grid md:grid-cols-[280px_1fr_340px] flex-1 min-h-0">
+          {/* LEFT: Position Panel */}
+          <div className="border-r border-[#2b3139] overflow-hidden">
+            <div className="h-full overflow-y-auto scrollbar-hide">
+              <PositionPanel />
+            </div>
+          </div>
+
+          {/* CENTER: Chart + Order Form */}
+          <div className="border-r border-[#2b3139] flex flex-col min-h-0">
+            {/* Pair Header */}
+            <div className="px-3 py-2 border-b border-[#2b3139] flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-4">
+                <div className="relative">
+                  <button
+                    onClick={() => setShowMarketDropdown(!showMarketDropdown)}
+                    className="flex items-center gap-1.5 hover:bg-[#2b3139] px-2 py-1 rounded transition-colors"
+                  >
+                    <span className="text-base font-semibold text-white">{selectedMarket?.symbol || 'Select'}</span>
+                    <Icon icon="ph:caret-down" width={14} className="text-[#848e9c]" />
+                  </button>
+
+                  {showMarketDropdown && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setShowMarketDropdown(false)} />
+                      <div className="absolute left-0 top-full mt-1 bg-[#2b3139] rounded-lg shadow-lg z-50 min-w-[200px]">
+                        {markets.map((market) => (
+                          <button
+                            key={market.id}
+                            onClick={() => handleSelectMarket(market)}
+                            className={`w-full px-4 py-3 text-left hover:bg-[#1e2329] transition-colors first:rounded-t-lg last:rounded-b-lg ${selectedMarket?.id === market.id ? 'bg-[#1e2329]' : ''
+                              }`}
+                          >
+                            <span className="text-white font-medium text-sm">{market.symbol}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className={`text-xl font-semibold ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
+                    ${Number(currentPrice).toFixed(2)}
+                  </span>
+                  <span className="text-xs text-[#848e9c]">
+                    ${Number(currentPrice).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-5 text-[11px]">
+                <div className="flex flex-col">
+                  <span className="text-[#848e9c]">24h Change</span>
+                  <span className={`font-medium ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
+                    {isPositive ? '+' : ''}{Number(priceChange).toFixed(2)}%
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Chart */}
+            <div className="flex-1 min-h-0">
+              <FuturesChart symbol={selectedMarket?.symbol} isDarkMode={true} />
+            </div>
+
+            {/* Order Form Placeholder - Will be styled in Phase 2 */}
+            <div className="border-t border-[#2b3139] shrink-0 p-4">
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleOpenOrderModal('long')}
+                  disabled={!isInitialized}
+                  className="flex-1 py-3 bg-[#0ecb81] hover:bg-[#0ecb81]/90 text-white font-semibold rounded transition-colors disabled:opacity-50"
+                >
+                  Long
+                </button>
+                <button
+                  onClick={() => handleOpenOrderModal('short')}
+                  disabled={!isInitialized}
+                  className="flex-1 py-3 bg-[#f6465d] hover:bg-[#f6465d]/90 text-white font-semibold rounded transition-colors disabled:opacity-50"
+                >
+                  Short
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT: Account Info */}
+          <div className="flex flex-col min-h-0 overflow-y-auto scrollbar-hide p-4 space-y-4">
+            <DriftAccountStatus />
+            <FuturesWalletBalance />
+            <CollateralPanel />
+            <RiskPanel />
+          </div>
+        </div>
+
+        {/* Mobile Layout */}
+        <div className="md:hidden flex flex-col h-[calc(100vh-60px)]">
+          {/* Pair Info Header */}
+          <div className="px-4 py-3 border-b border-[#2b3139] bg-[#181a20] shrink-0">
+            <div className="flex items-center justify-between mb-2">
+              <div className="relative">
+                <button
+                  onClick={() => setShowMarketDropdown(!showMarketDropdown)}
+                  className="flex items-center gap-2 hover:bg-[#2b3139] active:bg-[#2b3139]/80 px-2 py-1 rounded transition-all duration-200 active:scale-95 min-h-[44px]"
+                >
+                  <div className="flex items-center gap-1">
+                    <span className="text-sm font-semibold text-white">{selectedMarket?.symbol || 'Select'}</span>
+                    <Icon icon="ph:caret-down" width={12} className="text-[#848e9c]" />
+                  </div>
+                </button>
+
+                {showMarketDropdown && (
+                  <>
+                    <div className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm animate-fadeIn" onClick={() => setShowMarketDropdown(false)} />
+                    <div className="absolute left-0 top-full mt-2 bg-[#2b3139] rounded-lg shadow-2xl z-50 min-w-[200px] max-h-60 overflow-y-auto scrollbar-hide animate-slideDown">
                       {markets.map((market) => (
                         <button
                           key={market.id}
                           onClick={() => handleSelectMarket(market)}
-                          className={`w-full text-left px-4 py-3 rounded-xl hover:bg-gray-50 dark:hover:bg-white/5 text-sm font-medium transition-all duration-150 ${
-                            selectedMarket?.id === market.id 
-                              ? 'bg-primary/10 text-primary dark:bg-primary/20' 
-                              : 'text-dark dark:text-white'
-                          }`}
+                          className={`w-full px-4 py-3 text-left hover:bg-[#181a20] active:bg-[#181a20]/80 transition-all duration-200 min-h-[44px] ${selectedMarket?.id === market.id ? 'bg-[#181a20]' : ''
+                            }`}
                         >
-                          {market.symbol}
+                          <span className="text-white font-medium">{market.symbol}</span>
                         </button>
                       ))}
                     </div>
-                  </div>
+                  </>
+                )}
+              </div>
+              <Icon icon="ph:star" width={18} className="text-[#848e9c]" />
+            </div>
+
+            <div className="flex items-baseline gap-2 mb-2">
+              <span className={`text-2xl font-bold ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
+                ${Number(currentPrice).toFixed(2)}
+              </span>
+              <span className="text-sm text-[#848e9c]">
+                ${Number(currentPrice).toFixed(2)}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-4 text-xs">
+              <div>
+                <span className="text-[#848e9c]">24h Change </span>
+                <span className={`font-medium ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
+                  {isPositive ? '+' : ''}{Number(priceChange).toFixed(2)}%
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Tab Navigation */}
+          <div className="flex border-b border-[#2b3139] bg-[#181a20] overflow-x-auto scrollbar-hide shrink-0">
+            {(['chart', 'positions', 'info'] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setMobileActiveTab(tab)}
+                className={`px-4 py-3 text-xs font-medium whitespace-nowrap border-b-2 transition-all duration-200 active:scale-95 ${mobileActiveTab === tab
+                  ? 'border-[#fcd535] text-white'
+                  : 'border-transparent text-[#848e9c] active:text-white'
+                  }`}
+              >
+                {tab === 'chart' && 'Chart'}
+                {tab === 'positions' && 'Positions'}
+                {tab === 'info' && 'Account'}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab Content */}
+          <div className="flex-1 min-h-0 relative overflow-hidden">
+            {/* Chart Tab */}
+            <div
+              className={`absolute inset-0 transition-all duration-300 ${mobileActiveTab === 'chart'
+                ? 'translate-x-0 opacity-100'
+                : 'translate-x-full opacity-0 pointer-events-none'
+                }`}
+            >
+              <FuturesChart symbol={selectedMarket?.symbol} isDarkMode={true} />
+            </div>
+
+            {/* Positions Tab */}
+            <div
+              className={`absolute inset-0 overflow-y-auto scrollbar-hide p-4 transition-all duration-300 ${mobileActiveTab === 'positions'
+                ? 'translate-x-0 opacity-100'
+                : '-translate-x-full opacity-0 pointer-events-none'
+                }`}
+            >
+              <PositionPanel />
+            </div>
+
+            {/* Info Tab */}
+            <div
+              className={`absolute inset-0 overflow-y-auto scrollbar-hide p-4 space-y-4 pb-24 transition-all duration-300 ${mobileActiveTab === 'info'
+                ? 'translate-x-0 opacity-100'
+                : 'translate-x-full opacity-0 pointer-events-none'
+                }`}
+            >
+              {needsInitialization ? (
+                <div className="bg-[#2b3139] rounded-lg p-4 animate-fadeIn">
+                  <h3 className="text-xs font-bold text-white mb-2 uppercase">Drift Account</h3>
+                  <p className="text-xs text-[#848e9c] mb-3">Account not initialized</p>
+                  <button
+                    onClick={handleInitialize}
+                    disabled={initializing}
+                    className="w-full py-2.5 bg-[#fcd535] hover:bg-[#fcd535]/90 active:scale-95 text-[#181a20] rounded text-xs font-bold disabled:opacity-50 transition-all duration-200"
+                  >
+                    {initializing ? 'Initializing...' : 'Initialize Account'}
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <DriftAccountStatus />
+                  <FuturesWalletBalance />
+                  <CollateralPanel />
+                  <RiskPanel />
                 </>
               )}
             </div>
-            
-
-
-          </div>
-        </div>
-
-        {/* Two-Column Layout: 70/30 Split */}
-        <div className="h-[calc(100%-80px)] flex">
-          
-          {/* LEFT COLUMN (70%): Chart Only */}
-          <div className="w-[70%] h-full p-6 pr-3">
-            <div className="h-full bg-white dark:bg-[#0d0d0d] rounded-2xl border border-gray-200/50 dark:border-white/5 shadow-lg shadow-black/5 dark:shadow-black/20 overflow-hidden">
-              <FuturesChart symbol={selectedMarket?.symbol} isDarkMode={true} />
-            </div>
           </div>
 
-          {/* RIGHT COLUMN (30%): Scrollable Info & Actions */}
-          <div className="w-[30%] h-full overflow-y-auto pl-3 pr-6 py-6 custom-scrollbar">
-            <div className="flex flex-col gap-4">
-              
-              {/* 1. Quick Actions */}
-              <div className="bg-white dark:bg-[#0d0d0d] rounded-2xl border border-gray-200/50 dark:border-white/5 shadow-lg shadow-black/5 dark:shadow-black/20 p-6">
-                <h3 className="text-sm font-bold text-dark dark:text-white mb-4 uppercase tracking-wide">Quick Actions</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => handleOpenOrderModal('long')}
-                    className="group relative overflow-hidden py-4 bg-gradient-to-br from-success to-success/80 hover:from-success/90 hover:to-success/70 text-white font-bold rounded-xl transition-all duration-200 shadow-lg shadow-success/20 hover:shadow-xl hover:shadow-success/30 hover:-translate-y-0.5"
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                    <div className="relative flex flex-col items-center gap-1">
-                      <Icon icon="ph:arrow-up-bold" width={20} />
-                      <span className="text-sm">Open Long</span>
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => handleOpenOrderModal('short')}
-                    className="group relative overflow-hidden py-4 bg-gradient-to-br from-error to-error/80 hover:from-error/90 hover:to-error/70 text-white font-bold rounded-xl transition-all duration-200 shadow-lg shadow-error/20 hover:shadow-xl hover:shadow-error/30 hover:-translate-y-0.5"
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                    <div className="relative flex flex-col items-center gap-1">
-                      <Icon icon="ph:arrow-down-bold" width={20} />
-                      <span className="text-sm">Open Short</span>
-                    </div>
-                  </button>
-                </div>
-              </div>
-
-              <DriftAccountStatus />
-
-              {/* 3. Position Panel */}
-              <PositionPanel />
-
-              {/* 4. Wallet Balance */}
-              <FuturesWalletBalance />
-
-              {/* 5. Collateral Panel */}
-              <CollateralPanel />
-
-              {/* 6. Risk Panel */}
-              <RiskPanel />
-
-              {/* 7. Drift Account Status */}
-            </div>
+          {/* Fixed Bottom Action Buttons */}
+          <div className="grid grid-cols-2 gap-0 border-t border-[#2b3139] bg-[#181a20] safe-area-bottom shrink-0 shadow-[0_-4px_12px_rgba(0,0,0,0.3)]">
+            <button
+              onClick={() => handleOpenOrderModal('long')}
+              disabled={!isInitialized}
+              className="py-4 bg-[#0ecb81] hover:bg-[#0ecb81]/90 active:bg-[#0ecb81]/80 text-white font-semibold text-base transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 min-h-[56px]"
+            >
+              <span className="flex items-center justify-center gap-2">
+                <Icon icon="ph:arrow-up-bold" width={18} />
+                Long
+              </span>
+            </button>
+            <button
+              onClick={() => handleOpenOrderModal('short')}
+              disabled={!isInitialized}
+              className="py-4 bg-[#f6465d] hover:bg-[#f6465d]/90 active:bg-[#f6465d]/80 text-white font-semibold text-base transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 min-h-[56px]"
+            >
+              <span className="flex items-center justify-center gap-2">
+                <Icon icon="ph:arrow-down-bold" width={18} />
+                Short
+              </span>
+            </button>
           </div>
         </div>
       </div>
 
+      {/* Modals */}
       <WalletModal
         isOpen={showWalletModal}
         onClose={() => setShowWalletModal(false)}
@@ -324,6 +441,23 @@ export default function FuturesPage() {
         side={orderSide}
         onSuccess={() => setShowOrderModal(false)}
       />
-    </>
+
+      {solBalanceInfo && (
+        <InsufficientSolModal
+          isOpen={showInsufficientSol}
+          onClose={() => setShowInsufficientSol(false)}
+          requiredSol={solBalanceInfo.required}
+          currentSol={solBalanceInfo.current}
+          walletAddress={solBalanceInfo.address}
+        />
+      )}
+
+      {/* Initialization Overlay */}
+      <DriftInitializationOverlay
+        isLoading={isInitializing}
+        error={initializationError}
+        onRetry={handleRetryInitialization}
+      />
+    </div>
   );
 }

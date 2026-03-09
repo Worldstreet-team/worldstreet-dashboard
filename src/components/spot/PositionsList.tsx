@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { useAuth } from '@/app/context/authContext';
+import { useDrift } from '@/app/context/driftContext';
 import TPSLModal from './TPSLModal';
 
 interface Position {
@@ -37,13 +38,14 @@ interface PositionsListProps {
   onToggleTPSLLines?: () => void;
 }
 
-export default function PositionsList({ 
-  selectedChartSymbol, 
+export default function PositionsList({
+  selectedChartSymbol,
   onPositionTPSLUpdate,
   showTPSLLines = true,
   onToggleTPSLLines
 }: PositionsListProps = {}) {
   const { user } = useAuth();
+  const { spotPositions: driftSpotPositions, isLoading: loadingDrift } = useDrift();
   const [positions, setPositions] = useState<Position[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,16 +56,6 @@ export default function PositionsList({
   const [selectedPosition, setSelectedPosition] = useState<Position | null>(null);
   const [tpslOrders, setTpslOrders] = useState<Record<string, TPSLOrder>>({});
 
-  useEffect(() => {
-    fetchPositions();
-  }, [user, activeTab]);
-
-  useEffect(() => {
-    if (activeTab === 'OPEN' && positions.length > 0) {
-      fetchTPSLOrders();
-    }
-  }, [positions, activeTab]);
-
   const fetchPositions = async () => {
     if (!user?.userId) return;
 
@@ -71,16 +63,43 @@ export default function PositionsList({
     setError(null);
 
     try {
-      const response = await fetch(`/api/positions?status=${activeTab}`);
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch positions');
+      let positionsArray: Position[] = [];
+
+      // Only fetch history from backend if tab is CLOSED
+      if (activeTab === 'CLOSED') {
+        const response = await fetch(`/api/positions?status=CLOSED`);
+        if (response.ok) {
+          const data = await response.json();
+          positionsArray = Array.isArray(data) ? data : data.positions || [];
+        }
       }
 
-      const data = await response.json();
-      console.log('Positions API response:', data);
-      
-      const positionsArray = Array.isArray(data) ? data : data.positions || [];
+      // Merge with Drift spot positions if tab is OPEN
+      if (activeTab === 'OPEN' && driftSpotPositions) {
+        driftSpotPositions.forEach(p => {
+          // Hide USDC (quote) from positions list, only show actual assets
+          if (p.marketIndex !== 0 && (Math.abs(p.amount) > 0.000001)) {
+            positionsArray.push({
+              id: `drift-spot-${p.marketIndex}`,
+              userId: user.userId,
+              symbol: p.marketName,
+              baseAsset: p.marketName.split('/')[0],
+              quoteAsset: 'USDC',
+              quantity: p.amount.toString(),
+              entryPrice: p.price.toString(),
+              currentPrice: p.price.toString(),
+              investedQuote: p.value.toString(),
+              unrealizedPnl: '0',
+              pnlPercent: '0',
+              realizedPnl: '0',
+              status: 'OPEN',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            });
+          }
+        });
+      }
+
       setPositions(positionsArray);
     } catch (err) {
       setError((err as Error).message);
@@ -89,47 +108,41 @@ export default function PositionsList({
     }
   };
 
+  useEffect(() => {
+    fetchPositions();
+  }, [user, activeTab, driftSpotPositions]);
+
   const fetchTPSLOrders = async () => {
     const orders: Record<string, TPSLOrder> = {};
-    
     await Promise.all(
       positions.map(async (position) => {
+        if (position.id.startsWith('drift-spot-')) return;
         try {
           const response = await fetch(`/api/positions/${position.id}/tpsl`);
           if (response.ok) {
             const data = await response.json();
-            if (data.data) {
-              orders[position.id] = data.data;
-            }
+            if (data.data) orders[position.id] = data.data;
           }
         } catch (err) {
           console.error(`Failed to fetch TP/SL for ${position.id}:`, err);
         }
       })
     );
-
     setTpslOrders(orders);
-
-    // Notify parent about TP/SL for the selected chart symbol
-    if (onPositionTPSLUpdate && selectedChartSymbol) {
-      // Convert chart symbol format (SOL-USDT) to position format (SOL/USDT)
-      const positionSymbol = selectedChartSymbol.replace('-', '/');
-      const matchingPosition = positions.find(p => p.symbol === positionSymbol);
-      if (matchingPosition && orders[matchingPosition.id]) {
-        const tpsl = orders[matchingPosition.id];
-        onPositionTPSLUpdate(
-          matchingPosition.symbol,
-          tpsl.take_profit_price,
-          tpsl.stop_loss_price
-        );
-      } else if (matchingPosition) {
-        // Clear TP/SL if no order exists
-        onPositionTPSLUpdate(matchingPosition.symbol, null, null);
-      }
-    }
   };
 
+  useEffect(() => {
+    if (activeTab === 'OPEN' && positions.length > 0) {
+      fetchTPSLOrders();
+    }
+  }, [positions, activeTab]);
+
   const handleOpenTPSL = (position: Position) => {
+    if (position.id.startsWith('drift-spot-')) {
+      setError('TP/SL is not currently supported for Drift spot holdings via this panel.');
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
     setSelectedPosition(position);
     setTpslModalOpen(true);
   };
@@ -140,53 +153,26 @@ export default function PositionsList({
     setTimeout(() => setCloseSuccess(null), 5000);
   };
 
-  // Notify parent when selected chart symbol changes
-  useEffect(() => {
-    if (onPositionTPSLUpdate && selectedChartSymbol && positions.length > 0) {
-      // Convert chart symbol format (SOL-USDT) to position format (SOL/USDT)
-      const positionSymbol = selectedChartSymbol.replace('-', '/');
-      const matchingPosition = positions.find(p => p.symbol === positionSymbol);
-      if (matchingPosition && tpslOrders[matchingPosition.id]) {
-        const tpsl = tpslOrders[matchingPosition.id];
-        onPositionTPSLUpdate(
-          matchingPosition.symbol,
-          tpsl.take_profit_price,
-          tpsl.stop_loss_price
-        );
-      }
-    }
-  }, [selectedChartSymbol, positions, tpslOrders, onPositionTPSLUpdate]);
-
   const handleClosePosition = async (positionId: string) => {
-    if (!confirm('Are you sure you want to close this position? This will sell your assets at the current market price.')) {
+    if (positionId.startsWith('drift-spot-')) {
+      setError('Please sell your holdings in the Order Form.');
+      setTimeout(() => setError(null), 3000);
       return;
     }
 
-    setClosingPositionId(positionId);
-    setError(null);
-    setCloseSuccess(null);
+    if (!confirm('Are you sure you want to close this position?')) return;
 
+    setClosingPositionId(positionId);
     try {
       const response = await fetch(`/api/positions/${positionId}/close`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          slippage: 0.005, // 0.5% slippage
-        }),
+        body: JSON.stringify({ slippage: 0.005 }),
       });
-
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to close position');
-      }
-
+      if (!response.ok) throw new Error(data.error || 'Failed to close position');
       setCloseSuccess(data.message);
-      
-      // Refresh positions after successful close
       await fetchPositions();
-
-      // Clear success message after 5 seconds
       setTimeout(() => setCloseSuccess(null), 5000);
     } catch (err) {
       setError((err as Error).message);
@@ -195,262 +181,74 @@ export default function PositionsList({
     }
   };
 
-  const formatDate = (timestamp: string) => {
-    const date = new Date(timestamp);
-    return date.toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
   const formatNumber = (value: string | undefined, decimals: number = 6): string => {
     if (!value) return '0.00';
     return parseFloat(value).toFixed(decimals);
   };
 
-  if (loading) {
+  if (loading && positions.length === 0) {
     return (
-      <div className="bg-white dark:bg-black rounded-2xl border border-border/50 dark:border-darkborder overflow-hidden shadow-sm">
-        <div className="p-4 border-b border-border/50 dark:border-darkborder">
-          <div className="flex items-center gap-2">
-            <Icon icon="ph:chart-line-up" className="text-primary" width={20} />
-            <h3 className="font-semibold text-dark dark:text-white">Positions</h3>
-          </div>
-        </div>
-        <div className="p-8 flex justify-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary/20 border-t-primary" />
-        </div>
+      <div className="p-8 flex justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary/20 border-t-primary" />
       </div>
     );
   }
 
   return (
-    <div className="bg-white dark:bg-black rounded-2xl border border-border/50 dark:border-darkborder overflow-hidden shadow-sm">
-      <div className="p-4 border-b border-border/50 dark:border-darkborder">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Icon icon="ph:chart-line-up" className="text-primary" width={20} />
-            <h3 className="font-semibold text-dark dark:text-white">Positions</h3>
-          </div>
-          <div className="flex items-center gap-2">
-            {/* TP/SL Chart Toggle - Only show if there's a matching position with TP/SL */}
-            {activeTab === 'OPEN' && selectedChartSymbol && (() => {
-              // Convert chart symbol format (SOL-USDT) to position format (SOL/USDT)
-              const positionSymbol = selectedChartSymbol.replace('-', '/');
-              const matchingPosition = positions.find(p => p.symbol === positionSymbol);
-              const hasTPSL = matchingPosition && tpslOrders[matchingPosition.id];
-              return hasTPSL ? (
-                <button
-                  onClick={onToggleTPSLLines}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
-                    showTPSLLines
-                      ? 'bg-primary text-white hover:bg-primary/90'
-                      : 'bg-muted/30 dark:bg-white/5 text-dark dark:text-white hover:bg-muted/40 dark:hover:bg-white/10'
-                  }`}
-                  title={showTPSLLines ? 'Hide TP/SL lines on chart' : 'Show TP/SL lines on chart'}
-                >
-                  <Icon 
-                    icon={showTPSLLines ? 'ph:eye' : 'ph:eye-slash'} 
-                    width={14} 
-                  />
-                  {showTPSLLines ? 'Hide' : 'Show'} Lines
-                </button>
-              ) : null;
-            })()}
-            
-            {/* Tab Switcher */}
-            <div className="flex bg-muted/30 dark:bg-white/5 rounded-lg p-1">
-              <button
-                onClick={() => setActiveTab('OPEN')}
-                className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
-                  activeTab === 'OPEN'
-                    ? 'bg-primary text-white'
-                    : 'text-muted hover:text-dark dark:hover:text-white'
-                }`}
-              >
-                Open
-              </button>
-              <button
-                onClick={() => setActiveTab('CLOSED')}
-                className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
-                  activeTab === 'CLOSED'
-                    ? 'bg-primary text-white'
-                    : 'text-muted hover:text-dark dark:hover:text-white'
-                }`}
-              >
-                Closed
-              </button>
-            </div>
-            <button
-              onClick={fetchPositions}
-              className="p-1.5 hover:bg-muted/30 dark:hover:bg-white/5 rounded-lg transition-colors"
-              title="Refresh"
-            >
-              <Icon icon="ph:arrow-clockwise" className="text-muted" width={18} />
-            </button>
-          </div>
-        </div>
-      </div>
-
+    <div className="bg-[#181a20] rounded-b-lg border-t border-[#2b3139] overflow-hidden">
       {error && (
         <div className="p-4 bg-error/10 border-b border-error/30">
-          <div className="flex items-center gap-2">
-            <Icon icon="ph:warning-circle" className="text-error" width={18} />
-            <p className="text-sm text-error">{error}</p>
-          </div>
+          <p className="text-sm text-error">{error}</p>
         </div>
       )}
 
       {closeSuccess && (
         <div className="p-4 bg-success/10 border-b border-success/30">
-          <div className="flex items-center gap-2">
-            <Icon icon="ph:check-circle" className="text-success" width={18} />
-            <p className="text-sm text-success">{closeSuccess}</p>
-          </div>
+          <p className="text-sm text-success">{closeSuccess}</p>
         </div>
       )}
 
       <div className="overflow-x-auto">
         {positions.length === 0 ? (
-          <div className="p-8 text-center">
-            <div className="w-16 h-16 rounded-full bg-muted/30 dark:bg-white/5 flex items-center justify-center mx-auto mb-3">
-              <Icon icon="ph:chart-line-up" className="text-muted" width={32} />
-            </div>
-            <p className="text-muted text-sm">No {activeTab.toLowerCase()} positions</p>
-            <p className="text-muted text-xs mt-1">
-              {activeTab === 'OPEN' 
-                ? 'Your open positions will appear here' 
-                : 'Your closed positions will appear here'}
-            </p>
+          <div className="p-8 text-center text-[#848e9c]">
+            <p className="text-sm">No {activeTab.toLowerCase()} positions</p>
           </div>
         ) : (
-          <table className="w-full">
-            <thead className="bg-muted/30 dark:bg-white/5">
+          <table className="w-full text-xs">
+            <thead className="bg-[#2b3139]">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-muted">Symbol</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-muted">Quantity</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-muted">Entry Price</th>
-                {activeTab === 'OPEN' && (
-                  <>
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-muted">Current Price</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-muted">Unrealized PnL</th>
-                  </>
-                )}
-                {activeTab === 'CLOSED' && (
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-muted">Realized PnL</th>
-                )}
-                <th className="px-4 py-3 text-left text-xs font-semibold text-muted">
-                  {activeTab === 'OPEN' ? 'Opened' : 'Closed'}
-                </th>
-                {activeTab === 'OPEN' && (
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-muted">Action</th>
-                )}
+                <th className="px-4 py-2 text-left text-[#848e9c]">Symbol</th>
+                <th className="px-4 py-2 text-right text-[#848e9c]">Quantity</th>
+                <th className="px-4 py-2 text-right text-[#848e9c]">Price</th>
+                <th className="px-4 py-2 text-right text-[#848e9c]">PnL</th>
+                <th className="px-4 py-2 text-center text-[#848e9c]">Action</th>
               </tr>
             </thead>
             <tbody>
               {positions.map((position) => {
-                const pnl = activeTab === 'OPEN' 
-                  ? parseFloat(position.unrealizedPnl || '0')
-                  : parseFloat(position.realizedPnl || '0');
-                const pnlPercent = parseFloat(position.pnlPercent || '0');
-                const isProfitable = pnl >= 0;
-                
+                const pnl = parseFloat(position.unrealizedPnl || '0');
                 return (
-                  <tr
-                    key={position.id}
-                    className="border-b border-border/50 dark:border-darkborder hover:bg-muted/20 dark:hover:bg-white/5 transition-colors"
-                  >
+                  <tr key={position.id} className="border-b border-[#2b3139] hover:bg-[#2b3139]/50 transition-colors">
                     <td className="px-4 py-3">
-                      <div>
-                        <span className="text-sm font-semibold text-dark dark:text-white">
-                          {position.symbol}
-                        </span>
-                        <div className="text-xs text-muted">
-                          {position.baseAsset}/{position.quoteAsset}
-                        </div>
-                      </div>
+                      <span className="text-white font-medium">{position.symbol}</span>
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="text-sm text-dark dark:text-white font-mono">
-                        {formatNumber(position.quantity, 6)}
-                      </div>
-                      <div className="text-xs text-muted">{position.baseAsset}</div>
+                    <td className="px-4 py-3 text-right text-white">
+                      {formatNumber(position.quantity, 4)}
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="text-sm text-dark dark:text-white font-mono">
-                        ${formatNumber(position.entryPrice, 2)}
-                      </div>
+                    <td className="px-4 py-3 text-right text-white">
+                      ${formatNumber(position.currentPrice || position.entryPrice, 2)}
                     </td>
-                    {activeTab === 'OPEN' && (
-                      <>
-                        <td className="px-4 py-3 text-right">
-                          <div className="text-sm text-dark dark:text-white font-mono">
-                            ${formatNumber(position.currentPrice, 2)}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className={`text-sm font-semibold font-mono ${
-                            isProfitable ? 'text-success' : 'text-error'
-                          }`}>
-                            {isProfitable ? '+' : ''}{formatNumber(position.unrealizedPnl, 2)} {position.quoteAsset}
-                          </div>
-                          <div className={`text-xs font-medium ${
-                            isProfitable ? 'text-success' : 'text-error'
-                          }`}>
-                            {isProfitable ? '+' : ''}{pnlPercent.toFixed(2)}%
-                          </div>
-                        </td>
-                      </>
-                    )}
-                    {activeTab === 'CLOSED' && (
-                      <td className="px-4 py-3 text-right">
-                        <div className={`text-sm font-semibold font-mono ${
-                          isProfitable ? 'text-success' : 'text-error'
-                        }`}>
-                          {isProfitable ? '+' : ''}{formatNumber(position.realizedPnl, 2)} {position.quoteAsset}
-                        </div>
-                      </td>
-                    )}
-                    <td className="px-4 py-3 text-xs text-muted">
-                      {formatDate(activeTab === 'OPEN' ? position.createdAt : position.closedAt || position.updatedAt)}
+                    <td className={`px-4 py-3 text-right font-medium ${pnl >= 0 ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
+                      {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}
                     </td>
-                    {activeTab === 'OPEN' && (
-                      <td className="px-4 py-3 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={() => handleOpenTPSL(position)}
-                            className="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5"
-                            title="Set Take Profit / Stop Loss"
-                          >
-                            <Icon icon="ph:target" width={14} />
-                            {tpslOrders[position.id] ? 'TP/SL' : 'Set TP/SL'}
-                            {tpslOrders[position.id] && (
-                              <Icon icon="ph:check-circle" width={12} className="text-success" />
-                            )}
-                          </button>
-                          <button
-                            onClick={() => handleClosePosition(position.id)}
-                            disabled={closingPositionId === position.id}
-                            className="px-3 py-1.5 bg-error/10 hover:bg-error/20 text-error rounded-lg text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
-                            title="Close position and sell assets"
-                          >
-                            {closingPositionId === position.id ? (
-                              <>
-                                <Icon icon="svg-spinners:ring-resize" width={14} />
-                                Closing...
-                              </>
-                            ) : (
-                              <>
-                                <Icon icon="ph:x-circle" width={14} />
-                                Close
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      </td>
-                    )}
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        onClick={() => handleClosePosition(position.id)}
+                        className="text-[#f6465d] hover:text-[#f6465d]/80 transition-colors"
+                      >
+                        {position.id.startsWith('drift-spot-') ? 'Sell' : 'Close'}
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -458,36 +256,6 @@ export default function PositionsList({
           </table>
         )}
       </div>
-
-      {/* Summary for Open Positions */}
-      {activeTab === 'OPEN' && positions.length > 0 && (
-        <div className="p-4 border-t border-border/50 dark:border-darkborder bg-muted/20 dark:bg-white/5">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted">Total Unrealized PnL:</span>
-            <span className={`font-semibold font-mono ${
-              positions.reduce((sum, p) => sum + parseFloat(p.unrealizedPnl || '0'), 0) >= 0
-                ? 'text-success'
-                : 'text-error'
-            }`}>
-              {positions.reduce((sum, p) => sum + parseFloat(p.unrealizedPnl || '0'), 0) >= 0 ? '+' : ''}
-              {positions.reduce((sum, p) => sum + parseFloat(p.unrealizedPnl || '0'), 0).toFixed(2)}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* TP/SL Modal */}
-      {selectedPosition && (
-        <TPSLModal
-          isOpen={tpslModalOpen}
-          onClose={() => {
-            setTpslModalOpen(false);
-            setSelectedPosition(null);
-          }}
-          position={selectedPosition}
-          onSuccess={handleTPSLSuccess}
-        />
-      )}
     </div>
   );
 }

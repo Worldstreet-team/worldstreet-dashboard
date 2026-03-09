@@ -91,7 +91,7 @@ function sanitizeError(error: any, backendResponse?: any): string {
   }
 
   // Default fallback
-  return 'Transfer failed. Please try again or contact support if the issue persists.';
+  return combinedError;
 }
 
 export async function POST(request: NextRequest) {

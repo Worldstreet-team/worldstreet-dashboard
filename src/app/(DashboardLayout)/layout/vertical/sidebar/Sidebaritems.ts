@@ -42,6 +42,13 @@ const SidebarContent: MenuItem[] = [
         url: "/",
       },
       {
+        name: "Portfolio",
+        icon: 'ph:briefcase-duotone',
+        id: uniqueId(),
+        url: "/portfolio",
+        subtitle: "Trading overview",
+      },
+      {
         name: "Assets",
         icon: 'ph:coins-duotone',
         id: uniqueId(),
@@ -71,12 +78,6 @@ const SidebarContent: MenuItem[] = [
         icon: 'ph:upload-simple-duotone',
         id: uniqueId(),
         url: "/withdraw",
-      },
-      {
-        name: "Transfer",
-        icon: 'ph:arrow-square-out-duotone',
-        id: uniqueId(),
-        url: "/transfer",
       },
       {
         name: "Transactions",

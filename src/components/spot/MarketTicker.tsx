@@ -15,16 +15,6 @@ interface MarketTickerProps {
   onSelectPair: (pair: string) => void;
 }
 
-// Map trading pairs to CoinGecko IDs
-const COINGECKO_IDS: Record<string, string> = {
-  'BTC-USDT': 'bitcoin',
-  'ETH-USDT': 'ethereum',
-  'BNB-USDT': 'binancecoin',
-  'SOL-USDT': 'solana',
-  'XRP-USDT': 'ripple',
-  'ADA-USDT': 'cardano'
-};
-
 export default function MarketTicker({ selectedPair, onSelectPair }: MarketTickerProps) {
   const [tickers, setTickers] = useState<TickerData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,36 +32,34 @@ export default function MarketTicker({ selectedPair, onSelectPair }: MarketTicke
   useEffect(() => {
     const fetchTickers = async () => {
       try {
-        const coinIds = Object.values(COINGECKO_IDS).join(',');
-        
-        // CoinGecko free API endpoint
-        const response = await fetch(
-          `https://api.coingecko.com/api/v3/simple/price?ids=${coinIds}&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true`,
-          {
-            headers: {
-              'Accept': 'application/json',
-            },
+        // Fetch all tickers in parallel via our API route
+        const tickerPromises = tradingPairs.map(async (pair) => {
+          const response = await fetch(
+            `/api/kucoin/ticker?symbol=${pair}`
+          );
+
+          if (!response.ok) {
+            throw new Error(`Failed to fetch ${pair}`);
           }
-        );
 
-        if (!response.ok) {
-          throw new Error('Failed to fetch prices');
-        }
+          const result = await response.json();
+          
+          if (result.code !== '200000' || !result.data) {
+            throw new Error(`Invalid response for ${pair}`);
+          }
 
-        const data = await response.json();
-
-        const updatedTickers: TickerData[] = tradingPairs.map(pair => {
-          const coinId = COINGECKO_IDS[pair];
-          const coinData = data[coinId];
+          const data = result.data;
 
           return {
             symbol: pair,
-            price: coinData?.usd || 0,
-            change24h: coinData?.usd_24h_change || 0,
-            volume24h: coinData?.usd_24h_vol || 0
+            price: parseFloat(data.last) || 0,
+            change24h: parseFloat(data.changeRate) * 100 || 0, // Convert to percentage
+            volume24h: parseFloat(data.volValue) || 0 // Volume in USDT
           };
         });
 
+        const updatedTickers = await Promise.all(tickerPromises);
+        
         setTickers(updatedTickers);
         setError(null);
         setLoading(false);
@@ -83,7 +71,7 @@ export default function MarketTicker({ selectedPair, onSelectPair }: MarketTicke
     };
 
     fetchTickers();
-    const interval = setInterval(fetchTickers, 20000); // Poll every 20 seconds
+    const interval = setInterval(fetchTickers, 10000); // Poll every 10 seconds
 
     return () => clearInterval(interval);
   }, []);
@@ -127,7 +115,7 @@ export default function MarketTicker({ selectedPair, onSelectPair }: MarketTicke
         </div>
         <div className="flex items-center gap-1 text-xs text-muted">
           <Icon icon="ph:arrow-clockwise" className="animate-spin-slow" width={14} />
-          <span>Live prices via CoinGecko</span>
+          <span>Live prices via KuCoin</span>
         </div>
       </div>
       

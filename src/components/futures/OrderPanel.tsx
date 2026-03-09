@@ -20,10 +20,12 @@ interface ErrorState {
 }
 
 export const OrderPanel: React.FC = () => {
-  const { selectedMarket, selectedChain, setPreviewData, previewData, markets } = useFuturesStore();
-  const { openPosition: openPositionClient, refreshPositions, refreshSummary } = useDrift();
+  const { selectedMarket, markets } = useFuturesStore();
+  const { openPosition: openPositionClient, refreshPositions, refreshSummary, previewTrade, getMarketIndexBySymbol } = useDrift();
   const { isPolling: isConfirmingOrder, startPostActionPolling } = usePostActionPolling();
-  
+
+  const [previewData, setPreviewData] = useState<any>(null);
+
   const [side, setSide] = useState<OrderSide>('long');
   const [orderType, setOrderType] = useState<OrderType>('market');
   const [size, setSize] = useState('');
@@ -48,43 +50,31 @@ export const OrderPanel: React.FC = () => {
 
     const fetchPreview = async () => {
       try {
-        const response = await fetch('/api/futures/preview', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chain: selectedChain,
-            market: selectedMarket.symbol,
-            side,
-            size: parseFloat(debouncedSize),
-            leverage,
-            orderType,
-            limitPrice: debouncedLimitPrice ? parseFloat(debouncedLimitPrice) : undefined,
-          }),
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-          setPreviewData(data);
-          setError({ type: null, message: '' });
-        } else {
-          // Handle preview errors
-          setPreviewData(null);
-          const parsedError = parseError(data.error || '', data.message || data.error || '');
-          setError(parsedError);
+        const marketIndex = getMarketIndexBySymbol(selectedMarket.symbol);
+        if (marketIndex === undefined) {
+          throw new Error(`Market ${selectedMarket.symbol} not found on-chain`);
         }
+
+        const preview = await previewTrade(
+          marketIndex,
+          side,
+          parseFloat(debouncedSize),
+          leverage
+        );
+
+        setPreviewData(preview);
+        setError({ type: null, message: '' });
       } catch (error) {
         console.error('Preview error:', error);
         setPreviewData(null);
-        setError({
-          type: 'generic',
-          message: 'Failed to calculate preview. Please try again.',
-        });
+        const errorMessage = error instanceof Error ? error.message : 'Failed to calculate preview. Please try again.';
+        const parsedError = parseError('', errorMessage);
+        setError(parsedError);
       }
     };
 
     fetchPreview();
-  }, [selectedMarket, debouncedSize, leverage, side, orderType, debouncedLimitPrice, selectedChain, setPreviewData]);
+  }, [selectedMarket, debouncedSize, leverage, side, markets, previewTrade]);
 
   // Retry countdown effect
   useEffect(() => {
@@ -106,7 +96,7 @@ export const OrderPanel: React.FC = () => {
       const requiredMatch = message.match(/Required: \$([0-9.]+)/);
       const availableMatch = message.match(/Available: \$([0-9.]+)/);
       const shortfallMatch = message.match(/Shortfall: \$([0-9.]+)/);
-      
+
       return {
         type: 'insufficient_margin',
         message: 'You need more collateral to open this position',
@@ -122,7 +112,7 @@ export const OrderPanel: React.FC = () => {
     if (message.includes('Order size too small') || message.includes('Minimum:')) {
       const minMatch = message.match(/Minimum: ([0-9.]+)/);
       const orderMatch = message.match(/Your order: ([0-9.]+)/);
-      
+
       return {
         type: 'order_too_small',
         message: 'Your order size is below the minimum for this market',
@@ -136,7 +126,7 @@ export const OrderPanel: React.FC = () => {
     // Leverage too high
     if (message.includes('Leverage too high') || message.includes('Max leverage')) {
       const maxMatch = message.match(/Max leverage.*?(\d+)x/i);
-      
+
       return {
         type: 'leverage_too_high',
         message: 'Maximum leverage exceeded for this market',
@@ -215,11 +205,28 @@ export const OrderPanel: React.FC = () => {
       return;
     }
 
+    // Check min order size before submitting
+    if (previewData.sizeTooSmall) {
+      setError({
+        type: 'order_too_small',
+        message: `Your order size is below the minimum of ${previewData.minOrderSize} units`,
+        details: {
+          minimum: previewData.minOrderSize,
+          current: parseFloat(size),
+        },
+      });
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      // Determine marketIndex from market symbol
-      const marketIndex = markets.findIndex(m => m.id === selectedMarket.id);
-      
+      // Determine marketIndex using stable symbol mapping
+      const marketIndex = getMarketIndexBySymbol(selectedMarket.symbol);
+
+      if (marketIndex === undefined) {
+        throw new Error(`Market ${selectedMarket.symbol} not available on Drift`);
+      }
+
       // Use client-side openPosition
       const result = await openPositionClient(
         marketIndex >= 0 ? marketIndex : 0,
@@ -234,7 +241,7 @@ export const OrderPanel: React.FC = () => {
 
       // Show success message
       setSuccessMessage(`Position opened! TX: ${result.txSignature?.slice(0, 8)}...`);
-      
+
       // Start post-action polling to confirm position appears
       startPostActionPolling({
         checkCondition: async () => {
@@ -249,7 +256,7 @@ export const OrderPanel: React.FC = () => {
           setLimitPrice('');
           setError({ type: null, message: '' });
           setIsSubmitting(false);
-          
+
           // Clear success message after 5 seconds
           setTimeout(() => setSuccessMessage(''), 5000);
         },
@@ -263,7 +270,7 @@ export const OrderPanel: React.FC = () => {
       });
     } catch (error) {
       console.error('Submit error:', error);
-      
+
       // Parse error from hook
       const errorMessage = error instanceof Error ? error.message : 'Network error. Please check your connection and try again.';
       const parsedError = parseError('', errorMessage);
@@ -287,11 +294,12 @@ export const OrderPanel: React.FC = () => {
     }
   };
 
-  const isDisabled = !selectedMarket || 
-    !size || 
-    parseFloat(size) <= 0 || 
+  const isDisabled = !selectedMarket ||
+    !size ||
+    parseFloat(size) <= 0 ||
     !previewData ||
     !previewData.marginCheckPassed ||
+    previewData.sizeTooSmall ||
     isSubmitting;
 
   const shortfall = previewData && !previewData.marginCheckPassed
@@ -312,21 +320,19 @@ export const OrderPanel: React.FC = () => {
       <div className="flex gap-2 mb-4">
         <button
           onClick={() => setSide('long')}
-          className={`flex-1 py-2 rounded-lg font-medium transition-colors ${
-            side === 'long'
-              ? 'bg-success text-white'
-              : 'bg-gray-100 dark:bg-dark text-dark dark:text-white hover:bg-gray-200 dark:hover:bg-darkgray'
-          }`}
+          className={`flex-1 py-2 rounded-lg font-medium transition-colors ${side === 'long'
+            ? 'bg-success text-white'
+            : 'bg-gray-100 dark:bg-dark text-dark dark:text-white hover:bg-gray-200 dark:hover:bg-darkgray'
+            }`}
         >
           Long
         </button>
         <button
           onClick={() => setSide('short')}
-          className={`flex-1 py-2 rounded-lg font-medium transition-colors ${
-            side === 'short'
-              ? 'bg-error text-white'
-              : 'bg-gray-100 dark:bg-dark text-dark dark:text-white hover:bg-gray-200 dark:hover:bg-darkgray'
-          }`}
+          className={`flex-1 py-2 rounded-lg font-medium transition-colors ${side === 'short'
+            ? 'bg-error text-white'
+            : 'bg-gray-100 dark:bg-dark text-dark dark:text-white hover:bg-gray-200 dark:hover:bg-darkgray'
+            }`}
         >
           Short
         </button>
@@ -338,21 +344,19 @@ export const OrderPanel: React.FC = () => {
         <div className="flex gap-2">
           <button
             onClick={() => setOrderType('market')}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-              orderType === 'market'
-                ? 'bg-primary text-white'
-                : 'bg-gray-100 dark:bg-dark text-dark dark:text-white hover:bg-gray-200 dark:hover:bg-darkgray'
-            }`}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${orderType === 'market'
+              ? 'bg-primary text-white'
+              : 'bg-gray-100 dark:bg-dark text-dark dark:text-white hover:bg-gray-200 dark:hover:bg-darkgray'
+              }`}
           >
             Market
           </button>
           <button
             onClick={() => setOrderType('limit')}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-              orderType === 'limit'
-                ? 'bg-primary text-white'
-                : 'bg-gray-100 dark:bg-dark text-dark dark:text-white hover:bg-gray-200 dark:hover:bg-darkgray'
-            }`}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${orderType === 'limit'
+              ? 'bg-primary text-white'
+              : 'bg-gray-100 dark:bg-dark text-dark dark:text-white hover:bg-gray-200 dark:hover:bg-darkgray'
+              }`}
           >
             Limit
           </button>
@@ -426,9 +430,8 @@ export const OrderPanel: React.FC = () => {
               ${(Number(previewData?.totalRequired) || 0).toFixed(2)}
             </span>
           </div>
-          <div className={`flex justify-between text-sm ${
-            previewData?.marginCheckPassed ? 'text-success' : 'text-error'
-          }`}>
+          <div className={`flex justify-between text-sm ${previewData?.marginCheckPassed ? 'text-success' : 'text-error'
+            }`}>
             <span>Your Available:</span>
             <span className="font-medium">
               ${(Number(previewData?.freeCollateral) || 0).toFixed(2)}
@@ -470,21 +473,19 @@ export const OrderPanel: React.FC = () => {
 
       {/* Error Display */}
       {error.type && (
-        <div className={`mb-4 p-3 rounded-lg border ${
-          error.type === 'oracle_unavailable' || error.type === 'volatility' 
-            ? 'bg-warning/10 border-warning/20' 
-            : 'bg-error/10 border-error/20'
-        }`}>
+        <div className={`mb-4 p-3 rounded-lg border ${error.type === 'oracle_unavailable' || error.type === 'volatility'
+          ? 'bg-warning/10 border-warning/20'
+          : 'bg-error/10 border-error/20'
+          }`}>
           <div className="flex items-start gap-2">
-            <Icon 
-              icon={error.type === 'oracle_unavailable' || error.type === 'volatility' ? 'ph:warning' : 'ph:x-circle'} 
-              className={error.type === 'oracle_unavailable' || error.type === 'volatility' ? 'text-warning' : 'text-error'} 
-              height={20} 
+            <Icon
+              icon={error.type === 'oracle_unavailable' || error.type === 'volatility' ? 'ph:warning' : 'ph:x-circle'}
+              className={error.type === 'oracle_unavailable' || error.type === 'volatility' ? 'text-warning' : 'text-error'}
+              height={20}
             />
             <div className="flex-1">
-              <p className={`text-sm font-semibold ${
-                error.type === 'oracle_unavailable' || error.type === 'volatility' ? 'text-warning' : 'text-error'
-              }`}>
+              <p className={`text-sm font-semibold ${error.type === 'oracle_unavailable' || error.type === 'volatility' ? 'text-warning' : 'text-error'
+                }`}>
                 {error.type === 'insufficient_margin' && 'Insufficient Margin'}
                 {error.type === 'order_too_small' && 'Order Too Small'}
                 {error.type === 'leverage_too_high' && 'Leverage Too High'}
@@ -495,9 +496,8 @@ export const OrderPanel: React.FC = () => {
                 {error.type === 'wallet_not_found' && 'No Futures Wallet'}
                 {error.type === 'generic' && 'Error'}
               </p>
-              <p className={`text-xs mt-1 ${
-                error.type === 'oracle_unavailable' || error.type === 'volatility' ? 'text-warning/80' : 'text-error/80'
-              }`}>
+              <p className={`text-xs mt-1 ${error.type === 'oracle_unavailable' || error.type === 'volatility' ? 'text-warning/80' : 'text-error/80'
+                }`}>
                 {error.message}
               </p>
 
@@ -644,13 +644,12 @@ export const OrderPanel: React.FC = () => {
       <button
         onClick={handleSubmit}
         disabled={isDisabled || isConfirmingOrder}
-        className={`w-full py-3 rounded-lg font-semibold transition-colors ${
-          isDisabled || isConfirmingOrder
-            ? 'bg-gray-300 dark:bg-darkgray text-gray-500 cursor-not-allowed'
-            : side === 'long'
+        className={`w-full py-3 rounded-lg font-semibold transition-colors ${isDisabled || isConfirmingOrder
+          ? 'bg-gray-300 dark:bg-darkgray text-gray-500 cursor-not-allowed'
+          : side === 'long'
             ? 'bg-success hover:bg-success/90 text-white'
             : 'bg-error hover:bg-error/90 text-white'
-        }`}
+          }`}
       >
         {isConfirmingOrder ? (
           <span className="flex items-center justify-center gap-2">
@@ -674,8 +673,8 @@ export const OrderPanel: React.FC = () => {
               <p className="text-xs text-error/80 mt-1">
                 Need ${formatNumber(shortfall, 2)} more to open this position.
               </p>
-              <a 
-                href="/futures" 
+              <a
+                href="/futures"
                 className="text-xs text-error underline hover:no-underline mt-1 inline-block"
               >
                 Deposit collateral →

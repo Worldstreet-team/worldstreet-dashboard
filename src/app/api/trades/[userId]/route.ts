@@ -1,41 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://trading.watchup.site';
+
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ userId: string }> }
+  { params }: { params: { userId: string } }
 ) {
   try {
-    const { userId } = await params;
-    
-    if (!userId) {
-      return NextResponse.json(
-        { message: 'User ID is required' },
-        { status: 400 }
-      );
-    }
+    const { userId } = params;
+    const { searchParams } = new URL(request.url);
+    const status = searchParams.get('status');
+    const limit = searchParams.get('limit') || '50';
 
-    // Forward request to backend
-    const response = await fetch(`https://trading.watchup.site/api/trades/${userId}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
+    // Build query string
+    const queryParams = new URLSearchParams();
+    if (status) queryParams.append('status', status);
+    queryParams.append('limit', limit);
+
+    const response = await fetch(
+      `${BACKEND_URL}/api/trades/${userId}?${queryParams.toString()}`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    );
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ message: 'Failed to fetch trades' }));
+      const error = await response.json();
       return NextResponse.json(
-        { message: errorData.message || 'Failed to fetch trades' },
+        { error: error.message || 'Failed to fetch trade history' },
         { status: response.status }
       );
     }
 
-    const data = await response.json();
-    return NextResponse.json(data);
+    const trades = await response.json();
+
+    return NextResponse.json({
+      success: true,
+      data: trades,
+    });
   } catch (error) {
-    console.error('Trades API error:', error);
+    console.error('Error fetching trade history:', error);
     return NextResponse.json(
-      { message: 'Internal server error', error: (error as Error).message },
+      { error: 'Failed to fetch trade history' },
       { status: 500 }
     );
   }

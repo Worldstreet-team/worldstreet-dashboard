@@ -19,3 +19,9 @@ export { default as MobilePairHeader } from './MobilePairHeader';
 export { default as MobileTradingForm } from './MobileTradingForm';
 export { default as MobileOrderBook } from './MobileOrderBook';
 export { default as MobileBottomTabs } from './MobileBottomTabs';
+
+// Binance Desktop components
+export { default as BinanceOrderBook } from './BinanceOrderBook';
+export { default as BinanceMarketList } from './BinanceMarketList';
+export { default as BinanceOrderForm } from './BinanceOrderForm';
+export { default as BinanceBottomPanel } from './BinanceBottomPanel';

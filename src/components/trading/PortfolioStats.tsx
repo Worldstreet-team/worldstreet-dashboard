@@ -238,12 +238,6 @@ const PortfolioStats = () => {
               Withdraw
             </Button>
           </Link>
-          <Link href="/transfer">
-            <Button variant="outline" className="border-border text-primary hover:bg-primary hover:text-white font-medium rounded-lg px-4 h-9 text-sm transition-all duration-200">
-              <Icon icon="solar:transfer-horizontal-bold" className="mr-1.5 h-3.5 w-3.5" />
-              Transfer
-            </Button>
-          </Link>
         </div>
       </div>
 

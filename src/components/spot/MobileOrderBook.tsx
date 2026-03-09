@@ -1,6 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+/**
+ * MobileOrderBook Component
+ * 
+ * Mobile-optimized order book using KuCoin WebSocket API
+ * - Displays top 5 bids and asks
+ * - Real-time updates via WebSocket
+ * - Compact layout for mobile screens
+ */
+
+import { useState, useEffect, useRef } from 'react';
 
 interface OrderBookEntry {
   price: number;
@@ -11,52 +20,136 @@ interface MobileOrderBookProps {
   selectedPair: string;
 }
 
+interface KuCoinOrderBookData {
+  bids: [string, string][];
+  asks: [string, string][];
+  sequence: number;
+}
+
 export default function MobileOrderBook({ selectedPair }: MobileOrderBookProps) {
   const [asks, setAsks] = useState<OrderBookEntry[]>([]);
   const [bids, setBids] = useState<OrderBookEntry[]>([]);
-  const [lastPrice, setLastPrice] = useState<number>(65526.20);
+  const [lastPrice, setLastPrice] = useState<number>(0);
   const [priceChange, setPriceChange] = useState<number>(0);
+  const [connected, setConnected] = useState(false);
+
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   useEffect(() => {
-    generateMockOrderBook();
-    const interval = setInterval(generateMockOrderBook, 2000);
-    return () => clearInterval(interval);
+    connectWebSocket();
+    
+    return () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPair]);
 
-  const generateMockOrderBook = () => {
-    const basePrices: Record<string, number> = {
-      'BTC-USDT': 65526,
-      'ETH-USDT': 2280,
-      'SOL-USDT': 98.5,
-    };
+  const connectWebSocket = async () => {
+    try {
+      // Get WebSocket token from our API
+      const tokenResponse = await fetch('/api/kucoin/websocket-token');
+      if (!tokenResponse.ok) {
+        throw new Error('Failed to get WebSocket token');
+      }
 
-    const basePrice = basePrices[selectedPair] || 100;
-    const spread = basePrice * 0.0001;
+      const tokenResult = await tokenResponse.json();
+      if (tokenResult.code !== '200000' || !tokenResult.data) {
+        throw new Error('Invalid token response');
+      }
 
-    // Generate 5 asks (sell orders)
-    const newAsks: OrderBookEntry[] = [];
-    for (let i = 5; i >= 1; i--) {
-      const price = basePrice + spread + (i * basePrice * 0.00005);
-      const amount = Math.random() * 2 + 0.01;
-      newAsks.push({ price, amount });
+      const { token, instanceServers } = tokenResult.data;
+      const server = instanceServers[0];
+      const wsUrl = `${server.endpoint}?token=${token}`;
+
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        setConnected(true);
+        
+        const subscribeMessage = {
+          id: Date.now().toString(),
+          type: 'subscribe',
+          topic: `/spotMarket/level2Depth5:${selectedPair}`,
+          privateChannel: false,
+          response: true
+        };
+        
+        ws.send(JSON.stringify(subscribeMessage));
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          if (data.type === 'message' && data.topic?.includes('level2Depth5')) {
+            processOrderBookUpdate(data.data);
+          }
+        } catch (error) {
+          console.error('Error parsing WebSocket message:', error);
+        }
+      };
+
+      ws.onerror = () => {
+        setConnected(false);
+      };
+
+      ws.onclose = () => {
+        setConnected(false);
+        reconnectTimeoutRef.current = setTimeout(() => {
+          connectWebSocket();
+        }, 3000);
+      };
+    } catch (error) {
+      console.error('Error connecting to WebSocket:', error);
+      setConnected(false);
+      
+      reconnectTimeoutRef.current = setTimeout(() => {
+        connectWebSocket();
+      }, 3000);
     }
+  };
 
-    // Generate 5 bids (buy orders)
-    const newBids: OrderBookEntry[] = [];
-    for (let i = 1; i <= 5; i++) {
-      const price = basePrice - spread - (i * basePrice * 0.00005);
-      const amount = Math.random() * 2 + 0.01;
-      newBids.push({ price, amount });
+  const processOrderBookUpdate = (data: KuCoinOrderBookData) => {
+    try {
+      // Process asks (sell orders)
+      const processedAsks: OrderBookEntry[] = data.asks
+        .slice(0, 5)
+        .map(([priceStr, amountStr]) => ({
+          price: parseFloat(priceStr),
+          amount: parseFloat(amountStr)
+        }))
+        .sort((a, b) => a.price - b.price)
+        .reverse();
+
+      // Process bids (buy orders)
+      const processedBids: OrderBookEntry[] = data.bids
+        .slice(0, 5)
+        .map(([priceStr, amountStr]) => ({
+          price: parseFloat(priceStr),
+          amount: parseFloat(amountStr)
+        }))
+        .sort((a, b) => b.price - a.price);
+
+      setAsks(processedAsks);
+      setBids(processedBids);
+
+      // Update last price
+      if (processedBids.length > 0) {
+        const newLastPrice = processedBids[0].price;
+        const change = lastPrice > 0 ? ((newLastPrice - lastPrice) / lastPrice) * 100 : 0;
+        setLastPrice(newLastPrice);
+        setPriceChange(change);
+      }
+    } catch (error) {
+      console.error('Error processing order book update:', error);
     }
-
-    setAsks(newAsks);
-    setBids(newBids);
-    
-    const newLastPrice = basePrice + (Math.random() - 0.5) * spread;
-    const change = lastPrice > 0 ? ((newLastPrice - lastPrice) / lastPrice) * 100 : 0;
-    
-    setLastPrice(newLastPrice);
-    setPriceChange(change);
   };
 
   const formatPrice = (price: number): string => {
@@ -74,20 +167,31 @@ export default function MobileOrderBook({ selectedPair }: MobileOrderBookProps) 
       {/* Header Row */}
       <div className="flex justify-between text-[10px] text-muted font-medium mb-1 px-1">
         <span>Price(USDT)</span>
-        <span>Amount(BTC)</span>
+        <div className="flex items-center gap-1">
+          <span>Amount</span>
+          {connected && (
+            <div className="w-1 h-1 rounded-full bg-success animate-pulse" />
+          )}
+        </div>
       </div>
 
       {/* Sell Orders (Red) - Scrollable */}
       <div className="flex flex-col-reverse overflow-y-auto flex-1">
-        {asks.map((ask, index) => (
-          <div
-            key={`ask-${index}`}
-            className="flex justify-between text-[10px] font-mono py-0.5 px-1 hover:bg-error/5"
-          >
-            <span className="text-error font-semibold">{formatPrice(ask.price)}</span>
-            <span className="text-dark dark:text-white">{formatAmount(ask.amount)}</span>
+        {asks.length > 0 ? (
+          asks.map((ask, index) => (
+            <div
+              key={`ask-${index}`}
+              className="flex justify-between text-[10px] font-mono py-0.5 px-1 hover:bg-error/5"
+            >
+              <span className="text-error font-semibold">{formatPrice(ask.price)}</span>
+              <span className="text-dark dark:text-white">{formatAmount(ask.amount)}</span>
+            </div>
+          ))
+        ) : (
+          <div className="flex items-center justify-center h-full text-[10px] text-muted">
+            Loading...
           </div>
-        ))}
+        )}
       </div>
 
       {/* Current Price (Center Highlight) */}
@@ -104,25 +208,21 @@ export default function MobileOrderBook({ selectedPair }: MobileOrderBookProps) 
 
       {/* Buy Orders (Green) - Scrollable */}
       <div className="flex flex-col overflow-y-auto flex-1">
-        {bids.map((bid, index) => (
-          <div
-            key={`bid-${index}`}
-            className="flex justify-between text-[10px] font-mono py-0.5 px-1 hover:bg-success/5"
-          >
-            <span className="text-success font-semibold">{formatPrice(bid.price)}</span>
-            <span className="text-dark dark:text-white">{formatAmount(bid.amount)}</span>
+        {bids.length > 0 ? (
+          bids.map((bid, index) => (
+            <div
+              key={`bid-${index}`}
+              className="flex justify-between text-[10px] font-mono py-0.5 px-1 hover:bg-success/5"
+            >
+              <span className="text-success font-semibold">{formatPrice(bid.price)}</span>
+              <span className="text-dark dark:text-white">{formatAmount(bid.amount)}</span>
+            </div>
+          ))
+        ) : (
+          <div className="flex items-center justify-center h-full text-[10px] text-muted">
+            Loading...
           </div>
-        ))}
-      </div>
-
-      {/* Depth Bar */}
-      <div className="flex items-center gap-2 mt-2 px-1">
-        <span className="text-[10px] text-success font-semibold">2.38%</span>
-        <div className="relative flex-1 h-1 bg-muted/30 dark:bg-white/10 rounded overflow-hidden">
-          <div className="absolute left-0 top-0 bottom-0 bg-success" style={{ width: '2.38%' }} />
-          <div className="absolute right-0 top-0 bottom-0 bg-error" style={{ width: '97.62%' }} />
-        </div>
-        <span className="text-[10px] text-error font-semibold">97.62%</span>
+        )}
       </div>
     </div>
   );

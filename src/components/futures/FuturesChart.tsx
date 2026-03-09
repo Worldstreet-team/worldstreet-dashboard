@@ -421,20 +421,20 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
     : null;
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-[#0d0d0d]">
+    <div className="flex flex-col h-full bg-[#181a20]">
       {/* Chart Header */}
-      <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b border-gray-200/50 dark:border-white/5">
+      <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-[#2b3139]">
         <div className="flex items-center gap-4">
           {/* Symbol Display */}
           <div>
-            <h3 className="text-lg font-semibold text-dark dark:text-white">{symbol}</h3>
+            <h3 className="text-sm font-semibold text-white">{symbol}</h3>
             {currentPrice && (
               <div className="flex items-center gap-2">
-                <span className="text-xl font-bold text-dark dark:text-white">
+                <span className="text-lg font-bold text-white">
                   ${currentPrice?.toFixed(2) || 0}
                 </span>
                 {priceChange !== null && (
-                  <span className={`text-sm font-medium ${priceChange >= 0 ? 'text-success' : 'text-error'}`}>
+                  <span className={`text-xs font-medium ${priceChange >= 0 ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
                     {priceChange >= 0 ? '+' : ''}{priceChange?.toFixed(2) || 0}%
                   </span>
                 )}
@@ -445,11 +445,11 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
           {/* Polling Status */}
           <div className="flex items-center gap-1.5">
             <div className={`w-2 h-2 rounded-full ${
-              pollingStatus === 'active' ? 'bg-success animate-pulse' :
-              pollingStatus === 'error' ? 'bg-error' :
-              'bg-warning'
+              pollingStatus === 'active' ? 'bg-[#0ecb81] animate-pulse' :
+              pollingStatus === 'error' ? 'bg-[#f6465d]' :
+              'bg-[#fcd535]'
             }`} />
-            <span className="text-xs text-muted dark:text-darklink">
+            <span className="text-xs text-[#848e9c]">
               {pollingStatus === 'active' ? 'Live' :
                pollingStatus === 'error' ? 'Error' :
                'Paused'}
@@ -463,20 +463,20 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
           <div className="flex items-center gap-1">
             <button
               onClick={() => setTimeInterval('1min')}
-              className={`px-2 sm:px-3 py-1.5 rounded text-xs sm:text-sm font-medium transition-colors ${
+              className={`px-2 sm:px-3 py-1.5 rounded text-xs font-medium transition-colors ${
                 timeInterval === '1min'
-                  ? 'bg-primary text-white'
-                  : 'bg-gray-100 dark:bg-dark text-dark dark:text-white hover:bg-gray-200 dark:hover:bg-darkgray'
+                  ? 'bg-[#fcd535] text-[#181a20]'
+                  : 'bg-[#2b3139] text-white hover:bg-[#2b3139]/80'
               }`}
             >
               1m
             </button>
             <button
               onClick={() => setTimeInterval('5min')}
-              className={`px-2 sm:px-3 py-1.5 rounded text-xs sm:text-sm font-medium transition-colors ${
+              className={`px-2 sm:px-3 py-1.5 rounded text-xs font-medium transition-colors ${
                 timeInterval === '5min'
-                  ? 'bg-primary text-white'
-                  : 'bg-gray-100 dark:bg-dark text-dark dark:text-white hover:bg-gray-200 dark:hover:bg-darkgray'
+                  ? 'bg-[#fcd535] text-[#181a20]'
+                  : 'bg-[#2b3139] text-white hover:bg-[#2b3139]/80'
               }`}
             >
               5m
@@ -486,39 +486,39 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
           {/* Reset View Button */}
           <button
             onClick={handleResetView}
-            className="p-1.5 rounded bg-gray-100 dark:bg-dark text-dark dark:text-white hover:bg-gray-200 dark:hover:bg-darkgray transition-colors"
+            className="p-1.5 rounded bg-[#2b3139] text-white hover:bg-[#2b3139]/80 transition-colors"
             title="Reset zoom and pan"
           >
-            <Icon icon="ph:arrows-out" height={18} />
+            <Icon icon="ph:arrows-out" height={16} />
           </button>
         </div>
       </div>
 
       {/* Chart Stats */}
       {chartData.length > 0 && (
-        <div className="flex-shrink-0 px-6 py-3 border-b border-gray-200/50 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.02]">
+        <div className="flex-shrink-0 px-4 py-2 border-b border-[#2b3139] bg-[#2b3139]/30">
           <div className="flex flex-wrap gap-4 text-xs">
             <div>
-              <span className="text-muted dark:text-darklink">O: </span>
-              <span className="text-dark dark:text-white font-mono font-semibold">
+              <span className="text-[#848e9c]">O: </span>
+              <span className="text-white font-mono font-semibold">
                 {chartData[chartData.length - 1]?.open?.toFixed(2) || '0.00'}
               </span>
             </div>
             <div>
-              <span className="text-muted dark:text-darklink">H: </span>
-              <span className="text-success font-mono font-semibold">
+              <span className="text-[#848e9c]">H: </span>
+              <span className="text-[#0ecb81] font-mono font-semibold">
                 {chartData[chartData.length - 1]?.high?.toFixed(2) || '0.00'}
               </span>
             </div>
             <div>
-              <span className="text-muted dark:text-darklink">L: </span>
-              <span className="text-error font-mono font-semibold">
+              <span className="text-[#848e9c]">L: </span>
+              <span className="text-[#f6465d] font-mono font-semibold">
                 {chartData[chartData.length - 1]?.low?.toFixed(2) || '0.00'}
               </span>
             </div>
             <div>
-              <span className="text-muted dark:text-darklink">C: </span>
-              <span className="text-dark dark:text-white font-mono font-bold">
+              <span className="text-[#848e9c]">C: </span>
+              <span className="text-white font-mono font-bold">
                 {chartData[chartData.length - 1]?.close?.toFixed(2) || '0.00'}
               </span>
             </div>
@@ -529,19 +529,19 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
       {/* Chart Container */}
       <div ref={containerRef} className="relative flex-1 min-h-0 p-4 overflow-hidden">
         {loading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-darkgray/50 z-10">
+          <div className="absolute inset-0 flex items-center justify-center bg-[#181a20]/80 z-10">
             <div className="flex flex-col items-center gap-2">
-              <Icon icon="svg-spinners:ring-resize" className="text-primary" height={48} />
-              <span className="text-sm text-muted dark:text-darklink">Loading chart...</span>
+              <Icon icon="svg-spinners:ring-resize" className="text-[#fcd535]" height={48} />
+              <span className="text-sm text-[#848e9c]">Loading chart...</span>
             </div>
           </div>
         )}
 
         {error && (
           <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 max-w-[90%]">
-            <div className="bg-error/10 border border-error/20 rounded-lg px-4 py-2 flex items-center gap-2">
-              <Icon icon="ph:warning-duotone" className="text-error" height={20} />
-              <span className="text-sm text-error">{error}</span>
+            <div className="bg-[#f6465d]/10 border border-[#f6465d]/20 rounded px-4 py-2 flex items-center gap-2">
+              <Icon icon="ph:warning" className="text-[#f6465d]" height={18} />
+              <span className="text-sm text-[#f6465d]">{error}</span>
             </div>
           </div>
         )}
@@ -557,7 +557,7 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
             />
             
             {/* Mobile Instructions */}
-            <div className="mt-2 flex items-center justify-center gap-4 text-xs text-muted dark:text-darklink sm:hidden">
+            <div className="mt-2 flex items-center justify-center gap-4 text-xs text-[#848e9c] sm:hidden">
               <span className="flex items-center gap-1">
                 <Icon icon="ph:hand-swipe-right" height={14} />
                 Swipe to pan
@@ -570,7 +570,7 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
 
             {/* Zoom Indicator */}
             {visibleCandles !== 50 && (
-              <div className="absolute top-4 right-4 bg-primary/90 text-white px-3 py-1 rounded-full text-xs font-medium">
+              <div className="absolute top-4 right-4 bg-[#fcd535] text-[#181a20] px-3 py-1 rounded text-xs font-bold">
                 {visibleCandles} candles
               </div>
             )}

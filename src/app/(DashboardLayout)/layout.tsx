@@ -22,7 +22,7 @@ import { PinSetupModal, WalletAddressSync } from "@/components/wallet";
 import DashboardVividProvider from "@/components/dashboard/DashboardVividProvider";
 
 // Routes that render full-screen without sidebar/header chrome
-const FULLSCREEN_ROUTES = ["/vivid"];
+const FULLSCREEN_ROUTES = ["/vivid", "/spot", "/futures", "/portfolio"];
 
 const LOGIN_URL = "https://www.worldstreetgold.com/login";
 
@@ -85,37 +85,47 @@ export default function Layout({
                             {/* Syncs wallet addresses to chain contexts */}
                             <WalletAddressSync />
                             <DashboardVividProvider>
-                            <div className="flex w-full h-screen overflow-hidden">
-                              <div className="page-wrapper flex w-full h-full">
-                                {/* Header/sidebar */}
-                                {activeLayout == "vertical" ? <Sidebar /> : null}
-                                <div className="body-wrapper w-full h-full flex flex-col overflow-hidden">
-                                  {/* Top Header  */}
-                                  {activeLayout == "horizontal" ? (
-                                    <Header layoutType="horizontal" />
-                                  ) : (
-                                    <Header layoutType="vertical" />
+                            <div className={`flex w-full h-screen overflow-hidden ${isFullscreen ? 'bg-[#181a20]' : ''}`}>
+                              <div className={`${isFullscreen ? '' : 'page-wrapper'} flex w-full h-full ${isFullscreen ? 'bg-[#181a20]' : ''}`}>
+                                {/* Header/sidebar - Hide for fullscreen routes */}
+                                {!isFullscreen && activeLayout == "vertical" ? <Sidebar /> : null}
+                                <div className={`body-wrapper w-full h-full flex flex-col overflow-hidden ${isFullscreen ? 'bg-[#181a20]' : ''}`}>
+                                  {/* Top Header - Hide for fullscreen routes */}
+                                  {!isFullscreen && (
+                                    activeLayout == "horizontal" ? (
+                                      <Header layoutType="horizontal" />
+                                    ) : (
+                                      <Header layoutType="vertical" />
+                                    )
                                   )}
 
-                                  {/* Body Content - Scrollable */}
-                                  <div className="relative z-0 flex-1 bg-herobg dark:bg-dark transition-colors duration-300 overflow-y-auto overflow-x-hidden">
-                                    {/* Subtle ambient glow */}
-                                    <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/5 blur-[120px] rounded-full -translate-y-1/2 translate-x-1/3 pointer-events-none" />
-                                    <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-warning/3 blur-[100px] rounded-full translate-y-1/3 -translate-x-1/4 pointer-events-none" />
-                                    <div
-                                      className={`relative z-1 ${isLayout == "full"
-                                        ? "w-full p-6 lg:p-8"
-                                        : "container xl:max-w-7xl mx-auto px-6 lg:px-8 py-6 lg:py-8"
-                                        } ${activeLayout == "horizontal" ? "xl:mt-3" : ""}
+                                  {/* Body Content - Scrollable or Fullscreen */}
+                                  {isFullscreen ? (
+                                    // Fullscreen mode - no padding, no scroll wrapper
+                                    <div className="relative z-0 flex-1 w-full h-full overflow-hidden bg-[#181a20]">
+                                      {children}
+                                    </div>
+                                  ) : (
+                                    // Normal mode - with padding and scroll
+                                    <div className="relative z-0 flex-1 bg-herobg dark:bg-dark transition-colors duration-300 overflow-y-auto overflow-x-hidden">
+                                      {/* Subtle ambient glow */}
+                                      <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/5 blur-[120px] rounded-full -translate-y-1/2 translate-x-1/3 pointer-events-none" />
+                                      <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-warning/3 blur-[100px] rounded-full translate-y-1/3 -translate-x-1/4 pointer-events-none" />
+                                      <div
+                                        className={`relative z-1 ${isLayout == "full"
+                                          ? "w-full p-6 lg:p-8"
+                                          : "container xl:max-w-7xl mx-auto px-6 lg:px-8 py-6 lg:py-8"
+                                          } ${activeLayout == "horizontal" ? "xl:mt-3" : ""}
               `}
-                                    >
-                                      <div className="animate-fade-in">
-                                        {children}
+                                      >
+                                        <div className="animate-fade-in">
+                                          {children}
+                                        </div>
                                       </div>
                                     </div>
-                                  </div>
-                                  <Customizer />
-                                  <ProfileDrawer />
+                                  )}
+                                  {!isFullscreen && <Customizer />}
+                                  {!isFullscreen && <ProfileDrawer />}
                                 </div>
                               </div>
                             </div>

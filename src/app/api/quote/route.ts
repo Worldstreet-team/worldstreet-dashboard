@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { fetchQuote } from '@/services/spot/quoteService';
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,69 +12,67 @@ export async function POST(request: NextRequest) {
       tokenIn,
       tokenOut,
       amountIn,
+      fromAddress,
+      toAddress,
       slippage
     } = body;
 
     // Log the incoming request
-    console.log('[Quote API] Request:', { userId, fromChain, toChain, tokenIn, tokenOut, amountIn, slippage });
+    console.log('[Quote API] Handled by QuoteService:', { userId, fromChain, toChain, tokenIn, tokenOut, amountIn, fromAddress });
 
-    if (!userId || !tokenIn || !tokenOut || !amountIn || !fromChain) {
+    if (!tokenIn || !tokenOut || !amountIn || !fromChain) {
       return NextResponse.json(
-        { message: 'Missing required fields' },
+        { message: 'Missing required fields (tokenIn, tokenOut, amountIn, fromChain)' },
         { status: 400 }
       );
     }
 
-    const backendPayload = {
-      userId,
-      fromChain,
-      toChain: toChain || fromChain,
-      tokenIn,
-      tokenOut,
-      amountIn,
-      slippage: slippage ?? 0.005
-    };
-
-    console.log('[Quote API] Sending to backend:', backendPayload);
-
-    const response = await fetch('https://trading.watchup.site/api/quote', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(backendPayload)
-    });
-
-    const data = await response.json();
-    console.log('[Quote API] Backend response:', { status: response.status, data });
-
-    if (!response.ok) {
-      // Backend returns errors in 'error' field, not 'message'
-      const errorMessage = data.error || data.message || 'Quote failed';
-      console.error('[Quote API] Backend error:', errorMessage);
-      
+    // Validate fromAddress is provided and not zero address
+    if (!fromAddress || fromAddress === "0x0000000000000000000000000000000000000000" || fromAddress === "0x0") {
       return NextResponse.json(
-        { message: errorMessage },
-        { status: response.status }
+        { message: '/fromAddress Zero address is provided. Please connect your wallet first.' },
+        { status: 400 }
       );
     }
 
-    // Transform backend response to match frontend expectations
+    // Call our refined local service
+    const quoteResponse = await fetchQuote({
+      fromChain,
+      toChain: toChain || fromChain,
+      fromToken: tokenIn,
+      toToken: tokenOut,
+      fromAmount: amountIn,
+      fromAddress,
+      toAddress: toAddress || fromAddress,
+      slippageOverride: slippage
+    });
+
+    const { quote } = quoteResponse;
+
+    // Transform to match frontend expectations
     const transformedData = {
-      expectedOutput: data.expectedOut || data.expectedOutput || '0',
-      priceImpact: data.priceImpact || 0,
-      platformFee: '0', // Calculate if needed: amountIn * 0.003
-      gasEstimate: data.gasEstimate || '0',
-      route: data.route,
-      executionData: data.executionData,
-      toAmountMin: data.toAmountMin
+      expectedOutput: quote.estimate.toAmount,
+      toAmountMin: quote.estimate.toAmountMin,
+      priceImpact: quote.estimate.data?.priceImpact || 0,
+      gasEstimate: quote.estimate.gasCosts?.[0]?.amount || '0',
+      route: {
+        tool: quote.tool,
+        toolDetails: quote.toolDetails,
+        type: 'lifi',
+        fromChainId: fromChain, // Pass back original IDs for UI consistency
+        toChainId: toChain || fromChain,
+      },
+      executionData: quote.transactionRequest,
+      _raw: quote
     };
 
-    console.log('[Quote API] Transformed response:', transformedData);
+    console.log('[Quote API] Success: Quote via', quote.tool);
     return NextResponse.json(transformedData);
 
-  } catch (error) {
-    console.error('[Quote API] Internal error:', error);
+  } catch (error: any) {
+    console.error('[Quote API] QuoteService Error:', error.message);
     return NextResponse.json(
-      { message: 'Internal error', error: (error as Error).message },
+      { message: error.message || 'Internal error in Quote API', error: String(error) },
       { status: 500 }
     );
   }
