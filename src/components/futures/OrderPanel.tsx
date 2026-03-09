@@ -19,9 +19,12 @@ interface ErrorState {
   };
 }
 
-export const OrderPanel: React.FC = () => {
-  const { selectedMarket, markets } = useFuturesStore();
-  const { openPosition: openPositionClient, refreshPositions, refreshSummary, previewTrade, getMarketIndexBySymbol } = useDrift();
+interface OrderPanelProps {
+  marketIndex: number;
+}
+
+export const OrderPanel: React.FC<OrderPanelProps> = ({ marketIndex }) => {
+  const { openPosition: openPositionClient, refreshPositions, refreshSummary, previewTrade, getMarketName, perpMarkets } = useDrift();
   const { isPolling: isConfirmingOrder, startPostActionPolling } = usePostActionPolling();
 
   const [previewData, setPreviewData] = useState<any>(null);
@@ -40,9 +43,13 @@ export const OrderPanel: React.FC = () => {
   const debouncedSize = useDebounce(size, 300);
   const debouncedLimitPrice = useDebounce(limitPrice, 300);
 
+  // Get market info from Drift context
+  const marketInfo = perpMarkets.get(marketIndex);
+  const marketName = marketInfo?.symbol || getMarketName(marketIndex);
+
   // Preview calculation with debounced values
   useEffect(() => {
-    if (!selectedMarket || !debouncedSize || parseFloat(debouncedSize) <= 0) {
+    if (!marketIndex || !debouncedSize || parseFloat(debouncedSize) <= 0) {
       setPreviewData(null);
       setError({ type: null, message: '' });
       return;
@@ -50,16 +57,7 @@ export const OrderPanel: React.FC = () => {
 
     const fetchPreview = async () => {
       try {
-        // CRITICAL: Use getMarketIndexBySymbol to find the on-chain market
-        // This searches the perpMarkets Map which contains only subscribed markets
-        const marketIndex = getMarketIndexBySymbol(selectedMarket.symbol);
-        
-        if (marketIndex === undefined) {
-          console.error(`[OrderPanel] Market ${selectedMarket.symbol} not found in subscribed markets`);
-          throw new Error(`Market ${selectedMarket.symbol} is not available. Please select a different market.`);
-        }
-
-        console.log(`[OrderPanel] Found market ${selectedMarket.symbol} at index ${marketIndex}`);
+        console.log(`[OrderPanel] Previewing trade for market ${marketName} (index: ${marketIndex})`);
 
         const preview = await previewTrade(
           marketIndex,
@@ -80,7 +78,7 @@ export const OrderPanel: React.FC = () => {
     };
 
     fetchPreview();
-  }, [selectedMarket, debouncedSize, leverage, side, getMarketIndexBySymbol, previewTrade]);
+  }, [marketIndex, marketName, debouncedSize, leverage, side, previewTrade]);
 
   // Retry countdown effect
   useEffect(() => {
@@ -191,7 +189,7 @@ export const OrderPanel: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    if (!selectedMarket || !size || !previewData) return;
+    if (!marketIndex || !size || !previewData) return;
 
     // Clear previous messages
     setError({ type: null, message: '' });
@@ -226,15 +224,7 @@ export const OrderPanel: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      // CRITICAL: Use getMarketIndexBySymbol to find the on-chain market
-      // This ensures we're using the correct marketIndex from subscribed markets
-      const marketIndex = getMarketIndexBySymbol(selectedMarket.symbol);
-
-      if (marketIndex === undefined) {
-        throw new Error(`Market ${selectedMarket.symbol} is not available. Please select a different market.`);
-      }
-
-      console.log(`[OrderPanel] Opening position for ${selectedMarket.symbol} (marketIndex: ${marketIndex})`);
+      console.log(`[OrderPanel] Opening position for ${marketName} (marketIndex: ${marketIndex})`);
 
       // Use client-side openPosition
       const result = await openPositionClient(
@@ -303,7 +293,7 @@ export const OrderPanel: React.FC = () => {
     }
   };
 
-  const isDisabled = !selectedMarket ||
+  const isDisabled = !marketIndex ||
     !size ||
     parseFloat(size) <= 0 ||
     !previewData ||
@@ -540,13 +530,13 @@ export const OrderPanel: React.FC = () => {
                   {error.details.minimum && (
                     <div className="flex justify-between">
                       <span className="text-muted">Minimum:</span>
-                      <span className="font-medium text-error">{error.details.minimum} {selectedMarket?.baseAsset}</span>
+                      <span className="font-medium text-error">{error.details.minimum} {marketInfo?.baseAssetSymbol || 'units'}</span>
                     </div>
                   )}
                   {error.details.current && (
                     <div className="flex justify-between">
                       <span className="text-muted">Your order:</span>
-                      <span className="font-medium text-error">{error.details.current} {selectedMarket?.baseAsset}</span>
+                      <span className="font-medium text-error">{error.details.current} {marketInfo?.baseAssetSymbol || 'units'}</span>
                     </div>
                   )}
                 </div>
@@ -585,7 +575,7 @@ export const OrderPanel: React.FC = () => {
                     onClick={handleFixError}
                     className="text-xs px-3 py-1.5 bg-error text-white rounded hover:bg-error/90 transition-colors"
                   >
-                    Set to {error.details.minimum} {selectedMarket?.baseAsset}
+                    Set to {error.details.minimum} {marketInfo?.baseAssetSymbol || 'units'}
                   </button>
                 )}
                 {error.type === 'leverage_too_high' && error.details?.maximum && (

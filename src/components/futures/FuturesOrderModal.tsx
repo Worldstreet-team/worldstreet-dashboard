@@ -10,6 +10,7 @@ interface FuturesOrderModalProps {
   isOpen: boolean;
   onClose: () => void;
   side: OrderSide;
+  marketIndex: number;
   onSuccess?: () => void;
 }
 
@@ -17,10 +18,10 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
   isOpen,
   onClose,
   side,
+  marketIndex,
   onSuccess,
 }) => {
-  const { selectedMarket, markets } = useFuturesStore();
-  const { openPosition, isLoading: driftLoading, previewTrade, getMarketIndexBySymbol } = useDrift();
+  const { openPosition, isLoading: driftLoading, previewTrade, getMarketName, perpMarkets } = useDrift();
 
   const [previewData, setPreviewData] = useState<any>(null);
 
@@ -34,9 +35,13 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
   const debouncedSize = useDebounce(size, 300);
   const debouncedLimitPrice = useDebounce(limitPrice, 300);
 
+  // Get market info from Drift context
+  const marketInfo = perpMarkets.get(marketIndex);
+  const marketName = marketInfo?.symbol || getMarketName(marketIndex);
+
   // Preview calculation
   useEffect(() => {
-    if (!selectedMarket || !debouncedSize || parseFloat(debouncedSize) <= 0) {
+    if (!marketIndex || !debouncedSize || parseFloat(debouncedSize) <= 0) {
       setPreviewData(null);
       setError(null);
       return;
@@ -44,15 +49,7 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
 
     const fetchPreview = async () => {
       try {
-        // CRITICAL: Use getMarketIndexBySymbol to find the on-chain market
-        const marketIndex = getMarketIndexBySymbol(selectedMarket.symbol);
-        
-        if (marketIndex === undefined) {
-          console.error(`[FuturesOrderModal] Market ${selectedMarket.symbol} not found in subscribed markets`);
-          throw new Error(`Market ${selectedMarket.symbol} is not available. Please select a different market.`);
-        }
-
-        console.log(`[FuturesOrderModal] Found market ${selectedMarket.symbol} at index ${marketIndex}`);
+        console.log(`[FuturesOrderModal] Previewing trade for ${marketName} (index: ${marketIndex})`);
 
         const preview = await previewTrade(
           marketIndex,
@@ -76,22 +73,15 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
     };
 
     fetchPreview();
-  }, [selectedMarket, debouncedSize, leverage, side, getMarketIndexBySymbol, previewTrade]);
+  }, [marketIndex, marketName, debouncedSize, leverage, side, previewTrade]);
 
   const handleSubmit = async () => {
-    if (!selectedMarket || !size || !previewData || !previewData.marginCheckPassed) return;
+    if (!marketIndex || !size || !previewData || !previewData.marginCheckPassed) return;
 
     setError(null);
 
     try {
-      // CRITICAL: Use getMarketIndexBySymbol to find the on-chain market
-      const marketIndex = getMarketIndexBySymbol(selectedMarket.symbol);
-
-      if (marketIndex === undefined) {
-        throw new Error(`Market ${selectedMarket.symbol} is not available. Please select a different market.`);
-      }
-
-      console.log(`[FuturesOrderModal] Opening position for ${selectedMarket.symbol} (marketIndex: ${marketIndex})`);
+      console.log(`[FuturesOrderModal] Opening position for ${marketName} (marketIndex: ${marketIndex})`);
 
       // Use the hook instead of direct API call
       const result = await openPosition(
@@ -133,7 +123,7 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
 
   if (!isOpen) return null;
 
-  const canSubmit = selectedMarket &&
+  const canSubmit = marketIndex &&
     size &&
     parseFloat(size) > 0 &&
     previewData &&
@@ -170,10 +160,10 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
           <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-white/5 dark:to-white/10 rounded-xl p-4 border border-gray-200/50 dark:border-white/10">
             <div className="text-xs font-semibold text-muted dark:text-gray-400 mb-1 uppercase tracking-wide">Market</div>
             <div className="text-xl font-bold text-dark dark:text-white">
-              {selectedMarket?.symbol || 'Select Market'}
+              {marketName || 'Select Market'}
             </div>
             <div className="text-sm text-muted dark:text-gray-400 mt-2">
-              Mark Price: <span className="font-semibold text-dark dark:text-white">${(Number(selectedMarket?.markPrice) || 0).toFixed(2)}</span>
+              Mark Price: <span className="font-semibold text-dark dark:text-white">${(Number(previewData?.entryPrice) || 0).toFixed(2)}</span>
             </div>
           </div>
 
@@ -286,7 +276,7 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
                 {previewData.sizeTooSmall && (
                   <div className="flex justify-between text-xs text-error animate-pulse">
                     <span className="font-bold">Min Order Size:</span>
-                    <span className="font-bold font-mono">{previewData.minOrderSize} {selectedMarket?.symbol?.split('-')[0]}</span>
+                    <span className="font-bold font-mono">{previewData.minOrderSize} {marketInfo?.baseAssetSymbol || 'units'}</span>
                   </div>
                 )}
               </div>

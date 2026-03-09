@@ -433,6 +433,7 @@ export default function BinanceFuturesPage() {
         isOpen={showOrderModal}
         onClose={() => setShowOrderModal(false)}
         side={orderSide}
+        marketIndex={selectedMarketIndex ?? 0}
         onSuccess={() => setShowOrderModal(false)}
       />
 
