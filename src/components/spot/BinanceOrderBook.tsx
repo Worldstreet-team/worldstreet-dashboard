@@ -57,6 +57,7 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
       
       // Normalize symbol to always use _USDT format
       // Examples: SOL-PERP -> SOL_USDT, BTC_ETH -> BTC_USDT, ETH_USDT -> ETH_USDT
+      console.log("Symbol: ", symbol)
       let normalizedSymbol = symbol;
       if (symbol.includes('_')) {
         const [base, quote] = symbol.split('_');
