@@ -762,12 +762,16 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     if (!symbol) return undefined;
     const cleanSymbol = symbol.toUpperCase().trim();
 
-    for (const [index, info] of spotMarkets.entries()) {
+    // CRITICAL FIX: spotMarkets is a Map<marketIndex, info>
+    // The key IS the actual Drift market index, not an array position
+    for (const [marketIndex, info] of spotMarkets.entries()) {
       if (info.symbol.toUpperCase() === cleanSymbol || info.symbol.toUpperCase().startsWith(cleanSymbol)) {
-        return index;
+        console.log(`[DriftContext] Found spot market: ${cleanSymbol} → marketIndex ${marketIndex}`);
+        return marketIndex; // Return the Map key (actual Drift market index)
       }
     }
 
+    console.warn(`[DriftContext] Spot market not found: ${cleanSymbol}`);
     return undefined;
   }, [spotMarkets]);
   /**
