@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
+import Image from 'next/image';
+import Link from 'next/link';
 import { useDrift } from '@/app/context/driftContext';
 import { useFuturesData } from '@/hooks/useFuturesData';
 import { FuturesChart } from '@/components/futures/FuturesChart';
@@ -141,23 +143,49 @@ export default function BinanceFuturesPage() {
     <>
       {/* MOBILE LAYOUT */}
       <div className="md:hidden flex flex-col h-screen bg-[#0b0e11]">
-        {/* Mobile Header */}
-        <div className="flex-shrink-0 px-3 py-2 bg-[#1e2329] border-b border-[#2b3139]">
-          <div className="flex items-center justify-between">
-            <h1 className="text-xs font-bold text-white">Futures Trading</h1>
-            {isInitialized && (
-              <div className="flex items-center gap-1 px-2 py-0.5 bg-[#0ecb81]/10 rounded-full">
-                <div className="w-1.5 h-1.5 rounded-full bg-[#0ecb81] animate-pulse" />
-                <span className="text-[9px] font-medium text-[#0ecb81]">Active</span>
-              </div>
-            )}
+        {/* Mobile Header with Navigation */}
+        <div className="flex-shrink-0 bg-[#0b0e11] border-b border-[#2b3139]">
+          <div className="flex items-center justify-between px-4 py-3">
+            {/* Logo */}
+            <div className="flex items-center gap-2">
+              <Image
+                src="/worldstreet-logo/WorldStreet4x.png"
+                alt="WorldStreet"
+                width={24}
+                height={24}
+              />
+              <span className="text-sm font-semibold text-white">WorldStreet</span>
+            </div>
+            
+            {/* Navigation Icons */}
+            <div className="flex items-center gap-3">
+              <Link href="/assets" className="p-2 hover:bg-[#1e2329] rounded-lg transition-colors">
+                <Icon icon="ph:wallet" width={20} className="text-[#848e9c] hover:text-white transition-colors" />
+              </Link>
+              <Link href="/futures" className="p-2 bg-[#1e2329] rounded-lg">
+                <Icon icon="ph:chart-line" width={20} className="text-[#f0b90b]" />
+              </Link>
+            </div>
+          </div>
+          
+          {/* Status Bar */}
+          <div className="px-4 pb-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-[#848e9c]">Futures Trading</span>
+              {isInitialized && (
+                <div className="flex items-center gap-1 px-2 py-0.5 bg-[#0ecb81]/10 rounded-full">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#0ecb81] animate-pulse" />
+                  <span className="text-[9px] font-medium text-[#0ecb81]">Active</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
         
         {/* Market Info Bar */}
         <div className="flex-shrink-0 px-3 py-2 bg-[#0b0e11] border-b border-[#2b3139]">
           <div className="flex items-center justify-between">
-            <div className="relative z-30">
+            <div className="relative z-50">
               <button 
                 onClick={() => setShowMarketDropdown(!showMarketDropdown)}
                 className="flex items-center gap-1 px-2 py-1 rounded active:bg-white/5"
@@ -305,10 +333,32 @@ export default function BinanceFuturesPage() {
       <div className="hidden md:block fixed inset-0 bg-[#0a0a0a]">
         
         {/* Custom Trading Header - Replaces main app header */}
-        <div className="h-14 px-6 py-3 bg-black/40 backdrop-blur-xl border-b border-white/5 flex items-center justify-between">
+        <div className="h-14 px-6 py-3 bg-black/40 backdrop-blur-xl border-b border-white/5 flex items-center justify-between relative z-50">
+          {/* Left: Logo + Nav */}
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2">
+              <Image
+                src="/worldstreet-logo/WorldStreet4x.png"
+                alt="WorldStreet"
+                width={28}
+                height={28}
+              />
+              <span className="text-base font-semibold text-white">WorldStreet</span>
+            </div>
+            <nav className="flex items-center gap-5">
+              <Link href="/assets" className="text-[13px] text-[#848e9c] hover:text-white transition-colors">
+                Assets
+              </Link>
+              <Link href="/futures" className="text-[13px] text-[#f0b90b] font-medium">
+                Futures
+              </Link>
+            </nav>
+          </div>
+
+          {/* Center: Market Selector with Higher Z-Index */}
           <div className="flex items-center gap-6">
             {/* Market Selector */}
-            <div className="relative">
+            <div className="relative z-50">
               <button 
                 onClick={() => setShowMarketDropdown(!showMarketDropdown)}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all duration-200 group"
@@ -422,7 +472,7 @@ export default function BinanceFuturesPage() {
             </div>
 
             {/* Scrollable Actions & Info - Takes 40% of height */}
-            <div className="h-[40%] overflow-y-auto custom-scrollbar">
+            <div className="h-[40%] overflow-y-auto scrollbar-hide">
               <div className="p-4 space-y-3">
                 {/* Order Form */}
                 <FuturesOrderForm 

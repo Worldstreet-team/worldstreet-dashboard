@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { Icon } from '@iconify/react';
-import { useDrift, type SpotMarketInfo } from '@/app/context/driftContext';
+import { useDrift, type PerpMarketInfo } from '@/app/context/driftContext';
 
 type Chain = 'solana' | 'ethereum' | 'bitcoin';
 
@@ -40,7 +40,7 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
 
-  const { spotMarkets, getMarketPrice, isClientReady } = useDrift();
+  const { perpMarkets, getMarketPrice, isClientReady } = useDrift();
 
   // Fetch market data from API route
   useEffect(() => {
@@ -51,25 +51,16 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
 
         let finalMarkets: MarketData[] = [];
 
-        // If Drift is ready, build market list from ALL 60 Drift spot markets
-        if (isClientReady && spotMarkets.size > 0) {
-          console.log('[BinanceMarketList] Building market list from', spotMarkets.size, 'Drift markets');
+        // If Drift is ready, build market list from Drift PERP markets (for futures trading)
+        if (isClientReady && perpMarkets.size > 0) {
+          console.log('[BinanceMarketList] Building market list from', perpMarkets.size, 'Drift perp markets');
 
-          spotMarkets.forEach((info: SpotMarketInfo, index: number) => {
-            // Skip stablecoins as base assets (they're quote assets)
-            const isStablecoin = ['USDC', 'USDT', 'USDS', 'PYUSD', 'USDe', 'USDY', 'AUSD', 'EURC'].includes(info.symbol);
-            
-            // Only skip if they're in pool 0 (primary pool)
-            // Pool-specific versions (like USDC-1, USDC-4) should be included
-            if (isStablecoin && !info.symbol.includes('-')) {
-              return;
-            }
-
-            const driftPrice = getMarketPrice(index, 'spot');
+          perpMarkets.forEach((info: PerpMarketInfo, index: number) => {
+            const driftPrice = getMarketPrice(index, 'perp');
 
             finalMarkets.push({
-              symbol: `${info.symbol}-USDT`,
-              baseAsset: info.symbol,
+              symbol: info.symbol, // Already includes -PERP suffix
+              baseAsset: info.baseAssetSymbol,
               quoteAsset: 'USDT',
               price: driftPrice || 0,
               change24h: 0, // Drift doesn't provide 24h change
@@ -81,7 +72,7 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
             });
           });
 
-          console.log('[BinanceMarketList] Built', finalMarkets.length, 'markets from Drift');
+          console.log('[BinanceMarketList] Built', finalMarkets.length, 'perp markets from Drift');
         } else {
           console.log('[BinanceMarketList] Drift not ready yet, showing empty list');
         }
@@ -100,7 +91,7 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
     // Refresh every 10 seconds to update prices
     const interval = setInterval(fetchMarketData, 10000);
     return () => clearInterval(interval);
-  }, [isClientReady, spotMarkets, getMarketPrice]);
+  }, [isClientReady, perpMarkets, getMarketPrice]);
 
   const filteredMarkets = useMemo(() => {
     let filtered = markets.filter(market => {
