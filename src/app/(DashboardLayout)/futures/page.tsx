@@ -111,7 +111,6 @@ export default function FuturesPage() {
   }, [perpMarkets, isClientReady, getMarketPrice, setMarkets, markets.length]);
 
   return (
-    <DriftAccountGuard>
       <div className="min-h-screen bg-herobg dark:bg-dark">
         {/* Loading State */}
         {isLoadingMarkets && (
@@ -189,6 +188,5 @@ export default function FuturesPage() {
           </div>
         )}
       </div>
-    </DriftAccountGuard>
   );
 }
