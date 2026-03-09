@@ -4,6 +4,48 @@ import { connectDB } from "@/lib/mongodb";
 import Conversation from "@/models/Conversation";
 import ChatMessage from "@/models/ChatMessage";
 import DashboardProfile from "@/models/DashboardProfile";
+import {
+  getCryptoPrice,
+  getMarketAnalysis,
+  getForexRate,
+  getPortfolioBalance,
+  getTransactionHistory,
+} from "@/lib/vivid-functions";
+import type { VoiceFunctionConfig } from "@worldstreet/vivid-voice/functions";
+
+// Functions available in chat (UI-only functions like navigateToPage excluded)
+const CHAT_FUNCTIONS: VoiceFunctionConfig[] = [
+  getCryptoPrice,
+  getMarketAnalysis,
+  getForexRate,
+  getPortfolioBalance,
+  getTransactionHistory,
+];
+
+// OpenAI tool definitions built from function configs
+const CHAT_TOOLS = CHAT_FUNCTIONS.map((fn) => ({
+  type: "function" as const,
+  function: {
+    name: fn.name,
+    description: fn.description,
+    parameters: fn.parameters,
+  },
+}));
+
+// Execute a tool call by name and return its result
+async function executeToolCall(
+  name: string,
+  args: Record<string, unknown>,
+): Promise<string> {
+  const fn = CHAT_FUNCTIONS.find((f) => f.name === name);
+  if (!fn) return JSON.stringify({ error: `Unknown function: ${name}` });
+  try {
+    const result = await (fn.handler as (args: Record<string, unknown>) => Promise<unknown>)(args);
+    return JSON.stringify(result);
+  } catch (err) {
+    return JSON.stringify({ error: `Tool error: ${(err as Error).message}` });
+  }
+}
 
 // ── System prompt builder ──────────────────────────────────────────────────
 
@@ -65,7 +107,8 @@ You're part of WorldStreet:
 
 ## Market Knowledge
 - You know crypto and forex markets well. You can discuss technical analysis, fundamentals, DeFi protocols, on-chain metrics, and macro trends.
-- When discussing prices, remind users that crypto moves fast and to verify current prices on the chart.
+- **When a user explicitly asks for the current price of a crypto or a forex rate, always call the appropriate tool** — getCryptoPrice for tokens, getForexRate for currency pairs. Never guess or use training-data prices.
+- After getting live data from a tool, present it naturally in your voice — don't just read back raw numbers.
 - You can recommend checking specific pages in the dashboard (spot trading, futures, swap, etc.) when relevant.
 - If asked about a specific coin you're not sure about, say so rather than making things up.`;
 
@@ -238,100 +281,173 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   // Auto-generate title from first user message
   const isFirstMessage = history.length <= 1;
 
-  // Call OpenAI Chat Completions with streaming
-  const openaiResponse = await fetch(
-    "https://api.openai.com/v1/chat/completions",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        messages: openaiMessages,
-        stream: true,
-        max_tokens: 4096,
-        temperature: 0.85,
-        frequency_penalty: 0.3,
-        presence_penalty: 0.2,
-      }),
-    }
-  );
+  // ── Agentic tool loop ────────────────────────────────────────────────────
+  // We allow up to 3 tool-call rounds before forcing a final answer.
+  // Accumulated messages track the conversation including tool results so
+  // OpenAI always has full context between rounds.
 
-  if (!openaiResponse.ok) {
-    const errorBody = await openaiResponse.text();
-    console.error("OpenAI API error:", openaiResponse.status, errorBody);
+  type OpenAIMessage =
+    | { role: "system" | "user" | "assistant"; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }
+    | { role: "assistant"; content: null; tool_calls: Array<{ id: string; type: "function"; function: { name: string; arguments: string } }> }
+    | { role: "tool"; tool_call_id: string; content: string };
 
-    // Clean up the saved user message on failure
-    await ChatMessage.findByIdAndDelete(userMessage._id);
+  const accumulatedMessages: OpenAIMessage[] = [...openaiMessages];
 
-    return new Response(
-      JSON.stringify({ error: "AI service unavailable. Please try again." }),
-      { status: 502, headers: { "Content-Type": "application/json" } }
-    );
-  }
-
-  // Stream the response back to the client
+  const MAX_TOOL_ROUNDS = 3;
   const encoder = new TextEncoder();
-  const decoder = new TextDecoder();
   let fullAssistantContent = "";
 
   const stream = new ReadableStream({
     async start(controller) {
-      const reader = openaiResponse.body?.getReader();
-      if (!reader) {
-        controller.close();
-        return;
-      }
+      const send = (event: Record<string, unknown>) =>
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
 
       try {
-        let buffer = "";
+        for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
+          const isFinalRound = round === MAX_TOOL_ROUNDS;
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || !trimmed.startsWith("data: ")) continue;
-
-            const data = trimmed.slice(6);
-            if (data === "[DONE]") {
-              // Send final event with message metadata
-              controller.enqueue(
-                encoder.encode(
-                  `data: ${JSON.stringify({ type: "done", userMessageId: userMessage._id })}\n\n`
-                )
-              );
-              continue;
+          const openaiResponse = await fetch(
+            "https://api.openai.com/v1/chat/completions",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+              },
+              body: JSON.stringify({
+                model: "gpt-4o",
+                messages: accumulatedMessages,
+                stream: true,
+                max_tokens: 4096,
+                temperature: 0.85,
+                frequency_penalty: 0.3,
+                presence_penalty: 0.2,
+                // On the final forced round, don't offer tools to avoid infinite loops
+                ...(isFinalRound
+                  ? {}
+                  : { tools: CHAT_TOOLS, tool_choice: "auto" }),
+              }),
             }
+          );
 
-            try {
-              const parsed = JSON.parse(data);
-              const delta = parsed.choices?.[0]?.delta;
+          if (!openaiResponse.ok) {
+            const errorBody = await openaiResponse.text();
+            console.error("OpenAI API error:", openaiResponse.status, errorBody);
+            send({ type: "error", message: "AI service unavailable. Please try again." });
+            controller.close();
+            return;
+          }
 
-              if (delta?.content) {
-                fullAssistantContent += delta.content;
-                controller.enqueue(
-                  encoder.encode(
-                    `data: ${JSON.stringify({ type: "token", content: delta.content })}\n\n`
-                  )
-                );
+          // Read the SSE stream from OpenAI
+          const decoder = new TextDecoder();
+          let buffer = "";
+          let finishReason: string | null = null;
+
+          // Accumulate tool_calls deltas across chunks
+          const pendingToolCalls: Record<number, {
+            id: string;
+            name: string;
+            argumentsRaw: string;
+          }> = {};
+
+          let roundAssistantContent = "";
+
+          const reader = openaiResponse.body?.getReader();
+          if (!reader) break;
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() || "";
+
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed || !trimmed.startsWith("data: ")) continue;
+
+              const data = trimmed.slice(6);
+              if (data === "[DONE]") break;
+
+              try {
+                const parsed = JSON.parse(data);
+                const choice = parsed.choices?.[0];
+                if (!choice) continue;
+
+                const delta = choice.delta;
+                if (choice.finish_reason) finishReason = choice.finish_reason;
+
+                // Accumulate text tokens and stream to client
+                if (delta?.content) {
+                  roundAssistantContent += delta.content;
+                  fullAssistantContent += delta.content;
+                  send({ type: "token", content: delta.content });
+                }
+
+                // Accumulate tool_call deltas
+                if (delta?.tool_calls) {
+                  for (const tc of delta.tool_calls) {
+                    const idx: number = tc.index ?? 0;
+                    if (!pendingToolCalls[idx]) {
+                      pendingToolCalls[idx] = { id: tc.id ?? "", name: "", argumentsRaw: "" };
+                    }
+                    if (tc.id) pendingToolCalls[idx].id = tc.id;
+                    if (tc.function?.name) pendingToolCalls[idx].name += tc.function.name;
+                    if (tc.function?.arguments) pendingToolCalls[idx].argumentsRaw += tc.function.arguments;
+                  }
+                }
+              } catch {
+                // Skip malformed chunks
               }
-            } catch {
-              // Skip malformed JSON chunks
             }
           }
+
+          // ── Decide what to do based on finish reason ───────────────────
+          const toolCallList = Object.values(pendingToolCalls);
+
+          if (finishReason === "tool_calls" && toolCallList.length > 0 && !isFinalRound) {
+            // Add assistant message with tool_calls to accumulated history
+            accumulatedMessages.push({
+              role: "assistant",
+              content: null,
+              tool_calls: toolCallList.map((tc) => ({
+                id: tc.id,
+                type: "function" as const,
+                function: { name: tc.name, arguments: tc.argumentsRaw },
+              })),
+            });
+
+            // Execute each tool in parallel and append results
+            const toolResults = await Promise.all(
+              toolCallList.map(async (tc) => {
+                let args: Record<string, unknown> = {};
+                try { args = JSON.parse(tc.argumentsRaw); } catch { /* use empty args */ }
+                const result = await executeToolCall(tc.name, args);
+                return { tool_call_id: tc.id, content: result };
+              })
+            );
+
+            for (const res of toolResults) {
+              accumulatedMessages.push({ role: "tool", tool_call_id: res.tool_call_id, content: res.content });
+            }
+
+            // Continue to next round
+            continue;
+          }
+
+          // finish_reason === "stop" (or forced final round) — we're done
+          if (roundAssistantContent) {
+            accumulatedMessages.push({ role: "assistant", content: roundAssistantContent });
+          }
+          break;
         }
+
+        send({ type: "done", userMessageId: userMessage._id });
       } catch (err) {
         console.error("Stream processing error:", err);
       } finally {
-        // Save the complete assistant message to the database
+        // Persist the complete assistant response
         if (fullAssistantContent.trim()) {
           await ChatMessage.create({
             conversationId,
@@ -339,12 +455,11 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
             content: fullAssistantContent,
           });
 
-          // Update conversation's updatedAt timestamp
           await Conversation.findByIdAndUpdate(conversationId, {
             $set: { updatedAt: new Date() },
           });
 
-          // Auto-generate title from first exchange
+          // Auto-generate title on first exchange
           if (isFirstMessage && conversation.title === "New Chat") {
             try {
               const titleResponse = await fetch(
@@ -379,15 +494,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
                   $set: { title: generatedTitle.slice(0, 200) },
                 });
 
-                // Notify client about the generated title
-                controller.enqueue(
-                  encoder.encode(
-                    `data: ${JSON.stringify({ type: "title", title: generatedTitle.slice(0, 200) })}\n\n`
-                  )
-                );
+                const sendTitle = (event: Record<string, unknown>) =>
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+                sendTitle({ type: "title", title: generatedTitle.slice(0, 200) });
               }
             } catch {
-              // Title generation is non-critical — ignore errors
+              // Non-critical
             }
           }
         }

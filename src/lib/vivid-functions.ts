@@ -14,6 +14,10 @@ import type { VoiceFunctionConfig } from '@worldstreet/vivid-voice/functions'
 const COINGECKO_API = 'https://api.coingecko.com/api/v3'
 const BACKEND_URL = 'https://trading.watchup.site'
 
+// Forex rate cache (module-level, 60s TTL)
+let _forexCache: { rates: Record<string, number>; fetchedAt: number } | null = null
+const FOREX_CACHE_TTL = 60_000
+
 // CoinGecko ID mapping for supported symbols
 const SYMBOL_TO_COINGECKO: Record<string, string> = {
   BTC: 'bitcoin',
@@ -98,83 +102,111 @@ export const getCryptoPrice = createVividFunction({
   }),
   handler: async ({ symbol }: { symbol?: string }) => {
     try {
-      // Fetch from CoinGecko markets endpoint
-      const coinIds = Object.values(SYMBOL_TO_COINGECKO).join(',')
-      const url = `${COINGECKO_API}/coins/markets?vs_currency=usd&ids=${coinIds}&order=market_cap_desc&sparkline=false&price_change_percentage=24h`
+      // Prefer the shared /api/prices cache to avoid duplicate CoinGecko calls.
+      // Determine base URL for server-side absolute fetch.
+      const appBase =
+        process.env.NEXT_PUBLIC_APP_URL ??
+        process.env.NEXTAUTH_URL ??
+        'http://localhost:3000'
 
-      const res = await fetch(url, {
-        headers: { Accept: 'application/json' },
-        signal: AbortSignal.timeout(10_000),
-      })
-
-      if (!res.ok) {
-        return { error: `Market data temporarily unavailable (${res.status})` }
-      }
-
-      const coins: Array<{
+      let coins: Array<{
         id: string
         symbol: string
         name: string
-        current_price: number
-        price_change_percentage_24h: number
-        market_cap: number
-        total_volume: number
-      }> = await res.json()
+        price: number
+        change24h: number
+        marketCap: number
+        volume24h: number
+      }> = []
 
-      // If a specific symbol was requested, filter to that coin
+      let globalStats: {
+        totalMarketCap: number | null
+        totalVolume: number | null
+        btcDominance: number | null
+      } | null = null
+
+      try {
+        const cacheRes = await fetch(`${appBase}/api/prices`, {
+          headers: { Accept: 'application/json' },
+          signal: AbortSignal.timeout(8_000),
+        })
+        if (cacheRes.ok) {
+          const cacheData = await cacheRes.json()
+          coins = (cacheData.coins ?? []).map((c: {
+            id: string; symbol: string; name: string;
+            price: number; change24h: number; marketCap: number; volume24h: number
+          }) => ({
+            id: c.id,
+            symbol: c.symbol.toUpperCase(),
+            name: c.name,
+            price: c.price,
+            change24h: Math.round((c.change24h ?? 0) * 100) / 100,
+            marketCap: c.marketCap,
+            volume24h: c.volume24h,
+          }))
+          if (cacheData.globalStats) {
+            globalStats = {
+              totalMarketCap: cacheData.globalStats.totalMarketCap ?? null,
+              totalVolume: cacheData.globalStats.totalVolume ?? null,
+              btcDominance: cacheData.globalStats.btcDominance
+                ? Math.round(cacheData.globalStats.btcDominance * 100) / 100
+                : null,
+            }
+          }
+        }
+      } catch {
+        // Fall through to direct CoinGecko fetch
+      }
+
+      // Fallback: hit CoinGecko directly if the cache route failed
+      if (coins.length === 0) {
+        const coinIds = Object.values(SYMBOL_TO_COINGECKO).join(',')
+        const url = `${COINGECKO_API}/coins/markets?vs_currency=usd&ids=${coinIds}&order=market_cap_desc&sparkline=false&price_change_percentage=24h`
+        const res = await fetch(url, {
+          headers: { Accept: 'application/json' },
+          signal: AbortSignal.timeout(10_000),
+        })
+        if (!res.ok) {
+          return { error: `Market data temporarily unavailable (${res.status})` }
+        }
+        const raw = await res.json()
+        coins = raw.map((c: {
+          id: string; symbol: string; name: string;
+          current_price: number; price_change_percentage_24h: number;
+          market_cap: number; total_volume: number
+        }) => ({
+          id: c.id,
+          symbol: c.symbol.toUpperCase(),
+          name: c.name,
+          price: c.current_price,
+          change24h: Math.round((c.price_change_percentage_24h ?? 0) * 100) / 100,
+          marketCap: c.market_cap,
+          volume24h: c.total_volume,
+        }))
+      }
+
+      // Filter to requested symbol
       if (symbol) {
         const sym = symbol.toUpperCase()
-        const geckoId = SYMBOL_TO_COINGECKO[sym]
-        const coin = geckoId
-          ? coins.find(c => c.id === geckoId)
-          : coins.find(c => c.symbol === sym.toLowerCase())
+        const coin = coins.find(c => c.symbol === sym) ??
+          coins.find(c => c.id === SYMBOL_TO_COINGECKO[sym])
 
         if (!coin) {
           return { error: `Couldn't find data for ${sym}. Supported: ${Object.keys(SYMBOL_TO_COINGECKO).join(', ')}` }
         }
 
         return {
-          symbol: coin.symbol.toUpperCase(),
+          symbol: coin.symbol,
           name: coin.name,
-          price: coin.current_price,
-          change24h: Math.round((coin.price_change_percentage_24h ?? 0) * 100) / 100,
-          marketCap: coin.market_cap,
-          volume24h: coin.total_volume,
+          price: coin.price,
+          change24h: coin.change24h,
+          marketCap: coin.marketCap,
+          volume24h: coin.volume24h,
         }
       }
 
-      // No symbol — return top 10 overview
-      const overview = coins.slice(0, 10).map(c => ({
-        symbol: c.symbol.toUpperCase(),
-        name: c.name,
-        price: c.current_price,
-        change24h: Math.round((c.price_change_percentage_24h ?? 0) * 100) / 100,
-        marketCap: c.market_cap,
-        volume24h: c.total_volume,
-      }))
-
-      // Also grab global stats
-      let globalStats = null
-      try {
-        const globalRes = await fetch(`${COINGECKO_API}/global`, {
-          headers: { Accept: 'application/json' },
-          signal: AbortSignal.timeout(5_000),
-        })
-        if (globalRes.ok) {
-          const g = await globalRes.json()
-          globalStats = {
-            totalMarketCap: g.data?.total_market_cap?.usd ?? null,
-            totalVolume: g.data?.total_volume?.usd ?? null,
-            btcDominance: g.data?.market_cap_percentage?.btc
-              ? Math.round(g.data.market_cap_percentage.btc * 100) / 100
-              : null,
-          }
-        }
-      } catch {
-        // Non-critical — skip global stats on failure
-      }
-
-      return { coins: overview, globalStats }
+      // No symbol — return top 10 overview + global stats
+      return { coins: coins.slice(0, 10), globalStats }
     } catch (err) {
       return { error: `Failed to fetch prices: ${(err as Error).message}` }
     }
@@ -456,6 +488,89 @@ export const getTransactionHistory = createVividFunction({
 // Export Collections
 // =============================================================================
 
+export const getForexRate = createVividFunction({
+  name: 'getForexRate',
+  description:
+    'Get current foreign exchange (forex) rates. ' +
+    'Call this when the user asks about currency exchange rates — e.g. EUR/USD, GBP/USD, USD/NGN, USD/JPY, etc. ' +
+    'Provide pair as "BASE/QUOTE" (e.g. "EUR/USD", "USD/NGN"). ' +
+    'If no pair is specified, returns a summary of major pairs and NGN rates vs USD.',
+  parameters: buildParameters({
+    pair: stringParam(
+      'Currency pair to look up, formatted as BASE/QUOTE (e.g. "EUR/USD", "USD/NGN", "GBP/JPY"). Leave empty for a major-pairs overview.',
+      false,
+    ),
+  }),
+  handler: async ({ pair }: { pair?: string }) => {
+    try {
+      // Use module-level cache to avoid hammering the API
+      const now = Date.now()
+      if (!_forexCache || now - _forexCache.fetchedAt > FOREX_CACHE_TTL) {
+        const res = await fetch('https://open.er-api.com/v6/latest/USD', {
+          headers: { Accept: 'application/json' },
+          signal: AbortSignal.timeout(8_000),
+        })
+        if (!res.ok) {
+          return { error: `Forex data temporarily unavailable (${res.status})` }
+        }
+        const data = await res.json()
+        if (data.result !== 'success') {
+          return { error: 'Forex data unavailable right now. Try again shortly.' }
+        }
+        _forexCache = { rates: data.rates as Record<string, number>, fetchedAt: now }
+      }
+
+      const rates = _forexCache.rates
+
+      if (pair) {
+        const [rawBase, rawQuote] = pair.toUpperCase().split('/')
+        if (!rawBase || !rawQuote) {
+          return { error: `Invalid pair format. Use BASE/QUOTE, e.g. "EUR/USD" or "USD/NGN".` }
+        }
+
+        // All rates are vs USD. Convert:
+        // QUOTE per BASE = (1 / rates[BASE]) * rates[QUOTE]
+        const baseRate = rawBase === 'USD' ? 1 : rates[rawBase]
+        const quoteRate = rawQuote === 'USD' ? 1 : rates[rawQuote]
+
+        if (!baseRate) return { error: `Unknown currency: ${rawBase}` }
+        if (!quoteRate) return { error: `Unknown currency: ${rawQuote}` }
+
+        const rate = quoteRate / baseRate
+
+        return {
+          pair: `${rawBase}/${rawQuote}`,
+          rate: Math.round(rate * 100000) / 100000,
+          base: rawBase,
+          quote: rawQuote,
+          description: `1 ${rawBase} = ${(Math.round(rate * 10000) / 10000).toLocaleString()} ${rawQuote}`,
+          dataSource: 'open.er-api.com',
+          updatedAt: new Date(_forexCache.fetchedAt).toISOString(),
+        }
+      }
+
+      // No pair — return snapshot of major pairs + NGN
+      const majors = ['EUR', 'GBP', 'JPY', 'CHF', 'AUD', 'CAD', 'NGN']
+      const overview = majors
+        .filter(c => rates[c])
+        .map(c => ({
+          pair: `USD/${c}`,
+          rate: Math.round(rates[c] * 10000) / 10000,
+        }))
+
+      return {
+        base: 'USD',
+        rates: overview,
+        dataSource: 'open.er-api.com',
+        updatedAt: new Date(_forexCache.fetchedAt).toISOString(),
+      }
+    } catch (err) {
+      return { error: `Failed to fetch forex rates: ${(err as Error).message}` }
+    }
+  },
+  executionContext: 'server',
+})
+
 export const allFunctions: VoiceFunctionConfig[] = [
   navigateToPage,
   showAlert,
@@ -463,4 +578,5 @@ export const allFunctions: VoiceFunctionConfig[] = [
   getPortfolioBalance,
   getMarketAnalysis,
   getTransactionHistory,
+  getForexRate,
 ]
