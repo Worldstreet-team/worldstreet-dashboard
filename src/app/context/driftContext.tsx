@@ -142,7 +142,7 @@ interface DriftContextValue {
   // Trading operations
   depositCollateral: (amount: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
   withdrawCollateral: (amount: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
-  openPosition: (marketIndex: number, direction: 'long' | 'short', size: number, leverage: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
+  openPosition: (marketIndex: number, direction: 'long' | 'short', size: number, leverage: number, orderType?: 'market' | 'limit' | 'stop-limit', price?: number, triggerPrice?: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
   closePosition: (marketIndex: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
   placeSpotOrder: (marketIndex: number, direction: 'buy' | 'sell', amount: number, orderType?: 'market' | 'limit' | 'stop-limit', price?: number, triggerPrice?: number) => Promise<{ success: boolean; txSignature?: string; error?: string }>;
   previewTrade: (marketIndex: number, direction: 'long' | 'short', size: number, leverage: number) => Promise<any>;
@@ -1784,7 +1784,10 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     marketIndex: number,
     direction: 'long' | 'short',
     size: number,
-    leverage: number
+    leverage: number,
+    orderType: 'market' | 'limit' | 'stop-limit' = 'market',
+    price?: number,
+    triggerPrice?: number
   ): Promise<{ success: boolean; txSignature?: string; error?: string }> => {
     if (!user?.userId) {
       return { success: false, error: 'User not authenticated' };
@@ -1810,15 +1813,83 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       // Convert size to proper precision using SDK method
       const baseAssetAmount = client.convertToPerpPrecision(size);
 
+      // Get current market price for validation
+      const oracleData = client.getOracleDataForPerpMarket(marketIndex);
+      const marketPrice = oracleData.price.toNumber() / 1e6;
+
+      console.log('[DriftContext] Opening position:', {
+        marketIndex,
+        direction,
+        size,
+        leverage,
+        orderType,
+        marketPrice,
+        price,
+        triggerPrice,
+      });
+
+      // Determine order type and validate prices
+      let orderTypeEnum: any;
+      let orderPrice: any = new BN(0);
+      let triggerPriceBN: any = undefined;
+
+      if (orderType === 'market') {
+        orderTypeEnum = OrderType.MARKET;
+      } else if (orderType === 'limit') {
+        if (!price || price <= 0) {
+          return { success: false, error: 'Limit price is required for limit orders' };
+        }
+        orderTypeEnum = OrderType.LIMIT;
+        orderPrice = new BN(Math.floor(price * 1e6));
+      } else if (orderType === 'stop-limit') {
+        if (!triggerPrice || triggerPrice <= 0) {
+          return { success: false, error: 'Trigger price is required for stop-limit orders' };
+        }
+        if (!price || price <= 0) {
+          return { success: false, error: 'Limit price is required for stop-limit orders' };
+        }
+
+        // Validate trigger price vs limit price
+        if (direction === 'long') {
+          // For long stop-limit: trigger >= current market, limit >= trigger
+          if (triggerPrice < marketPrice) {
+            return { success: false, error: 'Long stop-limit trigger price must be above current market price' };
+          }
+          if (price < triggerPrice) {
+            return { success: false, error: 'Long stop-limit limit price must be at or above trigger price' };
+          }
+        } else {
+          // For short stop-limit: trigger <= current market, limit <= trigger
+          if (triggerPrice > marketPrice) {
+            return { success: false, error: 'Short stop-limit trigger price must be below current market price' };
+          }
+          if (price > triggerPrice) {
+            return { success: false, error: 'Short stop-limit limit price must be at or below trigger price' };
+          }
+        }
+
+        orderTypeEnum = OrderType.TRIGGER_LIMIT;
+        orderPrice = new BN(Math.floor(price * 1e6));
+        triggerPriceBN = new BN(Math.floor(triggerPrice * 1e6));
+      }
+
       // Construct order parameters with correct SDK enums and compute unit optimization
-      const orderParams = {
-        orderType: OrderType.MARKET,
+      const orderParams: any = {
+        orderType: orderTypeEnum,
         marketType: MarketType.PERP,
         marketIndex,
         direction: positionDirection,
         baseAssetAmount,
-        price: new BN(0),
+        price: orderPrice,
       };
+
+      // Add trigger price for stop-limit orders
+      if (orderType === 'stop-limit' && triggerPriceBN) {
+        orderParams.triggerPrice = triggerPriceBN;
+        orderParams.triggerCondition = direction === 'long'
+          ? 'above' // Trigger when price goes above trigger
+          : 'below'; // Trigger when price goes below trigger
+      }
 
       // Add transaction options for faster confirmation
       const txOptions = {
@@ -1908,7 +1979,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [user?.userId, requestPin, initializeDriftClient, refreshSummary, refreshPositions]);
+  }, [user?.userId, requestPin, initializeDriftClient, refreshSummary, refreshPositions, startTransactionMonitor]);
 
   // Close position
   const closePosition = useCallback(async (marketIndex: number): Promise<{ success: boolean; txSignature?: string; error?: string }> => {

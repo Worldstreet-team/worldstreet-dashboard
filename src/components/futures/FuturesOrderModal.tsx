@@ -21,10 +21,11 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
   const { openPosition, isLoading: driftLoading, previewTrade, getMarketName, perpMarkets, summary } = useDrift();
 
   const [previewData, setPreviewData] = useState<any>(null);
-  const [orderType, setOrderType] = useState<'market' | 'limit'>('market');
+  const [orderType, setOrderType] = useState<'market' | 'limit' | 'stop-limit'>('market');
   const [size, setSize] = useState('');
   const [leverage, setLeverage] = useState(1);
   const [limitPrice, setLimitPrice] = useState('');
+  const [triggerPrice, setTriggerPrice] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState('');
   const [showQuote, setShowQuote] = useState(false);
@@ -104,9 +105,43 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
       return;
     }
 
-    if (orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0)) {
+    if ((orderType === 'limit' || orderType === 'stop-limit') && (!limitPrice || parseFloat(limitPrice) <= 0)) {
       setError('Please enter a valid limit price');
       return;
+    }
+
+    if (orderType === 'stop-limit') {
+      if (!triggerPrice || parseFloat(triggerPrice) <= 0) {
+        setError('Please enter a valid trigger price');
+        return;
+      }
+
+      const triggerPriceNum = parseFloat(triggerPrice);
+      const limitPriceNum = parseFloat(limitPrice);
+      const currentPrice = previewData.entryPrice;
+
+      // Validate trigger price vs limit price
+      if (side === 'long') {
+        // For long stop-limit: trigger >= current market, limit >= trigger
+        if (triggerPriceNum < currentPrice) {
+          setError('Long stop-limit trigger price must be above current market price');
+          return;
+        }
+        if (limitPriceNum < triggerPriceNum) {
+          setError('Long stop-limit limit price must be at or above trigger price');
+          return;
+        }
+      } else {
+        // For short stop-limit: trigger <= current market, limit <= trigger
+        if (triggerPriceNum > currentPrice) {
+          setError('Short stop-limit trigger price must be below current market price');
+          return;
+        }
+        if (limitPriceNum > triggerPriceNum) {
+          setError('Short stop-limit limit price must be at or below trigger price');
+          return;
+        }
+      }
     }
 
     setShowQuote(true);
@@ -129,7 +164,10 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
         marketIndex,
         side,
         parseFloat(size),
-        leverage
+        leverage,
+        orderType,
+        orderType !== 'market' ? parseFloat(limitPrice) : undefined,
+        orderType === 'stop-limit' ? parseFloat(triggerPrice) : undefined
       );
 
       if (!result.success) {
@@ -144,6 +182,7 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
         onClose();
         setSize('');
         setLimitPrice('');
+        setTriggerPrice('');
         setSuccessMessage('');
         setError(null);
         setShowQuote(false);
@@ -170,6 +209,7 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
     if (!isOpen) {
       setSize('');
       setLimitPrice('');
+      setTriggerPrice('');
       setLeverage(1);
       setOrderType('market');
       setError(null);
@@ -257,13 +297,24 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
                   >
                     Limit
                   </button>
+                  <button
+                    onClick={() => setOrderType('stop-limit')}
+                    className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all duration-200 active:scale-95 min-h-[44px] touch-feedback ${orderType === 'stop-limit'
+                      ? 'bg-[#fcd535] text-[#181a20] shadow-lg shadow-[#fcd535]/20'
+                      : 'bg-[#2b3139] text-white hover:bg-[#2b3139]/80'
+                      }`}
+                  >
+                    Stop-Limit
+                  </button>
                 </div>
               </div>
 
               {/* Limit Price */}
-              {orderType === 'limit' && (
+              {(orderType === 'limit' || orderType === 'stop-limit') && (
                 <div>
-                  <label className="block text-sm font-bold text-dark dark:text-white mb-2 uppercase tracking-wide">Limit Price</label>
+                  <label className="block text-sm font-bold text-dark dark:text-white mb-2 uppercase tracking-wide">
+                    {orderType === 'stop-limit' ? 'Limit Price' : 'Price'}
+                  </label>
                   <input
                     type="number"
                     value={limitPrice}
@@ -271,6 +322,25 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
                     placeholder="0.00"
                     className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-black/20 text-dark dark:text-white focus:outline-none focus:ring-2 focus:ring-primary font-mono"
                   />
+                </div>
+              )}
+
+              {/* Trigger Price (Stop-Limit Only) */}
+              {orderType === 'stop-limit' && (
+                <div>
+                  <label className="block text-sm font-bold text-dark dark:text-white mb-2 uppercase tracking-wide">Trigger Price</label>
+                  <input
+                    type="number"
+                    value={triggerPrice}
+                    onChange={(e) => setTriggerPrice(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-black/20 text-dark dark:text-white focus:outline-none focus:ring-2 focus:ring-primary font-mono"
+                  />
+                  <p className="text-xs text-[#848e9c] mt-1">
+                    {side === 'long' 
+                      ? 'Order triggers when price rises above this level'
+                      : 'Order triggers when price falls below this level'}
+                  </p>
                 </div>
               )}
 
