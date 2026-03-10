@@ -22,7 +22,10 @@ export default function PortfolioPage() {
     refreshPositions,
     getMarketPrice,
     openOrders,
+    getOpenOrders,
   } = useDrift();
+
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
 
   // Force dark background immediately on mount
   useEffect(() => {
@@ -34,9 +37,18 @@ export default function PortfolioPage() {
     };
   }, []);
 
+  // Fetch orders on mount and when initialized
+  useEffect(() => {
+    if (isInitialized && isClientReady) {
+      getOpenOrders();
+    }
+  }, [isInitialized, isClientReady, getOpenOrders]);
+
   const handleRefresh = useCallback(async () => {
-    await Promise.all([refreshSummary(), refreshPositions()]);
-  }, [refreshSummary, refreshPositions]);
+    setIsRefreshing(true);
+    await Promise.all([refreshSummary(), refreshPositions(), getOpenOrders()]);
+    setIsRefreshing(false);
+  }, [refreshSummary, refreshPositions, getOpenOrders]);
 
   // Format number with decimals
   const formatNumber = (num: number, decimals: number = 2) => {
@@ -302,6 +314,131 @@ export default function PortfolioPage() {
               refreshInterval={5000}
             />
           )}
+
+          {/* All Orders (Spot & Futures) */}
+          <div className="bg-[#2b3139] border border-[#2b3139] rounded-lg overflow-hidden">
+            <div className="px-6 py-4 border-b border-[#1e2329]">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Icon icon="ph:list-checks-duotone" className="text-[#fcd535]" height={20} />
+                  <h2 className="text-lg font-semibold text-white">Orders</h2>
+                  <span className="text-xs text-[#848e9c]">
+                    ({openOrders.length} open)
+                  </span>
+                </div>
+                <button
+                  onClick={async () => {
+                    setIsRefreshing(true);
+                    await getOpenOrders();
+                    setIsRefreshing(false);
+                  }}
+                  disabled={isRefreshing}
+                  className="text-xs text-[#fcd535] hover:text-[#fcd535]/80 transition-colors disabled:opacity-50"
+                >
+                  {isRefreshing ? 'Refreshing...' : 'Refresh Orders'}
+                </button>
+              </div>
+            </div>
+
+            {openOrders.length === 0 ? (
+              <div className="p-12 text-center">
+                <Icon icon="ph:list-checks-duotone" className="mx-auto mb-4 text-[#848e9c]" height={48} />
+                <p className="text-[#848e9c] text-sm">No open orders</p>
+                <p className="text-[#848e9c] text-xs mt-1">
+                  Place an order to start trading
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-[#1e2329]">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-[#848e9c] uppercase tracking-wider">
+                        Market
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-[#848e9c] uppercase tracking-wider">
+                        Type
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-[#848e9c] uppercase tracking-wider">
+                        Side
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-semibold text-[#848e9c] uppercase tracking-wider">
+                        Amount
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-semibold text-[#848e9c] uppercase tracking-wider">
+                        Price
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-semibold text-[#848e9c] uppercase tracking-wider">
+                        Status
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#1e2329]">
+                    {openOrders.map((order, index) => {
+                      const isSpot = order.marketType === 'spot';
+                      const isBuy = order.direction === 'buy' || order.direction === 'long';
+                      
+                      // Parse amounts
+                      const baseAmount = parseFloat(order.baseAssetAmount) / 1e9;
+                      const price = parseFloat(order.price) / 1e6;
+                      
+                      return (
+                        <tr key={`${order.orderIndex}-${index}`} className="hover:bg-[#1e2329] transition-colors">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-white">
+                                {order.marketName || `Market ${order.marketIndex}`}
+                              </span>
+                              <span className={`text-xs px-1.5 py-0.5 rounded ${
+                                isSpot 
+                                  ? 'bg-[#0ecb81]/10 text-[#0ecb81]' 
+                                  : 'bg-[#fcd535]/10 text-[#fcd535]'
+                              }`}>
+                                {isSpot ? 'SPOT' : 'PERP'}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="text-sm text-white capitalize">
+                              {order.orderType}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                isBuy
+                                  ? 'bg-[#0ecb81]/10 text-[#0ecb81]'
+                                  : 'bg-[#f6465d]/10 text-[#f6465d]'
+                              }`}
+                            >
+                              {order.direction.toUpperCase()}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">
+                            {formatNumber(baseAmount, 4)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-white">
+                            {order.orderType === 'market' ? 'Market' : `$${formatNumber(price, 2)}`}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              order.status === 'open' 
+                                ? 'bg-[#fcd535]/10 text-[#fcd535]'
+                                : order.status === 'filled'
+                                ? 'bg-[#0ecb81]/10 text-[#0ecb81]'
+                                : 'bg-[#848e9c]/10 text-[#848e9c]'
+                            }`}>
+                              {order.status.toUpperCase()}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
 
           {/* Futures Positions */}
           <div className="bg-[#2b3139] border border-[#2b3139] rounded-lg overflow-hidden">
