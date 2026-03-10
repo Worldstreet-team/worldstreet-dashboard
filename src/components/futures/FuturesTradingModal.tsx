@@ -225,16 +225,6 @@ export default function FuturesTradingModal({
             >
               Limit
             </button>
-            <button
-              onClick={() => setOrderType('stop-limit')}
-              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
-                orderType === 'stop-limit'
-                  ? 'bg-[#181a20] text-white'
-                  : 'text-[#848e9c]'
-              }`}
-            >
-              Stop-Limit
-            </button>
           </div>
 
           {/* Available Balance */}
