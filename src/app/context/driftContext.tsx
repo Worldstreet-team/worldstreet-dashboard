@@ -1325,14 +1325,25 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
     }
   }, [user?.userId, requestPin, initializeDriftClient, refreshAccounts, getMarketName, getSpotMarketName]);
 
-  // Poll transaction status with improved blockhash handling
+  /**
+   * Poll transaction status using WebSocket subscription for real-time updates
+   * 
+   * This function uses WebSocket subscriptions to monitor transaction status in real-time,
+   * providing faster confirmation than polling. Falls back to polling if WebSocket fails.
+   * 
+   * @param connection - Solana connection with WebSocket support
+   * @param signature - Transaction signature to monitor
+   * @param maxAttempts - Maximum number of polling attempts (fallback only)
+   * @param intervalMs - Polling interval in milliseconds (fallback only)
+   * @returns Promise<boolean> - True if transaction confirmed successfully
+   */
   const pollTransactionStatus = async (
     connection: any,
     signature: string,
     maxAttempts: number = 60,
     intervalMs: number = 2000
   ): Promise<boolean> => {
-    console.log(`[DriftContext] Waiting for transaction confirmation: ${signature}`);
+    console.log(`[DriftContext] 🔔 Monitoring transaction via WebSocket: ${signature}`);
 
     try {
       // Get latest blockhash with finalized commitment for stability
@@ -1340,47 +1351,106 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
 
       console.log(`[DriftContext] Confirming with blockhash: ${blockhash}, lastValidBlockHeight: ${lastValidBlockHeight}`);
 
-      // Use confirmTransaction with extended timeout
-      const confirmation = await connection.confirmTransaction(
-        {
-          signature,
-          blockhash,
-          lastValidBlockHeight,
-        },
-        'confirmed'
-      );
+      // CRITICAL: Use WebSocket subscription for real-time confirmation
+      // This is significantly faster than polling (typically 400-800ms vs 2-4 seconds)
+      const confirmationPromise = new Promise<boolean>((resolve, reject) => {
+        let subscriptionId: number | null = null;
+        let timeoutId: NodeJS.Timeout | null = null;
 
-      if (confirmation.value.err) {
-        console.error(`[DriftContext] Transaction failed: ${signature}`, confirmation.value.err);
-        throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
-      }
-
-      console.log(`[DriftContext] Transaction confirmed: ${signature}`);
-      return true;
-    } catch (err: any) {
-      console.error(`[DriftContext] Error confirming transaction:`, err);
-      
-      // If blockhash expired, check if transaction actually landed
-      if (err.message?.includes('block height exceeded')) {
-        console.log(`[DriftContext] Blockhash expired, checking if transaction landed...`);
-        
-        try {
-          // Check transaction status directly
-          const status = await connection.getSignatureStatus(signature);
-          
-          if (status?.value?.confirmationStatus === 'confirmed' || 
-              status?.value?.confirmationStatus === 'finalized') {
-            console.log(`[DriftContext] Transaction actually confirmed despite blockhash expiry`);
-            return true;
+        // Set timeout for WebSocket subscription (30 seconds)
+        timeoutId = setTimeout(() => {
+          if (subscriptionId !== null) {
+            connection.removeSignatureListener(subscriptionId);
           }
-          
-          console.error(`[DriftContext] Transaction not found or failed`);
-        } catch (statusErr) {
-          console.error(`[DriftContext] Error checking transaction status:`, statusErr);
-        }
-      }
+          reject(new Error('WebSocket confirmation timeout'));
+        }, 30000);
+
+        // Subscribe to transaction status updates via WebSocket
+        subscriptionId = connection.onSignature(
+          signature,
+          (result: any, context: any) => {
+            console.log(`[DriftContext] 🔔 WebSocket update for ${signature}:`, {
+              slot: context.slot,
+              err: result.err,
+            });
+
+            // Clear timeout
+            if (timeoutId) {
+              clearTimeout(timeoutId);
+            }
+
+            // Check if transaction succeeded
+            if (result.err) {
+              console.error(`[DriftContext] ❌ Transaction failed:`, result.err);
+              reject(new Error(`Transaction failed: ${JSON.stringify(result.err)}`));
+            } else {
+              console.log(`[DriftContext] ✅ Transaction confirmed via WebSocket: ${signature}`);
+              resolve(true);
+            }
+          },
+          'confirmed' // Commitment level
+        );
+
+        console.log(`[DriftContext] 🔔 WebSocket subscription active (ID: ${subscriptionId})`);
+      });
+
+      // Wait for WebSocket confirmation
+      const confirmed = await confirmationPromise;
+      return confirmed;
+
+    } catch (err: any) {
+      console.error(`[DriftContext] ❌ WebSocket confirmation error:`, err);
       
-      throw err;
+      // FALLBACK: If WebSocket fails, use traditional polling
+      console.log(`[DriftContext] 🔄 Falling back to polling confirmation...`);
+      
+      try {
+        // Get latest blockhash again for polling
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
+        
+        // Use confirmTransaction with extended timeout
+        const confirmation = await connection.confirmTransaction(
+          {
+            signature,
+            blockhash,
+            lastValidBlockHeight,
+          },
+          'confirmed'
+        );
+
+        if (confirmation.value.err) {
+          console.error(`[DriftContext] Transaction failed: ${signature}`, confirmation.value.err);
+          throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+        }
+
+        console.log(`[DriftContext] Transaction confirmed via polling: ${signature}`);
+        return true;
+        
+      } catch (pollErr: any) {
+        console.error(`[DriftContext] Polling confirmation error:`, pollErr);
+        
+        // If blockhash expired, check if transaction actually landed
+        if (pollErr.message?.includes('block height exceeded')) {
+          console.log(`[DriftContext] Blockhash expired, checking if transaction landed...`);
+          
+          try {
+            // Check transaction status directly
+            const status = await connection.getSignatureStatus(signature);
+            
+            if (status?.value?.confirmationStatus === 'confirmed' || 
+                status?.value?.confirmationStatus === 'finalized') {
+              console.log(`[DriftContext] Transaction actually confirmed despite blockhash expiry`);
+              return true;
+            }
+            
+            console.error(`[DriftContext] Transaction not found or failed`);
+          } catch (statusErr) {
+            console.error(`[DriftContext] Error checking transaction status:`, statusErr);
+          }
+        }
+        
+        throw pollErr;
+      }
     }
   };
 
