@@ -64,8 +64,10 @@ export default function SpotDepositModal({
         try {
             const result = await depositCollateral(amountNum);
             if (result.success) {
-                setSuccess('Deposit successful!');
+                setSuccess(`Transaction submitted! TX: ${result.txSignature?.slice(0, 8)}...`);
                 setAmount('');
+                
+                // Close modal after 2 seconds (time to see/copy tx hash)
                 setTimeout(() => {
                     onClose();
                     setSuccess(null);

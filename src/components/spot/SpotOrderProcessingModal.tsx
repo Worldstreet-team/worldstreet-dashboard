@@ -1,12 +1,13 @@
 /**
  * Spot Order Processing Modal
  * Shows immediate feedback when order is submitted
- * Displays real-time status updates during order execution
+ * Displays transaction hash for monitoring on Solana Explorer
  */
 
 'use client';
 
 import { Icon } from '@iconify/react';
+import { useState } from 'react';
 
 interface SpotOrderProcessingModalProps {
   isOpen: boolean;
@@ -29,9 +30,21 @@ export default function SpotOrderProcessingModal({
   error,
   txSignature,
 }: SpotOrderProcessingModalProps) {
+  const [copied, setCopied] = useState(false);
+
   if (!isOpen) return null;
 
   const [baseAsset] = pair.split('-');
+
+  const handleCopyTxHash = () => {
+    if (txSignature) {
+      navigator.clipboard.writeText(txSignature);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const solscanUrl = txSignature ? `https://solscan.io/tx/${txSignature}` : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -47,7 +60,7 @@ export default function SpotOrderProcessingModal({
         <div className="flex items-center justify-between px-6 py-4 border-b border-[#2b3139]">
           <h3 className="text-lg font-semibold text-white">
             {status === 'processing' && 'Processing Order'}
-            {status === 'success' && 'Order Successful'}
+            {status === 'success' && 'Order Submitted'}
             {status === 'error' && 'Order Failed'}
           </h3>
           {status !== 'processing' && (
@@ -112,21 +125,61 @@ export default function SpotOrderProcessingModal({
             {status === 'success' && (
               <>
                 <p className="text-white text-lg font-medium">
-                  Order executed successfully!
+                  Transaction submitted!
                 </p>
                 <p className="text-[#848e9c] text-sm">
-                  {side === 'buy' ? 'Bought' : 'Sold'} {amount} {baseAsset}
+                  {side === 'buy' ? 'Buying' : 'Selling'} {amount} {baseAsset}
                 </p>
+                <p className="text-[#848e9c] text-xs">
+                  Your order is being confirmed on-chain
+                </p>
+                
+                {/* Transaction Hash Display */}
                 {txSignature && (
-                  <a
-                    href={`https://solscan.io/tx/${txSignature}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-[#fcd535] text-xs hover:underline mt-2"
-                  >
-                    View on Solscan
-                    <Icon icon="ph:arrow-square-out" width={14} />
-                  </a>
+                  <div className="mt-4 space-y-2">
+                    <div className="flex items-center justify-center gap-2 text-xs text-[#848e9c]">
+                      <Icon icon="ph:link" width={14} />
+                      <span>Transaction Hash</span>
+                    </div>
+                    
+                    {/* Copyable TX Hash */}
+                    <div className="relative group">
+                      <div className="flex items-center gap-2 px-3 py-2 bg-[#2b3139] rounded-lg border border-[#2b3139] hover:border-[#fcd535] transition-colors">
+                        <code className="flex-1 text-xs text-white font-mono truncate">
+                          {txSignature}
+                        </code>
+                        <button
+                          onClick={handleCopyTxHash}
+                          className="flex-shrink-0 p-1 hover:bg-[#181a20] rounded transition-colors"
+                          title="Copy transaction hash"
+                        >
+                          <Icon 
+                            icon={copied ? "ph:check" : "ph:copy"} 
+                            width={16} 
+                            className={copied ? "text-[#0ecb81]" : "text-[#848e9c]"} 
+                          />
+                        </button>
+                      </div>
+                      {copied && (
+                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-[#0ecb81] text-white text-xs rounded whitespace-nowrap">
+                          Copied!
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* View on Solscan */}
+                    {solscanUrl && (
+                      <a
+                        href={solscanUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 text-[#fcd535] text-xs hover:underline mt-2"
+                      >
+                        View on Solscan
+                        <Icon icon="ph:arrow-square-out" width={14} />
+                      </a>
+                    )}
+                  </div>
                 )}
               </>
             )}

@@ -205,26 +205,28 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
 
       if (!result.success) throw new Error(result.error || 'Drift spot order failed');
 
-      // Success!
-      setProcessingStatus('success');
+      // Transaction sent! Show signature immediately
       setTxSignature(result.txSignature || '');
-      setSuccess(`${activeTab === 'buy' ? 'Buy' : 'Sell'} ${orderType} order placed successfully!`);
+      setProcessingStatus('success');
       
+      // Clear form
       setAmount('');
       setPrice('');
       setStopPrice('');
       setTotal('');
       setSliderValue(0);
 
-      // Refresh balances in background
-      refetchBalances();
-      if (onTradeExecuted) onTradeExecuted();
-
-      // Auto-close success modal after 3 seconds
+      // Close modal immediately after showing tx hash (2 seconds for user to see/copy)
       setTimeout(() => {
         setShowProcessingModal(false);
         setSuccess(null);
-      }, 3000);
+      }, 2000);
+
+      // Refresh balances in background (non-blocking)
+      setTimeout(() => {
+        refetchBalances();
+        if (onTradeExecuted) onTradeExecuted();
+      }, 100);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to execute trade';
       setProcessingStatus('error');

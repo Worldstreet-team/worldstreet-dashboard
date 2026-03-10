@@ -208,14 +208,11 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
 
       if (!result.success) throw new Error(result.error || 'Drift spot order failed');
 
-      // Success!
+      // Success! Transaction sent
       setProcessingStatus('success');
       setTxSignature(result.txSignature || '');
-      setSuccess(`${side === 'buy' ? 'Buy' : 'Sell'} ${orderType} order placed successfully!`);
 
-      await refreshPositions();
-      await refetchBalances();
-
+      // Clear form
       setAmount('');
       setPrice('');
       setStopPrice('');
@@ -223,12 +220,18 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
       setSliderValue(0);
       setPin('');
 
-      // Auto-close and return to main view after 3 seconds
+      // Close modal immediately after showing tx hash (2 seconds for user to see/copy)
       setTimeout(() => {
         setShowProcessingModal(false);
         setSuccess(null);
         onClose();
-      }, 3000);
+      }, 2000);
+
+      // Refresh data in background (non-blocking)
+      setTimeout(() => {
+        refreshPositions();
+        refetchBalances();
+      }, 100);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to execute trade';
       setProcessingStatus('error');
