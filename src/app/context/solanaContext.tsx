@@ -62,6 +62,7 @@ interface SolanaContextType {
   setAddress: (address: string | null) => void;
   fetchBalance: (address?: string) => Promise<void>;
   refreshCustomTokens: () => Promise<void>;
+  getUsdtBalance: () => number;
   sendTransaction: (
     encryptedKey: string,
     pin: string,
@@ -362,6 +363,15 @@ export function SolanaProvider({ children }: { children: ReactNode }) {
     [connection, fetchBalance]
   );
 
+  // Helper to get USDT balance from token balances
+  const getUsdtBalance = useCallback((): number => {
+    const USDT_MINT = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
+    const usdtToken = tokenBalances.find(
+      (token) => token.mint === USDT_MINT
+    );
+    return usdtToken?.amount || 0;
+  }, [tokenBalances]);
+
   return (
     <SolanaContext.Provider
       value={{
@@ -374,6 +384,7 @@ export function SolanaProvider({ children }: { children: ReactNode }) {
         setAddress,
         fetchBalance,
         refreshCustomTokens,
+        getUsdtBalance,
         sendTransaction,
         sendTokenTransaction,
       }}
