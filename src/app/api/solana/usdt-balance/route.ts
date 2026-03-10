@@ -2,24 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
 import { convertRawToDisplay } from "@/lib/wallet/amounts";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import connectDB from "@/lib/mongodb";
-import User from "@/models/User";
+import { connectDB } from "@/lib/mongodb";
+import DashboardProfile from "@/models/DashboardProfile";
+import { getAuthUser } from "@/lib/auth";
 
 const SOL_RPC =
   process.env.NEXT_PUBLIC_SOL_RPC ||
-  "https://solana-mainnet.g.alchemy.com/v2/m15B-STIDlwShr712rmVB";
+  "https://solana-mainnet.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITN";
 
 // USDT on Solana (SPL Token)
 const USDT_MINT = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
 const USDT_DECIMALS = 6;
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     // Get authenticated user
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const authUser = await getAuthUser();
+    if (!authUser) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
         { status: 401 }
@@ -27,17 +26,19 @@ export async function GET(request: NextRequest) {
     }
 
     await connectDB();
-    const user = await User.findOne({ email: session.user.email });
+    const profile = await DashboardProfile.findOne({
+      authUserId: authUser.userId,
+    });
     
-    if (!user) {
+    if (!profile) {
       return NextResponse.json(
-        { success: false, message: "User not found" },
+        { success: false, message: "User profile not found" },
         { status: 404 }
       );
     }
 
     // Check if user has Solana wallet
-    if (!user.wallets?.solana?.address) {
+    if (!profile.wallets?.solana?.address) {
       return NextResponse.json({
         success: true,
         balance: 0,
@@ -46,7 +47,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const solanaAddress = user.wallets.solana.address;
+    const solanaAddress = profile.wallets.solana.address;
     const connection = new Connection(SOL_RPC);
     const pubKey = new PublicKey(solanaAddress);
 

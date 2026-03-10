@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
 import { convertRawToDisplay } from "@/lib/wallet/amounts";
-import connectDB from "@/lib/mongodb";
-import User from "@/models/User";
+import { connectDB } from "@/lib/mongodb";
+import DashboardProfile from "@/models/DashboardProfile";
 
 const SOL_RPC =
   process.env.NEXT_PUBLIC_SOL_RPC ||
@@ -14,7 +14,7 @@ const USDT_MINT = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
 const USDT_DECIMALS = 6;
 
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: { userId: string } }
 ) {
   try {
@@ -28,17 +28,19 @@ export async function GET(
     }
 
     await connectDB();
-    const user = await User.findById(userId);
+    const profile = await DashboardProfile.findOne({
+      authUserId: userId,
+    });
 
-    if (!user) {
+    if (!profile) {
       return NextResponse.json(
-        { success: false, message: "User not found" },
+        { success: false, message: "User profile not found" },
         { status: 404 }
       );
     }
 
     // Check if user has Solana wallet
-    if (!user.wallets?.solana?.address) {
+    if (!profile.wallets?.solana?.address) {
       return NextResponse.json({
         success: true,
         balance: 0,
@@ -47,7 +49,7 @@ export async function GET(
       });
     }
 
-    const solanaAddress = user.wallets.solana.address;
+    const solanaAddress = profile.wallets.solana.address;
     const connection = new Connection(SOL_RPC);
     const pubKey = new PublicKey(solanaAddress);
 
