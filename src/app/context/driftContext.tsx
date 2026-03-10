@@ -2716,7 +2716,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
                   .replace(/\0/g, '')
                   .trim();
                 if (parsedName && parsedName !== 'UNKNOWN') {
-                  marketName = parsedName;
+                  marketName = `Market ${order.marketIndex}`;
                 }
               }
             } catch (err) {
