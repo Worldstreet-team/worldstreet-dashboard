@@ -247,7 +247,7 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
   const isCurrentBorrowed = activeTab === 'buy' ? isBorrowed.quote : isBorrowed.base;
 
   return (
-    <div className="flex flex-col bg-[#0f1117] text-white overflow-hidden h-full">
+    <div className="flex flex-col bg-[#0f1117] text-white overflow-hidden max-h-[40vh]">
       {/* Order Type Tabs */}
       <div className="flex gap-4 px-4 py-3 border-b border-[#2b3139]">
         {(['limit', 'market', 'stop-limit'] as const).map((type) => (
@@ -327,14 +327,14 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
               </div>
 
               {/* Info */}
-              <div className="text-[10px] text-[#848e9c] space-y-1">
+              <div className="text-[10px] text-[#848e9c] space-y-1 border-t border-[#2b3139] pt-2">
                 <div className="flex justify-between">
-                  <span>Avbl</span>
-                  <span>- {quoteAsset}</span>
+                  <span>Available</span>
+                  <span className="text-white font-mono text-xs">{loadingBalances ? 'Loading...' : `${quoteBalance.toFixed(6)} ${quoteAsset}`}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Max.Buy</span>
-                  <span>-- {baseAsset}</span>
+                  <span>Max Buy</span>
+                  <span className="text-white font-mono text-xs">{loadingBalances ? 'Loading...' : `${quoteBalance.toFixed(6)} ${quoteAsset}`}</span>
                 </div>
               </div>
 
@@ -412,14 +412,14 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
               </div>
 
               {/* Info */}
-              <div className="text-[10px] text-[#848e9c] space-y-1">
+              <div className="text-[10px] text-[#848e9c] space-y-1 border-t border-[#2b3139] pt-2">
                 <div className="flex justify-between">
-                  <span>Avbl</span>
-                  <span>- {baseAsset}</span>
+                  <span>Available</span>
+                  <span className="text-white font-mono text-xs">{loadingBalances ? 'Loading...' : `${baseBalance.toFixed(6)} ${baseAsset}`}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Max.Sell</span>
-                  <span>-- {quoteAsset}</span>
+                  <span>Max Sell</span>
+                  <span className="text-white font-mono text-xs">{loadingBalances ? 'Loading...' : `${baseBalance.toFixed(6)} ${baseAsset}`}</span>
                 </div>
               </div>
 
