@@ -78,6 +78,7 @@ interface DriftOrder {
   price: string;
   status: 'init' | 'open' | 'filled' | 'canceled';
   orderIndex: number;
+  marketName?: string; // Optional market name for display
 }
 
 interface DriftContextValue {
@@ -2484,10 +2485,49 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         const isInAuction = currentSlot < auctionEndSlot;
         const slotsRemaining = Math.max(0, auctionEndSlot - currentSlot);
         
-        // Get market name
-        const marketName = marketType === 'spot' 
-          ? getSpotMarketName(order.marketIndex)
-          : getMarketName(order.marketIndex);
+        // CRITICAL: Get market name with proper fallback
+        let marketName: string;
+        if (marketType === 'spot') {
+          marketName = getSpotMarketName(order.marketIndex);
+          // If we get a generic fallback, try to get the actual name from the market account
+          if (marketName.startsWith('Spot ')) {
+            try {
+              const marketAccount = client.getSpotMarketAccount(order.marketIndex);
+              if (marketAccount && marketAccount.name) {
+                const nameBytes = marketAccount.name;
+                const parsedName = Buffer.from(nameBytes)
+                  .toString('utf8')
+                  .replace(/\0/g, '')
+                  .trim();
+                if (parsedName && parsedName !== 'UNKNOWN') {
+                  marketName = parsedName;
+                }
+              }
+            } catch (err) {
+              console.warn(`[DriftContext] Could not fetch spot market name for index ${order.marketIndex}`);
+            }
+          }
+        } else {
+          marketName = getMarketName(order.marketIndex);
+          // If we get a generic fallback, try to get the actual name from the market account
+          if (marketName.startsWith('Market ')) {
+            try {
+              const marketAccount = client.getPerpMarketAccount(order.marketIndex);
+              if (marketAccount && marketAccount.name) {
+                const nameBytes = marketAccount.name;
+                const parsedName = Buffer.from(nameBytes)
+                  .toString('utf8')
+                  .replace(/\0/g, '')
+                  .trim();
+                if (parsedName && parsedName !== 'UNKNOWN') {
+                  marketName = parsedName;
+                }
+              }
+            } catch (err) {
+              console.warn(`[DriftContext] Could not fetch perp market name for index ${order.marketIndex}`);
+            }
+          }
+        }
         
         console.log(`[DriftContext] Order ${index + 1}/${openOrders.length}:`, {
           orderId: order.orderId,
@@ -2510,6 +2550,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
           price: order.price.toString(),
           status: 'open',
           orderIndex: order.orderId,
+          marketName, // Add marketName to the returned order object
         };
       });
       
@@ -2600,9 +2641,49 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         const filledAmount = order.baseAssetAmountFilled.toNumber();
         const fillPercentage = totalAmount > 0 ? (filledAmount / totalAmount) * 100 : 0;
 
-        const marketName = isSpot 
-          ? getSpotMarketName(order.marketIndex)
-          : getMarketName(order.marketIndex);
+        // CRITICAL: Get market name with proper fallback
+        let marketName: string;
+        if (isSpot) {
+          marketName = getSpotMarketName(order.marketIndex);
+          // If we get a generic fallback, try to get the actual name from the market account
+          if (marketName.startsWith('Spot ')) {
+            try {
+              const marketAccount = client.getSpotMarketAccount(order.marketIndex);
+              if (marketAccount && marketAccount.name) {
+                const nameBytes = marketAccount.name;
+                const parsedName = Buffer.from(nameBytes)
+                  .toString('utf8')
+                  .replace(/\0/g, '')
+                  .trim();
+                if (parsedName && parsedName !== 'UNKNOWN') {
+                  marketName = parsedName;
+                }
+              }
+            } catch (err) {
+              console.warn(`[DriftContext] Could not fetch spot market name for index ${order.marketIndex}`);
+            }
+          }
+        } else {
+          marketName = getMarketName(order.marketIndex);
+          // If we get a generic fallback, try to get the actual name from the market account
+          if (marketName.startsWith('Market ')) {
+            try {
+              const marketAccount = client.getPerpMarketAccount(order.marketIndex);
+              if (marketAccount && marketAccount.name) {
+                const nameBytes = marketAccount.name;
+                const parsedName = Buffer.from(nameBytes)
+                  .toString('utf8')
+                  .replace(/\0/g, '')
+                  .trim();
+                if (parsedName && parsedName !== 'UNKNOWN') {
+                  marketName = parsedName;
+                }
+              }
+            } catch (err) {
+              console.warn(`[DriftContext] Could not fetch perp market name for index ${order.marketIndex}`);
+            }
+          }
+        }
 
         console.log(`[DriftContext] Order ${i + 1} (${marketType} - ${statusText}):`, {
           orderId: order.orderId,
@@ -2622,6 +2703,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
           price: order.price.toString(),
           status: statusText,
           orderIndex: order.orderId,
+          marketName, // Add marketName to the returned order object
         });
       }
 
