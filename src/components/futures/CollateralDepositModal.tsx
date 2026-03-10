@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2 } from 'lucide-react';
+import { Icon } from '@iconify/react';
 
 interface CollateralDepositModalProps {
   isOpen: boolean;
@@ -57,7 +57,6 @@ export const CollateralDepositModal: React.FC<CollateralDepositModalProps> = ({
       if (result.success) {
         setSuccess(true);
         setError(null);
-        // Show immediate success message
         setTimeout(() => {
           handleClose();
         }, 3000);
@@ -80,17 +79,17 @@ export const CollateralDepositModal: React.FC<CollateralDepositModalProps> = ({
   
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px] bg-[#1e2329] border-[#2b3139]">
         <DialogHeader>
-          <DialogTitle>Deposit Collateral</DialogTitle>
-          <DialogDescription>
-            Deposit USDC to your Drift account for trading. A {feePercentage}% platform fee will be deducted and sent to the master wallet.
+          <DialogTitle className="text-white">Deposit Collateral</DialogTitle>
+          <DialogDescription className="text-[#848e9c]">
+            Deposit USDC from your wallet to your Drift trading account. A {feePercentage}% platform fee will be deducted.
           </DialogDescription>
         </DialogHeader>
         
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label htmlFor="amount">Amount (USDC)</Label>
+            <Label htmlFor="amount" className="text-[#848e9c]">Amount (USDC)</Label>
             <Input
               id="amount"
               type="number"
@@ -100,25 +99,26 @@ export const CollateralDepositModal: React.FC<CollateralDepositModalProps> = ({
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               disabled={isDepositing || success}
+              className="bg-[#181a20] border-[#2b3139] text-white placeholder:text-[#848e9c]"
             />
           </div>
           
           {amountNum > 0 && (
-            <div className="space-y-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-sm">
+            <div className="space-y-2 p-3 bg-[#181a20] border border-[#2b3139] rounded text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-400">Total Amount:</span>
-                <span className="font-medium text-dark dark:text-white">{amountNum.toFixed(2)} USDC</span>
+                <span className="text-[#848e9c]">Total Amount:</span>
+                <span className="font-medium text-white">{amountNum.toFixed(2)} USDC</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-400">Platform Fee ({feePercentage}%):</span>
-                <span className="font-medium text-red-600">-{feeAmount.toFixed(2)} USDC</span>
+                <span className="text-[#848e9c]">Platform Fee ({feePercentage}%):</span>
+                <span className="font-medium text-[#f6465d]">-{feeAmount.toFixed(2)} USDC</span>
               </div>
-              <div className="flex justify-between border-t border-gray-200 dark:border-gray-700 pt-2">
-                <span className="font-semibold text-dark dark:text-white">Net Collateral:</span>
-                <span className="font-semibold text-green-600">{collateralAmount.toFixed(2)} USDC</span>
+              <div className="flex justify-between border-t border-[#2b3139] pt-2 mt-2">
+                <span className="font-semibold text-white">Net Collateral:</span>
+                <span className="font-semibold text-[#0ecb81]">{collateralAmount.toFixed(2)} USDC</span>
               </div>
-              <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+              <div className="mt-2 pt-2 border-t border-[#2b3139]">
+                <p className="text-xs text-[#848e9c]">
                   Note: SOL is used for transaction fees on Solana network
                 </p>
               </div>
@@ -126,14 +126,14 @@ export const CollateralDepositModal: React.FC<CollateralDepositModalProps> = ({
           )}
           
           {error && (
-            <div className="text-sm text-red-500 p-2 bg-red-50 dark:bg-red-900/20 rounded">
+            <div className="text-sm text-[#f6465d] p-3 bg-[#181a20] border border-[#f6465d]/20 rounded">
               {error}
             </div>
           )}
           
           {success && (
-            <div className="text-sm text-green-600 dark:text-green-400 p-2 bg-green-50 dark:bg-green-900/20 rounded">
-              Transaction sent! Confirming on-chain... {collateralAmount.toFixed(2)} USDC will be added to your Drift account.
+            <div className="text-sm text-[#0ecb81] p-3 bg-[#181a20] border border-[#0ecb81]/20 rounded">
+              Deposit successful! {collateralAmount.toFixed(2)} USDC added to your Drift account.
             </div>
           )}
         </div>
@@ -143,14 +143,16 @@ export const CollateralDepositModal: React.FC<CollateralDepositModalProps> = ({
             variant="outline"
             onClick={handleClose}
             disabled={isDepositing}
+            className="bg-[#2b3139] border-[#3a4149] text-white hover:bg-[#3a4149]"
           >
             Cancel
           </Button>
           <Button
             onClick={handleDeposit}
             disabled={isDepositing || success || amountNum <= 0}
+            className="bg-[#2b3139] border-[#3a4149] text-white hover:bg-[#3a4149] disabled:opacity-30"
           >
-            {isDepositing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isDepositing && <Icon icon="svg-spinners:ring-resize" className="mr-2 h-4 w-4" />}
             {isDepositing ? 'Depositing...' : 'Deposit'}
           </Button>
         </DialogFooter>
