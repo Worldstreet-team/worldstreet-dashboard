@@ -249,50 +249,31 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
         <button onClick={() => setActiveTab('sell')} className={`py-3 text-sm font-semibold transition-colors ${activeTab === 'sell' ? 'text-[#f6465d] border-b-2 border-[#f6465d]' : 'text-[#848e9c] hover:text-white'}`}>Sell</button>
       </div>
 
-      <div className="flex gap-4 px-4 py-3 border-b border-[#2b3139]">
+      <div className="flex gap-2 px-4 py-3 border-b border-[#2b3139]">
         {(['market', 'limit', 'stop-limit'] as const).map((type) => (
-          <button key={type} onClick={() => setOrderType(type)} className={`text-xs font-medium transition-colors ${orderType === type ? 'text-white' : 'text-[#848e9c] hover:text-white'}`}>
+          <button key={type} onClick={() => setOrderType(type)} className={`text-xs font-medium pb-2 transition-colors ${orderType === type ? 'text-white border-b-2 border-white' : 'text-[#848e9c] hover:text-white'}`}>
             {type === 'stop-limit' ? 'Stop-Limit' : type.charAt(0).toUpperCase() + type.slice(1)}
           </button>
         ))}
       </div>
 
-      <div className="max-h-[25vh] overflow-y-auto scrollbar-hide px-4 py-4 space-y-4">
-        <div className="flex items-center justify-between text-xs">
-          <div className="flex items-center gap-2">
-            <span className="text-[#848e9c]">
-              {isCurrentBorrowed ? 'Borrowed' : 'Avbl'}
-            </span>
-            <button
-              onClick={() => setShowDepositModal(true)}
-              className="px-1.5 py-0.5 rounded bg-[#fcd535]/10 text-[#fcd535] text-[10px] hover:bg-[#fcd535]/20 font-bold transition-all transition-colors"
-            >
-              Deposit
-            </button>
-          </div>
-          <span className={`font-mono ${isCurrentBorrowed ? 'text-[#f6465d]' : 'text-white'}`}>
-            {loadingBalances ? 'Loading...' : `${currentBalance.toFixed(6)} ${currentToken}`}
-          </span>
-        </div>
-
-        {balanceError && <div className="p-2 bg-[#f6465d]/10 border border-[#f6465d] rounded text-xs text-[#f6465d]">{balanceError}</div>}
-
+      <div className="max-h-[25vh] overflow-y-auto scrollbar-hide px-4 py-4 space-y-3">
         {/* Stop Price Input (for stop-limit orders) */}
         {orderType === 'stop-limit' && (
           <div>
-            <label className="block text-xs text-[#848e9c] mb-2">Stop Price</label>
-            <div className="relative">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-[#848e9c]">Stop Price</span>
+              <span className="text-xs text-[#848e9c]">{quoteAsset}</span>
+            </div>
+            <div className="flex gap-2">
               <input 
                 type="number" 
                 value={stopPrice} 
                 onChange={(e) => setStopPrice(e.target.value)} 
                 placeholder="0.00" 
-                className="w-full px-3 py-2 bg-[#2b3139] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#fcd535]" 
+                className="flex-1 px-3 py-2 bg-[#2b3139] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#fcd535]" 
               />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#848e9c]">{quoteAsset}</span>
-            </div>
-            <div className="mt-1 text-[10px] text-[#848e9c]">
-              Order triggers when market reaches this price
+              <button className="px-3 py-2 bg-[#2b3139] border border-[#2b3139] rounded text-white hover:bg-[#2b3139]/80 transition-colors">+</button>
             </div>
           </div>
         )}
@@ -300,39 +281,61 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
         {/* Limit Price Input (for limit and stop-limit orders) */}
         {orderType !== 'market' && (
           <div>
-            <label className="block text-xs text-[#848e9c] mb-2">
-              {orderType === 'stop-limit' ? 'Limit Price' : 'Price'}
-            </label>
-            <div className="relative">
-              <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" className="w-full px-3 py-2 bg-[#2b3139] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#fcd535]" />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#848e9c]">{quoteAsset}</span>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-[#848e9c]">
+                {orderType === 'stop-limit' ? 'Limit Price' : 'Price (USDT)'}
+              </span>
+              <span className="text-xs text-[#848e9c]">{quoteAsset}</span>
             </div>
-            {orderType === 'stop-limit' && (
-              <div className="mt-1 text-[10px] text-[#848e9c]">
-                Order executes at this price after trigger
-              </div>
-            )}
+            <div className="flex gap-2">
+              <input 
+                type="number" 
+                value={price} 
+                onChange={(e) => setPrice(e.target.value)} 
+                placeholder="0.00" 
+                className="flex-1 px-3 py-2 bg-[#2b3139] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#fcd535]" 
+              />
+              <button className="px-3 py-2 bg-[#2b3139] border border-[#2b3139] rounded text-white hover:bg-[#2b3139]/80 transition-colors">+</button>
+            </div>
           </div>
         )}
 
         <div>
-          <label className="block text-xs text-[#848e9c] mb-2">
-            {activeTab === 'buy' ? `Amount (${quoteAsset})` : `Amount (${baseAsset})`}
-          </label>
-          <div className="relative">
-            <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="w-full px-3 py-2 bg-[#2b3139] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#fcd535]" />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#848e9c]">{currentToken}</span>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-[#848e9c]">Amount ({baseAsset})</span>
+            <span className="text-xs text-[#848e9c]">{currentToken}</span>
           </div>
-          {total && <div className="mt-1 text-[10px] text-[#848e9c]">≈ {total} {equivalentToken}</div>}
+          <div className="flex gap-2">
+            <input 
+              type="number" 
+              value={amount} 
+              onChange={(e) => setAmount(e.target.value)} 
+              placeholder="0.00" 
+              className="flex-1 px-3 py-2 bg-[#2b3139] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#fcd535]" 
+            />
+            <button className="px-3 py-2 bg-[#2b3139] border border-[#2b3139] rounded text-white hover:bg-[#2b3139]/80 transition-colors">+</button>
+          </div>
         </div>
 
         <div>
-          <input type="range" min="0" max="100" value={sliderValue} onChange={(e) => handlePercentage(parseInt(e.target.value))} className="w-full h-1 bg-[#2b3139] rounded-lg appearance-none cursor-pointer" style={{ background: `linear-gradient(to right, ${activeTab === 'buy' ? '#0ecb81' : '#f6465d'} 0%, ${activeTab === 'buy' ? '#0ecb81' : '#f6465d'} ${sliderValue}%, #2b3139 ${sliderValue}%, #2b3139 100%)` }} />
-          <div className="flex justify-between mt-2">
-            {[25, 50, 75, 100].map((val) => (
-              <button key={val} onClick={() => handlePercentage(val)} className="text-[10px] text-[#848e9c] hover:text-white transition-colors">{val}%</button>
-            ))}
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-[#848e9c]">Total (USDT)</span>
           </div>
+          <div className="px-3 py-2 bg-[#2b3139] border border-[#2b3139] rounded text-sm text-white">
+            {total || '0.00'}
+          </div>
+        </div>
+
+        {/* Checkboxes */}
+        <div className="space-y-2 pt-2">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" className="w-4 h-4 rounded border-[#2b3139] accent-[#fcd535]" />
+            <span className="text-xs text-[#848e9c]">TP/SL</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" className="w-4 h-4 rounded border-[#2b3139] accent-[#fcd535]" />
+            <span className="text-xs text-[#848e9c]">Iceberg</span>
+          </label>
         </div>
 
         {error && <div className="p-3 bg-[#f6465d]/10 border border-[#f6465d] rounded text-xs text-[#f6465d]">{error}</div>}

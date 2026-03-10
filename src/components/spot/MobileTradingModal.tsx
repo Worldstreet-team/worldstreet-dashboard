@@ -304,8 +304,90 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
                 </button>
               </div>
 
+              {/* Stop Price Input (for stop-limit orders) */}
+              {orderType === 'stop-limit' && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-[#848e9c]">Stop Price</span>
+                    <span className="text-sm text-[#848e9c]">{tokenOut}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      value={stopPrice}
+                      onChange={(e) => setStopPrice(e.target.value)}
+                      placeholder="0.00"
+                      className="flex-1 px-4 py-3 bg-[#2b3139] border border-[#2b3139] rounded-lg text-base text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#fcd535]"
+                    />
+                    <button className="px-4 py-3 bg-[#2b3139] border border-[#2b3139] rounded-lg text-white hover:bg-[#2b3139]/80 transition-colors font-semibold">+</button>
+                  </div>
+                </div>
+              )}
+
+              {/* Limit Price Input (for limit and stop-limit orders) */}
+              {orderType !== 'market' && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-[#848e9c]">
+                      {orderType === 'stop-limit' ? 'Limit Price' : 'Price (USDT)'}
+                    </span>
+                    <span className="text-sm text-[#848e9c]">{tokenOut}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      value={price}
+                      onChange={(e) => setPrice(e.target.value)}
+                      placeholder="0.00"
+                      className="flex-1 px-4 py-3 bg-[#2b3139] border border-[#2b3139] rounded-lg text-base text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#fcd535]"
+                    />
+                    <button className="px-4 py-3 bg-[#2b3139] border border-[#2b3139] rounded-lg text-white hover:bg-[#2b3139]/80 transition-colors font-semibold">+</button>
+                  </div>
+                </div>
+              )}
+
+              {/* Amount Input */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-[#848e9c]">Amount ({tokenIn})</span>
+                  <span className="text-sm text-[#848e9c]">{currentToken}</span>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder="0.00"
+                    className="flex-1 px-4 py-3 bg-[#2b3139] border border-[#2b3139] rounded-lg text-base text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#fcd535]"
+                  />
+                  <button className="px-4 py-3 bg-[#2b3139] border border-[#2b3139] rounded-lg text-white hover:bg-[#2b3139]/80 transition-colors font-semibold">+</button>
+                </div>
+              </div>
+
+              {/* Total Display */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-[#848e9c]">Total (USDT)</span>
+                </div>
+                <div className="px-4 py-3 bg-[#2b3139] border border-[#2b3139] rounded-lg text-base text-white">
+                  {total || '0.00'}
+                </div>
+              </div>
+
+              {/* Checkboxes */}
+              <div className="space-y-2 pt-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" className="w-4 h-4 rounded border-[#2b3139] accent-[#fcd535]" />
+                  <span className="text-sm text-[#848e9c]">TP/SL</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" className="w-4 h-4 rounded border-[#2b3139] accent-[#fcd535]" />
+                  <span className="text-sm text-[#848e9c]">Iceberg</span>
+                </label>
+              </div>
+
               {/* Available Balance */}
-              <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center justify-between text-sm pt-2">
                 <span className="text-[#848e9c]">Available</span>
                 <span className="text-white font-mono">
                   {loadingBalances ? (
@@ -316,99 +398,6 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
                     `${currentBalance.toFixed(6)} ${currentToken}`
                   )}
                 </span>
-              </div>
-
-              {/* Balance Error Alert */}
-              {balanceError && (
-                <div className="p-3 bg-[rgba(246,70,93,0.12)] border border-[#f6465d] rounded-lg text-xs text-[#f6465d]">
-                  {balanceError}
-                </div>
-              )}
-
-              {/* Stop Price Input (for stop-limit orders) */}
-              {orderType === 'stop-limit' && (
-                <div>
-                  <label className="block text-sm text-[#848e9c] mb-2">Stop Price</label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      value={stopPrice}
-                      onChange={(e) => setStopPrice(e.target.value)}
-                      placeholder="0.00"
-                      className="w-full px-4 py-3 bg-[#2b3139] border border-[#2b3139] rounded-lg text-base text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#fcd535]"
-                    />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[#848e9c]">
-                      {tokenOut}
-                    </span>
-                  </div>
-                  <div className="mt-1 text-xs text-[#848e9c]">
-                    Order triggers when market reaches this price
-                  </div>
-                </div>
-              )}
-
-              {/* Limit Price Input (for limit and stop-limit orders) */}
-              {orderType !== 'market' && (
-                <div>
-                  <label className="block text-sm text-[#848e9c] mb-2">
-                    {orderType === 'stop-limit' ? 'Limit Price' : 'Price'}
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      value={price}
-                      onChange={(e) => setPrice(e.target.value)}
-                      placeholder="0.00"
-                      className="w-full px-4 py-3 bg-[#2b3139] border border-[#2b3139] rounded-lg text-base text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#fcd535]"
-                    />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[#848e9c]">
-                      {tokenOut}
-                    </span>
-                  </div>
-                  {orderType === 'stop-limit' && (
-                    <div className="mt-1 text-xs text-[#848e9c]">
-                      Order executes at this price after trigger
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Amount Input */}
-              <div>
-                <label className="block text-sm text-[#848e9c] mb-2">
-                  {side === 'buy' ? `Amount (${tokenOut})` : `Amount (${tokenIn})`}
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    placeholder="0.00"
-                    className="w-full px-4 py-3 bg-[#2b3139] border border-[#2b3139] rounded-lg text-base text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#fcd535]"
-                  />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[#848e9c]">
-                    {currentToken}
-                  </span>
-                </div>
-                {/* Show equivalent */}
-                {total && (
-                  <div className="mt-2 text-xs text-[#848e9c]">
-                    ≈ {total} {equivalentToken}
-                  </div>
-                )}
-              </div>
-
-              {/* Percentage Buttons */}
-              <div className="grid grid-cols-4 gap-2">
-                {[25, 50, 75, 100].map((percent) => (
-                  <button
-                    key={percent}
-                    onClick={() => handlePercentage(percent)}
-                    className="py-2 bg-[#2b3139] hover:bg-[#2b3139]/80 text-white text-sm font-medium rounded-lg transition-colors"
-                  >
-                    {percent}%
-                  </button>
-                ))}
               </div>
 
               {/* Error Message */}
