@@ -2153,7 +2153,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         const limitPrice = marketPrice * priceBuffer;
         
         // Convert price to Drift precision (6 decimals for USDC-quoted markets)
-        orderPrice = new BN(0);
+        orderPrice = new BN(Math.floor(limitPrice * 1e6));
         
         console.log('[DriftContext] Market order → Using LIMIT at oracle price');
         console.log('[DriftContext] Oracle Price:', marketPrice);
