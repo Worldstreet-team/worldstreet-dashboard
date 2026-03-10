@@ -84,20 +84,24 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
   }, [selectedPair, isOpen, driftSpotPositions, getSpotMarketIndexBySymbol]);
 
   useEffect(() => {
-    if (orderType === 'market' && amount && currentMarketPrice > 0) {
-      if (side === 'buy') {
-        const tokenAmount = parseFloat(amount) / currentMarketPrice;
-        setTotal(tokenAmount.toFixed(6));
-      } else {
-        const usdtAmount = parseFloat(amount) * currentMarketPrice;
-        setTotal(usdtAmount.toFixed(6));
-      }
-    } else if (orderType === 'limit' && amount && price) {
-      const priceNum = parseFloat(price);
-      const amountNum = parseFloat(amount);
-      setTotal((amountNum * priceNum).toFixed(6));
+    if (!amount || parseFloat(amount) <= 0) {
+      setTotal('');
+      return;
     }
-  }, [amount, price, currentMarketPrice, orderType, side]);
+
+    if (orderType === 'market' && currentMarketPrice > 0) {
+      // For market orders: total = amount * currentMarketPrice
+      const totalValue = parseFloat(amount) * currentMarketPrice;
+      setTotal(totalValue.toFixed(6));
+    } else if ((orderType === 'limit' || orderType === 'stop-limit') && price) {
+      // For limit/stop-limit: total = amount * price
+      const priceNum = parseFloat(price);
+      if (priceNum > 0) {
+        const totalValue = parseFloat(amount) * priceNum;
+        setTotal(totalValue.toFixed(6));
+      }
+    }
+  }, [amount, price, currentMarketPrice, orderType]);
 
   const handlePercentage = (percent: number) => {
     const calculatedAmount = (currentBalance * percent) / 100;
@@ -372,18 +376,6 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
                 <div className="px-4 py-3 bg-[#2b3139] border border-[#2b3139] rounded-lg text-base text-white">
                   {total || '0.00'}
                 </div>
-              </div>
-
-              {/* Checkboxes */}
-              <div className="space-y-2 pt-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" className="w-4 h-4 rounded border-[#2b3139] accent-[#fcd535]" />
-                  <span className="text-sm text-[#848e9c]">TP/SL</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" className="w-4 h-4 rounded border-[#2b3139] accent-[#fcd535]" />
-                  <span className="text-sm text-[#848e9c]">Iceberg</span>
-                </label>
               </div>
 
               {/* Available Balance */}
