@@ -1227,8 +1227,27 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
             const direction: 'long' | 'short' = baseAmount > 0 ? 'long' : 'short';
             const marketIndex = position.marketIndex;
 
-            // Get stable market name from mapping
-            const marketName = getMarketName(marketIndex);
+            // CRITICAL: Get market name with proper fallback
+            let marketName = getMarketName(marketIndex);
+            
+            // If we get a generic fallback, try to get the actual name from the market account
+            if (marketName.startsWith('Market ')) {
+              try {
+                const marketAccount = client.getPerpMarketAccount(marketIndex);
+                if (marketAccount && marketAccount.name) {
+                  const nameBytes = marketAccount.name;
+                  const parsedName = Buffer.from(nameBytes)
+                    .toString('utf8')
+                    .replace(/\0/g, '')
+                    .trim();
+                  if (parsedName && parsedName !== 'UNKNOWN') {
+                    marketName = parsedName;
+                  }
+                }
+              } catch (err) {
+                console.warn(`[DriftContext] Could not fetch perp market name for position index ${marketIndex}`);
+              }
+            }
 
             let market;
             try {
@@ -1239,7 +1258,7 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
 
             positionsList.push({
               marketIndex,
-              marketName, // Stable market symbol
+              marketName, // Stable market symbol with fallback
               direction,
               baseAmount: Math.abs(baseAmount) / 1e9,
               quoteAmount: Math.abs(position.quoteAssetAmount.toNumber()) / 1e6,
@@ -1266,7 +1285,28 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
           const marketIndex = marketAccount.marketIndex;
           const position = driftUser.getSpotPosition(marketIndex);
 
-          const marketName = getSpotMarketName(marketIndex);
+          // CRITICAL: Get market name with proper fallback
+          let marketName = getSpotMarketName(marketIndex);
+          
+          // If we get a generic fallback, try to get the actual name from the market account
+          if (marketName.startsWith('Spot ')) {
+            try {
+              const spotMarketAccount = client.getSpotMarketAccount(marketIndex);
+              if (spotMarketAccount && spotMarketAccount.name) {
+                const nameBytes = spotMarketAccount.name;
+                const parsedName = Buffer.from(nameBytes)
+                  .toString('utf8')
+                  .replace(/\0/g, '')
+                  .trim();
+                if (parsedName && parsedName !== 'UNKNOWN') {
+                  marketName = parsedName;
+                }
+              }
+            } catch (err) {
+              console.warn(`[DriftContext] Could not fetch spot market name for position index ${marketIndex}`);
+            }
+          }
+          
           const decimals = marketAccount.decimals;
 
           // Calculate actual amount based on balance type (deposit or borrow)
