@@ -28,10 +28,11 @@ export default function FuturesTradingModal({
     getMarketPrice
   } = useDrift();
 
-  const [orderType, setOrderType] = useState<'market' | 'limit'>('market');
+  const [orderType, setOrderType] = useState<'market' | 'limit' | 'stop-limit'>('market');
   const [size, setSize] = useState('');
   const [leverage, setLeverage] = useState(1);
   const [limitPrice, setLimitPrice] = useState('');
+  const [triggerPrice, setTriggerPrice] = useState('');
   const [sliderValue, setSliderValue] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -87,9 +88,42 @@ export default function FuturesTradingModal({
       return;
     }
 
-    if (orderType === 'limit' && (!limitPrice || parseFloat(limitPrice) <= 0)) {
+    if ((orderType === 'limit' || orderType === 'stop-limit') && (!limitPrice || parseFloat(limitPrice) <= 0)) {
       setError('Please enter a valid limit price');
       return;
+    }
+
+    if (orderType === 'stop-limit') {
+      if (!triggerPrice || parseFloat(triggerPrice) <= 0) {
+        setError('Please enter a valid trigger price');
+        return;
+      }
+
+      const triggerPriceNum = parseFloat(triggerPrice);
+      const limitPriceNum = parseFloat(limitPrice);
+
+      // Validate trigger price vs limit price
+      if (side === 'long') {
+        // For long stop-limit: trigger >= current market, limit >= trigger
+        if (triggerPriceNum < currentMarketPrice) {
+          setError('Long stop-limit trigger price must be above current market price');
+          return;
+        }
+        if (limitPriceNum < triggerPriceNum) {
+          setError('Long stop-limit limit price must be at or above trigger price');
+          return;
+        }
+      } else {
+        // For short stop-limit: trigger <= current market, limit <= trigger
+        if (triggerPriceNum > currentMarketPrice) {
+          setError('Short stop-limit trigger price must be below current market price');
+          return;
+        }
+        if (limitPriceNum > triggerPriceNum) {
+          setError('Short stop-limit limit price must be at or below trigger price');
+          return;
+        }
+      }
     }
 
     if (!previewData || !previewData.marginCheckPassed) {
@@ -109,7 +143,10 @@ export default function FuturesTradingModal({
         marketIndex,
         side,
         parseFloat(size),
-        leverage
+        leverage,
+        orderType,
+        orderType !== 'market' ? parseFloat(limitPrice) : undefined,
+        orderType === 'stop-limit' ? parseFloat(triggerPrice) : undefined
       );
 
       if (!result.success) {
@@ -123,6 +160,7 @@ export default function FuturesTradingModal({
 
       setSize('');
       setLimitPrice('');
+      setTriggerPrice('');
       setSliderValue(0);
 
       // Auto-close after 2 seconds
@@ -187,6 +225,16 @@ export default function FuturesTradingModal({
             >
               Limit
             </button>
+            <button
+              onClick={() => setOrderType('stop-limit')}
+              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
+                orderType === 'stop-limit'
+                  ? 'bg-[#181a20] text-white'
+                  : 'text-[#848e9c]'
+              }`}
+            >
+              Stop-Limit
+            </button>
           </div>
 
           {/* Available Balance */}
@@ -197,10 +245,12 @@ export default function FuturesTradingModal({
             </span>
           </div>
 
-          {/* Limit Price (for limit orders) */}
-          {orderType === 'limit' && (
+          {/* Limit Price (for limit and stop-limit orders) */}
+          {(orderType === 'limit' || orderType === 'stop-limit') && (
             <div>
-              <label className="block text-sm text-[#848e9c] mb-2">Limit Price</label>
+              <label className="block text-sm text-[#848e9c] mb-2">
+                {orderType === 'stop-limit' ? 'Limit Price' : 'Price'}
+              </label>
               <div className="relative">
                 <input
                   type="number"
@@ -213,6 +263,30 @@ export default function FuturesTradingModal({
                   USDT
                 </span>
               </div>
+            </div>
+          )}
+
+          {/* Trigger Price (for stop-limit orders only) */}
+          {orderType === 'stop-limit' && (
+            <div>
+              <label className="block text-sm text-[#848e9c] mb-2">Trigger Price</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={triggerPrice}
+                  onChange={(e) => setTriggerPrice(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full px-4 py-3 bg-[#2b3139] border border-[#2b3139] rounded-lg text-base text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#fcd535]"
+                />
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[#848e9c]">
+                  USDT
+                </span>
+              </div>
+              <p className="text-xs text-[#848e9c] mt-1">
+                {side === 'long' 
+                  ? 'Order triggers when price rises above this level'
+                  : 'Order triggers when price falls below this level'}
+              </p>
             </div>
           )}
 

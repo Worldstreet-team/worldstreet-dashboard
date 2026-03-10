@@ -18,9 +18,10 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
   side,
   marketIndex,
 }) => {
-  const { openPosition, isLoading: driftLoading, previewTrade, getMarketName, perpMarkets, summary } = useDrift();
+  const { openPosition, isLoading: driftLoading, previewTrade, getMarketName, getMarketPrice, perpMarkets, summary } = useDrift();
 
   const [previewData, setPreviewData] = useState<any>(null);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [orderType, setOrderType] = useState<'market' | 'limit' | 'stop-limit'>('market');
   const [size, setSize] = useState('');
   const [leverage, setLeverage] = useState(1);
@@ -39,16 +40,19 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
   // Get market info from Drift context
   const marketInfo = perpMarkets.get(marketIndex);
   const marketName = marketInfo?.symbol || getMarketName(marketIndex);
+  const currentMarketPrice = getMarketPrice(marketIndex, 'perp');
 
-  // Preview calculation
+  // Preview calculation with better error handling
   useEffect(() => {
     if (!marketIndex || !debouncedSize || parseFloat(debouncedSize) <= 0) {
       setPreviewData(null);
       setError(null);
+      setIsLoadingPreview(false);
       return;
     }
 
     const fetchPreview = async () => {
+      setIsLoadingPreview(true);
       try {
         console.log(`[FuturesOrderModal] Previewing trade for ${marketName} (index: ${marketIndex})`);
 
@@ -65,11 +69,17 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
         console.error('[FuturesOrderModal] Preview error:', error);
         setPreviewData(null);
         const errorMessage = error instanceof Error ? error.message : 'Failed to calculate preview';
+        
+        // Don't show error for authentication issues - user just needs to unlock wallet
         if (errorMessage.includes('subscribe') || errorMessage.includes('not authenticated')) {
           setError('Please unlock your wallet to preview trades');
+        } else if (errorMessage.includes('not initialized')) {
+          setError('Please initialize your Drift account first');
         } else {
           setError(errorMessage);
         }
+      } finally {
+        setIsLoadingPreview(false);
       }
     };
 
@@ -118,7 +128,7 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
 
       const triggerPriceNum = parseFloat(triggerPrice);
       const limitPriceNum = parseFloat(limitPrice);
-      const currentPrice = previewData.entryPrice;
+      const currentPrice = previewData?.entryPrice || currentMarketPrice;
 
       // Validate trigger price vs limit price
       if (side === 'long') {
@@ -215,6 +225,7 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
       setError(null);
       setSuccessMessage('');
       setPreviewData(null);
+      setIsLoadingPreview(false);
       setShowQuote(false);
       setPin('');
       setPinError('');
@@ -390,7 +401,16 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
               </div>
 
               {/* Preview */}
-              {previewData && (
+              {isLoadingPreview && (
+                <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-white/5 dark:to-white/10 rounded-xl p-4 border border-gray-200/50 dark:border-white/10">
+                  <div className="flex items-center justify-center gap-2 text-sm text-muted dark:text-gray-400">
+                    <Icon icon="ph:circle-notch" className="animate-spin" width={16} />
+                    <span>Calculating preview...</span>
+                  </div>
+                </div>
+              )}
+              
+              {!isLoadingPreview && previewData && (
                 <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-white/5 dark:to-white/10 rounded-xl p-4 border border-gray-200/50 dark:border-white/10 space-y-3">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted dark:text-gray-400">Base Margin:</span>
