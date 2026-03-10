@@ -56,9 +56,11 @@ export const CollateralDepositModal: React.FC<CollateralDepositModalProps> = ({
       
       if (result.success) {
         setSuccess(true);
+        setError(null);
+        // Show immediate success message
         setTimeout(() => {
           handleClose();
-        }, 2000);
+        }, 3000);
       } else {
         setError(result.error || 'Deposit failed');
       }
@@ -131,7 +133,7 @@ export const CollateralDepositModal: React.FC<CollateralDepositModalProps> = ({
           
           {success && (
             <div className="text-sm text-green-600 dark:text-green-400 p-2 bg-green-50 dark:bg-green-900/20 rounded">
-              Deposit successful! {collateralAmount.toFixed(2)} USDC has been added to your Drift account.
+              Transaction sent! Confirming on-chain... {collateralAmount.toFixed(2)} USDC will be added to your Drift account.
             </div>
           )}
         </div>

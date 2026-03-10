@@ -17,6 +17,7 @@ import { BitcoinProvider } from "@/app/context/bitcoinContext";
 import { TronProvider } from "@/app/context/tronContext";
 import { SwapProvider } from "@/app/context/swapContext";
 import { DriftProvider } from "@/app/context/driftContext";
+import { TransactionNotifications } from "@/components/drift/TransactionNotifications";
 
 import { PinSetupModal, WalletAddressSync } from "@/components/wallet";
 import DashboardVividProvider from "@/components/dashboard/DashboardVividProvider";
@@ -130,6 +131,9 @@ export default function Layout({
                         
                             {/* Wallet PIN Setup Modal */}
                             <PinSetupModal />
+                            
+                            {/* Transaction Notifications */}
+                            <TransactionNotifications />
                           </DashboardVividProvider>
 
                         </DriftProvider>

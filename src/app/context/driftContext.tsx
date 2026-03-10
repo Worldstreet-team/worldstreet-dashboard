@@ -1326,10 +1326,44 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
   }, [user?.userId, requestPin, initializeDriftClient, refreshAccounts, getMarketName, getSpotMarketName]);
 
   /**
+   * Start background transaction monitoring
+   * Returns immediately without waiting for confirmation
+   * 
+   * @param connection - Solana connection with WebSocket support
+   * @param signature - Transaction signature to monitor
+   * @param onUpdate - Optional callback for status updates
+   */
+  const startTransactionMonitor = useCallback(async (
+    connection: any,
+    signature: string,
+    onUpdate?: (status: 'pending' | 'confirming' | 'confirmed' | 'failed' | 'timeout') => void
+  ): Promise<void> => {
+    const { transactionMonitor } = await import('@/services/drift/TransactionMonitor');
+    
+    transactionMonitor.monitorTransaction(
+      connection,
+      signature,
+      (update) => {
+        console.log(`[DriftContext] Transaction ${signature} status:`, update.status);
+        if (onUpdate) {
+          onUpdate(update.status);
+        }
+        
+        // Refresh data when transaction is confirmed
+        if (update.status === 'confirmed') {
+          console.log(`[DriftContext] Transaction confirmed, refreshing data...`);
+          refreshSummary();
+          refreshPositions();
+        }
+      }
+    );
+  }, [refreshSummary, refreshPositions]);
+
+  /**
    * Poll transaction status using WebSocket subscription for real-time updates
    * 
-   * This function uses WebSocket subscriptions to monitor transaction status in real-time,
-   * providing faster confirmation than polling. Falls back to polling if WebSocket fails.
+   * DEPRECATED: Use startTransactionMonitor for background monitoring
+   * This function blocks until confirmation - only use when blocking is required
    * 
    * @param connection - Solana connection with WebSocket support
    * @param signature - Transaction signature to monitor
@@ -1538,9 +1572,9 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
 
           console.log('[DriftContext] Fee transaction sent:', feeTxSig);
 
-          // Wait for fee transaction confirmation
-          await pollTransactionStatus(client.connection, feeTxSig, 30, 2000);
-          console.log('[DriftContext] Fee transaction confirmed:', feeTxSig);
+          // Start background monitoring for fee transaction (non-blocking)
+          startTransactionMonitor(client.connection, feeTxSig);
+          console.log('[DriftContext] Background monitoring started for fee:', feeTxSig);
         }
 
         // Now deposit net amount to Drift
@@ -1570,9 +1604,9 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
 
         console.log('[DriftContext] Deposit transaction sent:', txSignature);
 
-        // Wait for confirmation
-        await pollTransactionStatus(client.connection, txSignature, 30, 2000);
-        console.log('[DriftContext] Deposit confirmed:', txSignature);
+        // Start background monitoring (non-blocking)
+        startTransactionMonitor(client.connection, txSignature);
+        console.log('[DriftContext] Background monitoring started for deposit:', txSignature);
 
         // Refresh accounts after deposit
         await refreshAccounts();
@@ -1678,9 +1712,9 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
 
         console.log("[DriftContext] Withdrawal transaction sent:", txSignature);
 
-        // 6. Poll for confirmation
-        await pollTransactionStatus(client.connection, txSignature, 30, 2000);
-        console.log("[DriftContext] Withdrawal confirmed:", txSignature);
+        // Start background monitoring (non-blocking)
+        startTransactionMonitor(client.connection, txSignature);
+        console.log('[DriftContext] Background monitoring started for withdrawal:', txSignature);
 
         // 7. Refresh summary after success
         await refreshSummary();
@@ -1755,9 +1789,9 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
 
       console.log('[DriftContext] Order transaction sent:', txSignature);
 
-      // Poll for order transaction confirmation
-      await pollTransactionStatus(client.connection, txSignature, 30, 2000);
-      console.log('[DriftContext] Order confirmed:', txSignature);
+      // Start background monitoring (non-blocking)
+      startTransactionMonitor(client.connection, txSignature);
+      console.log('[DriftContext] Background monitoring started for position:', txSignature);
 
       await refreshSummary();
       await refreshPositions();
@@ -1863,9 +1897,9 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
 
       console.log('[DriftContext] Close position transaction sent:', txSignature);
 
-      // Poll for close position transaction confirmation
-      await pollTransactionStatus(client.connection, txSignature, 30, 2000);
-      console.log('[DriftContext] Close position confirmed:', txSignature);
+      // Start background monitoring (non-blocking)
+      startTransactionMonitor(client.connection, txSignature);
+      console.log('[DriftContext] Background monitoring started for close position:', txSignature);
 
       await refreshSummary();
       await refreshPositions();
@@ -2291,9 +2325,9 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
       const txSignature = await client.placeSpotOrder(orderParams, txOptions);
       console.log('[DriftContext] Spot order sent:', txSignature);
 
-      // Wait for transaction confirmation
-      await pollTransactionStatus(client.connection, txSignature, 30, 2000);
-      console.log('[DriftContext] Transaction confirmed on-chain');
+      // Start background monitoring (non-blocking)
+      startTransactionMonitor(client.connection, txSignature);
+      console.log('[DriftContext] Background monitoring started for spot order:', txSignature);
       
       // CRITICAL: Slot buffer delay to prevent revertFill timing issues
       // This ensures the keeper's last_active_slot matches the validation slot
@@ -2628,9 +2662,9 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
 
       console.log('[DriftContext] Cancel order transaction sent:', txSignature);
 
-      // Wait for confirmation
-      await pollTransactionStatus(client.connection, txSignature, 30, 2000);
-      console.log('[DriftContext] Order cancelled:', txSignature);
+      // Start background monitoring (non-blocking)
+      startTransactionMonitor(client.connection, txSignature);
+      console.log('[DriftContext] Background monitoring started for cancel order:', txSignature);
 
       // Refresh orders list
       await getOpenOrders();

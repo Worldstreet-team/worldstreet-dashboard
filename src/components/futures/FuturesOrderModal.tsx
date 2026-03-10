@@ -136,9 +136,10 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
         throw new Error(result.error || 'Failed to open position');
       }
 
-      setSuccessMessage(`Position opened! TX: ${result.txSignature?.slice(0, 8)}...`);
+      // Show immediate success with transaction processing message
+      setSuccessMessage(`Transaction sent! Confirming on-chain... TX: ${result.txSignature?.slice(0, 8)}...`);
 
-      // Close modal after success
+      // Close modal after brief delay
       setTimeout(() => {
         onClose();
         setSize('');
@@ -147,7 +148,7 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
         setError(null);
         setShowQuote(false);
         setPin('');
-      }, 2000);
+      }, 3000);
     } catch (error) {
       console.error('Submit error:', error);
       const errorMsg = error instanceof Error ? error.message : 'Failed to open position';
