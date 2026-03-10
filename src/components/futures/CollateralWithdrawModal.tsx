@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2 } from 'lucide-react';
+import { Icon } from '@iconify/react';
 
 interface CollateralWithdrawModalProps {
   isOpen: boolean;
@@ -84,17 +84,17 @@ export const CollateralWithdrawModal: React.FC<CollateralWithdrawModalProps> = (
   
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px] bg-[#1e2329] border-[#2b3139]">
         <DialogHeader>
-          <DialogTitle>Withdraw Collateral</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className="text-white">Withdraw Collateral</DialogTitle>
+          <DialogDescription className="text-[#848e9c]">
             Withdraw USDC from your Drift account back to your main wallet.
           </DialogDescription>
         </DialogHeader>
         
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label htmlFor="amount">Amount (USDC)</Label>
+            <Label htmlFor="amount" className="text-[#848e9c]">Amount (USDC)</Label>
             <div className="relative">
               <Input
                 id="amount"
@@ -106,29 +106,30 @@ export const CollateralWithdrawModal: React.FC<CollateralWithdrawModalProps> = (
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 disabled={isWithdrawing || success}
+                className="bg-[#181a20] border-[#2b3139] text-white placeholder:text-[#848e9c] pr-16"
               />
               <button
                 type="button"
                 onClick={handleMaxClick}
                 disabled={isWithdrawing || success}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[#fcd535] hover:text-[#fcd535]/80 font-medium disabled:opacity-50"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[#848e9c] hover:text-white font-medium disabled:opacity-50 px-2 py-1 bg-[#2b3139] rounded"
               >
                 MAX
               </button>
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
+            <p className="text-xs text-[#848e9c]">
               Available: {availableBalance.toFixed(2)} USDC
             </p>
           </div>
           
           {amountNum > 0 && (
-            <div className="space-y-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-sm">
+            <div className="space-y-2 p-3 bg-[#181a20] border border-[#2b3139] rounded text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-600 dark:text-gray-400">Withdrawal Amount:</span>
-                <span className="font-medium text-dark dark:text-white">{amountNum.toFixed(2)} USDC</span>
+                <span className="text-[#848e9c]">Withdrawal Amount:</span>
+                <span className="font-medium text-white">{amountNum.toFixed(2)} USDC</span>
               </div>
-              <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+              <div className="mt-2 pt-2 border-t border-[#2b3139]">
+                <p className="text-xs text-[#848e9c]">
                   Note: SOL is used for transaction fees on Solana network
                 </p>
               </div>
@@ -136,13 +137,13 @@ export const CollateralWithdrawModal: React.FC<CollateralWithdrawModalProps> = (
           )}
           
           {error && (
-            <div className="text-sm text-red-500 p-2 bg-red-50 dark:bg-red-900/20 rounded">
+            <div className="text-sm text-[#f6465d] p-3 bg-[#181a20] border border-[#f6465d]/20 rounded">
               {error}
             </div>
           )}
           
           {success && (
-            <div className="text-sm text-green-600 dark:text-green-400 p-2 bg-green-50 dark:bg-green-900/20 rounded">
+            <div className="text-sm text-[#0ecb81] p-3 bg-[#181a20] border border-[#0ecb81]/20 rounded">
               Withdrawal successful! {amountNum.toFixed(2)} USDC will be returned to your wallet.
             </div>
           )}
@@ -153,14 +154,16 @@ export const CollateralWithdrawModal: React.FC<CollateralWithdrawModalProps> = (
             variant="outline"
             onClick={handleClose}
             disabled={isWithdrawing}
+            className="bg-[#2b3139] border-[#3a4149] text-white hover:bg-[#3a4149]"
           >
             Cancel
           </Button>
           <Button
             onClick={handleWithdraw}
             disabled={isWithdrawing || success || amountNum <= 0 || amountNum > availableBalance}
+            className="bg-[#2b3139] border-[#3a4149] text-white hover:bg-[#3a4149] disabled:opacity-30"
           >
-            {isWithdrawing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isWithdrawing && <Icon icon="svg-spinners:ring-resize" className="mr-2 h-4 w-4" />}
             {isWithdrawing ? 'Withdrawing...' : 'Withdraw'}
           </Button>
         </DialogFooter>

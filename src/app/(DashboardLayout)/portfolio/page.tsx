@@ -9,10 +9,8 @@ import { DriftAccountStatus } from '@/components/futures/DriftAccountStatus';
 import { PaginatedSpotPositions } from '@/components/spot/PaginatedSpotPositions';
 import OrderStatusMonitor from '@/components/spot/OrderStatusMonitor';
 import { CollateralManagementPanel } from '@/components/futures/CollateralManagementPanel';
-import { useUser } from '@clerk/nextjs';
 
 export default function PortfolioPage() {
-  const { user } = useUser();
   const {
     summary,
     positions,
@@ -52,75 +50,6 @@ export default function PortfolioPage() {
     await Promise.all([refreshSummary(), refreshPositions(), getOpenOrders()]);
     setIsRefreshing(false);
   }, [refreshSummary, refreshPositions, getOpenOrders]);
-
-  // Handle collateral deposit
-  const handleDeposit = useCallback(async (amount: number) => {
-    try {
-      const response = await fetch('/api/futures/collateral/deposit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        return {
-          success: false,
-          error: result.error || 'Deposit failed',
-        };
-      }
-
-      // Refresh summary after successful deposit
-      await refreshSummary();
-
-      return {
-        success: true,
-        feeAmount: result.data?.feeAmount,
-        collateralAmount: result.data?.collateralAmount,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
-  }, [refreshSummary]);
-
-  // Handle collateral withdrawal
-  const handleWithdraw = useCallback(async (amount: number) => {
-    try {
-      const response = await fetch('/api/futures/collateral/withdraw', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          chain: 'solana',
-          amount 
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        return {
-          success: false,
-          error: result.error || 'Withdrawal failed',
-        };
-      }
-
-      // Refresh summary after successful withdrawal
-      await refreshSummary();
-
-      return {
-        success: true,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
-  }, [refreshSummary]);
 
   // Format number with decimals
   const formatNumber = (num: number, decimals: number = 2) => {
@@ -347,13 +276,7 @@ export default function PortfolioPage() {
           </div>
 
           {/* Collateral Management */}
-          <CollateralManagementPanel
-            totalCollateral={summary?.totalCollateral || 0}
-            freeCollateral={summary?.freeCollateral || 0}
-            onDeposit={handleDeposit}
-            onWithdraw={handleWithdraw}
-            feePercentage={5}
-          />
+          <CollateralManagementPanel />
 
           {/* Account Metrics */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
