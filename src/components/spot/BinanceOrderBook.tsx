@@ -65,12 +65,15 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
         if (quote.toUpperCase() !== 'USDT') {
           normalizedSymbol = `${base}_USDT`;
         }
+        if (quote.toUpperCase() !== 'USDC'){
+          normalizedSymbol = `${base}_USDT`
+        }
       } else {
         // No underscore, just add _USDT
         normalizedSymbol = `${symbol}_USDT`;
       }
       
-      const response = await fetch(`/api/orderbook?symbol=${normalizedSymbol.split("_")[0]}`);
+      const response = await fetch(`/api/orderbook?symbol=${normalizedSymbol}`);
       
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
