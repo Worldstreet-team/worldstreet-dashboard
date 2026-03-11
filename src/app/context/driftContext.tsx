@@ -1555,6 +1555,28 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
           await client.subscribe();
         }
 
+        // CRITICAL: Wait for spot market accounts to load after subscription
+        // The client needs time to fetch market data from the blockchain
+        let retries = 0;
+        const maxRetries = 10;
+        while (retries < maxRetries) {
+          try {
+            const testMarket = client.getSpotMarketAccount(0);
+            if (testMarket) {
+              console.log('[DriftContext] Spot market data loaded successfully');
+              break;
+            }
+          } catch (err) {
+            console.log(`[DriftContext] Waiting for spot market data... (attempt ${retries + 1}/${maxRetries})`);
+            await new Promise(resolve => setTimeout(resolve, 500));
+            retries++;
+          }
+        }
+
+        if (retries >= maxRetries) {
+          throw new Error('Failed to load spot market data. Please try again.');
+        }
+
         // Get pre-deposit balance for verification
         const driftUser = client.getUser();
         const preDepositPosition = driftUser.getSpotPosition(0);
@@ -1726,6 +1748,27 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         // Subscribe client if not already
         if (!client.isSubscribed) {
           await client.subscribe();
+        }
+
+        // CRITICAL: Wait for spot market accounts to load after subscription
+        let retries = 0;
+        const maxRetries = 10;
+        while (retries < maxRetries) {
+          try {
+            const testMarket = client.getSpotMarketAccount(0);
+            if (testMarket) {
+              console.log('[DriftContext] Spot market data loaded for withdrawal');
+              break;
+            }
+          } catch (err) {
+            console.log(`[DriftContext] Waiting for spot market data... (attempt ${retries + 1}/${maxRetries})`);
+            await new Promise(resolve => setTimeout(resolve, 500));
+            retries++;
+          }
+        }
+
+        if (retries >= maxRetries) {
+          throw new Error('Failed to load spot market data. Please try again.');
         }
 
         console.log(`[DriftContext] Withdrawing ${amount} USDC from Drift`);
