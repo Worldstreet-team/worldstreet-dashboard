@@ -26,19 +26,12 @@ interface BinanceMarketListProps {
   onSelectPair: (pair: string, chain?: Chain, tokenAddress?: string) => void;
 }
 
-const ITEMS_PER_PAGE = 20;
-
 export default function BinanceMarketList({ selectedPair, onSelectPair }: BinanceMarketListProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTab, setSelectedTab] = useState<'favorites' | 'spot' | 'margin'>('spot');
-  const [selectedQuote, setSelectedQuote] = useState<'USDT' | 'BTC' | 'ETH'>('USDT');
-  const [selectedChain, setSelectedChain] = useState<Chain | 'all'>('all');
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
-  const [sortBy, setSortBy] = useState<'pair' | 'price' | 'change'>('change');
   const [markets, setMarkets] = useState<MarketData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
 
   const { perpMarkets, getMarketPrice, isClientReady } = useDrift();
 
@@ -94,40 +87,13 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
   }, [isClientReady, perpMarkets, getMarketPrice]);
 
   const filteredMarkets = useMemo(() => {
-    let filtered = markets.filter(market => {
+    return markets.filter(market => {
       const matchesSearch = searchQuery === '' ||
         market.baseAsset.toLowerCase().includes(searchQuery.toLowerCase()) ||
         market.symbol.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesQuote = market.quoteAsset === selectedQuote;
-      const matchesFavorites = selectedTab !== 'favorites' || favorites.has(market.symbol);
-      const matchesChain = selectedChain === 'all' || market.chain === selectedChain;
-
-      return matchesSearch && matchesQuote && matchesFavorites && matchesChain;
+      return matchesSearch;
     });
-
-    // Sort markets
-    filtered.sort((a, b) => {
-      if (sortBy === 'change') return Math.abs(b.change24h) - Math.abs(a.change24h);
-      if (sortBy === 'price') return b.price - a.price;
-      return a.baseAsset.localeCompare(b.baseAsset);
-    });
-
-    return filtered;
-  }, [markets, searchQuery, selectedQuote, selectedTab, selectedChain, favorites, sortBy]);
-
-  // Paginated markets
-  const paginatedMarkets = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    const endIndex = startIndex + ITEMS_PER_PAGE;
-    return filteredMarkets.slice(startIndex, endIndex);
-  }, [filteredMarkets, currentPage]);
-
-  const totalPages = Math.ceil(filteredMarkets.length / ITEMS_PER_PAGE);
-
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, selectedQuote, selectedTab, selectedChain, sortBy]);
+  }, [markets, searchQuery]);
 
   const toggleFavorite = (symbol: string) => {
     setFavorites(prev => {
@@ -167,87 +133,17 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search"
+            placeholder="Search markets..."
             className="w-full pl-10 pr-3 py-2.5 bg-[#1e2329] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f0b90b]"
           />
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-[#1e2329] px-4 shrink-0">
-        {(['favorites', 'spot', 'margin'] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setSelectedTab(tab)}
-            className={`px-4 py-3 text-sm font-medium transition-colors border-b-2 ${selectedTab === tab
-              ? 'border-[#f0b90b] text-white'
-              : 'border-transparent text-[#848e9c] hover:text-white'
-              }`}
-          >
-            {tab === 'favorites' && <Icon icon="ph:star" width={14} className="inline mr-1.5" />}
-            {tab.charAt(0).toUpperCase() + tab.slice(1)}
-          </button>
-        ))}
-      </div>
-
-      {/* Quote Tabs */}
-      <div className="flex border-b border-[#1e2329] px-4 gap-2 py-3 shrink-0">
-        {(['USDT', 'BTC', 'ETH'] as const).map((quote) => (
-          <button
-            key={quote}
-            onClick={() => setSelectedQuote(quote)}
-            className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${selectedQuote === quote
-              ? 'bg-[#1e2329] text-white'
-              : 'text-[#848e9c] hover:text-white'
-              }`}
-          >
-            {quote}
-          </button>
-        ))}
-      </div>
-
-      {/* Chain Filter */}
-      <div className="flex border-b border-[#1e2329] px-4 gap-2 py-3 overflow-x-auto scrollbar-hide shrink-0">
-        <button
-          onClick={() => setSelectedChain('all')}
-          className={`px-3 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap ${selectedChain === 'all'
-            ? 'bg-[#1e2329] text-white'
-            : 'text-[#848e9c] hover:text-white'
-            }`}
-        >
-          All Chains
-        </button>
-        {(['solana', 'ethereum', 'bitcoin'] as const).map((chain) => (
-          <button
-            key={chain}
-            onClick={() => setSelectedChain(chain)}
-            className={`px-3 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap flex items-center gap-1.5 ${selectedChain === chain
-              ? 'bg-[#1e2329] text-white'
-              : 'text-[#848e9c] hover:text-white'
-              }`}
-          >
-            {chain === 'solana' && <Icon icon="cryptocurrency:sol" width={14} />}
-            {chain === 'ethereum' && <Icon icon="cryptocurrency:eth" width={14} />}
-            {chain === 'bitcoin' && <Icon icon="cryptocurrency:btc" width={14} />}
-            {chain.charAt(0).toUpperCase() + chain.slice(1)}
-          </button>
-        ))}
-      </div>
-
       {/* Column Headers */}
       <div className="px-4 py-3 border-b border-[#1e2329] grid grid-cols-[1fr_auto_auto] gap-4 text-xs text-[#848e9c] font-medium shrink-0">
-        <button onClick={() => setSortBy('pair')} className="text-left hover:text-white flex items-center gap-1">
-          Pair
-          {sortBy === 'pair' && <Icon icon="ph:caret-down" width={12} />}
-        </button>
-        <button onClick={() => setSortBy('price')} className="text-right hover:text-white flex items-center justify-end gap-1">
-          Last Price
-          {sortBy === 'price' && <Icon icon="ph:caret-down" width={12} />}
-        </button>
-        <button onClick={() => setSortBy('change')} className="text-right hover:text-white flex items-center justify-end gap-1">
-          Change
-          {sortBy === 'change' && <Icon icon="ph:caret-down" width={12} />}
-        </button>
+        <div className="text-left">Pair</div>
+        <div className="text-right">Last Price</div>
+        <div className="text-right">Change</div>
       </div>
 
       {/* Market List */}
@@ -275,7 +171,7 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
           </div>
         ) : (
           <>
-            {paginatedMarkets.map((market) => {
+            {filteredMarkets.map((market) => {
               const isSelected = market.symbol === selectedPair;
               const isPositive = market.change24h >= 0;
               const isFav = favorites.has(market.symbol);
@@ -349,33 +245,6 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
           </>
         )}
       </div>
-
-      {/* Pagination */}
-      {!loading && !error && filteredMarkets.length > 0 && totalPages > 1 && (
-        <div className="border-t border-[#1e2329] p-4 flex items-center justify-between shrink-0">
-          <button
-            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-            disabled={currentPage === 1}
-            className="px-4 py-2 text-sm font-medium rounded bg-[#1e2329] text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#2b3139] transition-colors flex items-center gap-1"
-          >
-            <Icon icon="ph:caret-left" width={14} />
-            Previous
-          </button>
-          
-          <div className="text-sm text-[#848e9c]">
-            Page {currentPage} of {totalPages}
-          </div>
-          
-          <button
-            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-            disabled={currentPage === totalPages}
-            className="px-4 py-2 text-sm font-medium rounded bg-[#1e2329] text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#2b3139] transition-colors flex items-center gap-1"
-          >
-            Next
-            <Icon icon="ph:caret-right" width={14} />
-          </button>
-        </div>
-      )}
     </div>
   );
 }
