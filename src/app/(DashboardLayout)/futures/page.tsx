@@ -349,105 +349,105 @@ export default function BinanceFuturesPage() {
         </div>
       </div>
 
-      {/* DESKTOP LAYOUT - Fullscreen Trading Interface */}
-      <div className="hidden md:block fixed inset-0 bg-[#0a0a0a]">
+      {/* DESKTOP LAYOUT - Bybit Style Trading Interface */}
+      <div className="hidden md:block fixed inset-0 bg-[#0b0e11]">
         
-        {/* Custom Trading Header - Replaces main app header */}
-        <div className="h-14 px-6 py-3 bg-black/40 backdrop-blur-xl border-b border-white/5 flex items-center justify-between relative z-50">
+        {/* HEADER - 60px Bybit Style */}
+        <div className="h-[60px] px-4 bg-[#0b0e11] border-b border-[#1f2329] flex items-center justify-between relative z-50">
           {/* Left: Logo + Nav */}
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">
               <Image
                 src="/worldstreet-logo/WorldStreet4x.png"
                 alt="WorldStreet"
-                width={28}
-                height={28}
+                width={24}
+                height={24}
               />
-              <span className="text-base font-semibold text-white">WorldStreet</span>
+              <span className="text-[13px] font-medium text-white">WorldStreet</span>
             </div>
-            <nav className="flex items-center gap-5">
-              <Link href="/assets" className="text-[13px] text-[#848e9c] hover:text-white transition-colors">
+            <nav className="flex items-center gap-4">
+              <Link href="/assets" className="text-[12px] text-[#848e9c] hover:text-white transition-colors font-medium">
                 Assets
               </Link>
-              <Link href="/futures" className="text-[13px] text-[#f0b90b] font-medium">
+              <Link href="/futures" className="text-[12px] text-[#f0b90b] font-medium">
                 Futures
               </Link>
             </nav>
           </div>
 
-          {/* Center: Market Selector with Higher Z-Index */}
+          {/* Center: Market Selector + Price Stats */}
           <div className="flex items-center gap-6">
             {/* Market Selector */}
             <div className="relative z-50">
               <button 
                 onClick={() => setShowMarketDropdown(!showMarketDropdown)}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all duration-200 group"
+                className="flex items-center gap-1 px-3 py-1.5 hover:bg-[#1a1f26] rounded transition-colors"
               >
-                <span className="text-lg font-bold text-white tracking-tight">
+                <span className="text-[14px] font-bold text-white">
                   {currentMarketName}
                 </span>
+                <span className="text-[11px] text-[#848e9c]">Perpetual</span>
                 <Icon 
                   icon="ph:caret-down" 
-                  width={16} 
-                  className="text-gray-400 group-hover:text-white transition-colors" 
+                  width={14} 
+                  className="text-[#848e9c]" 
                 />
               </button>
               
               {showMarketDropdown && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowMarketDropdown(false)} />
-                  <div className="absolute top-full left-0 mt-2 bg-[#1a1a1a] border border-white/10 rounded-2xl shadow-2xl shadow-black/50 z-50 min-w-[200px] max-h-[400px] overflow-y-auto scrollbar-hide backdrop-blur-xl">
-                    <div className="p-2">
-                      {topMarkets.map(([marketIndex, market]) => (
-                        <button
-                          key={marketIndex}
-                          onClick={() => handleSelectMarket(marketIndex)}
-                          className={`w-full text-left px-4 py-3 rounded-xl hover:bg-white/5 text-sm font-medium transition-all duration-150 ${
-                            selectedMarketIndex === marketIndex 
-                              ? 'bg-primary/10 text-primary' 
-                              : 'text-white'
-                          }`}
-                        >
-                          <div className="flex justify-between items-center">
-                            <span>{market.symbol}</span>
-                            <span className="text-xs text-gray-400">${(getMarketPrice(marketIndex, 'perp') || 0).toFixed(2)}</span>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
+                  <div className="absolute top-full left-0 mt-1 bg-[#0f1419] border border-[#1f2329] rounded shadow-xl z-50 min-w-[180px] max-h-[350px] overflow-y-auto scrollbar-thin scrollbar-thumb-[#1f2329]">
+                    {topMarkets.map(([marketIndex, market]) => (
+                      <button
+                        key={marketIndex}
+                        onClick={() => handleSelectMarket(marketIndex)}
+                        className={`w-full text-left px-3 py-2 text-[12px] font-medium transition-colors ${
+                          selectedMarketIndex === marketIndex 
+                            ? 'bg-[#1a1f26] text-[#f0b90b]' 
+                            : 'text-white hover:bg-[#1a1f26]'
+                        }`}
+                      >
+                        <div className="flex justify-between items-center">
+                          <span>{market.symbol}</span>
+                          <span className="text-[11px] text-[#848e9c]">${(getMarketPrice(marketIndex, 'perp') || 0).toFixed(2)}</span>
+                        </div>
+                      </button>
+                    ))}
                   </div>
                 </>
               )}
             </div>
 
-            {/* Price Display */}
-            <div className="flex items-center gap-4">
+            {/* Price Stats */}
+            <div className="flex items-center gap-4 text-[12px]">
               <div className="flex flex-col">
-                <span className="text-xs text-gray-400">Last Price</span>
-                <span className={`text-lg font-bold ${isPositive ? 'text-success' : 'text-error'}`}>
+                <span className="text-[11px] text-[#848e9c]">Price</span>
+                <span className={`text-[14px] font-bold ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
                   ${currentPrice.toFixed(2)}
                 </span>
               </div>
-              <div className={`px-3 py-1 rounded-lg ${isPositive ? 'bg-success/10 text-success' : 'bg-error/10 text-error'}`}>
-                <span className="text-sm font-semibold">
+              <div className="flex flex-col">
+                <span className="text-[11px] text-[#848e9c]">24h Change</span>
+                <span className={`text-[12px] font-medium ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
                   {isPositive ? '+' : ''}{priceChange.toFixed(2)}%
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Right side - Account status */}
+          {/* Right: Account Status */}
           <div className="flex items-center gap-4">
             {isInitialized && summary && (
-              <div className="flex items-center gap-3 text-xs">
+              <div className="flex items-center gap-3 text-[12px]">
                 <div className="flex flex-col items-end">
-                  <span className="text-gray-400">Available</span>
-                  <span className="text-white font-semibold">${summary.freeCollateral.toFixed(2)}</span>
+                  <span className="text-[11px] text-[#848e9c]">Available</span>
+                  <span className="text-white font-medium">${summary.freeCollateral.toFixed(2)}</span>
                 </div>
-                <div className="w-px h-8 bg-white/10" />
+                <div className="w-px h-6 bg-[#1f2329]" />
                 <div className="flex flex-col items-end">
-                  <span className="text-gray-400">PnL</span>
-                  <span className={`font-semibold ${summary.unrealizedPnl >= 0 ? 'text-success' : 'text-error'}`}>
+                  <span className="text-[11px] text-[#848e9c]">Unrealized PnL</span>
+                  <span className={`font-medium ${summary.unrealizedPnl >= 0 ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
                     {summary.unrealizedPnl >= 0 ? '+' : ''}${summary.unrealizedPnl.toFixed(2)}
                   </span>
                 </div>
@@ -456,15 +456,14 @@ export default function BinanceFuturesPage() {
           </div>
         </div>
 
-        {/* Three-Column Layout: Market List | Chart | Order Book & Actions */}
-        <div className="h-[calc(100%-56px)] flex">
+        {/* MAIN TRADING AREA - Grid Layout */}
+        <div className="h-[calc(100%-60px-220px)] grid grid-cols-[15%_50%_15%_20%]">
           
-          {/* LEFT COLUMN (20%): Market List */}
-          <div className="w-[20%] h-full border-r border-white/5">
+          {/* COLUMN 1: Market List (15%) */}
+          <div className="h-full bg-[#0b0e11] border-r border-[#1f2329] overflow-hidden">
             <BinanceMarketList 
               selectedPair={currentMarketName}
               onSelectPair={(pair) => {
-                // Find market index by symbol
                 const market = Array.from(perpMarkets.entries()).find(([_, info]) => 
                   info.symbol === pair || `${info.symbol}-PERP` === pair
                 );
@@ -475,33 +474,53 @@ export default function BinanceFuturesPage() {
             />
           </div>
 
-          {/* CENTER COLUMN (50%): Chart */}
-          <div className="w-[50%] h-full flex flex-col">
-            <div className="flex-1 p-4">
-              <div className="h-full bg-[#0d0d0d] rounded-xl border border-white/5 shadow-lg shadow-black/20 overflow-hidden">
-                <FuturesChart symbol={currentMarketName} isDarkMode={true} />
-              </div>
+          {/* COLUMN 2: Chart (50%) */}
+          <div className="h-full bg-[#0b0e11] border-r border-[#1f2329] p-2">
+            <div className="h-full">
+              <FuturesChart symbol={currentMarketName} isDarkMode={true} />
             </div>
           </div>
 
-          {/* RIGHT COLUMN (30%): Order Book & Actions */}
-          <div className="w-[30%] h-full border-l border-white/5 flex flex-col">
-            {/* Order Book - Takes 60% of height */}
-            <div className="h-[60%] border-b border-white/5">
-              <BinanceOrderBook selectedPair={currentMarketName} />
+          {/* COLUMN 3: Order Book (15%) */}
+          <div className="h-full bg-[#0b0e11] border-r border-[#1f2329] overflow-hidden">
+            <BinanceOrderBook selectedPair={currentMarketName} />
+          </div>
+
+          {/* COLUMN 4: Trading Panel (20%) */}
+          <div className="h-full bg-[#0b0e11] overflow-y-auto scrollbar-thin scrollbar-thumb-[#1f2329]">
+            <div className="p-2">
+              <FuturesOrderForm 
+                marketIndex={selectedMarketIndex ?? 0}
+                marketName={currentMarketName}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* BOTTOM DATA PANEL - 220px */}
+        <div className="h-[220px] bg-[#0b0e11] border-t border-[#1f2329]">
+          <div className="h-full flex flex-col">
+            {/* Tabs Row */}
+            <div className="flex items-center gap-6 px-4 py-2 border-b border-[#1f2329]">
+              <button className="text-[12px] font-medium text-[#f0b90b] pb-1 border-b-2 border-[#f0b90b]">
+                Positions
+              </button>
+              <button className="text-[12px] font-medium text-[#848e9c] hover:text-white transition-colors">
+                Open Orders
+              </button>
+              <button className="text-[12px] font-medium text-[#848e9c] hover:text-white transition-colors">
+                Order History
+              </button>
+              <button className="text-[12px] font-medium text-[#848e9c] hover:text-white transition-colors">
+                Assets
+              </button>
             </div>
 
-            {/* Scrollable Actions & Info - Takes 40% of height */}
-            <div className="h-[40%] overflow-y-auto scrollbar-hide">
-              <div className="p-4 space-y-3">
-                {/* Order Form */}
-                <FuturesOrderForm 
-                  marketIndex={selectedMarketIndex ?? 0}
-                  marketName={currentMarketName}
-                />
-
-                <DriftAccountStatus />
+            {/* Content Area */}
+            <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-[#1f2329]">
+              <div className="p-2 space-y-2">
                 <PositionPanel />
+                <DriftAccountStatus />
               </div>
             </div>
           </div>

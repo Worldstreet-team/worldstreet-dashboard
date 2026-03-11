@@ -1554,24 +1554,24 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         if (!client.isSubscribed) {
           console.log('[DriftContext] Client not subscribed, subscribing now...');
           await client.subscribe();
+          
+          // Give the subscription a moment to populate market data
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
 
-        // CRITICAL: Ensure spot market accounts are loaded
-        // The Drift SDK requires explicit fetching of market accounts
-        console.log('[DriftContext] Fetching spot market accounts...');
+        console.log('[DriftContext] Client subscribed, checking market data availability...');
+        
+        // Verify the client has spot market data loaded
         try {
-          // Force fetch all subscribed spot market accounts
-          await client.fetchMarketLookupTableAccount();
+          const spotMarkets = client.getSpotMarketAccounts();
+          console.log('[DriftContext] Spot markets available:', spotMarkets?.length || 0);
           
-          // Verify spot market 0 (USDC) is accessible
-          const usdcMarket = client.getSpotMarketAccount(0);
-          if (!usdcMarket) {
-            throw new Error('USDC spot market not loaded');
+          if (!spotMarkets || spotMarkets.length === 0) {
+            throw new Error('No spot markets loaded in client');
           }
-          console.log('[DriftContext] Spot market data verified and ready');
-        } catch (fetchErr) {
-          console.error('[DriftContext] Failed to fetch spot markets:', fetchErr);
-          throw new Error('Failed to load market data. Please refresh the page and try again.');
+        } catch (checkErr) {
+          console.error('[DriftContext] Spot market check failed:', checkErr);
+          throw new Error('Market data not available. Please refresh the page and try again.');
         }
 
         // Get pre-deposit balance for verification
@@ -1746,23 +1746,24 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         if (!client.isSubscribed) {
           console.log('[DriftContext] Client not subscribed, subscribing now...');
           await client.subscribe();
+          
+          // Give the subscription a moment to populate market data
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
 
-        // CRITICAL: Ensure spot market accounts are loaded
-        console.log('[DriftContext] Fetching spot market accounts for withdrawal...');
+        console.log('[DriftContext] Client subscribed, checking market data for withdrawal...');
+        
+        // Verify the client has spot market data loaded
         try {
-          // Force fetch all subscribed spot market accounts
-          await client.fetchMarketLookupTableAccount();
+          const spotMarkets = client.getSpotMarketAccounts();
+          console.log('[DriftContext] Spot markets available:', spotMarkets?.length || 0);
           
-          // Verify spot market 0 (USDC) is accessible
-          const usdcMarket = client.getSpotMarketAccount(0);
-          if (!usdcMarket) {
-            throw new Error('USDC spot market not loaded');
+          if (!spotMarkets || spotMarkets.length === 0) {
+            throw new Error('No spot markets loaded in client');
           }
-          console.log('[DriftContext] Spot market data verified for withdrawal');
-        } catch (fetchErr) {
-          console.error('[DriftContext] Failed to fetch spot markets:', fetchErr);
-          throw new Error('Failed to load market data. Please refresh the page and try again.');
+        } catch (checkErr) {
+          console.error('[DriftContext] Spot market check failed:', checkErr);
+          throw new Error('Market data not available. Please refresh the page and try again.');
         }
 
         console.log(`[DriftContext] Withdrawing ${amount} USDC from Drift`);
