@@ -156,11 +156,11 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
   return (
     <div className="h-full flex flex-col bg-[#0b0e11] text-white overflow-hidden">
       {/* Search Bar */}
-      <div className="p-3 border-b border-[#1e2329]">
+      <div className="p-4 border-b border-[#1e2329] shrink-0">
         <div className="relative">
           <Icon
             icon="ph:magnifying-glass"
-            width={16}
+            width={18}
             className="absolute left-3 top-1/2 -translate-y-1/2 text-[#848e9c]"
           />
           <input
@@ -168,35 +168,35 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search"
-            className="w-full pl-9 pr-3 py-2 bg-[#1e2329] border border-[#2b3139] rounded text-xs text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f0b90b]"
+            className="w-full pl-10 pr-3 py-2.5 bg-[#1e2329] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f0b90b]"
           />
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-[#1e2329] px-3">
+      <div className="flex border-b border-[#1e2329] px-4 shrink-0">
         {(['favorites', 'spot', 'margin'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setSelectedTab(tab)}
-            className={`px-3 py-2 text-xs font-medium transition-colors border-b-2 ${selectedTab === tab
+            className={`px-4 py-3 text-sm font-medium transition-colors border-b-2 ${selectedTab === tab
               ? 'border-[#f0b90b] text-white'
               : 'border-transparent text-[#848e9c] hover:text-white'
               }`}
           >
-            {tab === 'favorites' && <Icon icon="ph:star" width={12} className="inline mr-1" />}
+            {tab === 'favorites' && <Icon icon="ph:star" width={14} className="inline mr-1.5" />}
             {tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
         ))}
       </div>
 
       {/* Quote Tabs */}
-      <div className="flex border-b border-[#1e2329] px-3 gap-2 py-2">
+      <div className="flex border-b border-[#1e2329] px-4 gap-2 py-3 shrink-0">
         {(['USDT', 'BTC', 'ETH'] as const).map((quote) => (
           <button
             key={quote}
             onClick={() => setSelectedQuote(quote)}
-            className={`px-2 py-1 text-[10px] font-medium rounded transition-colors ${selectedQuote === quote
+            className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${selectedQuote === quote
               ? 'bg-[#1e2329] text-white'
               : 'text-[#848e9c] hover:text-white'
               }`}
@@ -207,10 +207,10 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
       </div>
 
       {/* Chain Filter */}
-      <div className="flex border-b border-[#1e2329] px-3 gap-2 py-2 overflow-x-auto scrollbar-hide">
+      <div className="flex border-b border-[#1e2329] px-4 gap-2 py-3 overflow-x-auto scrollbar-hide shrink-0">
         <button
           onClick={() => setSelectedChain('all')}
-          className={`px-2 py-1 text-[10px] font-medium rounded transition-colors whitespace-nowrap ${selectedChain === 'all'
+          className={`px-3 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap ${selectedChain === 'all'
             ? 'bg-[#1e2329] text-white'
             : 'text-[#848e9c] hover:text-white'
             }`}
@@ -221,57 +221,57 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
           <button
             key={chain}
             onClick={() => setSelectedChain(chain)}
-            className={`px-2 py-1 text-[10px] font-medium rounded transition-colors whitespace-nowrap flex items-center gap-1 ${selectedChain === chain
+            className={`px-3 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap flex items-center gap-1.5 ${selectedChain === chain
               ? 'bg-[#1e2329] text-white'
               : 'text-[#848e9c] hover:text-white'
               }`}
           >
-            {chain === 'solana' && <Icon icon="cryptocurrency:sol" width={12} />}
-            {chain === 'ethereum' && <Icon icon="cryptocurrency:eth" width={12} />}
-            {chain === 'bitcoin' && <Icon icon="cryptocurrency:btc" width={12} />}
+            {chain === 'solana' && <Icon icon="cryptocurrency:sol" width={14} />}
+            {chain === 'ethereum' && <Icon icon="cryptocurrency:eth" width={14} />}
+            {chain === 'bitcoin' && <Icon icon="cryptocurrency:btc" width={14} />}
             {chain.charAt(0).toUpperCase() + chain.slice(1)}
           </button>
         ))}
       </div>
 
       {/* Column Headers */}
-      <div className="px-3 py-2 border-b border-[#1e2329] grid grid-cols-[1fr_auto_auto] gap-2 text-[10px] text-[#848e9c] font-medium">
+      <div className="px-4 py-3 border-b border-[#1e2329] grid grid-cols-[1fr_auto_auto] gap-4 text-xs text-[#848e9c] font-medium shrink-0">
         <button onClick={() => setSortBy('pair')} className="text-left hover:text-white flex items-center gap-1">
           Pair
-          {sortBy === 'pair' && <Icon icon="ph:caret-down" width={10} />}
+          {sortBy === 'pair' && <Icon icon="ph:caret-down" width={12} />}
         </button>
         <button onClick={() => setSortBy('price')} className="text-right hover:text-white flex items-center justify-end gap-1">
           Last Price
-          {sortBy === 'price' && <Icon icon="ph:caret-down" width={10} />}
+          {sortBy === 'price' && <Icon icon="ph:caret-down" width={12} />}
         </button>
         <button onClick={() => setSortBy('change')} className="text-right hover:text-white flex items-center justify-end gap-1">
           Change
-          {sortBy === 'change' && <Icon icon="ph:caret-down" width={10} />}
+          {sortBy === 'change' && <Icon icon="ph:caret-down" width={12} />}
         </button>
       </div>
 
       {/* Market List */}
-      <div className="flex-1 overflow-y-auto scrollbar-hide">
+      <div className="flex-1 overflow-y-auto">
         {loading ? (
-          <div className="p-6 text-center">
-            <Icon icon="ph:spinner" className="mx-auto mb-2 text-[#848e9c] animate-spin" width={32} />
-            <p className="text-xs text-[#848e9c]">Loading markets...</p>
+          <div className="p-8 text-center">
+            <Icon icon="ph:spinner" className="mx-auto mb-3 text-[#848e9c] animate-spin" width={40} />
+            <p className="text-sm text-[#848e9c]">Loading markets...</p>
           </div>
         ) : error ? (
-          <div className="p-6 text-center">
-            <Icon icon="ph:warning-circle" className="mx-auto mb-2 text-[#f6465d]" width={32} />
-            <p className="text-xs text-[#f6465d] mb-2">{error}</p>
+          <div className="p-8 text-center">
+            <Icon icon="ph:warning-circle" className="mx-auto mb-3 text-[#f6465d]" width={40} />
+            <p className="text-sm text-[#f6465d] mb-3">{error}</p>
             <button
               onClick={() => window.location.reload()}
-              className="text-xs text-[#f0b90b] hover:underline"
+              className="text-sm text-[#f0b90b] hover:underline"
             >
               Retry
             </button>
           </div>
         ) : filteredMarkets.length === 0 ? (
-          <div className="p-6 text-center">
-            <Icon icon="ph:magnifying-glass" className="mx-auto mb-2 text-[#848e9c]" width={32} />
-            <p className="text-xs text-[#848e9c]">No markets found</p>
+          <div className="p-8 text-center">
+            <Icon icon="ph:magnifying-glass" className="mx-auto mb-3 text-[#848e9c]" width={40} />
+            <p className="text-sm text-[#848e9c]">No markets found</p>
           </div>
         ) : (
           <>
@@ -284,14 +284,14 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
                 <div
                   key={market.symbol}
                   onClick={() => onSelectPair(market.symbol, market.chain, market.mintAddress)}
-                  className={`px-3 py-2 cursor-pointer transition-colors ${isSelected
+                  className={`px-4 py-3 cursor-pointer transition-colors border-b border-[#1e2329]/50 ${isSelected
                     ? 'bg-[#1e2329]'
                     : 'hover:bg-[#1e2329]'
                     }`}
                 >
-                  <div className="grid grid-cols-[1fr_auto_auto] gap-2 items-center">
+                  <div className="grid grid-cols-[1fr_auto_auto] gap-4 items-center">
                     {/* Pair */}
-                    <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex items-center gap-2.5 min-w-0">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -301,12 +301,12 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
                       >
                         <Icon
                           icon={isFav ? 'ph:star-fill' : 'ph:star'}
-                          width={12}
+                          width={14}
                           className={isFav ? 'text-[#f0b90b]' : 'text-[#848e9c] hover:text-[#f0b90b]'}
                         />
                       </button>
                       <div className="min-w-0 flex-1">
-                        <div className="text-xs font-medium text-white flex items-center gap-1">
+                        <div className="text-sm font-medium text-white flex items-center gap-1.5 mb-0.5">
                           {market.chain && (
                             <Icon
                               icon={
@@ -316,13 +316,13 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
                                     ? 'cryptocurrency:eth'
                                     : 'cryptocurrency:btc'
                               }
-                              width={10}
+                              width={12}
                               className="flex-shrink-0"
                             />
                           )}
                           {market.baseAsset}<span className="text-[#848e9c]">/{market.quoteAsset}</span>
                         </div>
-                        <div className="text-[9px] text-[#848e9c]">
+                        <div className="text-[10px] text-[#848e9c]">
                           Vol {formatVolume(market.volume24h)}
                         </div>
                       </div>
@@ -330,14 +330,14 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
 
                     {/* Price */}
                     <div className="text-right">
-                      <div className="text-xs font-mono text-white">
+                      <div className="text-sm font-mono text-white">
                         {formatPrice(market.price)}
                       </div>
                     </div>
 
                     {/* Change */}
-                    <div className="text-right min-w-[60px]">
-                      <div className={`text-xs font-semibold px-2 py-0.5 rounded ${isPositive ? 'bg-[rgba(14,203,129,0.12)] text-[#0ecb81]' : 'bg-[rgba(246,70,93,0.12)] text-[#f6465d]'
+                    <div className="text-right min-w-[70px]">
+                      <div className={`text-xs font-semibold px-2.5 py-1 rounded ${isPositive ? 'bg-[rgba(14,203,129,0.12)] text-[#0ecb81]' : 'bg-[rgba(246,70,93,0.12)] text-[#f6465d]'
                         }`}>
                         {isPositive ? '+' : ''}{market.change24h.toFixed(2)}%
                       </div>
@@ -352,25 +352,27 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
 
       {/* Pagination */}
       {!loading && !error && filteredMarkets.length > 0 && totalPages > 1 && (
-        <div className="border-t border-[#1e2329] p-3 flex items-center justify-between">
+        <div className="border-t border-[#1e2329] p-4 flex items-center justify-between shrink-0">
           <button
             onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
             disabled={currentPage === 1}
-            className="px-3 py-1.5 text-xs font-medium rounded bg-[#1e2329] text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#2b3139] transition-colors"
+            className="px-4 py-2 text-sm font-medium rounded bg-[#1e2329] text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#2b3139] transition-colors flex items-center gap-1"
           >
-            <Icon icon="ph:caret-left" width={12} className="inline" />
+            <Icon icon="ph:caret-left" width={14} />
+            Previous
           </button>
           
-          <div className="text-xs text-[#848e9c]">
-            Page {currentPage} of {totalPages} ({filteredMarkets.length} markets)
+          <div className="text-sm text-[#848e9c]">
+            Page {currentPage} of {totalPages}
           </div>
           
           <button
             onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
             disabled={currentPage === totalPages}
-            className="px-3 py-1.5 text-xs font-medium rounded bg-[#1e2329] text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#2b3139] transition-colors"
+            className="px-4 py-2 text-sm font-medium rounded bg-[#1e2329] text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#2b3139] transition-colors flex items-center gap-1"
           >
-            <Icon icon="ph:caret-right" width={12} className="inline" />
+            Next
+            <Icon icon="ph:caret-right" width={14} />
           </button>
         </div>
       )}

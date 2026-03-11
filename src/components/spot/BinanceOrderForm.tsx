@@ -349,7 +349,7 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
               className="w-full px-3 py-2 bg-[#1a1f2e] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f0b90b]"
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#848e9c]">
-              {baseAsset}
+              {activeTab === 'buy' ? quoteAsset : baseAsset}
             </span>
           </div>
         </div>
