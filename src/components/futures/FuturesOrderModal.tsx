@@ -241,150 +241,169 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
     !previewData.sizeTooSmall;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center animate-fadeIn">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
         onClick={onClose}
       />
 
-      {/* Modal */}
-      <div className="relative w-full md:w-[500px] bg-[#181a20] rounded-t-2xl md:rounded-2xl shadow-2xl border border-[#2b3139] max-h-[90vh] overflow-y-auto animate-slideUp">
-        {/* Header */}
-        <div className="sticky top-0 bg-[#181a20] border-b border-[#2b3139] px-6 py-4 flex items-center justify-between z-10 backdrop-blur-xl">
-          <h3 className="text-lg font-bold text-white">
-            Open {side === 'long' ? 'Long' : 'Short'} Position
-          </h3>
+      {/* Modal - Compact Bybit Style */}
+      <div className="relative w-full max-w-[500px] bg-[#0b0e11] rounded-lg border border-[#1f2329] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+        {/* Header - Compact */}
+        <div className="flex items-center justify-between px-3 py-2 border-b border-[#1f2329] flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <h3 className="text-[13px] font-bold text-white">
+              {side === 'long' ? 'Long' : 'Short'} {marketName}
+            </h3>
+            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+              side === 'long' ? 'bg-[#0ecb81]/10 text-[#0ecb81]' : 'bg-[#f6465d]/10 text-[#f6465d]'
+            }`}>
+              {side.toUpperCase()}
+            </span>
+          </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-[#2b3139] active:bg-[#2b3139]/80 rounded-xl transition-all duration-200 active:scale-95 min-h-[44px] min-w-[44px] flex items-center justify-center touch-feedback"
+            className="p-1 hover:bg-[#1f2329] rounded transition-colors"
           >
-            <Icon icon="ph:x" width={20} className="text-[#848e9c]" />
+            <Icon icon="ph:x" width={16} className="text-[#848e9c]" />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-6 space-y-4">
+        {/* Content - Scrollable without visible scrollbar */}
+        <div 
+          className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-2" 
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
+          <style jsx>{`
+            div::-webkit-scrollbar {
+              display: none;
+            }
+          `}</style>
           {!showQuote ? (
             <>
-              {/* Market Info */}
-              <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-white/5 dark:to-white/10 rounded-xl p-4 border border-gray-200/50 dark:border-white/10">
-                <div className="text-xs font-semibold text-muted dark:text-gray-400 mb-1 uppercase tracking-wide">Market</div>
-                <div className="text-xl font-bold text-dark dark:text-white">
-                  {marketName || 'Select Market'}
-                </div>
-                <div className="text-sm text-muted dark:text-gray-400 mt-2">
-                  Mark Price: <span className="font-semibold text-dark dark:text-white">${(Number(previewData?.entryPrice) || 0).toFixed(2)}</span>
-                </div>
-              </div>
-
-              {/* Available Balance */}
-              <div className="flex items-center justify-between text-sm">
+              {/* Available Balance - Compact */}
+              <div className="flex items-center justify-between text-[11px] mb-2 px-1">
                 <span className="text-[#848e9c]">Available</span>
-                <span className="text-white font-mono">
+                <span className="text-white font-mono font-medium">
                   ${(summary?.freeCollateral || 0).toFixed(2)} USDC
                 </span>
               </div>
 
-              {/* Order Type */}
-              <div>
-                <label className="block text-sm font-bold text-white mb-2 uppercase tracking-wide">Order Type</label>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setOrderType('market')}
-                    className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all duration-200 active:scale-95 min-h-[44px] touch-feedback ${orderType === 'market'
-                      ? 'bg-[#fcd535] text-[#181a20] shadow-lg shadow-[#fcd535]/20'
-                      : 'bg-[#2b3139] text-white hover:bg-[#2b3139]/80'
-                      }`}
-                  >
-                    Market
-                  </button>
-                  <button
-                    onClick={() => setOrderType('limit')}
-                    className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all duration-200 active:scale-95 min-h-[44px] touch-feedback ${orderType === 'limit'
-                      ? 'bg-[#fcd535] text-[#181a20] shadow-lg shadow-[#fcd535]/20'
-                      : 'bg-[#2b3139] text-white hover:bg-[#2b3139]/80'
-                      }`}
-                  >
-                    Limit
-                  </button>
-                  <button
-                    onClick={() => setOrderType('stop-limit')}
-                    className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all duration-200 active:scale-95 min-h-[44px] touch-feedback ${orderType === 'stop-limit'
-                      ? 'bg-[#fcd535] text-[#181a20] shadow-lg shadow-[#fcd535]/20'
-                      : 'bg-[#2b3139] text-white hover:bg-[#2b3139]/80'
-                      }`}
-                  >
-                    Stop-Limit
-                  </button>
-                </div>
+              {/* Order Type Tabs - Compact */}
+              <div className="flex gap-1 p-0.5 bg-[#1f2329] rounded mb-2">
+                <button
+                  onClick={() => setOrderType('market')}
+                  className={`flex-1 py-1.5 text-[11px] font-medium rounded transition-colors ${
+                    orderType === 'market'
+                      ? 'bg-[#0b0e11] text-white'
+                      : 'text-[#848e9c] hover:text-white'
+                  }`}
+                >
+                  Market
+                </button>
+                <button
+                  onClick={() => setOrderType('limit')}
+                  className={`flex-1 py-1.5 text-[11px] font-medium rounded transition-colors ${
+                    orderType === 'limit'
+                      ? 'bg-[#0b0e11] text-white'
+                      : 'text-[#848e9c] hover:text-white'
+                  }`}
+                >
+                  Limit
+                </button>
+                <button
+                  onClick={() => setOrderType('stop-limit')}
+                  className={`flex-1 py-1.5 text-[11px] font-medium rounded transition-colors ${
+                    orderType === 'stop-limit'
+                      ? 'bg-[#0b0e11] text-white'
+                      : 'text-[#848e9c] hover:text-white'
+                  }`}
+                >
+                  Stop-Limit
+                </button>
               </div>
 
-              {/* Limit Price */}
+              {/* Limit Price - Compact */}
               {(orderType === 'limit' || orderType === 'stop-limit') && (
-                <div>
-                  <label className="block text-sm font-bold text-dark dark:text-white mb-2 uppercase tracking-wide">
+                <div className="mb-2">
+                  <label className="block text-[10px] text-[#848e9c] mb-1 uppercase font-medium">
                     {orderType === 'stop-limit' ? 'Limit Price' : 'Price'}
                   </label>
-                  <input
-                    type="number"
-                    value={limitPrice}
-                    onChange={(e) => setLimitPrice(e.target.value)}
-                    placeholder="0.00"
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-black/20 text-dark dark:text-white focus:outline-none focus:ring-2 focus:ring-primary font-mono"
-                  />
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={limitPrice}
+                      onChange={(e) => setLimitPrice(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full px-2 py-1.5 bg-[#1f2329] border border-[#1f2329] rounded text-[12px] text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f0b90b]"
+                    />
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-[#848e9c]">
+                      USDT
+                    </span>
+                  </div>
                 </div>
               )}
 
-              {/* Trigger Price (Stop-Limit Only) */}
+              {/* Trigger Price - Compact */}
               {orderType === 'stop-limit' && (
-                <div>
-                  <label className="block text-sm font-bold text-dark dark:text-white mb-2 uppercase tracking-wide">Trigger Price</label>
-                  <input
-                    type="number"
-                    value={triggerPrice}
-                    onChange={(e) => setTriggerPrice(e.target.value)}
-                    placeholder="0.00"
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-black/20 text-dark dark:text-white focus:outline-none focus:ring-2 focus:ring-primary font-mono"
-                  />
-                  <p className="text-xs text-[#848e9c] mt-1">
+                <div className="mb-2">
+                  <label className="block text-[10px] text-[#848e9c] mb-1 uppercase font-medium">Trigger Price</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={triggerPrice}
+                      onChange={(e) => setTriggerPrice(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full px-2 py-1.5 bg-[#1f2329] border border-[#1f2329] rounded text-[12px] text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f0b90b]"
+                    />
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-[#848e9c]">
+                      USDT
+                    </span>
+                  </div>
+                  <p className="text-[9px] text-[#848e9c] mt-0.5">
                     {side === 'long' 
-                      ? 'Order triggers when price rises above this level'
-                      : 'Order triggers when price falls below this level'}
+                      ? 'Triggers when price rises above this level'
+                      : 'Triggers when price falls below this level'}
                   </p>
                 </div>
               )}
 
-              {/* Size Input */}
-              <div>
-                <label className="block text-sm font-bold text-dark dark:text-white mb-2 uppercase tracking-wide">Size</label>
-                <input
-                  type="number"
-                  value={size}
-                  onChange={(e) => setSize(e.target.value)}
-                  placeholder="0.00"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-black/20 text-dark dark:text-white focus:outline-none focus:ring-2 focus:ring-primary font-mono"
-                />
+              {/* Size Input - Compact */}
+              <div className="mb-2">
+                <label className="block text-[10px] text-[#848e9c] mb-1 uppercase font-medium">Size</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={size}
+                    onChange={(e) => setSize(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full px-2 py-1.5 bg-[#1f2329] border border-[#1f2329] rounded text-[12px] text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f0b90b]"
+                  />
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-[#848e9c]">
+                    {marketName?.split('-')[0] || 'Units'}
+                  </span>
+                </div>
               </div>
 
-              {/* Percentage Buttons */}
-              <div className="grid grid-cols-4 gap-2">
+              {/* Percentage Buttons - Compact */}
+              <div className="grid grid-cols-4 gap-1 mb-2">
                 {[25, 50, 75, 100].map((percent) => (
                   <button
                     key={percent}
                     onClick={() => handlePercentage(percent)}
-                    className="py-2 bg-[#2b3139] hover:bg-[#2b3139]/80 text-white text-sm font-medium rounded-lg transition-colors"
+                    className="py-1 bg-[#1f2329] hover:bg-[#2b3139] text-white text-[10px] font-medium rounded transition-colors"
                   >
                     {percent}%
                   </button>
                 ))}
               </div>
 
-              {/* Leverage Slider */}
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <label className="text-sm font-bold text-dark dark:text-white uppercase tracking-wide">Leverage</label>
-                  <span className="text-lg font-bold text-primary">{leverage}x</span>
+              {/* Leverage Slider - Compact */}
+              <div className="mb-2">
+                <div className="flex justify-between items-center mb-1 px-1">
+                  <label className="text-[10px] text-[#848e9c] uppercase font-medium">Leverage</label>
+                  <span className="text-[12px] font-bold text-[#f0b90b]">{leverage}x</span>
                 </div>
                 <input
                   type="range"
@@ -392,84 +411,78 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
                   max={previewData?.maxLeverageAllowed || 20}
                   value={leverage}
                   onChange={(e) => setLeverage(parseInt(e.target.value))}
-                  className="w-full h-2 bg-gray-200 dark:bg-white/10 rounded-lg appearance-none cursor-pointer accent-primary"
+                  className="w-full h-1 bg-[#1f2329] rounded appearance-none cursor-pointer accent-[#f0b90b]"
                 />
-                <div className="flex justify-between text-xs text-muted dark:text-gray-400 mt-2 font-semibold">
+                <div className="flex justify-between text-[9px] text-[#848e9c] mt-0.5 px-1">
                   <span>1x</span>
                   <span>{previewData?.maxLeverageAllowed || 20}x</span>
                 </div>
               </div>
 
-              {/* Preview */}
+              {/* Preview - Compact */}
               {isLoadingPreview && (
-                <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-white/5 dark:to-white/10 rounded-xl p-4 border border-gray-200/50 dark:border-white/10">
-                  <div className="flex items-center justify-center gap-2 text-sm text-muted dark:text-gray-400">
-                    <Icon icon="ph:circle-notch" className="animate-spin" width={16} />
-                    <span>Calculating preview...</span>
+                <div className="bg-[#1f2329] rounded p-2 mb-2">
+                  <div className="flex items-center justify-center gap-1.5 text-[10px] text-[#848e9c]">
+                    <Icon icon="ph:circle-notch" className="animate-spin" width={12} />
+                    <span>Calculating...</span>
                   </div>
                 </div>
               )}
               
               {!isLoadingPreview && previewData && (
-                <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-white/5 dark:to-white/10 rounded-xl p-4 border border-gray-200/50 dark:border-white/10 space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted dark:text-gray-400">Base Margin:</span>
-                    <span className="font-bold text-dark dark:text-white font-mono">
+                <div className="bg-[#1f2329] rounded p-2 space-y-1 mb-2">
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-[#848e9c]">Entry Price</span>
+                    <span className="text-white font-mono">
+                      ${(Number(previewData?.entryPrice) || 0).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-[#848e9c]">Required Margin</span>
+                    <span className="text-white font-mono">
                       ${(Number(previewData?.requiredMargin) || 0).toFixed(2)}
                     </span>
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted dark:text-gray-400">Trading Fee:</span>
-                    <span className="font-bold text-dark dark:text-white font-mono">
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-[#848e9c]">Trading Fee</span>
+                    <span className="text-white font-mono">
                       ${(Number(previewData?.estimatedFee) || 0).toFixed(2)}
                     </span>
                   </div>
-                  <div className="flex justify-between text-sm border-t border-gray-200 dark:border-white/10 pt-3">
-                    <span className="font-bold text-dark dark:text-white">Total Required:</span>
-                    <span className="font-bold text-dark dark:text-white font-mono">
+                  <div className="flex justify-between text-[10px] border-t border-[#2b3139] pt-1">
+                    <span className="text-[#848e9c] font-semibold">Total Required</span>
+                    <span className="text-white font-mono font-semibold">
                       ${(Number(previewData?.totalRequired) || 0).toFixed(2)}
                     </span>
                   </div>
-                  <div className={`flex justify-between text-sm ${previewData?.marginCheckPassed ? 'text-success' : 'text-error'
-                    }`}>
-                    <span className="font-semibold">Your Available:</span>
-                    <span className="font-bold font-mono">
-                      ${(Number(previewData?.freeCollateral) || 0).toFixed(2)}
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-[#848e9c]">Est. Liquidation</span>
+                    <span className="text-[#f6465d] font-mono">
+                      ${(Number(previewData?.estimatedLiquidationPrice) || 0).toFixed(2)}
                     </span>
                   </div>
-                  <div className="border-t border-gray-200 dark:border-white/10 pt-3 space-y-2">
-                    <div className="flex justify-between text-xs text-muted dark:text-gray-400">
-                      <span>Est. Liquidation:</span>
-                      <span className="text-error font-bold font-mono">
-                        ${(Number(previewData?.estimatedLiquidationPrice) || 0).toFixed(2)}
-                      </span>
+                  {previewData.sizeTooSmall && (
+                    <div className="flex justify-between text-[10px] text-[#f6465d] pt-1 border-t border-[#2b3139]">
+                      <span className="font-semibold">Min Size</span>
+                      <span className="font-mono">{previewData.minOrderSize} units</span>
                     </div>
-                    {previewData.sizeTooSmall && (
-                      <div className="flex justify-between text-xs text-error animate-pulse">
-                        <span className="font-bold">Min Order Size:</span>
-                        <span className="font-bold font-mono">{previewData.minOrderSize} {marketInfo?.baseAssetSymbol || 'units'}</span>
-                      </div>
-                    )}
-                  </div>
+                  )}
                 </div>
               )}
 
-              {/* Error Message */}
+              {/* Error Message - Compact */}
               {error && (
-                <div className="p-4 bg-error/10 border border-error/20 rounded-xl flex items-start gap-3">
-                  <Icon icon="ph:warning" className="text-error flex-shrink-0 mt-0.5" height={24} />
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-error">{error}</p>
-                  </div>
+                <div className="p-2 bg-[#f6465d]/10 border border-[#f6465d]/20 rounded text-[10px] text-[#f6465d] mb-2">
+                  {error}
                 </div>
               )}
             </>
           ) : (
             <>
-              {/* PIN Input */}
-              <div className="space-y-3">
-                <label className="block text-sm text-[#848e9c] font-medium">
-                  Enter PIN to confirm trade
+              {/* PIN Input - Compact */}
+              <div className="mb-2">
+                <label className="block text-[10px] text-[#848e9c] mb-1 uppercase font-medium">
+                  Enter PIN to confirm
                 </label>
                 <div className="relative">
                   <input
@@ -482,67 +495,69 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
                     placeholder="Enter your PIN"
                     maxLength={6}
                     disabled={executing}
-                    className="w-full px-4 py-3 bg-[#2b3139] border border-[#2b3139] rounded-lg text-base text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#fcd535] disabled:opacity-50"
+                    className="w-full px-2 py-1.5 bg-[#1f2329] border border-[#1f2329] rounded text-[12px] text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f0b90b] disabled:opacity-50"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPin(!showPin)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#848e9c] hover:text-white transition-colors"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-[#848e9c] hover:text-white transition-colors"
                   >
-                    <Icon icon={showPin ? 'ph:eye-slash' : 'ph:eye'} width={20} />
+                    <Icon icon={showPin ? 'ph:eye-slash' : 'ph:eye'} width={14} />
                   </button>
                 </div>
                 {pinError && (
-                  <p className="text-xs text-[#f6465d]">{pinError}</p>
+                  <p className="text-[9px] text-[#f6465d] mt-0.5">{pinError}</p>
                 )}
               </div>
 
-              {/* Error Message */}
+              {/* Error Message - Compact */}
               {error && (
-                <div className="p-3 bg-[rgba(246,70,93,0.12)] border border-[#f6465d] rounded-lg text-sm text-[#f6465d]">
+                <div className="p-2 bg-[#f6465d]/10 border border-[#f6465d]/20 rounded text-[10px] text-[#f6465d] mb-2">
                   {error}
                 </div>
               )}
 
-              {/* Success Message */}
+              {/* Success Message - Compact */}
               {successMessage && (
-                <div className="p-4 bg-success/10 border border-success/20 rounded-xl flex items-center gap-3">
-                  <Icon icon="ph:check-circle" className="text-success flex-shrink-0" height={24} />
-                  <span className="text-sm font-semibold text-success">{successMessage}</span>
+                <div className="p-2 bg-[#0ecb81]/10 border border-[#0ecb81]/20 rounded flex items-center gap-1.5 mb-2">
+                  <Icon icon="ph:check-circle" className="text-[#0ecb81] flex-shrink-0" height={14} />
+                  <span className="text-[10px] font-semibold text-[#0ecb81]">{successMessage}</span>
                 </div>
               )}
             </>
           )}
         </div>
 
-        {/* Footer */}
-        <div className="p-4 border-t border-[#2b3139] safe-area-bottom space-y-2">
+        {/* Footer - Compact */}
+        <div className="p-2 border-t border-[#1f2329] flex-shrink-0">
           {!showQuote ? (
             <button
               onClick={handleGetQuote}
               disabled={!canContinue}
-              className={`w-full py-4 rounded-xl font-bold text-lg transition-all duration-200 active:scale-95 min-h-[56px] touch-feedback ${canContinue
-                ? side === 'long'
-                  ? 'bg-gradient-to-br from-[#0ecb81] to-[#0ecb81]/80 hover:from-[#0ecb81]/90 hover:to-[#0ecb81]/70 text-white shadow-lg shadow-[#0ecb81]/20 hover:shadow-xl hover:shadow-[#0ecb81]/30'
-                  : 'bg-gradient-to-br from-[#f6465d] to-[#f6465d]/80 hover:from-[#f6465d]/90 hover:to-[#f6465d]/70 text-white shadow-lg shadow-[#f6465d]/20 hover:shadow-xl hover:shadow-[#f6465d]/30'
-                : 'bg-[#2b3139] text-[#848e9c] cursor-not-allowed'
-                }`}
+              className={`w-full py-2 rounded font-bold text-[12px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                canContinue
+                  ? side === 'long'
+                    ? 'bg-[#0ecb81] hover:bg-[#0ecb81]/90 text-white'
+                    : 'bg-[#f6465d] hover:bg-[#f6465d]/90 text-white'
+                  : 'bg-[#1f2329] text-[#848e9c]'
+              }`}
             >
               Continue
             </button>
           ) : (
-            <>
+            <div className="space-y-1.5">
               <button
                 onClick={handleConfirmOrder}
                 disabled={executing || !pin}
-                className={`w-full py-4 rounded-lg font-semibold text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${side === 'long'
-                  ? 'bg-[#0ecb81] hover:bg-[#0ecb81]/90 text-white'
-                  : 'bg-[#f6465d] hover:bg-[#f6465d]/90 text-white'
-                  }`}
+                className={`w-full py-2 rounded font-bold text-[12px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                  side === 'long'
+                    ? 'bg-[#0ecb81] hover:bg-[#0ecb81]/90 text-white'
+                    : 'bg-[#f6465d] hover:bg-[#f6465d]/90 text-white'
+                }`}
               >
                 {executing ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <Icon icon="ph:circle-notch" className="animate-spin" width={20} />
+                  <span className="flex items-center justify-center gap-1.5">
+                    <Icon icon="ph:circle-notch" className="animate-spin" width={14} />
                     Executing...
                   </span>
                 ) : (
@@ -553,11 +568,11 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
               <button
                 onClick={handleBackToForm}
                 disabled={executing}
-                className="w-full py-3 rounded-lg font-semibold text-base bg-[#2b3139] hover:bg-[#2b3139]/80 text-white transition-colors disabled:opacity-50"
+                className="w-full py-1.5 rounded font-medium text-[11px] bg-[#1f2329] hover:bg-[#2b3139] text-white transition-colors disabled:opacity-50"
               >
                 Back
               </button>
-            </>
+            </div>
           )}
         </div>
       </div>
