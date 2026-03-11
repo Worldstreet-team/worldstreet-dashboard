@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Icon } from '@iconify/react';
+import { createChart, ColorType, CandlestickSeries } from 'lightweight-charts';
 import { useFuturesStore } from '@/store/futuresStore';
 
 interface CandleData {
@@ -10,20 +11,11 @@ interface CandleData {
   high: number;
   low: number;
   close: number;
-  volume: number;
 }
 
 interface FuturesChartProps {
   symbol?: string;
   isDarkMode?: boolean;
-}
-
-interface TouchState {
-  startX: number;
-  startY: number;
-  lastX: number;
-  lastY: number;
-  startDistance: number;
 }
 
 export const FuturesChart: React.FC<FuturesChartProps> = ({
@@ -34,20 +26,16 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
   const symbol = propSymbol || selectedMarket?.symbol || 'BTC-PERP';
   
   const [timeInterval, setTimeInterval] = useState('1min');
-  const [chartData, setChartData] = useState<CandleData[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pollingStatus, setPollingStatus] = useState<'active' | 'paused' | 'error'>('paused');
+  const [currentPrice, setCurrentPrice] = useState<number | null>(null);
+  const [priceChange, setPriceChange] = useState<number | null>(null);
   
-  // Zoom and pan state
-  const [zoom, setZoom] = useState(1);
-  const [panOffset, setPanOffset] = useState(0);
-  const [visibleCandles, setVisibleCandles] = useState(50);
-  
-  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const touchStateRef = useRef<TouchState | null>(null);
+  const chartRef = useRef<any>(null);
+  const seriesRef = useRef<any>(null);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Auto-select first market when markets load
   useEffect(() => {
@@ -56,369 +44,190 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
     }
   }, [markets, selectedMarket, setSelectedMarket]);
 
+  // Initialize chart
   useEffect(() => {
-    if (symbol) {
-      // Clear existing data when symbol changes
-      setChartData([]);
-      setError(null);
-      
-      fetchHistoricalData();
-      startPolling();
-    }
+    if (!containerRef.current) return;
 
-    return () => {
-      stopPolling();
-    };
-  }, [symbol, timeInterval]);
+    let retryCount = 0;
+    const maxRetries = 10;
 
-  useEffect(() => {
-    if (chartData.length > 0 && canvasRef.current) {
-      drawChart();
-    }
-  }, [chartData, isDarkMode]);
+    const tryInitChart = () => {
+      if (!containerRef.current) return;
 
-  useEffect(() => {
-    // Redraw chart when canvas is ready
-    if (canvasRef.current && chartData.length > 0) {
-      drawChart();
-    }
-  }, [canvasRef.current]);
+      const width = containerRef.current.clientWidth;
+      const height = containerRef.current.clientHeight;
 
-  // Redraw when zoom or pan changes
-  useEffect(() => {
-    if (chartData.length > 0 && canvasRef.current) {
-      drawChart();
-    }
-  }, [zoom, panOffset, visibleCandles]);
-
-  // Touch event handlers for mobile
-  const handleTouchStart = useCallback((e: TouchEvent) => {
-    if (e.touches.length === 1) {
-      // Single touch - pan
-      touchStateRef.current = {
-        startX: e.touches[0].clientX,
-        startY: e.touches[0].clientY,
-        lastX: e.touches[0].clientX,
-        lastY: e.touches[0].clientY,
-        startDistance: 0,
-      };
-    } else if (e.touches.length === 2) {
-      // Two touches - zoom
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const dy = e.touches[0].clientY - e.touches[1].clientY;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      
-      touchStateRef.current = {
-        startX: (e.touches[0].clientX + e.touches[1].clientX) / 2,
-        startY: (e.touches[0].clientY + e.touches[1].clientY) / 2,
-        lastX: (e.touches[0].clientX + e.touches[1].clientX) / 2,
-        lastY: (e.touches[0].clientY + e.touches[1].clientY) / 2,
-        startDistance: distance,
-      };
-    }
-  }, []);
-
-  const handleTouchMove = useCallback((e: TouchEvent) => {
-    if (!touchStateRef.current) return;
-
-    if (e.touches.length === 1 && touchStateRef.current.startDistance === 0) {
-      // Pan
-      const deltaX = e.touches[0].clientX - touchStateRef.current.lastX;
-      const candlesPerPixel = visibleCandles / (canvasRef.current?.width || 1200);
-      const candlesDelta = Math.round(deltaX * candlesPerPixel);
-      
-      setPanOffset(prev => {
-        const newOffset = prev - candlesDelta;
-        const maxOffset = Math.max(0, chartData.length - visibleCandles);
-        return Math.max(0, Math.min(maxOffset, newOffset));
-      });
-      
-      touchStateRef.current.lastX = e.touches[0].clientX;
-      touchStateRef.current.lastY = e.touches[0].clientY;
-    } else if (e.touches.length === 2) {
-      // Zoom
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const dy = e.touches[0].clientY - e.touches[1].clientY;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      
-      const scale = distance / touchStateRef.current.startDistance;
-      const newVisibleCandles = Math.round(visibleCandles / scale);
-      
-      setVisibleCandles(Math.max(10, Math.min(200, newVisibleCandles)));
-      
-      touchStateRef.current.startDistance = distance;
-    }
-
-    e.preventDefault();
-  }, [chartData.length, visibleCandles]);
-
-  const handleTouchEnd = useCallback(() => {
-    touchStateRef.current = null;
-  }, []);
-
-  // Mouse wheel zoom for desktop
-  const handleWheel = useCallback((e: WheelEvent) => {
-    e.preventDefault();
-    
-    const delta = e.deltaY > 0 ? 1.1 : 0.9;
-    setVisibleCandles(prev => {
-      const newValue = Math.round(prev * delta);
-      return Math.max(10, Math.min(200, newValue));
-    });
-  }, []);
-
-  // Setup touch and wheel listeners
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
-    canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
-    canvas.addEventListener('touchend', handleTouchEnd);
-    canvas.addEventListener('wheel', handleWheel, { passive: false });
-
-    return () => {
-      canvas.removeEventListener('touchstart', handleTouchStart);
-      canvas.removeEventListener('touchmove', handleTouchMove);
-      canvas.removeEventListener('touchend', handleTouchEnd);
-      canvas.removeEventListener('wheel', handleWheel);
-    };
-  }, [handleTouchStart, handleTouchMove, handleTouchEnd, handleWheel]);
-
-  const fetchHistoricalData = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      // Use Next.js API route as proxy
-      const response = await fetch(
-        `/api/futures/klines?symbol=${symbol}&interval=${timeInterval}`
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch chart data');
-      }
-
-      const data = await response.json();
-      
-      // Backend returns array of objects with: time, open, close, high, low, volume, turnover
-      const candles = (data || []).map((k: any) => ({
-        time: k.time * 1000, // Convert to milliseconds
-        open: parseFloat(k.open),
-        high: parseFloat(k.high),
-        low: parseFloat(k.low),
-        close: parseFloat(k.close),
-        volume: parseFloat(k.volume || 0)
-      }));
-
-      setChartData(candles);
-      
-      // Force redraw after data is set
-      setTimeout(() => {
-        if (canvasRef.current && candles.length > 0) {
-          drawChart();
+      if (width === 0 || height === 0) {
+        if (retryCount < maxRetries) {
+          retryCount++;
+          setTimeout(tryInitChart, 200);
         }
-      }, 100);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const startPolling = () => {
-    stopPolling(); // Clear any existing interval
-    
-    setPollingStatus('active');
-    
-    // Poll every 3 seconds for live updates
-    pollingIntervalRef.current = setInterval(() => {
-      fetchLiveUpdate();
-    }, 3000);
-  };
-
-  const stopPolling = () => {
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-      pollingIntervalRef.current = null;
-    }
-    setPollingStatus('paused');
-  };
-
-  const fetchLiveUpdate = async () => {
-    try {
-      // Use current symbol from state
-      const currentSymbol = propSymbol || selectedMarket?.symbol || 'BTC-PERP';
-      
-      // Use Next.js API route as proxy
-      const response = await fetch(
-        `/api/futures/klines?symbol=${currentSymbol}&interval=${timeInterval}`
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch live update');
+        return;
       }
 
-      const data = await response.json();
-      if (data && data.length > 0) {
-        // Get the latest candle from the response
-        const latestCandle = data[data.length - 1];
-        const newCandle: CandleData = {
-          time: latestCandle.time * 1000, // Convert to milliseconds
-          open: parseFloat(latestCandle.open),
-          high: parseFloat(latestCandle.high),
-          low: parseFloat(latestCandle.low),
-          close: parseFloat(latestCandle.close),
-          volume: parseFloat(latestCandle.volume || 0)
-        };
+      try {
+        // Clean up existing chart
+        if (chartRef.current) {
+          chartRef.current.remove();
+          chartRef.current = null;
+        }
 
-        setChartData(prev => {
-          const updated = [...prev];
-          const lastIndex = updated.length - 1;
-
-          if (lastIndex >= 0 && updated[lastIndex].time === newCandle.time) {
-            // Update existing candle
-            updated[lastIndex] = newCandle;
-          } else {
-            // Add new candle
-            updated.push(newCandle);
-            if (updated.length > 100) updated.shift();
-          }
-
-          return updated;
+        const chart = createChart(containerRef.current, {
+          layout: {
+            background: { type: ColorType.Solid, color: '#181a20' },
+            textColor: '#848e9c',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          },
+          width: width,
+          height: height,
+          timeScale: {
+            timeVisible: true,
+            secondsVisible: false,
+            fixLeftEdge: true,
+            fixRightEdge: true,
+          },
+          crosshair: {
+            mode: 1,
+            vertLine: {
+              color: '#2b3139',
+              width: 1,
+              style: 2,
+            },
+            horzLine: {
+              color: '#2b3139',
+              width: 1,
+              style: 2,
+            },
+          },
+          grid: {
+            vertLines: { color: '#2b3139', style: 2 },
+            horzLines: { color: '#2b3139', style: 2 },
+          },
         });
 
+        const candlestickSeries = chart.addSeries(CandlestickSeries, {
+          upColor: '#0ecb81',
+          downColor: '#f6465d',
+          borderUpColor: '#0ecb81',
+          borderDownColor: '#f6465d',
+          wickUpColor: '#0ecb81',
+          wickDownColor: '#f6465d',
+        });
+
+        chartRef.current = chart;
+        seriesRef.current = candlestickSeries;
+
+        // Fetch data immediately
+        if (symbol) {
+          fetchAndUpdateData(symbol);
+        }
+      } catch (error) {
+        console.error('Error initializing chart:', error);
+      }
+    };
+
+    const initTimeout = setTimeout(tryInitChart, 100);
+
+    // Handle window resize
+    const handleResize = () => {
+      if (containerRef.current && chartRef.current) {
+        const newWidth = containerRef.current.clientWidth;
+        const newHeight = containerRef.current.clientHeight;
+        if (newWidth > 0 && newHeight > 0) {
+          chartRef.current.applyOptions({
+            width: newWidth,
+            height: newHeight,
+          });
+        }
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      clearTimeout(initTimeout);
+      window.removeEventListener('resize', handleResize);
+      if (chartRef.current) {
+        chartRef.current.remove();
+        chartRef.current = null;
+      }
+    };
+  }, [symbol]);
+
+  // Fetch and update chart data
+  const fetchAndUpdateData = useCallback(async (pair: string) => {
+    try {
+      const response = await fetch(
+        `/api/futures/klines?symbol=${pair}&interval=${timeInterval}`
+      );
+
+      if (!response.ok) {
+        console.error('API response not ok:', response.status, response.statusText);
+        return;
+      }
+
+      const data = await response.json();
+
+      if (!data || !Array.isArray(data)) {
+        console.error('Invalid response format:', data);
+        return;
+      }
+
+      // Convert to lightweight-charts format
+      const candles: CandleData[] = data
+        .map((k: any) => ({
+          time: k.time, // Already in seconds
+          open: parseFloat(k.open),
+          high: parseFloat(k.high),
+          low: parseFloat(k.low),
+          close: parseFloat(k.close),
+        }))
+        .sort((a: CandleData, b: CandleData) => a.time - b.time);
+
+      if (seriesRef.current && candles.length > 0) {
+        seriesRef.current.setData(candles);
+        chartRef.current?.timeScale().fitContent();
+        setIsLoading(false);
+        
+        // Update price stats
+        setCurrentPrice(candles[candles.length - 1].close);
+        if (candles.length > 1) {
+          const change = ((candles[candles.length - 1].close - candles[0].close) / candles[0].close) * 100;
+          setPriceChange(change);
+        }
+        
         setPollingStatus('active');
       }
-    } catch (err) {
-      console.error('Polling error:', err);
+    } catch (error) {
+      console.error('Error fetching chart data:', error);
+      setIsLoading(false);
       setPollingStatus('error');
     }
-  };
+  }, [timeInterval]);
 
-  const drawChart = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) {
-      console.log('Canvas not ready');
-      return;
-    }
+  // Set up polling for data updates
+  useEffect(() => {
+    if (!symbol) return;
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      console.log('Context not available');
-      return;
-    }
+    // Wait for chart to initialize
+    const startPolling = setTimeout(() => {
+      // Initial fetch
+      fetchAndUpdateData(symbol);
 
-    if (chartData.length === 0) {
-      console.log('No chart data available');
-      return;
-    }
+      // Set up polling every 3 seconds
+      pollingIntervalRef.current = setInterval(() => {
+        fetchAndUpdateData(symbol);
+      }, 3000);
+    }, 500);
 
-    console.log(`Drawing chart with ${chartData.length} candles, visible: ${visibleCandles}, offset: ${panOffset}`);
-
-    const width = canvas.width;
-    const height = canvas.height;
-
-    // Clear canvas with theme-aware background
-    ctx.fillStyle = isDarkMode ? '#1a1a1a' : '#ffffff';
-    ctx.fillRect(0, 0, width, height);
-
-    // Calculate visible data range
-    const endIndex = Math.min(chartData.length, chartData.length - panOffset);
-    const startIndex = Math.max(0, endIndex - visibleCandles);
-    const visibleData = chartData.slice(startIndex, endIndex);
-
-    if (visibleData.length === 0) return;
-
-    const prices = visibleData.flatMap(c => [c.high, c.low]);
-    const maxPrice = Math.max(...prices);
-    const minPrice = Math.min(...prices);
-    const priceRange = maxPrice - minPrice || 1;
-    const padding = 60; // Increased for mobile readability
-
-    console.log(`Price range: ${minPrice} - ${maxPrice}`);
-
-    // Draw grid with theme-aware colors
-    ctx.strokeStyle = isDarkMode ? '#2a2e39' : '#e2e8f0';
-    ctx.lineWidth = 1;
-    for (let i = 0; i <= 5; i++) {
-      const y = padding + (height - 2 * padding) * (i / 5);
-      ctx.beginPath();
-      ctx.moveTo(padding, y);
-      ctx.lineTo(width - padding, y);
-      ctx.stroke();
-
-      const price = maxPrice - (priceRange * i / 5);
-      ctx.fillStyle = isDarkMode ? '#94a3b8' : '#64748b';
-      ctx.font = 'bold 12px monospace'; // Larger font for mobile
-      ctx.textAlign = 'right';
-      ctx.fillText(price.toFixed(2), padding - 5, y + 4);
-    }
-
-    // Draw candlesticks
-    const candleWidth = Math.max(3, (width - 2 * padding) / visibleData.length - 2);
-    visibleData.forEach((candle, index) => {
-      const x = padding + (index * (width - 2 * padding) / visibleData.length);
-      const yHigh = padding + (height - 2 * padding) * (1 - (candle.high - minPrice) / priceRange);
-      const yLow = padding + (height - 2 * padding) * (1 - (candle.low - minPrice) / priceRange);
-      const yOpen = padding + (height - 2 * padding) * (1 - (candle.open - minPrice) / priceRange);
-      const yClose = padding + (height - 2 * padding) * (1 - (candle.close - minPrice) / priceRange);
-
-      const isGreen = candle.close >= candle.open;
-      ctx.strokeStyle = isGreen ? '#26a69a' : '#ef5350';
-      ctx.fillStyle = isGreen ? '#26a69a' : '#ef5350';
-      ctx.lineWidth = Math.max(1, candleWidth / 4);
-
-      // Draw wick
-      ctx.beginPath();
-      ctx.moveTo(x + candleWidth / 2, yHigh);
-      ctx.lineTo(x + candleWidth / 2, yLow);
-      ctx.stroke();
-
-      // Draw body
-      const bodyHeight = Math.abs(yClose - yOpen);
-      const bodyY = Math.min(yOpen, yClose);
-      ctx.fillRect(x, bodyY, candleWidth, Math.max(2, bodyHeight));
-    });
-
-    // Draw current price line
-    if (visibleData.length > 0) {
-      const lastPrice = visibleData[visibleData.length - 1].close;
-      const y = padding + (height - 2 * padding) * (1 - (lastPrice - minPrice) / priceRange);
-
-      ctx.strokeStyle = '#3b82f6';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([5, 5]);
-      ctx.beginPath();
-      ctx.moveTo(padding, y);
-      ctx.lineTo(width - padding, y);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      // Price label
-      ctx.fillStyle = '#3b82f6';
-      const labelWidth = 80;
-      const labelHeight = 24;
-      ctx.fillRect(width - padding + 5, y - labelHeight / 2, labelWidth, labelHeight);
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 13px monospace';
-      ctx.textAlign = 'left';
-      ctx.fillText(lastPrice.toFixed(2), width - padding + 10, y + 5);
-    }
-
-    console.log('Chart drawn successfully');
-  };
-
-  // Reset zoom and pan
-  const handleResetView = useCallback(() => {
-    setZoom(1);
-    setPanOffset(0);
-    setVisibleCandles(50);
-  }, []);
-
-  const currentPrice = chartData.length > 0 ? chartData[chartData.length - 1].close : null;
-  const priceChange = chartData.length > 1 
-    ? ((chartData[chartData.length - 1].close - chartData[0].close) / chartData[0].close) * 100 
-    : null;
+    return () => {
+      clearTimeout(startPolling);
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    };
+  }, [symbol, timeInterval, fetchAndUpdateData]);
 
   return (
     <div className="flex flex-col h-full bg-[#181a20]">
@@ -482,53 +291,12 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
               5m
             </button>
           </div>
-
-          {/* Reset View Button */}
-          <button
-            onClick={handleResetView}
-            className="p-1.5 rounded bg-[#2b3139] text-white hover:bg-[#2b3139]/80 transition-colors"
-            title="Reset zoom and pan"
-          >
-            <Icon icon="ph:arrows-out" height={16} />
-          </button>
         </div>
       </div>
 
-      {/* Chart Stats */}
-      {chartData.length > 0 && (
-        <div className="flex-shrink-0 px-4 py-2 border-b border-[#2b3139] bg-[#2b3139]/30">
-          <div className="flex flex-wrap gap-4 text-xs">
-            <div>
-              <span className="text-[#848e9c]">O: </span>
-              <span className="text-white font-mono font-semibold">
-                {chartData[chartData.length - 1]?.open?.toFixed(2) || '0.00'}
-              </span>
-            </div>
-            <div>
-              <span className="text-[#848e9c]">H: </span>
-              <span className="text-[#0ecb81] font-mono font-semibold">
-                {chartData[chartData.length - 1]?.high?.toFixed(2) || '0.00'}
-              </span>
-            </div>
-            <div>
-              <span className="text-[#848e9c]">L: </span>
-              <span className="text-[#f6465d] font-mono font-semibold">
-                {chartData[chartData.length - 1]?.low?.toFixed(2) || '0.00'}
-              </span>
-            </div>
-            <div>
-              <span className="text-[#848e9c]">C: </span>
-              <span className="text-white font-mono font-bold">
-                {chartData[chartData.length - 1]?.close?.toFixed(2) || '0.00'}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Chart Container */}
-      <div ref={containerRef} className="relative flex-1 min-h-0 p-4 overflow-hidden">
-        {loading && (
+      <div ref={containerRef} className="relative flex-1 min-h-0 overflow-hidden">
+        {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-[#181a20]/80 z-10">
             <div className="flex flex-col items-center gap-2">
               <Icon icon="svg-spinners:ring-resize" className="text-[#fcd535]" height={48} />
@@ -546,36 +314,7 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
           </div>
         )}
 
-        {!loading && !error && (
-          <>
-            <canvas
-              ref={canvasRef}
-              width={1200}
-              height={500}
-              className="w-full h-full rounded-lg touch-none"
-              style={{ touchAction: 'none' }}
-            />
-            
-            {/* Mobile Instructions */}
-            <div className="mt-2 flex items-center justify-center gap-4 text-xs text-[#848e9c] sm:hidden">
-              <span className="flex items-center gap-1">
-                <Icon icon="ph:hand-swipe-right" height={14} />
-                Swipe to pan
-              </span>
-              <span className="flex items-center gap-1">
-                <Icon icon="ph:magnifying-glass-plus" height={14} />
-                Pinch to zoom
-              </span>
-            </div>
-
-            {/* Zoom Indicator */}
-            {visibleCandles !== 50 && (
-              <div className="absolute top-4 right-4 bg-[#fcd535] text-[#181a20] px-3 py-1 rounded text-xs font-bold">
-                {visibleCandles} candles
-              </div>
-            )}
-          </>
-        )}
+        <div ref={containerRef} className="w-full h-full"></div>
       </div>
     </div>
   );
