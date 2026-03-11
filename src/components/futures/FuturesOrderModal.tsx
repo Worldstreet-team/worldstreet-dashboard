@@ -64,7 +64,16 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
         );
 
         setPreviewData(preview);
-        setError(null);
+        
+        // Show warning if insufficient margin but still display preview
+        if (!preview.marginCheckPassed) {
+          const shortfall = preview.totalRequired - preview.freeCollateral;
+          setError(`Insufficient margin. You need $${shortfall.toFixed(2)} more USDC`);
+        } else if (preview.sizeTooSmall) {
+          setError(`Order size too small. Minimum: ${preview.minOrderSize} units`);
+        } else {
+          setError(null);
+        }
       } catch (error) {
         console.error('[FuturesOrderModal] Preview error:', error);
         setPreviewData(null);
@@ -430,7 +439,21 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
               )}
               
               {!isLoadingPreview && previewData && (
-                <div className="bg-[#1f2329] rounded p-2 space-y-1 mb-2">
+                <div className={`rounded p-2 space-y-1 mb-2 ${
+                  !previewData.marginCheckPassed 
+                    ? 'bg-[#f6465d]/10 border border-[#f6465d]/30' 
+                    : 'bg-[#1f2329]'
+                }`}>
+                  {/* Insufficient Margin Warning Banner */}
+                  {!previewData.marginCheckPassed && (
+                    <div className="flex items-center gap-1.5 pb-1 mb-1 border-b border-[#f6465d]/20">
+                      <Icon icon="ph:warning" className="text-[#f6465d]" width={14} />
+                      <span className="text-[10px] font-semibold text-[#f6465d]">
+                        Insufficient Margin
+                      </span>
+                    </div>
+                  )}
+                  
                   <div className="flex justify-between text-[10px]">
                     <span className="text-[#848e9c]">Entry Price</span>
                     <span className="text-white font-mono">
@@ -451,10 +474,31 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
                   </div>
                   <div className="flex justify-between text-[10px] border-t border-[#2b3139] pt-1">
                     <span className="text-[#848e9c] font-semibold">Total Required</span>
-                    <span className="text-white font-mono font-semibold">
+                    <span className={`font-mono font-semibold ${
+                      !previewData.marginCheckPassed ? 'text-[#f6465d]' : 'text-white'
+                    }`}>
                       ${(Number(previewData?.totalRequired) || 0).toFixed(2)}
                     </span>
                   </div>
+                  
+                  {/* Show available vs required when insufficient */}
+                  {!previewData.marginCheckPassed && (
+                    <>
+                      <div className="flex justify-between text-[10px]">
+                        <span className="text-[#848e9c]">Available</span>
+                        <span className="text-white font-mono">
+                          ${(Number(previewData?.freeCollateral) || 0).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-[10px] pb-1 border-b border-[#f6465d]/20">
+                        <span className="text-[#f6465d] font-semibold">Shortfall</span>
+                        <span className="text-[#f6465d] font-mono font-semibold">
+                          ${((Number(previewData?.totalRequired) || 0) - (Number(previewData?.freeCollateral) || 0)).toFixed(2)}
+                        </span>
+                      </div>
+                    </>
+                  )}
+                  
                   <div className="flex justify-between text-[10px]">
                     <span className="text-[#848e9c]">Est. Liquidation</span>
                     <span className="text-[#f6465d] font-mono">
@@ -472,8 +516,18 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
 
               {/* Error Message - Compact */}
               {error && (
-                <div className="p-2 bg-[#f6465d]/10 border border-[#f6465d]/20 rounded text-[10px] text-[#f6465d] mb-2">
-                  {error}
+                <div className="p-2 bg-[#f6465d]/10 border border-[#f6465d]/20 rounded mb-2">
+                  <div className="flex items-start gap-1.5">
+                    <Icon icon="ph:warning-circle" className="text-[#f6465d] flex-shrink-0 mt-0.5" width={14} />
+                    <div className="flex-1">
+                      <p className="text-[10px] text-[#f6465d] font-medium">{error}</p>
+                      {error.includes('Insufficient margin') && (
+                        <p className="text-[9px] text-[#848e9c] mt-1">
+                          Deposit more USDC to your Drift account or reduce position size
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
             </>
