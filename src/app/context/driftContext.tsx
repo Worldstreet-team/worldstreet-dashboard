@@ -1552,29 +1552,26 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
 
         // Make sure client is subscribed (polling or websocket)
         if (!client.isSubscribed) {
+          console.log('[DriftContext] Client not subscribed, subscribing now...');
           await client.subscribe();
         }
 
-        // CRITICAL: Wait for spot market accounts to load after subscription
-        // The client needs time to fetch market data from the blockchain
-        let retries = 0;
-        const maxRetries = 10;
-        while (retries < maxRetries) {
-          try {
-            const testMarket = client.getSpotMarketAccount(0);
-            if (testMarket) {
-              console.log('[DriftContext] Spot market data loaded successfully');
-              break;
-            }
-          } catch (err) {
-            console.log(`[DriftContext] Waiting for spot market data... (attempt ${retries + 1}/${maxRetries})`);
-            await new Promise(resolve => setTimeout(resolve, 500));
-            retries++;
+        // CRITICAL: Ensure spot market accounts are loaded
+        // The Drift SDK requires explicit fetching of market accounts
+        console.log('[DriftContext] Fetching spot market accounts...');
+        try {
+          // Force fetch all subscribed spot market accounts
+          await client.fetchMarketLookupTableAccount();
+          
+          // Verify spot market 0 (USDC) is accessible
+          const usdcMarket = client.getSpotMarketAccount(0);
+          if (!usdcMarket) {
+            throw new Error('USDC spot market not loaded');
           }
-        }
-
-        if (retries >= maxRetries) {
-          throw new Error('Failed to load spot market data. Please try again.');
+          console.log('[DriftContext] Spot market data verified and ready');
+        } catch (fetchErr) {
+          console.error('[DriftContext] Failed to fetch spot markets:', fetchErr);
+          throw new Error('Failed to load market data. Please refresh the page and try again.');
         }
 
         // Get pre-deposit balance for verification
@@ -1747,28 +1744,25 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
 
         // Subscribe client if not already
         if (!client.isSubscribed) {
+          console.log('[DriftContext] Client not subscribed, subscribing now...');
           await client.subscribe();
         }
 
-        // CRITICAL: Wait for spot market accounts to load after subscription
-        let retries = 0;
-        const maxRetries = 10;
-        while (retries < maxRetries) {
-          try {
-            const testMarket = client.getSpotMarketAccount(0);
-            if (testMarket) {
-              console.log('[DriftContext] Spot market data loaded for withdrawal');
-              break;
-            }
-          } catch (err) {
-            console.log(`[DriftContext] Waiting for spot market data... (attempt ${retries + 1}/${maxRetries})`);
-            await new Promise(resolve => setTimeout(resolve, 500));
-            retries++;
+        // CRITICAL: Ensure spot market accounts are loaded
+        console.log('[DriftContext] Fetching spot market accounts for withdrawal...');
+        try {
+          // Force fetch all subscribed spot market accounts
+          await client.fetchMarketLookupTableAccount();
+          
+          // Verify spot market 0 (USDC) is accessible
+          const usdcMarket = client.getSpotMarketAccount(0);
+          if (!usdcMarket) {
+            throw new Error('USDC spot market not loaded');
           }
-        }
-
-        if (retries >= maxRetries) {
-          throw new Error('Failed to load spot market data. Please try again.');
+          console.log('[DriftContext] Spot market data verified for withdrawal');
+        } catch (fetchErr) {
+          console.error('[DriftContext] Failed to fetch spot markets:', fetchErr);
+          throw new Error('Failed to load market data. Please refresh the page and try again.');
         }
 
         console.log(`[DriftContext] Withdrawing ${amount} USDC from Drift`);
