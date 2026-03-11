@@ -396,7 +396,7 @@ export default function BinanceSpotPage() {
           </div>
 
           {/* Main Trading Grid - 4 Columns: Chart | OrderBook | OrderForm | Markets */}
-          <div className="grid grid-cols-[1fr_260px_340px_320px] h-[calc(100vh-48px-48px)] overflow-hidden">
+          <div className="grid grid-cols-[1fr_260px_340px_320px] h-[calc(100vh-48px-48px-200px)] overflow-hidden">
             {/* COLUMN 1: Chart (Largest - Dominant) */}
             <div className="border-r border-[#2b3139] flex flex-col min-h-0 bg-[#0b0e11]">
               <LiveChart
@@ -413,7 +413,7 @@ export default function BinanceSpotPage() {
             </div>
 
             {/* COLUMN 3: Order Form */}
-            <div className="border-r border-[#2b3139] overflow-hidden bg-[#0b0e11]">
+            <div className="border-r border-[#2b3139] overflow-y-auto bg-[#0b0e11]">
               <BinanceOrderForm
                 selectedPair={selectedPair}
                 chain={selectedChain}
@@ -447,8 +447,8 @@ export default function BinanceSpotPage() {
             </div>
           </div>
 
-          {/* Positions Panel - Below Trading Grid */}
-          <div className="border-t border-[#2b3139] bg-[#0b0e11] shrink-0">
+          {/* Positions Panel - Below Trading Grid (Fixed Height) */}
+          <div className="h-[200px] border-t border-[#2b3139] bg-[#0b0e11] shrink-0">
             <PositionsPanel
               selectedPair={selectedPair}
               onRefresh={handleTradeExecuted}

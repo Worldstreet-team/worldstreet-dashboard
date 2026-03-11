@@ -247,192 +247,187 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
   const isCurrentBorrowed = activeTab === 'buy' ? isBorrowed.quote : isBorrowed.base;
 
   return (
-    <div className="flex flex-col bg-[#0f1117] text-white overflow-hidden max-h-[40vh]">
+    <div className="flex flex-col h-full bg-[#0b0e11] text-white">
+      {/* Buy/Sell Tabs */}
+      <div className="flex border-b border-[#2b3139] shrink-0">
+        <button
+          onClick={() => setActiveTab('buy')}
+          className={`flex-1 py-3 text-sm font-semibold transition-colors ${
+            activeTab === 'buy'
+              ? 'text-[#0ecb81] border-b-2 border-[#0ecb81]'
+              : 'text-[#848e9c] hover:text-white'
+          }`}
+        >
+          Buy
+        </button>
+        <button
+          onClick={() => setActiveTab('sell')}
+          className={`flex-1 py-3 text-sm font-semibold transition-colors ${
+            activeTab === 'sell'
+              ? 'text-[#f6465d] border-b-2 border-[#f6465d]'
+              : 'text-[#848e9c] hover:text-white'
+          }`}
+        >
+          Sell
+        </button>
+      </div>
+
       {/* Order Type Tabs */}
-      <div className="flex gap-4 px-4 py-3 border-b border-[#2b3139]">
+      <div className="flex gap-4 px-4 py-3 border-b border-[#2b3139] shrink-0">
         {(['limit', 'market', 'stop-limit'] as const).map((type) => (
-          <button key={type} onClick={() => setOrderType(type)} className={`text-sm font-medium pb-2 transition-colors ${orderType === type ? 'text-white border-b-2 border-white' : 'text-[#848e9c] hover:text-white'}`}>
+          <button
+            key={type}
+            onClick={() => setOrderType(type)}
+            className={`text-xs font-medium transition-colors ${
+              orderType === type ? 'text-white' : 'text-[#848e9c] hover:text-white'
+            }`}
+          >
             {type === 'stop-limit' ? 'Stop-Limit' : type.charAt(0).toUpperCase() + type.slice(1)}
           </button>
         ))}
       </div>
 
-      {/* Two Column Layout for Buy/Sell */}
-      <div className="flex-1 overflow-y-auto scrollbar-hide">
-        <div className="grid grid-cols-2 gap-4 p-4">
-          {/* BUY Column */}
-          <div className={`p-4 rounded-lg border-2 transition-colors cursor-pointer ${activeTab === 'buy' ? 'border-[#0ecb81] bg-[#0ecb81]/5' : 'border-[#2b3139]'}`} onClick={() => setActiveTab('buy')}>
-            <div className="space-y-4">
-              {/* Stop Price */}
-              {orderType === 'stop-limit' && (
-                <div>
-                  <div className="text-xs text-[#848e9c] mb-1">Stop</div>
-                  <div className="flex items-center gap-2">
-                    <input 
-                      type="number" 
-                      value={stopPrice} 
-                      onChange={(e) => setStopPrice(e.target.value)} 
-                      placeholder="0.00" 
-                      className="flex-1 px-2 py-1 bg-[#1a1f2e] border border-[#2b3139] rounded text-xs text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#0ecb81]" 
-                    />
-                    <span className="text-xs text-[#848e9c]">USDT</span>
-                    <button className="p-1 hover:bg-[#2b3139] rounded transition-colors">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m0 0l4 4m10-4v12m0 0l4-4m0 0l-4-4" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              )}
+      {/* Form Content */}
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+        {/* Available Balance */}
+        <div className="flex justify-between text-xs">
+          <span className="text-[#848e9c]">Available</span>
+          <span className="text-white font-mono">
+            {loadingBalances ? 'Loading...' : `${currentBalance.toFixed(6)} ${currentToken}`}
+          </span>
+        </div>
 
-              {/* Price */}
-              <div>
-                <div className="text-xs text-[#848e9c] mb-1">Price</div>
-                <div className="flex items-center gap-2">
-                  <input 
-                    type="number" 
-                    value={price} 
-                    onChange={(e) => setPrice(e.target.value)} 
-                    placeholder="0.00" 
-                    className="flex-1 px-2 py-1 bg-[#1a1f2e] border border-[#2b3139] rounded text-xs text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#0ecb81]" 
-                  />
-                  <span className="text-xs text-[#848e9c]">USDT</span>
-                  <button className="px-2 py-1 bg-[#2b3139] hover:bg-[#3b4149] rounded text-xs font-semibold transition-colors">BBO</button>
-                </div>
-              </div>
-
-              {/* Amount */}
-              <div>
-                <div className="text-xs text-[#848e9c] mb-1">Amount</div>
-                <div className="flex items-center gap-2">
-                  <input 
-                    type="number" 
-                    value={amount} 
-                    onChange={(e) => setAmount(e.target.value)} 
-                    placeholder="0.00" 
-                    className="flex-1 px-2 py-1 bg-[#1a1f2e] border border-[#2b3139] rounded text-xs text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#0ecb81]" 
-                  />
-                  <span className="text-xs text-[#848e9c]">{baseAsset}</span>
-                  <button className="p-1 hover:bg-[#2b3139] rounded transition-colors">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m0 0l4 4m10-4v12m0 0l4-4m0 0l-4-4" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
-              {/* Slider */}
-              <div>
-                <input type="range" min="0" max="100" value={sliderValue} onChange={(e) => handlePercentage(parseInt(e.target.value))} className="w-full h-1 bg-[#2b3139] rounded-lg appearance-none cursor-pointer accent-[#0ecb81]" />
-              </div>
-
-              {/* Info */}
-              <div className="text-[10px] text-[#848e9c] space-y-1 border-t border-[#2b3139] pt-2">
-                <div className="flex justify-between">
-                  <span>Available</span>
-                  <span className="text-white font-mono text-xs">{loadingBalances ? 'Loading...' : `${quoteBalance.toFixed(6)} ${quoteAsset}`}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Max Buy</span>
-                  <span className="text-white font-mono text-xs">{loadingBalances ? 'Loading...' : `${quoteBalance.toFixed(6)} ${quoteAsset}`}</span>
-                </div>
-              </div>
-
-              {/* Button */}
-              <button onClick={executeTrade} disabled={executing || !amount} className="w-full py-2 rounded font-semibold text-sm bg-[#0ecb81] hover:bg-[#0ecb81]/90 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors">
-                {executing ? 'Processing...' : `Buy ${baseAsset}`}
-              </button>
+        {/* Stop Price (for stop-limit) */}
+        {orderType === 'stop-limit' && (
+          <div>
+            <label className="block text-xs text-[#848e9c] mb-1.5">Stop Price</label>
+            <div className="relative">
+              <input
+                type="number"
+                value={stopPrice}
+                onChange={(e) => setStopPrice(e.target.value)}
+                placeholder="0.00"
+                className="w-full px-3 py-2 bg-[#1a1f2e] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f0b90b]"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#848e9c]">
+                {quoteAsset}
+              </span>
             </div>
           </div>
+        )}
 
-          {/* SELL Column */}
-          <div className={`p-4 rounded-lg border-2 transition-colors cursor-pointer ${activeTab === 'sell' ? 'border-[#f6465d] bg-[#f6465d]/5' : 'border-[#2b3139]'}`} onClick={() => setActiveTab('sell')}>
-            <div className="space-y-4">
-              {/* Stop Price */}
-              {orderType === 'stop-limit' && (
-                <div>
-                  <div className="text-xs text-[#848e9c] mb-1">Stop</div>
-                  <div className="flex items-center gap-2">
-                    <input 
-                      type="number" 
-                      value={stopPrice} 
-                      onChange={(e) => setStopPrice(e.target.value)} 
-                      placeholder="0.00" 
-                      className="flex-1 px-2 py-1 bg-[#1a1f2e] border border-[#2b3139] rounded text-xs text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f6465d]" 
-                    />
-                    <span className="text-xs text-[#848e9c]">USDT</span>
-                    <button className="p-1 hover:bg-[#2b3139] rounded transition-colors">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m0 0l4 4m10-4v12m0 0l4-4m0 0l-4-4" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Price */}
-              <div>
-                <div className="text-xs text-[#848e9c] mb-1">Price</div>
-                <div className="flex items-center gap-2">
-                  <input 
-                    type="number" 
-                    value={price} 
-                    onChange={(e) => setPrice(e.target.value)} 
-                    placeholder="0.00" 
-                    className="flex-1 px-2 py-1 bg-[#1a1f2e] border border-[#2b3139] rounded text-xs text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f6465d]" 
-                  />
-                  <span className="text-xs text-[#848e9c]">USDT</span>
-                  <button className="px-2 py-1 bg-[#2b3139] hover:bg-[#3b4149] rounded text-xs font-semibold transition-colors">BBO</button>
-                </div>
-              </div>
-
-              {/* Amount */}
-              <div>
-                <div className="text-xs text-[#848e9c] mb-1">Amount</div>
-                <div className="flex items-center gap-2">
-                  <input 
-                    type="number" 
-                    value={amount} 
-                    onChange={(e) => setAmount(e.target.value)} 
-                    placeholder="0.00" 
-                    className="flex-1 px-2 py-1 bg-[#1a1f2e] border border-[#2b3139] rounded text-xs text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f6465d]" 
-                  />
-                  <span className="text-xs text-[#848e9c]">{baseAsset}</span>
-                  <button className="p-1 hover:bg-[#2b3139] rounded transition-colors">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m0 0l4 4m10-4v12m0 0l4-4m0 0l-4-4" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
-              {/* Slider */}
-              <div>
-                <input type="range" min="0" max="100" value={sliderValue} onChange={(e) => handlePercentage(parseInt(e.target.value))} className="w-full h-1 bg-[#2b3139] rounded-lg appearance-none cursor-pointer accent-[#f6465d]" />
-              </div>
-
-              {/* Info */}
-              <div className="text-[10px] text-[#848e9c] space-y-1 border-t border-[#2b3139] pt-2">
-                <div className="flex justify-between">
-                  <span>Available</span>
-                  <span className="text-white font-mono text-xs">{loadingBalances ? 'Loading...' : `${baseBalance.toFixed(6)} ${baseAsset}`}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Max Sell</span>
-                  <span className="text-white font-mono text-xs">{loadingBalances ? 'Loading...' : `${baseBalance.toFixed(6)} ${baseAsset}`}</span>
-                </div>
-              </div>
-
-              {/* Button */}
-              <button onClick={executeTrade} disabled={executing || !amount} className="w-full py-2 rounded font-semibold text-sm bg-[#f6465d] hover:bg-[#f6465d]/90 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors">
-                {executing ? 'Processing...' : `Sell ${baseAsset}`}
-              </button>
+        {/* Price (for limit and stop-limit) */}
+        {(orderType === 'limit' || orderType === 'stop-limit') && (
+          <div>
+            <label className="block text-xs text-[#848e9c] mb-1.5">
+              {orderType === 'stop-limit' ? 'Limit Price' : 'Price'}
+            </label>
+            <div className="relative">
+              <input
+                type="number"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                placeholder="0.00"
+                className="w-full px-3 py-2 bg-[#1a1f2e] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f0b90b]"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#848e9c]">
+                {quoteAsset}
+              </span>
             </div>
+          </div>
+        )}
+
+        {/* Amount */}
+        <div>
+          <label className="block text-xs text-[#848e9c] mb-1.5">Amount</label>
+          <div className="relative">
+            <input
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="0.00"
+              className="w-full px-3 py-2 bg-[#1a1f2e] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f0b90b]"
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#848e9c]">
+              {baseAsset}
+            </span>
           </div>
         </div>
+
+        {/* Percentage Buttons */}
+        <div className="grid grid-cols-4 gap-2">
+          {[25, 50, 75, 100].map((percent) => (
+            <button
+              key={percent}
+              onClick={() => handlePercentage(percent)}
+              className="py-1.5 bg-[#2b3139] hover:bg-[#3b4149] rounded text-xs font-medium transition-colors"
+            >
+              {percent}%
+            </button>
+          ))}
+        </div>
+
+        {/* Slider */}
+        <div>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={sliderValue}
+            onChange={(e) => handlePercentage(parseInt(e.target.value))}
+            className={`w-full h-1 bg-[#2b3139] rounded-lg appearance-none cursor-pointer ${
+              activeTab === 'buy' ? 'accent-[#0ecb81]' : 'accent-[#f6465d]'
+            }`}
+          />
+        </div>
+
+        {/* Total */}
+        {total && (
+          <div className="flex justify-between text-xs pt-2 border-t border-[#2b3139]">
+            <span className="text-[#848e9c]">Total</span>
+            <span className="text-white font-mono">{total} {quoteAsset}</span>
+          </div>
+        )}
+
+        {/* Error Message */}
+        {error && (
+          <div className="p-2 bg-[#f6465d]/10 border border-[#f6465d]/20 rounded text-xs text-[#f6465d]">
+            {error}
+          </div>
+        )}
+
+        {/* Success Message */}
+        {success && (
+          <div className="p-2 bg-[#0ecb81]/10 border border-[#0ecb81]/20 rounded text-xs text-[#0ecb81]">
+            {success}
+          </div>
+        )}
       </div>
 
-      <SpotSwapConfirmModal isOpen={showConfirmModal} onClose={() => setShowConfirmModal(false)} quote={null} pair={selectedPair} side={activeTab} onConfirm={handleConfirmSwap} executing={executing} />
+      {/* Submit Button */}
+      <div className="p-4 border-t border-[#2b3139] shrink-0">
+        <button
+          onClick={executeTrade}
+          disabled={executing || !amount}
+          className={`w-full py-3 rounded font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+            activeTab === 'buy'
+              ? 'bg-[#0ecb81] hover:bg-[#0ecb81]/90 text-white'
+              : 'bg-[#f6465d] hover:bg-[#f6465d]/90 text-white'
+          }`}
+        >
+          {executing ? 'Processing...' : `${activeTab === 'buy' ? 'Buy' : 'Sell'} ${baseAsset}`}
+        </button>
+      </div>
+
+      <SpotSwapConfirmModal
+        isOpen={showConfirmModal}
+        onClose={() => setShowConfirmModal(false)}
+        quote={null}
+        pair={selectedPair}
+        side={activeTab}
+        onConfirm={handleConfirmSwap}
+        executing={executing}
+      />
 
       <SpotOrderProcessingModal
         isOpen={showProcessingModal}
