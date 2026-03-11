@@ -324,111 +324,107 @@ export default function BinanceSpotPage() {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-h-0">
-        {/* Desktop Layout */}
+        {/* Desktop Layout - Bybit Style */}
         <div className="hidden md:flex md:flex-col flex-1">
-          {/* Full Screen - 3 columns */}
-          <div className="grid grid-cols-[280px_1fr_340px] h-[calc(100vh-48px)]">
-            {/* LEFT: Order Book */}
-            <div className="border-r border-[#2b3139] overflow-hidden">
+          {/* Pair Header - Above Trading Grid */}
+          <div className="px-4 py-2 border-b border-[#2b3139] flex items-center justify-between shrink-0 bg-[#0b0e11]">
+            <div className="flex items-center gap-4">
+              <div className="relative pair-selector-container">
+                <button
+                  onClick={() => setShowPairSelector(!showPairSelector)}
+                  className="flex items-center gap-1.5 hover:bg-[#2b3139] px-2 py-1 rounded transition-colors"
+                >
+                  <span className="text-base font-semibold text-white">{selectedPair.replace('-', '/')}</span>
+                  <Icon icon="ph:caret-down" width={14} className="text-[#848e9c]" />
+                </button>
+
+                {/* Desktop Pair Selector Dropdown */}
+                {showPairSelector && (
+                  <div className="absolute left-0 top-full mt-1 bg-[#2b3139] rounded-lg shadow-lg z-50 min-w-[200px]">
+                    {AVAILABLE_PAIRS.map((pair) => {
+                      const [baseAsset] = pair.split('-');
+                      const chain = baseAsset === 'SOL' ? 'solana' :
+                        baseAsset === 'ETH' ? 'ethereum' :
+                          baseAsset === 'BTC' ? 'bitcoin' : 'ethereum';
+
+                      return (
+                        <button
+                          key={pair}
+                          onClick={() => handleSelectPair(pair, chain as 'solana' | 'ethereum' | 'bitcoin')}
+                          className={`w-full px-4 py-3 text-left hover:bg-[#1e2329] transition-colors first:rounded-t-lg last:rounded-b-lg ${selectedPair === pair ? 'bg-[#1e2329]' : ''
+                            }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-white font-medium text-sm">{pair.replace('-', '/')}</span>
+                            <span className="text-[#848e9c] text-xs">${pairData[pair]?.price.toFixed(4) || '0.00'}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className={`text-xl font-semibold ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
+                  {currentPrice.toFixed(2)}
+                </span>
+                <span className="text-xs text-[#848e9c]">
+                  ${currentPrice.toFixed(2)}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-5 text-[11px]">
+              <div className="flex flex-col">
+                <span className="text-[#848e9c]">24h Change</span>
+                <span className={`font-medium ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
+                  {isPositive ? '+' : ''}{priceChange.toFixed(2)}%
+                </span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[#848e9c]">24h High</span>
+                <span className="text-white">{currentPairData?.high24h.toFixed(2) || '0.00'}</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[#848e9c]">24h Low</span>
+                <span className="text-white">{currentPairData?.low24h.toFixed(2) || '0.00'}</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[#848e9c]">24h Volume({tokenIn})</span>
+                <span className="text-white">{currentPairData?.volume24h.toFixed(2) || '0.00'}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Main Trading Grid - 4 Columns: Chart | OrderBook | OrderForm | Markets */}
+          <div className="grid grid-cols-[1fr_260px_340px_320px] h-[calc(100vh-48px-48px)] overflow-hidden">
+            {/* COLUMN 1: Chart (Largest - Dominant) */}
+            <div className="border-r border-[#2b3139] flex flex-col min-h-0 bg-[#0b0e11]">
+              <LiveChart
+                symbol={selectedPair}
+                stopLoss={chartStopLoss}
+                takeProfit={chartTakeProfit}
+                onUpdateLevels={handleUpdateLevels}
+              />
+            </div>
+
+            {/* COLUMN 2: Order Book */}
+            <div className="border-r border-[#2b3139] overflow-hidden bg-[#0b0e11]">
               <BinanceOrderBook selectedPair={selectedPair} />
             </div>
 
-            {/* CENTER: Chart + Order Form */}
-            <div className="border-r border-[#2b3139] flex flex-col min-h-0">
-              {/* Pair Header */}
-              <div className="px-3 py-2 border-b border-[#2b3139] flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-4">
-                  <div className="relative pair-selector-container">
-                    <button
-                      onClick={() => setShowPairSelector(!showPairSelector)}
-                      className="flex items-center gap-1.5 hover:bg-[#2b3139] px-2 py-1 rounded transition-colors"
-                    >
-                      <span className="text-base font-semibold text-white">{selectedPair.replace('-', '/')}</span>
-                      <Icon icon="ph:caret-down" width={14} className="text-[#848e9c]" />
-                    </button>
-
-                    {/* Desktop Pair Selector Dropdown */}
-                    {showPairSelector && (
-                      <div className="absolute left-0 top-full mt-1 bg-[#2b3139] rounded-lg shadow-lg z-50 min-w-[200px]">
-                        {AVAILABLE_PAIRS.map((pair) => {
-                          // Determine chain for each pair
-                          const [baseAsset] = pair.split('-');
-                          const chain = baseAsset === 'SOL' ? 'solana' :
-                            baseAsset === 'ETH' ? 'ethereum' :
-                              baseAsset === 'BTC' ? 'bitcoin' : 'ethereum';
-
-                          return (
-                            <button
-                              key={pair}
-                              onClick={() => handleSelectPair(pair, chain as 'solana' | 'ethereum' | 'bitcoin')}
-                              className={`w-full px-4 py-3 text-left hover:bg-[#1e2329] transition-colors first:rounded-t-lg last:rounded-b-lg ${selectedPair === pair ? 'bg-[#1e2329]' : ''
-                                }`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="text-white font-medium text-sm">{pair.replace('-', '/')}</span>
-                                <span className="text-[#848e9c] text-xs">${pairData[pair]?.price.toFixed(4) || '0.00'}</span>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <span className={`text-xl font-semibold ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
-                      {currentPrice.toFixed(2)}
-                    </span>
-                    <span className="text-xs text-[#848e9c]">
-                      ${currentPrice.toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-5 text-[11px]">
-                  <div className="flex flex-col">
-                    <span className="text-[#848e9c]">24h Change</span>
-                    <span className={`font-medium ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
-                      {isPositive ? '+' : ''}{priceChange.toFixed(2)}%
-                    </span>
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[#848e9c]">24h High</span>
-                    <span className="text-white">{currentPairData?.high24h.toFixed(2) || '0.00'}</span>
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[#848e9c]">24h Low</span>
-                    <span className="text-white">{currentPairData?.low24h.toFixed(2) || '0.00'}</span>
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[#848e9c]">24h Volume({tokenIn})</span>
-                    <span className="text-white">{currentPairData?.volume24h.toFixed(2) || '0.00'}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Chart */}
-              <div className="flex-1 min-h-0">
-                <LiveChart
-                  symbol={selectedPair}
-                  stopLoss={chartStopLoss}
-                  takeProfit={chartTakeProfit}
-                  onUpdateLevels={handleUpdateLevels}
-                />
-              </div>
-
-              {/* Order Form */}
-              <div className="border-t border-[#2b3139] shrink-0">
-                <BinanceOrderForm
-                  selectedPair={selectedPair}
-                  chain={selectedChain}
-                  tokenAddress={selectedTokenAddress}
-                  onTradeExecuted={handleTradeExecuted}
-                  initialSide={tradingSide}
-                />
-              </div>
+            {/* COLUMN 3: Order Form */}
+            <div className="border-r border-[#2b3139] overflow-hidden bg-[#0b0e11]">
+              <BinanceOrderForm
+                selectedPair={selectedPair}
+                chain={selectedChain}
+                tokenAddress={selectedTokenAddress}
+                onTradeExecuted={handleTradeExecuted}
+                initialSide={tradingSide}
+              />
             </div>
 
-            {/* RIGHT: Market List + Market Trades */}
-            <div className="flex flex-col min-h-0">
+            {/* COLUMN 4: Market List + Market Trades */}
+            <div className="flex flex-col min-h-0 bg-[#0b0e11]">
               {/* Market List */}
               <div className="flex-1 min-h-0 overflow-hidden">
                 <BinanceMarketList
@@ -438,7 +434,7 @@ export default function BinanceSpotPage() {
               </div>
 
               {/* Market Trades */}
-              <div className="h-[280px] border-t border-[#2b3139] bg-[#181a20] shrink-0">
+              <div className="h-[280px] border-t border-[#2b3139] shrink-0">
                 <div className="flex flex-col h-full">
                   <div className="px-3 py-2 border-b border-[#2b3139] flex items-center justify-between shrink-0">
                     <span className="text-xs font-medium text-[#848e9c]">Market Trades</span>
@@ -449,7 +445,14 @@ export default function BinanceSpotPage() {
                 </div>
               </div>
             </div>
+          </div>
 
+          {/* Positions Panel - Below Trading Grid */}
+          <div className="border-t border-[#2b3139] bg-[#0b0e11] shrink-0">
+            <PositionsPanel
+              selectedPair={selectedPair}
+              onRefresh={handleTradeExecuted}
+            />
           </div>
         </div>
 
