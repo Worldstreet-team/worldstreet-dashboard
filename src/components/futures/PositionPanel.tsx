@@ -64,38 +64,30 @@ export const PositionPanel: React.FC = () => {
 
   if (isLoading && positions.length === 0) {
     return (
-      <div className="bg-[#181a20] p-6">
-        <h3 className="text-xs font-medium text-[#848e9c] mb-4 uppercase">Open Positions</h3>
-        <div className="text-center py-8">
-          <Icon icon="svg-spinners:ring-resize" className="mx-auto text-[#fcd535] mb-2" height={32} />
-          <p className="text-[#848e9c] text-sm">Loading positions...</p>
-        </div>
+      <div className="bg-[#0b0e11] h-full flex flex-col items-center justify-center">
+        <Icon icon="svg-spinners:ring-resize" className="text-[#fcd535] mb-2" height={28} />
+        <p className="text-[#848e9c] text-[11px]">Loading positions...</p>
       </div>
     );
   }
 
   if (!isLoading && positions.length === 0) {
     return (
-      <div className="bg-[#181a20] p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-xs font-medium text-[#848e9c] uppercase">Open Positions</h3>
-        </div>
-        <div className="text-center py-12">
-          <Icon icon="ph:chart-line" className="mx-auto text-[#848e9c] mb-4" height={32} />
-          <p className="text-[#848e9c] text-sm">No open positions</p>
-          <p className="text-xs text-[#848e9c]/60 mt-1">Open a long or short position to get started</p>
-        </div>
+      <div className="bg-[#0b0e11] h-full flex flex-col items-center justify-center">
+        <Icon icon="ph:chart-line" className="text-[#848e9c] mb-3" height={28} />
+        <p className="text-[#848e9c] text-[11px]">No open positions</p>
+        <p className="text-[10px] text-[#848e9c]/60 mt-1">Open a long or short position to get started</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-[#181a20] overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[#2b3139]">
+    <div className="bg-[#0b0e11] h-full overflow-hidden flex flex-col">
+      <div className="flex items-center justify-between px-4 py-2">
         <div className="flex items-center gap-3">
-          <h3 className="text-xs font-medium text-[#848e9c] uppercase">Open Positions</h3>
+          <h3 className="text-[11px] font-medium text-[#848e9c] uppercase">Open Positions</h3>
           {positions.length > 0 && (
-            <span className="px-2 py-0.5 rounded bg-[#fcd535]/10 text-[#fcd535] text-xs font-bold">
+            <span className="px-2 py-0.5 rounded bg-[#fcd535]/10 text-[#fcd535] text-[10px] font-bold">
               {positions.length}
             </span>
           )}
@@ -103,71 +95,71 @@ export const PositionPanel: React.FC = () => {
         <button
           onClick={() => { refreshSummary(); refreshPositions(); }}
           disabled={isLoading}
-          className="p-2 hover:bg-[#2b3139] active:bg-[#2b3139]/80 rounded transition-all duration-200 disabled:opacity-50 active:scale-95 min-h-[44px] min-w-[44px] flex items-center justify-center touch-feedback"
+          className="p-1.5 hover:bg-[#2b3139] active:bg-[#2b3139]/80 rounded transition-all duration-200 disabled:opacity-50 active:scale-95"
           title="Refresh"
         >
           <Icon
             icon="ph:arrow-clockwise"
             className={`text-[#848e9c] ${isLoading ? 'animate-spin' : ''}`}
-            width={16}
+            width={14}
           />
         </button>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full">
+      <div className="flex-1 overflow-hidden">
+        <table className="w-full text-[11px]">
           <thead>
-            <tr className="border-b border-[#2b3139]">
-              <th className="text-left py-2 px-3 text-[11px] font-medium text-[#848e9c] uppercase">Market</th>
-              <th className="text-left py-2 px-3 text-[11px] font-medium text-[#848e9c] uppercase">Side</th>
-              <th className="text-right py-2 px-3 text-[11px] font-medium text-[#848e9c] uppercase">Size</th>
-              <th className="text-right py-2 px-3 text-[11px] font-medium text-[#848e9c] uppercase">Entry</th>
-              <th className="text-right py-2 px-3 text-[11px] font-medium text-[#848e9c] uppercase">Value</th>
-              <th className="text-right py-2 px-3 text-[11px] font-medium text-[#848e9c] uppercase">PnL</th>
-              <th className="text-right py-2 px-3 text-[11px] font-medium text-[#848e9c] uppercase">Leverage</th>
-              <th className="text-center py-2 px-3 text-[11px] font-medium text-[#848e9c] uppercase">Actions</th>
+            <tr className="border-b border-[#1f2329]">
+              <th className="text-left py-1.5 px-2 font-medium text-[#848e9c] uppercase">Market</th>
+              <th className="text-left py-1.5 px-2 font-medium text-[#848e9c] uppercase">Side</th>
+              <th className="text-right py-1.5 px-2 font-medium text-[#848e9c] uppercase">Size</th>
+              <th className="text-right py-1.5 px-2 font-medium text-[#848e9c] uppercase">Entry</th>
+              <th className="text-right py-1.5 px-2 font-medium text-[#848e9c] uppercase">Value</th>
+              <th className="text-right py-1.5 px-2 font-medium text-[#848e9c] uppercase">PnL</th>
+              <th className="text-right py-1.5 px-2 font-medium text-[#848e9c] uppercase">Leverage</th>
+              <th className="text-center py-1.5 px-2 font-medium text-[#848e9c] uppercase">Actions</th>
             </tr>
           </thead>
           <tbody>
             {positions.map((position) => (
-              <tr key={position.marketIndex} className="border-b border-[#2b3139] hover:bg-[#2b3139]/30 active:bg-[#2b3139]/50 transition-colors">
-                <td className="py-3 px-3 text-sm font-semibold text-white">
+              <tr key={position.marketIndex} className="border-b border-[#1f2329] hover:bg-[#1a1f26] transition-colors">
+                <td className="py-2 px-2 font-semibold text-white">
                   {getMarketSymbol(position.marketIndex)}
                 </td>
-                <td className="py-3 px-3">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${position.direction === 'long'
+                <td className="py-2 px-2">
+                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${position.direction === 'long'
                       ? 'bg-[#0ecb81]/10 text-[#0ecb81]'
                       : 'bg-[#f6465d]/10 text-[#f6465d]'
                     }`}>
                     {position.direction.toUpperCase()}
                   </span>
                 </td>
-                <td className="py-3 px-3 text-sm text-right text-white font-mono tabular-nums">
+                <td className="py-2 px-2 text-right text-white font-mono tabular-nums">
                   {position.baseAmount?.toFixed(4) || '0.0000'}
                 </td>
-                <td className="py-3 px-3 text-sm text-right text-white font-mono tabular-nums">
+                <td className="py-2 px-2 text-right text-white font-mono tabular-nums">
                   ${position.entryPrice?.toFixed(2) || '0.00'}
                 </td>
-                <td className="py-3 px-3 text-sm text-right text-white font-mono tabular-nums">
+                <td className="py-2 px-2 text-right text-white font-mono tabular-nums">
                   ${position.quoteAmount?.toFixed(2) || '0.00'}
                 </td>
-                <td className={`py-3 px-3 text-sm text-right font-bold font-mono tabular-nums ${(position.unrealizedPnl || 0) >= 0 ? 'text-[#0ecb81]' : 'text-[#f6465d]'
+                <td className={`py-2 px-2 text-right font-bold font-mono tabular-nums ${(position.unrealizedPnl || 0) >= 0 ? 'text-[#0ecb81]' : 'text-[#f6465d]'
                   }`}>
                   {(position.unrealizedPnl || 0) >= 0 ? '+' : ''}${(Number(position.unrealizedPnl) || 0).toFixed(2)}
                 </td>
-                <td className="py-3 px-3 text-sm text-right text-white font-mono tabular-nums">
+                <td className="py-2 px-2 text-right text-white font-mono tabular-nums">
                   {position.leverage?.toFixed(1) || '1.0'}x
                 </td>
-                <td className="py-3 px-3 text-center">
+                <td className="py-2 px-2 text-center">
                   <button
                     onClick={() => handleClose(position.marketIndex)}
                     disabled={closingMarketIndex === position.marketIndex || isConfirmingClose}
-                    className="px-3 py-2 rounded text-xs font-bold bg-[#f6465d]/10 text-[#f6465d] hover:bg-[#f6465d]/20 active:bg-[#f6465d]/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 active:scale-95 min-h-[36px] touch-feedback"
+                    className="px-2 py-1 rounded text-[10px] font-bold bg-[#f6465d]/10 text-[#f6465d] hover:bg-[#f6465d]/20 active:bg-[#f6465d]/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 active:scale-95"
                   >
                     {closingMarketIndex === position.marketIndex ? (
                       isConfirmingClose ? (
-                        <span className="flex items-center gap-1.5">
-                          <Icon icon="svg-spinners:ring-resize" height={12} />
+                        <span className="flex items-center gap-1">
+                          <Icon icon="svg-spinners:ring-resize" height={10} />
                           Confirming...
                         </span>
                       ) : (

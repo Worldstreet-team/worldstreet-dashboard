@@ -131,11 +131,11 @@ export const DriftAccountStatus: React.FC = () => {
 
   // Account is initialized - show summary
   return (
-    <div className="bg-[#181a20] border border-[#2b3139] rounded overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[#2b3139]">
-        <div className="flex items-center gap-3">
-          <div className={`w-2 h-2 rounded-full ${canTrade ? 'bg-[#0ecb81] animate-pulse' : 'bg-[#fcd535]'}`} />
-          <h3 className="text-xs font-medium text-[#848e9c] uppercase">
+    <div className="bg-[#0b0e11] h-full overflow-hidden flex flex-col">
+      <div className="flex items-center justify-between px-4 py-2">
+        <div className="flex items-center gap-2">
+          <div className={`w-1.5 h-1.5 rounded-full ${canTrade ? 'bg-[#0ecb81] animate-pulse' : 'bg-[#fcd535]'}`} />
+          <h3 className="text-[11px] font-medium text-[#848e9c] uppercase">
             Account Status
           </h3>
         </div>
@@ -148,43 +148,41 @@ export const DriftAccountStatus: React.FC = () => {
           <Icon 
             icon="ph:arrow-clockwise" 
             className={`text-[#848e9c] ${refreshing ? 'animate-spin' : ''}`}
-            height={16} 
+            height={14} 
           />
         </button>
       </div>
 
       {summary && (
-        <div className="p-4">
-          {/* Horizontal Stats Strip */}
-          <div className="grid grid-cols-2 gap-2 mb-3">
+        <div className="flex-1 px-4 pb-2 overflow-hidden">
+          {/* Horizontal Stats Grid - Compact */}
+          <div className="grid grid-cols-4 gap-2">
             {/* Total Collateral */}
-            <div className="bg-[#2b3139] rounded p-2">
-              <p className="text-[10px] font-medium text-[#848e9c] mb-1 uppercase">
+            <div className="bg-[#1f2329] rounded p-1.5">
+              <p className="text-[9px] font-medium text-[#848e9c] mb-0.5 uppercase">
                 Total Collateral
               </p>
-              <p className="text-base font-bold text-white tabular-nums">
+              <p className="text-[12px] font-bold text-white tabular-nums">
                 ${summary.totalCollateral.toFixed(2)}
               </p>
             </div>
             
             {/* Free Collateral */}
-            <div className="bg-[#0ecb81]/10 border border-[#0ecb81]/20 rounded p-2">
-              <p className="text-[10px] font-medium text-[#0ecb81] mb-1 uppercase">
+            <div className="bg-[#0ecb81]/10 border border-[#0ecb81]/20 rounded p-1.5">
+              <p className="text-[9px] font-medium text-[#0ecb81] mb-0.5 uppercase">
                 Free Collateral
               </p>
-              <p className="text-base font-bold text-white tabular-nums">
+              <p className="text-[12px] font-bold text-white tabular-nums">
                 ${summary.freeCollateral.toFixed(2)}
               </p>
             </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-2 mb-3">
             {/* Unrealized PnL */}
-            <div className="bg-[#2b3139] rounded p-2">
-              <p className="text-[10px] font-medium text-[#848e9c] mb-1 uppercase">
+            <div className="bg-[#1f2329] rounded p-1.5">
+              <p className="text-[9px] font-medium text-[#848e9c] mb-0.5 uppercase">
                 Unrealized PnL
               </p>
-              <p className={`text-base font-bold tabular-nums ${
+              <p className={`text-[12px] font-bold tabular-nums ${
                 summary.unrealizedPnl >= 0 ? 'text-[#0ecb81]' : 'text-[#f6465d]'
               }`}>
                 {summary.unrealizedPnl >= 0 ? '+' : ''}${summary.unrealizedPnl.toFixed(2)}
@@ -192,26 +190,26 @@ export const DriftAccountStatus: React.FC = () => {
             </div>
             
             {/* Leverage */}
-            <div className="bg-[#2b3139] rounded p-2">
-              <p className="text-[10px] font-medium text-[#848e9c] mb-1 uppercase">
+            <div className="bg-[#1f2329] rounded p-1.5">
+              <p className="text-[9px] font-medium text-[#848e9c] mb-0.5 uppercase">
                 Leverage
               </p>
-              <p className="text-base font-bold text-white tabular-nums">
+              <p className="text-[12px] font-bold text-white tabular-nums">
                 {summary.leverage.toFixed(2)}x
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2 mt-2">
             {/* Margin Ratio */}
-            <div className={`rounded p-2 ${
+            <div className={`rounded p-1.5 ${
               summary.marginRatio > 0.5 
                 ? 'bg-[#0ecb81]/10 border border-[#0ecb81]/20' 
                 : summary.marginRatio > 0.2 
                 ? 'bg-[#fcd535]/10 border border-[#fcd535]/20'
                 : 'bg-[#f6465d]/10 border border-[#f6465d]/20'
             }`}>
-              <p className={`text-[10px] font-medium mb-1 uppercase ${
+              <p className={`text-[9px] font-medium mb-0.5 uppercase ${
                 summary.marginRatio > 0.5 
                   ? 'text-[#0ecb81]' 
                   : summary.marginRatio > 0.2 
@@ -220,7 +218,7 @@ export const DriftAccountStatus: React.FC = () => {
               }`}>
                 Margin Ratio
               </p>
-              <p className={`text-base font-bold tabular-nums ${
+              <p className={`text-[12px] font-bold tabular-nums ${
                 summary.marginRatio > 0.5 ? 'text-[#0ecb81]' : 
                 summary.marginRatio > 0.2 ? 'text-[#fcd535]' : 'text-[#f6465d]'
               }`}>
@@ -229,11 +227,11 @@ export const DriftAccountStatus: React.FC = () => {
             </div>
             
             {/* Open Positions */}
-            <div className="bg-[#2b3139] rounded p-2">
-              <p className="text-[10px] font-medium text-[#848e9c] mb-1 uppercase">
+            <div className="bg-[#1f2329] rounded p-1.5">
+              <p className="text-[9px] font-medium text-[#848e9c] mb-0.5 uppercase">
                 Open Positions
               </p>
-              <p className="text-base font-bold text-white tabular-nums">
+              <p className="text-[12px] font-bold text-white tabular-nums">
                 {summary.openPositions}
               </p>
             </div>
@@ -241,11 +239,11 @@ export const DriftAccountStatus: React.FC = () => {
 
           {/* Trading Disabled Warning */}
           {!canTrade && (
-            <div className="mt-4 p-3 bg-[#fcd535]/10 border border-[#fcd535]/20 rounded flex items-start gap-2">
-              <Icon icon="ph:warning" className="text-[#fcd535] flex-shrink-0 mt-0.5" height={18} />
+            <div className="mt-2 p-2 bg-[#fcd535]/10 border border-[#fcd535]/20 rounded flex items-start gap-1.5">
+              <Icon icon="ph:warning" className="text-[#fcd535] flex-shrink-0 mt-0.5" height={14} />
               <div>
-                <p className="text-xs font-bold text-[#fcd535]">Trading Disabled</p>
-                <p className="text-xs text-[#fcd535]/80 mt-1">
+                <p className="text-[10px] font-bold text-[#fcd535]">Trading Disabled</p>
+                <p className="text-[9px] text-[#fcd535]/80 mt-0.5">
                   Please add collateral or close positions to continue trading.
                 </p>
               </div>

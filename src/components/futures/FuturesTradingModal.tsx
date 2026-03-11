@@ -190,9 +190,9 @@ export default function FuturesTradingModal({
       />
 
       {/* Modal */}
-      <div className="relative w-full md:max-w-md bg-[#181a20] md:rounded-t-2xl rounded-t-2xl max-h-[85vh] flex flex-col">
+      <div className="relative w-full md:max-w-md bg-[#181a20] md:rounded-t-2xl rounded-t-2xl max-h-[85vh] flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-4 border-b border-[#2b3139]">
+        <div className="flex items-center justify-between px-4 py-4 border-b border-[#2b3139] flex-shrink-0">
           <h3 className="text-lg font-semibold text-white">
             {side === 'long' ? 'Long' : 'Short'} {marketName}
           </h3>
@@ -201,8 +201,13 @@ export default function FuturesTradingModal({
           </button>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto scrollbar-hide p-4 space-y-4">
+        {/* Content - No visible scrollbar */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+          <style jsx>{`
+            div::-webkit-scrollbar {
+              display: none;
+            }
+          `}</style>
           {/* Order Type Tabs */}
           <div className="flex gap-2 p-1 bg-[#2b3139] rounded-lg">
             <button
@@ -382,7 +387,7 @@ export default function FuturesTradingModal({
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-[#2b3139] safe-area-bottom">
+        <div className="p-4 border-t border-[#2b3139] safe-area-bottom flex-shrink-0">
           <button
             onClick={handleSubmit}
             disabled={isDisabled}

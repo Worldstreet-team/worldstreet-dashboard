@@ -21,6 +21,48 @@ import FuturesTradingModal from '@/components/futures/FuturesTradingModal';
 
 type OrderSide = 'long' | 'short';
 
+// Bottom Panel Component with Tabs
+const BottomPanel: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'positions' | 'assets'>('positions');
+
+  return (
+    <div className="h-full flex flex-col">
+      {/* Tabs Row */}
+      <div className="flex items-center gap-6 px-4 py-2 border-b border-[#1f2329]">
+        <button 
+          onClick={() => setActiveTab('positions')}
+          className={`text-[12px] font-medium pb-1 transition-colors ${
+            activeTab === 'positions' 
+              ? 'text-[#f0b90b] border-b-2 border-[#f0b90b]' 
+              : 'text-[#848e9c] hover:text-white'
+          }`}
+        >
+          Positions
+        </button>
+        <button 
+          onClick={() => setActiveTab('assets')}
+          className={`text-[12px] font-medium pb-1 transition-colors ${
+            activeTab === 'assets' 
+              ? 'text-[#f0b90b] border-b-2 border-[#f0b90b]' 
+              : 'text-[#848e9c] hover:text-white'
+          }`}
+        >
+          Assets
+        </button>
+      </div>
+
+      {/* Content Area - No scrollbar */}
+      <div className="flex-1 overflow-hidden">
+        {activeTab === 'positions' ? (
+          <PositionPanel />
+        ) : (
+          <DriftAccountStatus />
+        )}
+      </div>
+    </div>
+  );
+};
+
 export default function BinanceFuturesPage() {
   const [selectedMarketIndex, setSelectedMarketIndex] = useState<number | null>(null);
   const [tradingSide, setTradingSide] = useState<OrderSide>('long');
@@ -499,31 +541,7 @@ export default function BinanceFuturesPage() {
 
         {/* BOTTOM DATA PANEL - 220px */}
         <div className="h-[220px] bg-[#0b0e11] border-t border-[#1f2329]">
-          <div className="h-full flex flex-col">
-            {/* Tabs Row */}
-            <div className="flex items-center gap-6 px-4 py-2 border-b border-[#1f2329]">
-              <button className="text-[12px] font-medium text-[#f0b90b] pb-1 border-b-2 border-[#f0b90b]">
-                Positions
-              </button>
-              <button className="text-[12px] font-medium text-[#848e9c] hover:text-white transition-colors">
-                Open Orders
-              </button>
-              <button className="text-[12px] font-medium text-[#848e9c] hover:text-white transition-colors">
-                Order History
-              </button>
-              <button className="text-[12px] font-medium text-[#848e9c] hover:text-white transition-colors">
-                Assets
-              </button>
-            </div>
-
-            {/* Content Area */}
-            <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-[#1f2329]">
-              <div className="p-2 space-y-2">
-                <PositionPanel />
-                <DriftAccountStatus />
-              </div>
-            </div>
-          </div>
+          <BottomPanel />
         </div>
       </div>
 
