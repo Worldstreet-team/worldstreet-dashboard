@@ -106,7 +106,12 @@ export const PositionPanel: React.FC = () => {
         </button>
       </div>
 
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        <style jsx>{`
+          div::-webkit-scrollbar {
+            display: none;
+          }
+        `}</style>
         <table className="w-full text-[11px]">
           <thead>
             <tr className="border-b border-[#1f2329]">

@@ -182,68 +182,79 @@ export default function FuturesTradingModal({
   const isDisabled = !size || parseFloat(size) <= 0 || !previewData || !previewData.marginCheckPassed || previewData.sizeTooSmall || executing;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center md:justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
         onClick={onClose}
       />
 
-      {/* Modal */}
-      <div className="relative w-full md:max-w-md bg-[#181a20] md:rounded-t-2xl rounded-t-2xl max-h-[85vh] flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-4 border-b border-[#2b3139] flex-shrink-0">
-          <h3 className="text-lg font-semibold text-white">
-            {side === 'long' ? 'Long' : 'Short'} {marketName}
-          </h3>
-          <button onClick={onClose} className="p-2 hover:bg-[#2b3139] rounded-full transition-colors">
-            <Icon icon="ph:x" width={20} className="text-[#848e9c]" />
+      {/* Modal - Compact Bybit Style */}
+      <div className="relative w-full max-w-[500px] bg-[#0b0e11] rounded-lg border border-[#1f2329] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+        {/* Header - Compact */}
+        <div className="flex items-center justify-between px-3 py-2 border-b border-[#1f2329] flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <h3 className="text-[13px] font-bold text-white">
+              {side === 'long' ? 'Long' : 'Short'} {marketName}
+            </h3>
+            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+              side === 'long' ? 'bg-[#0ecb81]/10 text-[#0ecb81]' : 'bg-[#f6465d]/10 text-[#f6465d]'
+            }`}>
+              {side.toUpperCase()}
+            </span>
+          </div>
+          <button onClick={onClose} className="p-1 hover:bg-[#1f2329] rounded transition-colors">
+            <Icon icon="ph:x" width={16} className="text-[#848e9c]" />
           </button>
         </div>
 
-        {/* Content - No visible scrollbar */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        {/* Content - Scrollable without visible scrollbar */}
+        <div 
+          className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-2" 
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
           <style jsx>{`
             div::-webkit-scrollbar {
               display: none;
             }
           `}</style>
-          {/* Order Type Tabs */}
-          <div className="flex gap-2 p-1 bg-[#2b3139] rounded-lg">
+
+          {/* Order Type Tabs - Compact */}
+          <div className="flex gap-1 p-0.5 bg-[#1f2329] rounded mb-2">
             <button
               onClick={() => setOrderType('market')}
-              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
+              className={`flex-1 py-1.5 text-[11px] font-medium rounded transition-colors ${
                 orderType === 'market'
-                  ? 'bg-[#181a20] text-white'
-                  : 'text-[#848e9c]'
+                  ? 'bg-[#0b0e11] text-white'
+                  : 'text-[#848e9c] hover:text-white'
               }`}
             >
               Market
             </button>
             <button
               onClick={() => setOrderType('limit')}
-              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
+              className={`flex-1 py-1.5 text-[11px] font-medium rounded transition-colors ${
                 orderType === 'limit'
-                  ? 'bg-[#181a20] text-white'
-                  : 'text-[#848e9c]'
+                  ? 'bg-[#0b0e11] text-white'
+                  : 'text-[#848e9c] hover:text-white'
               }`}
             >
               Limit
             </button>
           </div>
 
-          {/* Available Balance */}
-          <div className="flex items-center justify-between text-sm">
+          {/* Available Balance - Compact */}
+          <div className="flex items-center justify-between text-[11px] mb-2 px-1">
             <span className="text-[#848e9c]">Available</span>
-            <span className="text-white font-mono">
+            <span className="text-white font-mono font-medium">
               ${availableBalance.toFixed(2)} USDC
             </span>
           </div>
 
-          {/* Limit Price (for limit and stop-limit orders) */}
+          {/* Limit Price - Compact */}
           {(orderType === 'limit' || orderType === 'stop-limit') && (
-            <div>
-              <label className="block text-sm text-[#848e9c] mb-2">
+            <div className="mb-2">
+              <label className="block text-[10px] text-[#848e9c] mb-1 uppercase font-medium">
                 {orderType === 'stop-limit' ? 'Limit Price' : 'Price'}
               </label>
               <div className="relative">
@@ -252,61 +263,61 @@ export default function FuturesTradingModal({
                   value={limitPrice}
                   onChange={(e) => setLimitPrice(e.target.value)}
                   placeholder="0.00"
-                  className="w-full px-4 py-3 bg-[#2b3139] border border-[#2b3139] rounded-lg text-base text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#fcd535]"
+                  className="w-full px-2 py-1.5 bg-[#1f2329] border border-[#1f2329] rounded text-[12px] text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f0b90b]"
                 />
-                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[#848e9c]">
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-[#848e9c]">
                   USDT
                 </span>
               </div>
             </div>
           )}
 
-          {/* Trigger Price (for stop-limit orders only) */}
+          {/* Trigger Price - Compact */}
           {orderType === 'stop-limit' && (
-            <div>
-              <label className="block text-sm text-[#848e9c] mb-2">Trigger Price</label>
+            <div className="mb-2">
+              <label className="block text-[10px] text-[#848e9c] mb-1 uppercase font-medium">Trigger Price</label>
               <div className="relative">
                 <input
                   type="number"
                   value={triggerPrice}
                   onChange={(e) => setTriggerPrice(e.target.value)}
                   placeholder="0.00"
-                  className="w-full px-4 py-3 bg-[#2b3139] border border-[#2b3139] rounded-lg text-base text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#fcd535]"
+                  className="w-full px-2 py-1.5 bg-[#1f2329] border border-[#1f2329] rounded text-[12px] text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f0b90b]"
                 />
-                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[#848e9c]">
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-[#848e9c]">
                   USDT
                 </span>
               </div>
-              <p className="text-xs text-[#848e9c] mt-1">
+              <p className="text-[9px] text-[#848e9c] mt-0.5">
                 {side === 'long' 
-                  ? 'Order triggers when price rises above this level'
-                  : 'Order triggers when price falls below this level'}
+                  ? 'Triggers when price rises above this level'
+                  : 'Triggers when price falls below this level'}
               </p>
             </div>
           )}
 
-          {/* Size Input */}
-          <div>
-            <label className="block text-sm text-[#848e9c] mb-2">Size</label>
+          {/* Size Input - Compact */}
+          <div className="mb-2">
+            <label className="block text-[10px] text-[#848e9c] mb-1 uppercase font-medium">Size</label>
             <div className="relative">
               <input
                 type="number"
                 value={size}
                 onChange={(e) => setSize(e.target.value)}
                 placeholder="0.00"
-                className="w-full px-4 py-3 bg-[#2b3139] border border-[#2b3139] rounded-lg text-base text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#fcd535]"
+                className="w-full px-2 py-1.5 bg-[#1f2329] border border-[#1f2329] rounded text-[12px] text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f0b90b]"
               />
-              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-[#848e9c]">
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-[#848e9c]">
                 {marketName.split('-')[0]}
               </span>
             </div>
           </div>
 
-          {/* Leverage Slider */}
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <label className="text-sm text-[#848e9c]">Leverage</label>
-              <span className="text-base font-bold text-[#fcd535]">{leverage}x</span>
+          {/* Leverage Slider - Compact */}
+          <div className="mb-2">
+            <div className="flex justify-between items-center mb-1 px-1">
+              <label className="text-[10px] text-[#848e9c] uppercase font-medium">Leverage</label>
+              <span className="text-[12px] font-bold text-[#f0b90b]">{leverage}x</span>
             </div>
             <input
               type="range"
@@ -314,56 +325,56 @@ export default function FuturesTradingModal({
               max={previewData?.maxLeverageAllowed || 20}
               value={leverage}
               onChange={(e) => setLeverage(parseInt(e.target.value))}
-              className="w-full h-1 bg-[#2b3139] rounded-lg appearance-none cursor-pointer accent-[#fcd535]"
+              className="w-full h-1 bg-[#1f2329] rounded appearance-none cursor-pointer accent-[#f0b90b]"
             />
-            <div className="flex justify-between text-xs text-[#848e9c] mt-2">
+            <div className="flex justify-between text-[9px] text-[#848e9c] mt-0.5 px-1">
               <span>1x</span>
               <span>{previewData?.maxLeverageAllowed || 20}x</span>
             </div>
           </div>
 
-          {/* Percentage Buttons */}
-          <div className="grid grid-cols-4 gap-2">
+          {/* Percentage Buttons - Compact */}
+          <div className="grid grid-cols-4 gap-1 mb-2">
             {[25, 50, 75, 100].map((percent) => (
               <button
                 key={percent}
                 onClick={() => handlePercentage(percent)}
-                className="py-2 bg-[#2b3139] hover:bg-[#2b3139]/80 text-white text-sm font-medium rounded-lg transition-colors"
+                className="py-1 bg-[#1f2329] hover:bg-[#2b3139] text-white text-[10px] font-medium rounded transition-colors"
               >
                 {percent}%
               </button>
             ))}
           </div>
 
-          {/* Preview */}
+          {/* Preview - Compact */}
           {previewData && (
-            <div className="bg-[#2b3139] rounded-lg p-3 space-y-2">
-              <div className="flex justify-between text-xs">
-                <span className="text-[#848e9c]">Entry Price:</span>
+            <div className="bg-[#1f2329] rounded p-2 space-y-1 mb-2">
+              <div className="flex justify-between text-[10px]">
+                <span className="text-[#848e9c]">Entry Price</span>
                 <span className="text-white font-mono">
                   ${(previewData.entryPrice || 0).toFixed(2)}
                 </span>
               </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-[#848e9c]">Required Margin:</span>
+              <div className="flex justify-between text-[10px]">
+                <span className="text-[#848e9c]">Required Margin</span>
                 <span className="text-white font-mono">
                   ${(previewData.requiredMargin || 0).toFixed(2)}
                 </span>
               </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-[#848e9c]">Trading Fee:</span>
+              <div className="flex justify-between text-[10px]">
+                <span className="text-[#848e9c]">Trading Fee</span>
                 <span className="text-white font-mono">
                   ${(previewData.estimatedFee || 0).toFixed(2)}
                 </span>
               </div>
-              <div className="flex justify-between text-xs border-t border-white/10 pt-2">
-                <span className="text-[#848e9c] font-semibold">Total Required:</span>
+              <div className="flex justify-between text-[10px] border-t border-[#2b3139] pt-1">
+                <span className="text-[#848e9c] font-semibold">Total Required</span>
                 <span className="text-white font-mono font-semibold">
                   ${(previewData.totalRequired || 0).toFixed(2)}
                 </span>
               </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-[#848e9c]">Est. Liquidation:</span>
+              <div className="flex justify-between text-[10px]">
+                <span className="text-[#848e9c]">Est. Liquidation</span>
                 <span className="text-[#f6465d] font-mono">
                   ${(previewData.estimatedLiquidationPrice || 0).toFixed(2)}
                 </span>
@@ -371,35 +382,35 @@ export default function FuturesTradingModal({
             </div>
           )}
 
-          {/* Error Message */}
+          {/* Error Message - Compact */}
           {error && (
-            <div className="p-3 bg-[rgba(246,70,93,0.12)] border border-[#f6465d] rounded-lg text-sm text-[#f6465d]">
+            <div className="p-2 bg-[#f6465d]/10 border border-[#f6465d]/20 rounded text-[10px] text-[#f6465d] mb-2">
               {error}
             </div>
           )}
 
-          {/* Success Message */}
+          {/* Success Message - Compact */}
           {success && (
-            <div className="p-3 bg-[rgba(14,203,129,0.12)] border border-[#0ecb81] rounded-lg text-sm text-[#0ecb81]">
+            <div className="p-2 bg-[#0ecb81]/10 border border-[#0ecb81]/20 rounded text-[10px] text-[#0ecb81] mb-2">
               {success}
             </div>
           )}
         </div>
 
-        {/* Footer */}
-        <div className="p-4 border-t border-[#2b3139] safe-area-bottom flex-shrink-0">
+        {/* Footer - Compact */}
+        <div className="p-2 border-t border-[#1f2329] flex-shrink-0">
           <button
             onClick={handleSubmit}
             disabled={isDisabled}
-            className={`w-full py-4 rounded-lg font-semibold text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+            className={`w-full py-2 rounded font-bold text-[12px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
               side === 'long'
                 ? 'bg-[#0ecb81] hover:bg-[#0ecb81]/90 text-white'
                 : 'bg-[#f6465d] hover:bg-[#f6465d]/90 text-white'
             }`}
           >
             {executing ? (
-              <span className="flex items-center justify-center gap-2">
-                <Icon icon="ph:circle-notch" className="animate-spin" width={20} />
+              <span className="flex items-center justify-center gap-1.5">
+                <Icon icon="ph:circle-notch" className="animate-spin" width={14} />
                 Opening...
               </span>
             ) : (

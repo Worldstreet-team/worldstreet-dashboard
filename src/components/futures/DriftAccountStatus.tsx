@@ -154,7 +154,12 @@ export const DriftAccountStatus: React.FC = () => {
       </div>
 
       {summary && (
-        <div className="flex-1 px-4 pb-2 overflow-hidden">
+        <div className="flex-1 px-4 pb-2 overflow-y-auto overflow-x-hidden" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+          <style jsx>{`
+            div::-webkit-scrollbar {
+              display: none;
+            }
+          `}</style>
           {/* Horizontal Stats Grid - Compact */}
           <div className="grid grid-cols-4 gap-2">
             {/* Total Collateral */}
