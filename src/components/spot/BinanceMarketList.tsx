@@ -147,7 +147,7 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
       </div>
 
       {/* Market List */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto scrollbar-hide">
         {loading ? (
           <div className="p-8 text-center">
             <Icon icon="ph:spinner" className="mx-auto mb-3 text-[#848e9c] animate-spin" width={40} />

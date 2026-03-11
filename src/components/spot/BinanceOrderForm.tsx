@@ -81,19 +81,36 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
       return;
     }
 
-    if (orderType === 'market' && currentMarketPrice > 0) {
-      // For market orders: total = amount * currentMarketPrice
-      const totalValue = parseFloat(amount) * currentMarketPrice;
-      setTotal(totalValue.toFixed(6));
-    } else if ((orderType === 'limit' || orderType === 'stop-limit') && price) {
-      // For limit/stop-limit: total = amount * price
-      const priceNum = parseFloat(price);
-      if (priceNum > 0) {
-        const totalValue = parseFloat(amount) * priceNum;
+    const amountNum = parseFloat(amount);
+
+    if (activeTab === 'buy') {
+      // BUY: User enters USDC amount, calculate how much base asset they'll get
+      // Formula: baseAsset = USDC / price
+      if (orderType === 'market' && currentMarketPrice > 0) {
+        const totalValue = amountNum / currentMarketPrice;
         setTotal(totalValue.toFixed(6));
+      } else if ((orderType === 'limit' || orderType === 'stop-limit') && price) {
+        const priceNum = parseFloat(price);
+        if (priceNum > 0) {
+          const totalValue = amountNum / priceNum;
+          setTotal(totalValue.toFixed(6));
+        }
+      }
+    } else {
+      // SELL: User enters base asset amount, calculate how much USDC they'll get
+      // Formula: USDC = baseAsset * price
+      if (orderType === 'market' && currentMarketPrice > 0) {
+        const totalValue = amountNum * currentMarketPrice;
+        setTotal(totalValue.toFixed(6));
+      } else if ((orderType === 'limit' || orderType === 'stop-limit') && price) {
+        const priceNum = parseFloat(price);
+        if (priceNum > 0) {
+          const totalValue = amountNum * priceNum;
+          setTotal(totalValue.toFixed(6));
+        }
       }
     }
-  }, [amount, price, currentMarketPrice, orderType]);
+  }, [amount, price, currentMarketPrice, orderType, activeTab]);
 
   const handlePercentage = (percent: number) => {
     // For BUY: use quote balance (USDC/USDT)
@@ -385,7 +402,9 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
         {total && (
           <div className="flex justify-between text-xs pt-2 border-t border-[#2b3139]">
             <span className="text-[#848e9c]">Total</span>
-            <span className="text-white font-mono">{total} {quoteAsset}</span>
+            <span className="text-white font-mono">
+              {total} {activeTab === 'buy' ? baseAsset : quoteAsset}
+            </span>
           </div>
         )}
 
