@@ -325,7 +325,7 @@ export default function BinanceSpotPage() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-h-0">
         {/* Desktop Layout - Bybit Style */}
-        <div className="hidden md:flex md:flex-col flex-1">
+        <div className="hidden md:flex md:flex-col h-screen overflow-hidden">
           {/* Pair Header - Above Trading Grid */}
           <div className="px-4 py-2 border-b border-[#2b3139] flex items-center justify-between shrink-0 bg-[#0b0e11]">
             <div className="flex items-center gap-4">
@@ -396,9 +396,9 @@ export default function BinanceSpotPage() {
           </div>
 
           {/* Main Trading Grid - 4 Columns: Chart | OrderBook | OrderForm | Markets */}
-          <div className="grid grid-cols-[1fr_260px_340px_320px] h-[calc(100vh-48px-48px-200px)] overflow-hidden">
+          <div className="flex-1 min-h-0 grid grid-cols-[1fr_260px_340px_320px] overflow-hidden">
             {/* COLUMN 1: Chart (Largest - Dominant) */}
-            <div className="border-r border-[#2b3139] flex flex-col min-h-0 bg-[#0b0e11]">
+            <div className="border-r border-[#2b3139] h-full overflow-hidden bg-[#0b0e11]">
               <LiveChart
                 symbol={selectedPair}
                 stopLoss={chartStopLoss}
@@ -408,12 +408,12 @@ export default function BinanceSpotPage() {
             </div>
 
             {/* COLUMN 2: Order Book */}
-            <div className="border-r border-[#2b3139] overflow-hidden bg-[#0b0e11]">
+            <div className="border-r border-[#2b3139] h-full overflow-y-auto bg-[#0b0e11]">
               <BinanceOrderBook selectedPair={selectedPair} />
             </div>
 
-            {/* COLUMN 3: Order Form */}
-            <div className="border-r border-[#2b3139] overflow-y-auto bg-[#0b0e11]">
+            {/* COLUMN 3: Order Form - Hidden Scrollbar */}
+            <div className="border-r border-[#2b3139] h-full overflow-y-auto bg-[#0b0e11] scrollbar-hide">
               <BinanceOrderForm
                 selectedPair={selectedPair}
                 chain={selectedChain}
@@ -424,9 +424,9 @@ export default function BinanceSpotPage() {
             </div>
 
             {/* COLUMN 4: Market List + Market Trades */}
-            <div className="flex flex-col min-h-0 bg-[#0b0e11]">
+            <div className="flex flex-col h-full overflow-hidden bg-[#0b0e11]">
               {/* Market List */}
-              <div className="flex-1 min-h-0 overflow-hidden">
+              <div className="flex-1 min-h-0 overflow-y-auto">
                 <BinanceMarketList
                   selectedPair={selectedPair}
                   onSelectPair={handleSelectPair}
@@ -434,12 +434,12 @@ export default function BinanceSpotPage() {
               </div>
 
               {/* Market Trades */}
-              <div className="h-[280px] border-t border-[#2b3139] shrink-0">
+              <div className="h-[280px] border-t border-[#2b3139] shrink-0 overflow-hidden">
                 <div className="flex flex-col h-full">
                   <div className="px-3 py-2 border-b border-[#2b3139] flex items-center justify-between shrink-0">
                     <span className="text-xs font-medium text-[#848e9c]">Market Trades</span>
                   </div>
-                  <div className="flex-1 min-h-0">
+                  <div className="flex-1 min-h-0 overflow-y-auto">
                     <MarketTrades selectedPair={selectedPair} />
                   </div>
                 </div>
@@ -447,12 +447,14 @@ export default function BinanceSpotPage() {
             </div>
           </div>
 
-          {/* Positions Panel - Below Trading Grid (Fixed Height) */}
-          <div className="h-[200px] border-t border-[#2b3139] bg-[#0b0e11] shrink-0">
-            <PositionsPanel
-              selectedPair={selectedPair}
-              onRefresh={handleTradeExecuted}
-            />
+          {/* Positions Panel - Below Trading Grid (Fixed Height, Internal Scroll) */}
+          <div className="shrink-0 h-[220px] border-t border-[#2b3139] bg-[#0b0e11] overflow-hidden">
+            <div className="h-full overflow-y-auto">
+              <PositionsPanel
+                selectedPair={selectedPair}
+                onRefresh={handleTradeExecuted}
+              />
+            </div>
           </div>
         </div>
 
