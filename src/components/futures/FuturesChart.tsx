@@ -2,8 +2,26 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Icon } from '@iconify/react';
-import { createChart, ColorType, CandlestickSeries } from 'lightweight-charts';
+import * as echarts from 'echarts/core';
+import { CandlestickChart } from 'echarts/charts';
+import {
+  GridComponent,
+  TooltipComponent,
+  TitleComponent,
+  DataZoomComponent,
+} from 'echarts/components';
+import { CanvasRenderer } from 'echarts/renderers';
 import { useFuturesStore } from '@/store/futuresStore';
+
+// Register ECharts components
+echarts.use([
+  CandlestickChart,
+  GridComponent,
+  TooltipComponent,
+  TitleComponent,
+  DataZoomComponent,
+  CanvasRenderer,
+]);
 
 interface CandleData {
   time: number;
@@ -33,8 +51,7 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
   const [priceChange, setPriceChange] = useState<number | null>(null);
   
   const containerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<any>(null);
-  const seriesRef = useRef<any>(null);
+  const chartRef = useRef<echarts.ECharts | null>(null);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Auto-select first market when markets load
@@ -44,7 +61,7 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
     }
   }, [markets, selectedMarket, setSelectedMarket]);
 
-  // Initialize chart
+  // Initialize ECharts
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -68,54 +85,124 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
       try {
         // Clean up existing chart
         if (chartRef.current) {
-          chartRef.current.remove();
+          chartRef.current.dispose();
           chartRef.current = null;
         }
 
-        const chart = createChart(containerRef.current, {
-          layout: {
-            background: { type: ColorType.Solid, color: '#181a20' },
-            textColor: '#848e9c',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-          },
-          width: width,
-          height: height,
-          timeScale: {
-            timeVisible: true,
-            secondsVisible: false,
-            fixLeftEdge: true,
-            fixRightEdge: true,
-          },
-          crosshair: {
-            mode: 1,
-            vertLine: {
-              color: '#2b3139',
-              width: 1,
-              style: 2,
-            },
-            horzLine: {
-              color: '#2b3139',
-              width: 1,
-              style: 2,
-            },
-          },
-          grid: {
-            vertLines: { color: '#2b3139', style: 2 },
-            horzLines: { color: '#2b3139', style: 2 },
-          },
+        // Initialize ECharts instance
+        const chart = echarts.init(containerRef.current, null, {
+          renderer: 'canvas',
+          width,
+          height,
         });
 
-        const candlestickSeries = chart.addSeries(CandlestickSeries, {
-          upColor: '#0ecb81',
-          downColor: '#f6465d',
-          borderUpColor: '#0ecb81',
-          borderDownColor: '#f6465d',
-          wickUpColor: '#0ecb81',
-          wickDownColor: '#f6465d',
+        // Set initial chart options
+        chart.setOption({
+          backgroundColor: '#181a20',
+          grid: {
+            left: '3%',
+            right: '3%',
+            top: '10%',
+            bottom: '15%',
+            containLabel: true,
+          },
+          xAxis: {
+            type: 'category',
+            data: [],
+            axisLine: { lineStyle: { color: '#2b3139' } },
+            axisLabel: {
+              color: '#848e9c',
+              fontSize: 11,
+              formatter: (value: string) => {
+                const date = new Date(parseInt(value) * 1000);
+                return `${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
+              },
+            },
+            splitLine: { show: false },
+          },
+          yAxis: {
+            type: 'value',
+            scale: true,
+            axisLine: { lineStyle: { color: '#2b3139' } },
+            axisLabel: {
+              color: '#848e9c',
+              fontSize: 11,
+            },
+            splitLine: {
+              lineStyle: {
+                color: '#2b3139',
+                type: 'dashed',
+              },
+            },
+          },
+          series: [
+            {
+              type: 'candlestick',
+              data: [],
+              itemStyle: {
+                color: '#0ecb81',
+                color0: '#f6465d',
+                borderColor: '#0ecb81',
+                borderColor0: '#f6465d',
+              },
+            },
+          ],
+          tooltip: {
+            trigger: 'axis',
+            axisPointer: {
+              type: 'cross',
+              lineStyle: {
+                color: '#2b3139',
+                type: 'dashed',
+              },
+            },
+            backgroundColor: '#1e2329',
+            borderColor: '#2b3139',
+            textStyle: {
+              color: '#848e9c',
+            },
+            formatter: (params: any) => {
+              const data = params[0];
+              if (!data || !data.data) return '';
+              const [open, close, low, high] = data.data;
+              const time = new Date(parseInt(data.name) * 1000);
+              return `
+                <div style="padding: 8px;">
+                  <div style="margin-bottom: 4px; color: #fff;">${time.toLocaleString()}</div>
+                  <div>Open: <span style="color: #fff;">${open.toFixed(2)}</span></div>
+                  <div>High: <span style="color: #0ecb81;">${high.toFixed(2)}</span></div>
+                  <div>Low: <span style="color: #f6465d;">${low.toFixed(2)}</span></div>
+                  <div>Close: <span style="color: #fff;">${close.toFixed(2)}</span></div>
+                </div>
+              `;
+            },
+          },
+          dataZoom: [
+            {
+              type: 'inside',
+              start: 0,
+              end: 100,
+              minValueSpan: 10,
+            },
+            {
+              type: 'slider',
+              start: 0,
+              end: 100,
+              height: 20,
+              bottom: 10,
+              borderColor: '#2b3139',
+              fillerColor: 'rgba(252, 213, 53, 0.2)',
+              handleStyle: {
+                color: '#fcd535',
+              },
+              textStyle: {
+                color: '#848e9c',
+              },
+            },
+          ],
         });
 
         chartRef.current = chart;
-        seriesRef.current = candlestickSeries;
 
         // Fetch data immediately
         if (symbol) {
@@ -123,6 +210,7 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
         }
       } catch (error) {
         console.error('Error initializing chart:', error);
+        setError('Failed to initialize chart');
       }
     };
 
@@ -130,15 +218,8 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
 
     // Handle window resize
     const handleResize = () => {
-      if (containerRef.current && chartRef.current) {
-        const newWidth = containerRef.current.clientWidth;
-        const newHeight = containerRef.current.clientHeight;
-        if (newWidth > 0 && newHeight > 0) {
-          chartRef.current.applyOptions({
-            width: newWidth,
-            height: newHeight,
-          });
-        }
+      if (chartRef.current) {
+        chartRef.current.resize();
       }
     };
 
@@ -148,7 +229,7 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
       clearTimeout(initTimeout);
       window.removeEventListener('resize', handleResize);
       if (chartRef.current) {
-        chartRef.current.remove();
+        chartRef.current.dispose();
         chartRef.current = null;
       }
     };
@@ -163,6 +244,7 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
 
       if (!response.ok) {
         console.error('API response not ok:', response.status, response.statusText);
+        setPollingStatus('error');
         return;
       }
 
@@ -170,13 +252,14 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
 
       if (!data || !Array.isArray(data)) {
         console.error('Invalid response format:', data);
+        setPollingStatus('error');
         return;
       }
 
-      // Convert to lightweight-charts format
+      // Convert to ECharts candlestick format
       const candles: CandleData[] = data
         .map((k: any) => ({
-          time: k.time, // Already in seconds
+          time: k.time,
           open: parseFloat(k.open),
           high: parseFloat(k.high),
           low: parseFloat(k.low),
@@ -184,9 +267,22 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
         }))
         .sort((a: CandleData, b: CandleData) => a.time - b.time);
 
-      if (seriesRef.current && candles.length > 0) {
-        seriesRef.current.setData(candles);
-        chartRef.current?.timeScale().fitContent();
+      if (chartRef.current && candles.length > 0) {
+        // Format data for ECharts: [open, close, low, high]
+        const chartData = candles.map(c => [c.open, c.close, c.low, c.high]);
+        const timeData = candles.map(c => c.time.toString());
+
+        chartRef.current.setOption({
+          xAxis: {
+            data: timeData,
+          },
+          series: [
+            {
+              data: chartData,
+            },
+          ],
+        });
+
         setIsLoading(false);
         
         // Update price stats
@@ -295,7 +391,7 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
       </div>
 
       {/* Chart Container */}
-      <div ref={containerRef} className="relative flex-1 min-h-0 overflow-hidden">
+      <div className="relative flex-1 min-h-0 overflow-hidden">
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-[#181a20]/80 z-10">
             <div className="flex flex-col items-center gap-2">
