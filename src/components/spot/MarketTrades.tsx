@@ -69,9 +69,48 @@ export default function MarketTrades({ selectedPair }: MarketTradesProps) {
   const itemsPerPage = 10;
 
   useEffect(() => {
+    // Convert pair format: Replace USDC with USDT for KuCoin API
+    const apiSymbol = selectedPair.replace('-USDC', '-USDT').replace('USDC', 'USDT');
+    
     fetchTrades();
     const interval = setInterval(fetchTrades, 3000);
     return () => clearInterval(interval);
+    
+    async function fetchTrades() {
+      try {
+        const response = await fetch(
+          `/api/kucoin/trades?symbol=${apiSymbol}`
+        );
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch trades');
+        }
+
+        const result = await response.json();
+
+        if (result.code !== '200000' || !result.data) {
+          throw new Error('Invalid response');
+        }
+
+        const kucoinTrades: KuCoinTrade[] = result.data;
+
+        const formattedTrades: Trade[] = kucoinTrades.map((trade) => ({
+          id: trade.tradeId,
+          price: parseFloat(trade.price),
+          amount: parseFloat(trade.size),
+          time: new Date(trade.time / 1000000), // Convert nanoseconds to milliseconds
+          side: trade.side
+        }));
+
+        setTrades(formattedTrades);
+        setError(null);
+        setLoading(false);
+      } catch (err) {
+        console.error('Error fetching trades:', err);
+        setError('Failed to fetch trades');
+        setLoading(false);
+      }
+    }
   }, [selectedPair]);
 
   // Fetch user trades when switching to "My Trades" tab
@@ -111,8 +150,11 @@ export default function MarketTrades({ selectedPair }: MarketTradesProps) {
 
   const fetchTrades = async () => {
     try {
+      // Convert pair format: Replace USDC with USDT for KuCoin API
+      const apiSymbol = selectedPair.replace('-USDC', '-USDT').replace('USDC', 'USDT');
+      
       const response = await fetch(
-        `/api/kucoin/trades?symbol=${selectedPair}`
+        `/api/kucoin/trades?symbol=${apiSymbol}`
       );
 
       if (!response.ok) {

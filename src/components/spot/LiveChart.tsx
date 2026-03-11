@@ -154,7 +154,10 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
   // Fetch and update chart data
   const fetchAndUpdateData = useCallback(async (pair: string) => {
     try {
-      const url = `/api/kucoin/candles?symbol=${encodeURIComponent(pair)}&type=1hour&limit=100`;
+      // Convert pair format: Replace USDC with USDT for KuCoin API
+      const apiSymbol = pair.replace('-USDC', '-USDT').replace('USDC', 'USDT');
+      
+      const url = `/api/kucoin/candles?symbol=${encodeURIComponent(apiSymbol)}&type=1hour&limit=100`;
       
       const response = await fetch(url);
       
