@@ -1,8 +1,29 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { createChart, ColorType, CandlestickSeries } from 'lightweight-charts';
+import * as echarts from 'echarts/core';
+import { CandlestickChart, LineChart } from 'echarts/charts';
+import {
+  GridComponent,
+  TooltipComponent,
+  TitleComponent,
+  DataZoomComponent,
+  MarkLineComponent,
+} from 'echarts/components';
+import { CanvasRenderer } from 'echarts/renderers';
 import { cn } from '@/lib/utils';
+
+// Register ECharts components
+echarts.use([
+  CandlestickChart,
+  LineChart,
+  GridComponent,
+  TooltipComponent,
+  TitleComponent,
+  DataZoomComponent,
+  MarkLineComponent,
+  CanvasRenderer,
+]);
 
 interface LiveChartProps {
   symbol: string;
@@ -24,10 +45,10 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
   const [tempStopLoss, setTempStopLoss] = useState(stopLoss || '');
   const [tempTakeProfit, setTempTakeProfit] = useState(takeProfit || '');
   const [isLoading, setIsLoading] = useState(true);
+  const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   
   const containerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<any>(null);
-  const seriesRef = useRef<any>(null);
+  const chartRef = useRef<echarts.ECharts | null>(null);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -35,7 +56,7 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
     setTempTakeProfit(takeProfit || '');
   }, [stopLoss, takeProfit]);
 
-  // Initialize chart with a delay to ensure container has dimensions
+  // Initialize ECharts with a delay to ensure container has dimensions
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -62,54 +83,157 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
       try {
         // Clean up existing chart if any
         if (chartRef.current) {
-          chartRef.current.remove();
+          chartRef.current.dispose();
           chartRef.current = null;
         }
 
-        const chart = createChart(containerRef.current, {
-          layout: {
-            background: { type: ColorType.Solid, color: '#181a20' },
-            textColor: '#848e9c',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-          },
-          width: width,
-          height: height,
-          timeScale: {
-            timeVisible: true,
-            secondsVisible: false,
-            fixLeftEdge: true,
-            fixRightEdge: true,
-          },
-          crosshair: {
-            mode: 1,
-            vertLine: {
-              color: '#2b3139',
-              width: 1,
-              style: 2,
-            },
-            horzLine: {
-              color: '#2b3139',
-              width: 1,
-              style: 2,
-            },
-          },
-          grid: {
-            vertLines: { color: '#2b3139', style: 2 },
-            horzLines: { color: '#2b3139', style: 2 },
-          },
+        // Initialize ECharts instance
+        const chart = echarts.init(containerRef.current, null, {
+          renderer: 'canvas',
+          width,
+          height,
         });
 
-        const candlestickSeries = chart.addSeries(CandlestickSeries, {
-          upColor: '#0ecb81',
-          downColor: '#f6465d',
-          borderUpColor: '#0ecb81',
-          borderDownColor: '#f6465d',
-          wickUpColor: '#0ecb81',
-          wickDownColor: '#f6465d',
+        // Build mark lines for TP/SL
+        const markLineData: any[] = [];
+        if (stopLoss && parseFloat(stopLoss) > 0) {
+          markLineData.push({
+            yAxis: parseFloat(stopLoss),
+            lineStyle: { color: '#f6465d', type: 'dashed', width: 2 },
+            label: {
+              formatter: 'SL: {c}',
+              position: 'insideEndTop',
+              color: '#f6465d',
+              fontSize: 10,
+            },
+          });
+        }
+        if (takeProfit && parseFloat(takeProfit) > 0) {
+          markLineData.push({
+            yAxis: parseFloat(takeProfit),
+            lineStyle: { color: '#0ecb81', type: 'dashed', width: 2 },
+            label: {
+              formatter: 'TP: {c}',
+              position: 'insideEndTop',
+              color: '#0ecb81',
+              fontSize: 10,
+            },
+          });
+        }
+
+        // Set initial chart options
+        chart.setOption({
+          backgroundColor: '#181a20',
+          grid: {
+            left: '3%',
+            right: '3%',
+            top: '10%',
+            bottom: '15%',
+            containLabel: true,
+          },
+          xAxis: {
+            type: 'category',
+            data: [],
+            axisLine: { lineStyle: { color: '#2b3139' } },
+            axisLabel: {
+              color: '#848e9c',
+              fontSize: 10,
+              formatter: (value: string) => {
+                const date = new Date(parseInt(value) * 1000);
+                return `${date.getHours()}:${date.getMinutes().toString().padStart(2, '0')}`;
+              },
+            },
+            splitLine: { show: false },
+          },
+          yAxis: {
+            type: 'value',
+            scale: true,
+            axisLine: { lineStyle: { color: '#2b3139' } },
+            axisLabel: {
+              color: '#848e9c',
+              fontSize: 10,
+            },
+            splitLine: {
+              lineStyle: {
+                color: '#2b3139',
+                type: 'dashed',
+              },
+            },
+          },
+          series: [
+            {
+              type: 'candlestick',
+              data: [],
+              itemStyle: {
+                color: '#0ecb81',
+                color0: '#f6465d',
+                borderColor: '#0ecb81',
+                borderColor0: '#f6465d',
+              },
+              markLine: {
+                symbol: 'none',
+                data: markLineData,
+              },
+            },
+          ],
+          tooltip: {
+            trigger: 'axis',
+            axisPointer: {
+              type: 'cross',
+              lineStyle: {
+                color: '#2b3139',
+                type: 'dashed',
+              },
+            },
+            backgroundColor: '#1e2329',
+            borderColor: '#2b3139',
+            textStyle: {
+              color: '#848e9c',
+              fontSize: 10,
+            },
+            formatter: (params: any) => {
+              const data = params[0];
+              if (!data || !data.data) return '';
+              const [open, close, low, high] = data.data;
+              const time = new Date(parseInt(data.name) * 1000);
+              return `
+                <div style="padding: 6px;">
+                  <div style="margin-bottom: 3px; color: #fff; font-size: 10px;">${time.toLocaleString()}</div>
+                  <div style="font-size: 9px;">Open: <span style="color: #fff;">${open.toFixed(2)}</span></div>
+                  <div style="font-size: 9px;">High: <span style="color: #0ecb81;">${high.toFixed(2)}</span></div>
+                  <div style="font-size: 9px;">Low: <span style="color: #f6465d;">${low.toFixed(2)}</span></div>
+                  <div style="font-size: 9px;">Close: <span style="color: #fff;">${close.toFixed(2)}</span></div>
+                </div>
+              `;
+            },
+          },
+          dataZoom: [
+            {
+              type: 'inside',
+              start: 0,
+              end: 100,
+              minValueSpan: 10,
+            },
+            {
+              type: 'slider',
+              start: 0,
+              end: 100,
+              height: 18,
+              bottom: 8,
+              borderColor: '#2b3139',
+              fillerColor: 'rgba(252, 213, 53, 0.2)',
+              handleStyle: {
+                color: '#fcd535',
+              },
+              textStyle: {
+                color: '#848e9c',
+                fontSize: 9,
+              },
+            },
+          ],
         });
 
         chartRef.current = chart;
-        seriesRef.current = candlestickSeries;
 
         console.log('Chart initialized successfully');
 
@@ -127,15 +251,8 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
 
     // Handle window resize
     const handleResize = () => {
-      if (containerRef.current && chartRef.current) {
-        const newWidth = containerRef.current.clientWidth;
-        const newHeight = containerRef.current.clientHeight;
-        if (newWidth > 0 && newHeight > 0) {
-          chartRef.current.applyOptions({
-            width: newWidth,
-            height: newHeight,
-          });
-        }
+      if (chartRef.current) {
+        chartRef.current.resize();
       }
     };
 
@@ -145,11 +262,74 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
       clearTimeout(initTimeout);
       window.removeEventListener('resize', handleResize);
       if (chartRef.current) {
-        chartRef.current.remove();
+        chartRef.current.dispose();
         chartRef.current = null;
       }
     };
-  }, [symbol]); // Re-initialize when symbol changes
+  }, [symbol]);
+
+  // Update mark lines when TP/SL changes
+  useEffect(() => {
+    if (!chartRef.current || !currentPrice) return;
+
+    const markLineData: any[] = [
+      {
+        yAxis: currentPrice,
+        lineStyle: {
+          color: '#3b82f6',
+          type: 'solid',
+          width: 2,
+        },
+        label: {
+          show: true,
+          position: 'insideEndTop',
+          formatter: '{c}',
+          color: '#fff',
+          fontSize: 10,
+          backgroundColor: '#3b82f6',
+          padding: [2, 6],
+          borderRadius: 3,
+        },
+      },
+    ];
+
+    if (stopLoss && parseFloat(stopLoss) > 0) {
+      markLineData.push({
+        yAxis: parseFloat(stopLoss),
+        lineStyle: { color: '#f6465d', type: 'dashed', width: 2 },
+        label: {
+          formatter: 'SL: {c}',
+          position: 'insideEndTop',
+          color: '#f6465d',
+          fontSize: 10,
+        },
+      });
+    }
+    if (takeProfit && parseFloat(takeProfit) > 0) {
+      markLineData.push({
+        yAxis: parseFloat(takeProfit),
+        lineStyle: { color: '#0ecb81', type: 'dashed', width: 2 },
+        label: {
+          formatter: 'TP: {c}',
+          position: 'insideEndTop',
+          color: '#0ecb81',
+          fontSize: 10,
+        },
+      });
+    }
+
+    chartRef.current.setOption({
+      series: [
+        {
+          markLine: {
+            symbol: 'none',
+            animation: false,
+            data: markLineData,
+          },
+        },
+      ],
+    });
+  }, [stopLoss, takeProfit, currentPrice]);
 
   // Fetch and update chart data
   const fetchAndUpdateData = useCallback(async (pair: string) => {
@@ -184,9 +364,79 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
         }))
         .sort((a: CandleData, b: CandleData) => a.time - b.time);
 
-      if (seriesRef.current && candles.length > 0) {
-        seriesRef.current.setData(candles);
-        chartRef.current?.timeScale().fitContent();
+      if (chartRef.current && candles.length > 0) {
+        // Format data for ECharts: [open, close, low, high]
+        const chartData = candles.map(c => [c.open, c.close, c.low, c.high]);
+        const timeData = candles.map(c => c.time.toString());
+
+        // Get current price (last candle's close)
+        const latestPrice = candles[candles.length - 1].close;
+        setCurrentPrice(latestPrice);
+
+        // Build mark lines including current price
+        const markLineData: any[] = [
+          {
+            yAxis: latestPrice,
+            lineStyle: {
+              color: '#3b82f6',
+              type: 'solid',
+              width: 2,
+            },
+            label: {
+              show: true,
+              position: 'insideEndTop',
+              formatter: '{c}',
+              color: '#fff',
+              fontSize: 10,
+              backgroundColor: '#3b82f6',
+              padding: [2, 6],
+              borderRadius: 3,
+            },
+          },
+        ];
+
+        // Add TP/SL lines if they exist
+        if (stopLoss && parseFloat(stopLoss) > 0) {
+          markLineData.push({
+            yAxis: parseFloat(stopLoss),
+            lineStyle: { color: '#f6465d', type: 'dashed', width: 2 },
+            label: {
+              formatter: 'SL: {c}',
+              position: 'insideEndTop',
+              color: '#f6465d',
+              fontSize: 10,
+            },
+          });
+        }
+        if (takeProfit && parseFloat(takeProfit) > 0) {
+          markLineData.push({
+            yAxis: parseFloat(takeProfit),
+            lineStyle: { color: '#0ecb81', type: 'dashed', width: 2 },
+            label: {
+              formatter: 'TP: {c}',
+              position: 'insideEndTop',
+              color: '#0ecb81',
+              fontSize: 10,
+            },
+          });
+        }
+
+        chartRef.current.setOption({
+          xAxis: {
+            data: timeData,
+          },
+          series: [
+            {
+              data: chartData,
+              markLine: {
+                symbol: 'none',
+                animation: false,
+                data: markLineData,
+              },
+            },
+          ],
+        });
+
         setIsLoading(false);
         console.log('Chart updated with', candles.length, 'candles');
       }
@@ -236,7 +486,7 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
           <span className="text-[10px] font-semibold text-white">
             {symbol.replace('-', '/')}
           </span>
-          <span className="text-[8px] text-[#848e9c]">Lightweight Charts</span>
+          <span className="text-[8px] text-[#848e9c]">ECharts</span>
 
           {/* TP/SL Indicators */}
           {(stopLoss || takeProfit) && (

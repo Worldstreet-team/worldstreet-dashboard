@@ -9,6 +9,7 @@ import {
   TooltipComponent,
   TitleComponent,
   DataZoomComponent,
+  MarkLineComponent,
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import { useFuturesStore } from '@/store/futuresStore';
@@ -20,6 +21,7 @@ echarts.use([
   TooltipComponent,
   TitleComponent,
   DataZoomComponent,
+  MarkLineComponent,
   CanvasRenderer,
 ]);
 
@@ -144,6 +146,11 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
                 color0: '#f6465d',
                 borderColor: '#0ecb81',
                 borderColor0: '#f6465d',
+              },
+              markLine: {
+                symbol: 'none',
+                data: [],
+                animation: false,
               },
             },
           ],
@@ -272,6 +279,9 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
         const chartData = candles.map(c => [c.open, c.close, c.low, c.high]);
         const timeData = candles.map(c => c.time.toString());
 
+        // Get current price (last candle's close)
+        const latestPrice = candles[candles.length - 1].close;
+
         chartRef.current.setOption({
           xAxis: {
             data: timeData,
@@ -279,6 +289,30 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
           series: [
             {
               data: chartData,
+              markLine: {
+                symbol: 'none',
+                animation: false,
+                label: {
+                  show: true,
+                  position: 'insideEndTop',
+                  formatter: '{c}',
+                  color: '#3b82f6',
+                  fontSize: 11,
+                  backgroundColor: '#3b82f6',
+                  padding: [2, 6],
+                  borderRadius: 3,
+                },
+                lineStyle: {
+                  color: '#3b82f6',
+                  type: 'solid',
+                  width: 2,
+                },
+                data: [
+                  {
+                    yAxis: latestPrice,
+                  },
+                ],
+              },
             },
           ],
         });
