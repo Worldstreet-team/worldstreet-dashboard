@@ -249,14 +249,14 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
       />
 
       {/* Modal - Compact Bybit Style */}
-      <div className="relative w-full max-w-[500px] bg-[#0b0e11] rounded-lg border border-[#1f2329] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+      <div className="relative w-full max-w-[400px] md:max-w-[600px] bg-[#0b0e11] rounded-lg border border-[#1f2329] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
         {/* Header - Compact */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-[#1f2329] flex-shrink-0">
+        <div className="flex items-center justify-between px-3 md:px-4 py-2 md:py-3 border-b border-[#1f2329] flex-shrink-0">
           <div className="flex items-center gap-2">
-            <h3 className="text-[13px] font-bold text-white">
+            <h3 className="text-[13px] md:text-[14px] font-bold text-white">
               {side === 'long' ? 'Long' : 'Short'} {marketName}
             </h3>
-            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+            <span className={`px-1.5 py-0.5 rounded text-[10px] md:text-[11px] font-bold ${
               side === 'long' ? 'bg-[#0ecb81]/10 text-[#0ecb81]' : 'bg-[#f6465d]/10 text-[#f6465d]'
             }`}>
               {side.toUpperCase()}
@@ -272,7 +272,7 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
 
         {/* Content - Scrollable without visible scrollbar */}
         <div 
-          className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-2" 
+          className="flex-1 overflow-y-auto overflow-x-hidden px-3 md:px-4 py-2 md:py-3" 
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
           <style jsx>{`
@@ -283,7 +283,7 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
           {!showQuote ? (
             <>
               {/* Available Balance - Compact */}
-              <div className="flex items-center justify-between text-[11px] mb-2 px-1">
+              <div className="flex items-center justify-between text-[11px] md:text-[12px] mb-2 md:mb-3 px-1">
                 <span className="text-[#848e9c]">Available</span>
                 <span className="text-white font-mono font-medium">
                   ${(summary?.freeCollateral || 0).toFixed(2)} USDC
@@ -291,10 +291,10 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
               </div>
 
               {/* Order Type Tabs - Compact */}
-              <div className="flex gap-1 p-0.5 bg-[#1f2329] rounded mb-2">
+              <div className="flex gap-1 p-0.5 bg-[#1f2329] rounded mb-2 md:mb-3">
                 <button
                   onClick={() => setOrderType('market')}
-                  className={`flex-1 py-1.5 text-[11px] font-medium rounded transition-colors ${
+                  className={`flex-1 py-1.5 md:py-2 text-[11px] md:text-[12px] font-medium rounded transition-colors ${
                     orderType === 'market'
                       ? 'bg-[#0b0e11] text-white'
                       : 'text-[#848e9c] hover:text-white'
@@ -304,7 +304,7 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
                 </button>
                 <button
                   onClick={() => setOrderType('limit')}
-                  className={`flex-1 py-1.5 text-[11px] font-medium rounded transition-colors ${
+                  className={`flex-1 py-1.5 md:py-2 text-[11px] md:text-[12px] font-medium rounded transition-colors ${
                     orderType === 'limit'
                       ? 'bg-[#0b0e11] text-white'
                       : 'text-[#848e9c] hover:text-white'
@@ -314,7 +314,7 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
                 </button>
                 <button
                   onClick={() => setOrderType('stop-limit')}
-                  className={`flex-1 py-1.5 text-[11px] font-medium rounded transition-colors ${
+                  className={`flex-1 py-1.5 md:py-2 text-[11px] md:text-[12px] font-medium rounded transition-colors ${
                     orderType === 'stop-limit'
                       ? 'bg-[#0b0e11] text-white'
                       : 'text-[#848e9c] hover:text-white'
@@ -326,8 +326,8 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
 
               {/* Limit Price - Compact */}
               {(orderType === 'limit' || orderType === 'stop-limit') && (
-                <div className="mb-2">
-                  <label className="block text-[10px] text-[#848e9c] mb-1 uppercase font-medium">
+                <div className="mb-2 md:mb-3">
+                  <label className="block text-[10px] md:text-[11px] text-[#848e9c] mb-1 uppercase font-medium">
                     {orderType === 'stop-limit' ? 'Limit Price' : 'Price'}
                   </label>
                   <div className="relative">
@@ -336,9 +336,9 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
                       value={limitPrice}
                       onChange={(e) => setLimitPrice(e.target.value)}
                       placeholder="0.00"
-                      className="w-full px-2 py-1.5 bg-[#1f2329] border border-[#1f2329] rounded text-[12px] text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f0b90b]"
+                      className="w-full px-2 md:px-3 py-1.5 md:py-2 bg-[#1f2329] border border-[#1f2329] rounded text-[12px] md:text-[13px] text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f0b90b]"
                     />
-                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-[#848e9c]">
+                    <span className="absolute right-2 md:right-3 top-1/2 -translate-y-1/2 text-[10px] md:text-[11px] text-[#848e9c]">
                       USDT
                     </span>
                   </div>
@@ -370,17 +370,17 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
               )}
 
               {/* Size Input - Compact */}
-              <div className="mb-2">
-                <label className="block text-[10px] text-[#848e9c] mb-1 uppercase font-medium">Size</label>
+              <div className="mb-2 md:mb-3">
+                <label className="block text-[10px] md:text-[11px] text-[#848e9c] mb-1 uppercase font-medium">Size</label>
                 <div className="relative">
                   <input
                     type="number"
                     value={size}
                     onChange={(e) => setSize(e.target.value)}
                     placeholder="0.00"
-                    className="w-full px-2 py-1.5 bg-[#1f2329] border border-[#1f2329] rounded text-[12px] text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f0b90b]"
+                    className="w-full px-2 md:px-3 py-1.5 md:py-2 bg-[#1f2329] border border-[#1f2329] rounded text-[12px] md:text-[13px] text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f0b90b]"
                   />
-                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-[#848e9c]">
+                  <span className="absolute right-2 md:right-3 top-1/2 -translate-y-1/2 text-[10px] md:text-[11px] text-[#848e9c]">
                     {marketName?.split('-')[0] || 'Units'}
                   </span>
                 </div>
@@ -529,12 +529,12 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
         </div>
 
         {/* Footer - Compact */}
-        <div className="p-2 border-t border-[#1f2329] flex-shrink-0">
+        <div className="p-2 md:p-3 border-t border-[#1f2329] flex-shrink-0">
           {!showQuote ? (
             <button
               onClick={handleGetQuote}
               disabled={!canContinue}
-              className={`w-full py-2 rounded font-bold text-[12px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+              className={`w-full py-2 md:py-2.5 rounded font-bold text-[12px] md:text-[13px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                 canContinue
                   ? side === 'long'
                     ? 'bg-[#0ecb81] hover:bg-[#0ecb81]/90 text-white'
@@ -549,7 +549,7 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
               <button
                 onClick={handleConfirmOrder}
                 disabled={executing || !pin}
-                className={`w-full py-2 rounded font-bold text-[12px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                className={`w-full py-2 md:py-2.5 rounded font-bold text-[12px] md:text-[13px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                   side === 'long'
                     ? 'bg-[#0ecb81] hover:bg-[#0ecb81]/90 text-white'
                     : 'bg-[#f6465d] hover:bg-[#f6465d]/90 text-white'
@@ -568,7 +568,7 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
               <button
                 onClick={handleBackToForm}
                 disabled={executing}
-                className="w-full py-1.5 rounded font-medium text-[11px] bg-[#1f2329] hover:bg-[#2b3139] text-white transition-colors disabled:opacity-50"
+                className="w-full py-1.5 md:py-2 rounded font-medium text-[11px] md:text-[12px] bg-[#1f2329] hover:bg-[#2b3139] text-white transition-colors disabled:opacity-50"
               >
                 Back
               </button>
