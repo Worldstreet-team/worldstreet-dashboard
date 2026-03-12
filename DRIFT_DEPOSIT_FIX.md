@@ -132,9 +132,9 @@ if (!usdcMarket) {
 }
 ```
 
-### 3. Same Protection for Withdrawals
+### 3. Same Protection for Withdrawals and Order Cancellations
 
-Applied identical market data verification logic to the `withdrawCollateral` function to prevent the same issue during withdrawals.
+Applied identical market data verification logic to the `withdrawCollateral` and `cancelOrder` functions to prevent the same issue during withdrawals and order cancellations. Both operations internally call SDK methods that require the `dataAndSlot` structure to be properly populated.
 
 ### 4. Clear Cached PIN on Logout
 
@@ -169,5 +169,6 @@ const logout = useCallback(async () => {
 
 ## Files Modified
 
-- `src/app/context/driftContext.tsx` - Enhanced market data verification for deposits and withdrawals
+- `src/app/context/driftContext.tsx` - Enhanced market data verification for deposits, withdrawals, and order cancellations
 - `src/app/context/authContext.tsx` - Clear cached PIN on logout
+- `src/app/(DashboardLayout)/portfolio/page.tsx` - Added cancel button for open orders

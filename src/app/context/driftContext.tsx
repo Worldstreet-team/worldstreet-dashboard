@@ -3080,7 +3080,61 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         client = await initializeDriftClient(pin);
       }
 
+      // Ensure client is subscribed
+      if (!client.isSubscribed) {
+        console.log('[DriftContext] Client not subscribed, subscribing now...');
+        await client.subscribe();
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+
       console.log(`[DriftContext] Cancelling order at index ${orderIndex}`);
+
+      // CRITICAL: Force refresh of ALL account data before cancel
+      // The cancelOrder SDK method internally calls getSpotMarketAccountAndSlot
+      console.log('[DriftContext] Force-fetching ALL accounts before cancel order...');
+      
+      await Promise.all([
+        client.fetchAccounts(),
+        client.accountSubscriber.fetch(),
+      ]);
+
+      // Verify the internal dataAndSlot structure exists
+      const accountSubscriber = client.accountSubscriber as any;
+      const spotMarketAccountAndSlots = accountSubscriber.spotMarketAccountAndSlots;
+      
+      console.log('[DriftContext] Checking internal subscriber state for cancel:', {
+        hasSpotMarketAccountAndSlots: !!spotMarketAccountAndSlots,
+        spotMarketAccountAndSlotsLength: spotMarketAccountAndSlots?.length,
+      });
+
+      // If the internal structure is missing or incomplete, force a re-subscription
+      if (!spotMarketAccountAndSlots || spotMarketAccountAndSlots.length === 0) {
+        console.warn('[DriftContext] ⚠️ Internal market data structure incomplete, forcing re-subscription...');
+        
+        if (client.isSubscribed) {
+          await client.unsubscribe();
+        }
+        
+        await client.subscribe();
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        await Promise.all([
+          client.fetchAccounts(),
+          client.accountSubscriber.fetch(),
+        ]);
+        
+        const reCheckSlots = (client.accountSubscriber as any).spotMarketAccountAndSlots;
+        console.log('[DriftContext] After re-subscription for cancel:', {
+          hasSpotMarketAccountAndSlots: !!reCheckSlots,
+          length: reCheckSlots?.length,
+        });
+        
+        if (!reCheckSlots || reCheckSlots.length === 0) {
+          throw new Error('Unable to load market data structure. Please refresh the page and try again.');
+        }
+      }
+
+      console.log('[DriftContext] ✅ Market data confirmed ready for cancel order');
 
       // Cancel the order
       const txSignature = await client.cancelOrder(orderIndex);
@@ -3104,6 +3158,8 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         friendlyError = 'Order not found or already filled';
       } else if (errorMessage.includes('Invalid order')) {
         friendlyError = 'Invalid order index';
+      } else if (errorMessage.includes('dataAndSlot') || errorMessage.includes('market data')) {
+        friendlyError = 'Market data unavailable. Please refresh the page and try again.';
       }
 
       return { success: false, error: friendlyError };
