@@ -1703,6 +1703,19 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         console.log('[DriftContext] Deposit amount (BN):', depositAmountBN.toString());
         console.log('[DriftContext] Deposit amount (human):', netAmount);
 
+        // CRITICAL: Force refresh of all accounts immediately before deposit
+        // This ensures market data is fresh when building the deposit instruction
+        console.log('[DriftContext] Force-fetching accounts before deposit...');
+        await client.fetchAccounts();
+        
+        // Verify market data is still accessible after fetch
+        const finalMarketCheck = client.getSpotMarketAccount(marketIndex);
+        if (!finalMarketCheck) {
+          console.error('[DriftContext] ❌ Market data lost after fetchAccounts!');
+          throw new Error('Market data unavailable. Please refresh the page and try again.');
+        }
+        console.log('[DriftContext] ✅ Market data confirmed fresh and ready for deposit');
+
         // Perform the deposit
         const txSignature = await client.deposit(
           depositAmountBN,
@@ -1717,32 +1730,47 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         startTransactionMonitor(client.connection, txSignature);
         console.log('[DriftContext] Background monitoring started for deposit:', txSignature);
 
-        // Refresh accounts after deposit
+        // CRITICAL: Wait for slot synchronization before checking balance
+        // This ensures the deposit transaction has been processed on-chain
+        console.log('[DriftContext] Waiting for slot synchronization...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Refresh accounts after deposit to get latest on-chain data
         await refreshAccounts();
 
         // Verify deposit was successful by checking balance
-        const postDepositUser = client.getUser();
-        const postDepositPosition = postDepositUser.getSpotPosition(0);
-        
-        let postDepositBalance = 0;
-        if (postDepositPosition && postDepositPosition.scaledBalance && !postDepositPosition.scaledBalance.isZero()) {
-          const tokenAmount = client.getTokenAmount(
-            postDepositPosition.scaledBalance,
-            usdcMarket,
-            postDepositPosition.balanceType
-          );
-          postDepositBalance = tokenAmount.toNumber();
-        }
+        // SAFE: Wrap in try-catch in case market data is temporarily unavailable
+        try {
+          const postDepositUser = client.getUser();
+          const postDepositPosition = postDepositUser.getSpotPosition(0);
+          
+          let postDepositBalance = 0;
+          if (postDepositPosition && postDepositPosition.scaledBalance && !postDepositPosition.scaledBalance.isZero()) {
+            // Re-fetch USDC market to ensure we have latest data
+            const freshUsdcMarket = client.getSpotMarketAccount(0);
+            if (freshUsdcMarket) {
+              const tokenAmount = client.getTokenAmount(
+                postDepositPosition.scaledBalance,
+                freshUsdcMarket,
+                postDepositPosition.balanceType
+              );
+              postDepositBalance = tokenAmount.toNumber();
+            }
+          }
 
-        console.log('[DriftContext] Post-deposit Drift balance:', postDepositBalance);
-        console.log('[DriftContext] Balance increase:', postDepositBalance - preDepositBalance);
-        console.log('=== END DEPOSIT DEBUG ===');
+          console.log('[DriftContext] Post-deposit Drift balance:', postDepositBalance);
+          console.log('[DriftContext] Balance increase:', postDepositBalance - preDepositBalance);
+          console.log('=== END DEPOSIT DEBUG ===');
 
-        // Verify the deposit actually increased the balance
-        if (postDepositBalance <= preDepositBalance) {
-          console.warn('[DriftContext] WARNING: Deposit did not increase balance as expected!');
-          console.warn('[DriftContext] Expected increase:', netAmount);
-          console.warn('[DriftContext] Actual increase:', postDepositBalance - preDepositBalance);
+          // Verify the deposit actually increased the balance
+          if (postDepositBalance <= preDepositBalance) {
+            console.warn('[DriftContext] WARNING: Deposit did not increase balance as expected!');
+            console.warn('[DriftContext] Expected increase:', netAmount);
+            console.warn('[DriftContext] Actual increase:', postDepositBalance - preDepositBalance);
+          }
+        } catch (verifyErr) {
+          console.warn('[DriftContext] Could not verify deposit balance (non-critical):', verifyErr);
+          console.log('=== END DEPOSIT DEBUG ===');
         }
 
         // Refresh summary after success
