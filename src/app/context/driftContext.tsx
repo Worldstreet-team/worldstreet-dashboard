@@ -1703,17 +1703,98 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
         console.log('[DriftContext] Deposit amount (BN):', depositAmountBN.toString());
         console.log('[DriftContext] Deposit amount (human):', netAmount);
 
-        // CRITICAL: Force refresh of all accounts immediately before deposit
+        // CRITICAL: Force refresh of ALL account data (user + markets) before deposit
         // This ensures market data is fresh when building the deposit instruction
-        console.log('[DriftContext] Force-fetching accounts before deposit...');
-        await client.fetchAccounts();
+        console.log('[DriftContext] Force-fetching ALL accounts (user + markets) before deposit...');
         
-        // Verify market data is still accessible after fetch
+        // Fetch both user accounts AND market accounts
+        await Promise.all([
+          client.fetchAccounts(), // User account data
+          client.accountSubscriber.fetch(), // Market account data
+        ]);
+        
+        console.log('[DriftContext] All accounts fetched, verifying market data...');
+        
+        // CRITICAL: Verify the internal dataAndSlot structure exists
+        // This is what getSpotMarketAccountAndSlot() checks internally
+        const accountSubscriber = client.accountSubscriber as any;
+        const spotMarketAccountAndSlots = accountSubscriber.spotMarketAccountAndSlots;
+        
+        console.log('[DriftContext] Checking internal subscriber state:', {
+          hasSpotMarketAccountAndSlots: !!spotMarketAccountAndSlots,
+          spotMarketAccountAndSlotsType: typeof spotMarketAccountAndSlots,
+          spotMarketAccountAndSlotsLength: spotMarketAccountAndSlots?.length,
+          marketIndexData: spotMarketAccountAndSlots?.[marketIndex],
+        });
+        
+        // If the internal structure is missing or incomplete, force a re-subscription
+        if (!spotMarketAccountAndSlots || !spotMarketAccountAndSlots[marketIndex]?.dataAndSlot) {
+          console.warn('[DriftContext] ⚠️ Internal market data structure incomplete, forcing re-subscription...');
+          
+          // Unsubscribe and re-subscribe to force fresh data
+          if (client.isSubscribed) {
+            await client.unsubscribe();
+          }
+          
+          await client.subscribe();
+          
+          // Wait for subscription to populate
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          // Fetch again after re-subscription
+          await Promise.all([
+            client.fetchAccounts(),
+            client.accountSubscriber.fetch(),
+          ]);
+          
+          // Re-check the internal structure
+          const reCheckSlots = (client.accountSubscriber as any).spotMarketAccountAndSlots;
+          console.log('[DriftContext] After re-subscription:', {
+            hasSpotMarketAccountAndSlots: !!reCheckSlots,
+            marketIndexData: reCheckSlots?.[marketIndex],
+            hasDataAndSlot: !!reCheckSlots?.[marketIndex]?.dataAndSlot,
+          });
+          
+          if (!reCheckSlots?.[marketIndex]?.dataAndSlot) {
+            throw new Error('Unable to load market data structure. Please refresh the page and try again.');
+          }
+        }
+        
+        // Verify market data is accessible through the proper SDK method
         const finalMarketCheck = client.getSpotMarketAccount(marketIndex);
         if (!finalMarketCheck) {
           console.error('[DriftContext] ❌ Market data lost after fetchAccounts!');
-          throw new Error('Market data unavailable. Please refresh the page and try again.');
+          console.error('[DriftContext] Attempting emergency market data reload...');
+          
+          // Emergency: Try to manually fetch the specific market account
+          try {
+            const marketPubkey = client.getSpotMarketAccountPublicKey(marketIndex);
+            const accountInfo = await client.connection.getAccountInfo(marketPubkey);
+            
+            if (!accountInfo) {
+              throw new Error('Market account not found on-chain');
+            }
+            
+            console.log('[DriftContext] Market account exists on-chain, but subscriber cache is stale');
+            throw new Error('Market data cache is stale. Please refresh the page and try again.');
+          } catch (emergencyErr) {
+            console.error('[DriftContext] Emergency market check failed:', emergencyErr);
+            throw new Error('Market data unavailable. Please refresh the page and try again.');
+          }
         }
+        
+        // ADDITIONAL CHECK: Try to call getSpotMarketAccountAndSlot directly to verify it works
+        try {
+          const marketAccountAndSlot = client.getSpotMarketAccountAndSlot(marketIndex);
+          console.log('[DriftContext] ✅ getSpotMarketAccountAndSlot successful:', {
+            hasData: !!marketAccountAndSlot?.data,
+            hasSlot: typeof marketAccountAndSlot?.slot !== 'undefined',
+          });
+        } catch (slotCheckErr) {
+          console.error('[DriftContext] ❌ getSpotMarketAccountAndSlot failed:', slotCheckErr);
+          throw new Error('Market data structure incomplete. Please refresh the page and try again.');
+        }
+        
         console.log('[DriftContext] ✅ Market data confirmed fresh and ready for deposit');
 
         // Perform the deposit

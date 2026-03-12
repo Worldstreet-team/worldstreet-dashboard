@@ -12,11 +12,64 @@ This occurred because the Drift client was trying to access spot market data (sp
 
 ## Root Cause
 
-1. **Insufficient Market Data Verification**: The original code only checked if `spotMarkets.length > 0` but didn't verify that individual market accounts were actually loaded and accessible.
+1. **Stale Account Subscriber Cache**: The Drift SDK's internal `spotMarketAccountAndSlots[marketIndex].dataAndSlot` structure becomes undefined between market data verification and transaction building.
 
-2. **Race Condition**: For older accounts with cached/stale data, the WebSocket subscription might complete before market account data is fully populated.
+2. **Cache Inconsistency**: While `client.getSpotMarketAccount()` returns market data successfully, the internal `getSpotMarketAccountAndSlot()` method (used by `deposit()`) fails because the `dataAndSlot` property is missing.
 
-3. **Missing Null Checks**: The code accessed `usdcMarket.marketIndex` without first checking if `usdcMarket` was null/undefined.
+3. **Incomplete Fetch**: `client.fetchAccounts()` only refreshes user account data, not the market account cache structure that `deposit()` requires internally.
+
+## Solution
+
+### 1. Enhanced Market Data Verification with Re-subscription
+
+Added comprehensive checks and automatic re-subscription if the internal cache structure is incomplete:
+
+```typescript
+// Fetch both user accounts AND market accounts
+await Promise.all([
+  client.fetchAccounts(), // User account data
+  client.accountSubscriber.fetch(), // Market account data
+]);
+
+// CRITICAL: Verify the internal dataAndSlot structure exists
+const accountSubscriber = client.accountSubscriber as any;
+const spotMarketAccountAndSlots = accountSubscriber.spotMarketAccountAndSlots;
+
+// If the internal structure is missing or incomplete, force a re-subscription
+if (!spotMarketAccountAndSlots || !spotMarketAccountAndSlots[marketIndex]?.dataAndSlot) {
+  console.warn('[DriftContext] ⚠️ Internal market data structure incomplete, forcing re-subscription...');
+  
+  // Unsubscribe and re-subscribe to force fresh data
+  if (client.isSubscribed) {
+    await client.unsubscribe();
+  }
+  
+  await client.subscribe();
+  
+  // Wait for subscription to populate
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  
+  // Fetch again after re-subscription
+  await Promise.all([
+    client.fetchAccounts(),
+    client.accountSubscriber.fetch(),
+  ]);
+  
+  // Verify the structure is now populated
+  const reCheckSlots = (client.accountSubscriber as any).spotMarketAccountAndSlots;
+  if (!reCheckSlots?.[marketIndex]?.dataAndSlot) {
+    throw new Error('Unable to load market data structure. Please refresh the page and try again.');
+  }
+}
+
+// Test getSpotMarketAccountAndSlot directly before deposit
+const marketAccountAndSlot = client.getSpotMarketAccountAndSlot(marketIndex);
+if (!marketAccountAndSlot?.data || typeof marketAccountAndSlot?.slot === 'undefined') {
+  throw new Error('Market data structure incomplete. Please refresh the page and try again.');
+}
+```
+
+This ensures the internal cache structure is properly populated before calling `deposit()`.
 
 ## Solution
 
@@ -99,11 +152,12 @@ const logout = useCallback(async () => {
 
 ## Benefits
 
-1. **Prevents Race Conditions**: Waits up to 5 seconds (10 attempts × 500ms) for market data to load
-2. **Explicit Null Checking**: Verifies market account exists before accessing properties
-3. **Better Error Messages**: Provides clear feedback when market data isn't available
-4. **Consistent Behavior**: Same protection for both deposits and withdrawals
-5. **Security**: Clears sensitive PIN data on logout
+1. **Fixes Cache Staleness**: Automatically detects and repairs stale account subscriber cache by forcing re-subscription
+2. **Validates Internal Structure**: Checks the exact `dataAndSlot` structure that the SDK requires internally
+3. **Prevents Deposit Failures**: Tests `getSpotMarketAccountAndSlot()` directly before calling `deposit()` to ensure it will succeed
+4. **Better Error Messages**: Provides clear feedback when market data structure is incomplete
+5. **Consistent Behavior**: Same protection for both deposits and withdrawals
+6. **Security**: Clears sensitive PIN data on logout
 
 ## Testing Recommendations
 
