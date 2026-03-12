@@ -1561,23 +1561,72 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
 
         console.log('[DriftContext] Client subscribed, checking market data availability...');
         
-        // Verify the client has spot market data loaded
-        try {
-          const spotMarkets = client.getSpotMarketAccounts();
-          console.log('[DriftContext] Spot markets available:', spotMarkets?.length || 0);
-          
-          if (!spotMarkets || spotMarkets.length === 0) {
-            throw new Error('No spot markets loaded in client');
+        // Verify the client has spot market data loaded with retry logic
+        const MAX_MARKET_WAIT_ATTEMPTS = 10;
+        const MARKET_WAIT_DELAY = 500;
+        let marketDataReady = false;
+
+        for (let i = 0; i < MAX_MARKET_WAIT_ATTEMPTS; i++) {
+          try {
+            const spotMarkets = client.getSpotMarketAccounts();
+            console.log(`[DriftContext] Spot markets check attempt ${i + 1}: ${spotMarkets?.length || 0} markets`);
+            
+            if (spotMarkets && spotMarkets.length > 0) {
+              // Verify we can actually access market 0 (USDC) with proper null checking
+              const usdcMarket = client.getSpotMarketAccount(0);
+              
+              // CRITICAL: Explicit null check before accessing properties
+              if (!usdcMarket) {
+                console.warn(`[DriftContext] Market check attempt ${i + 1}: USDC market is null/undefined`);
+                throw new Error('USDC market account not loaded');
+              }
+              
+              // Verify market has required properties
+              if (typeof usdcMarket.marketIndex === 'undefined') {
+                console.warn(`[DriftContext] Market check attempt ${i + 1}: USDC market missing marketIndex property`);
+                throw new Error('USDC market account incomplete');
+              }
+              
+              if (usdcMarket.marketIndex === 0) {
+                console.log('[DriftContext] ✅ USDC market (index 0) is fully accessible');
+                console.log('[DriftContext] ✅ Market properties:', {
+                  marketIndex: usdcMarket.marketIndex,
+                  hasDecimals: typeof usdcMarket.decimals !== 'undefined',
+                  hasName: !!usdcMarket.name,
+                });
+                marketDataReady = true;
+                break;
+              }
+            }
+          } catch (checkErr) {
+            console.warn(`[DriftContext] Market check attempt ${i + 1} failed:`, checkErr);
           }
-        } catch (checkErr) {
-          console.error('[DriftContext] Spot market check failed:', checkErr);
+
+          if (i < MAX_MARKET_WAIT_ATTEMPTS - 1) {
+            console.log(`[DriftContext] Waiting ${MARKET_WAIT_DELAY}ms for market data to load...`);
+            await new Promise(resolve => setTimeout(resolve, MARKET_WAIT_DELAY));
+          }
+        }
+
+        if (!marketDataReady) {
+          console.error('[DriftContext] ❌ Market data failed to load after all attempts');
           throw new Error('Market data not available. Please refresh the page and try again.');
         }
+
+        console.log('[DriftContext] ✅ Market data verified and ready');
 
         // Get pre-deposit balance for verification
         const driftUser = client.getUser();
         const preDepositPosition = driftUser.getSpotPosition(0);
+        
+        // CRITICAL: Double-check USDC market is accessible before using it
         const usdcMarket = client.getSpotMarketAccount(0);
+        if (!usdcMarket) {
+          console.error('[DriftContext] ❌ CRITICAL: USDC market is null after verification passed!');
+          throw new Error('USDC market account not available. Please refresh the page and try again.');
+        }
+        
+        console.log('[DriftContext] ✅ USDC market confirmed accessible for deposit');
         
         let preDepositBalance = 0;
         if (preDepositPosition && preDepositPosition.scaledBalance && !preDepositPosition.scaledBalance.isZero()) {
@@ -1753,18 +1802,54 @@ export const DriftProvider: React.FC<DriftProviderProps> = ({ children }) => {
 
         console.log('[DriftContext] Client subscribed, checking market data for withdrawal...');
         
-        // Verify the client has spot market data loaded
-        try {
-          const spotMarkets = client.getSpotMarketAccounts();
-          console.log('[DriftContext] Spot markets available:', spotMarkets?.length || 0);
-          
-          if (!spotMarkets || spotMarkets.length === 0) {
-            throw new Error('No spot markets loaded in client');
+        // Verify the client has spot market data loaded with retry logic
+        const MAX_MARKET_WAIT_ATTEMPTS = 10;
+        const MARKET_WAIT_DELAY = 500;
+        let marketDataReady = false;
+
+        for (let i = 0; i < MAX_MARKET_WAIT_ATTEMPTS; i++) {
+          try {
+            const spotMarkets = client.getSpotMarketAccounts();
+            console.log(`[DriftContext] Withdrawal - Spot markets check attempt ${i + 1}: ${spotMarkets?.length || 0} markets`);
+            
+            if (spotMarkets && spotMarkets.length > 0) {
+              // Verify we can actually access market 0 (USDC) with proper null checking
+              const usdcMarket = client.getSpotMarketAccount(0);
+              
+              // CRITICAL: Explicit null check before accessing properties
+              if (!usdcMarket) {
+                console.warn(`[DriftContext] Withdrawal - Market check attempt ${i + 1}: USDC market is null/undefined`);
+                throw new Error('USDC market account not loaded');
+              }
+              
+              // Verify market has required properties
+              if (typeof usdcMarket.marketIndex === 'undefined') {
+                console.warn(`[DriftContext] Withdrawal - Market check attempt ${i + 1}: USDC market missing marketIndex property`);
+                throw new Error('USDC market account incomplete');
+              }
+              
+              if (usdcMarket.marketIndex === 0) {
+                console.log('[DriftContext] ✅ USDC market (index 0) is fully accessible for withdrawal');
+                marketDataReady = true;
+                break;
+              }
+            }
+          } catch (checkErr) {
+            console.warn(`[DriftContext] Withdrawal - Market check attempt ${i + 1} failed:`, checkErr);
           }
-        } catch (checkErr) {
-          console.error('[DriftContext] Spot market check failed:', checkErr);
+
+          if (i < MAX_MARKET_WAIT_ATTEMPTS - 1) {
+            console.log(`[DriftContext] Waiting ${MARKET_WAIT_DELAY}ms for market data to load...`);
+            await new Promise(resolve => setTimeout(resolve, MARKET_WAIT_DELAY));
+          }
+        }
+
+        if (!marketDataReady) {
+          console.error('[DriftContext] ❌ Market data failed to load after all attempts (withdrawal)');
           throw new Error('Market data not available. Please refresh the page and try again.');
         }
+
+        console.log('[DriftContext] ✅ Market data verified and ready for withdrawal');
 
         console.log(`[DriftContext] Withdrawing ${amount} USDC from Drift`);
 

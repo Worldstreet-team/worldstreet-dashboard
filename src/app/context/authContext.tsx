@@ -75,6 +75,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [clerkUser, fetchProfile]);
 
   const logout = useCallback(async () => {
+    // Clear cached PIN from localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('worldstreet_temp_pin');
+    }
     await signOut({ redirectUrl: "https://www.worldstreetgold.com/login" });
   }, [signOut]);
 
