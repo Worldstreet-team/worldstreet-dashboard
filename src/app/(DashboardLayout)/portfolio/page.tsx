@@ -26,6 +26,7 @@ export default function PortfolioPage() {
     getMarketPrice,
     openOrders,
     getOpenOrders,
+    cancelOrder,
   } = useDrift();
 
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -34,6 +35,7 @@ export default function PortfolioPage() {
   const [showInitModal, setShowInitModal] = useState(false);
   const [redirectCountdown, setRedirectCountdown] = useState(3);
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [cancellingOrderIndex, setCancellingOrderIndex] = useState<number | null>(null);
 
   // Force dark background immediately on mount
   useEffect(() => {
@@ -92,6 +94,26 @@ export default function PortfolioPage() {
     await Promise.all([refreshSummary(), refreshPositions(), getOpenOrders()]);
     setIsRefreshing(false);
   }, [refreshSummary, refreshPositions, getOpenOrders]);
+
+  const handleCancelOrder = useCallback(async (orderIndex: number) => {
+    setCancellingOrderIndex(orderIndex);
+    try {
+      const result = await cancelOrder(orderIndex);
+      if (result.success) {
+        console.log('Order cancelled successfully');
+        // Refresh orders list
+        await getOpenOrders();
+      } else {
+        console.error('Failed to cancel order:', result.error);
+        alert(result.error || 'Failed to cancel order');
+      }
+    } catch (err) {
+      console.error('Error cancelling order:', err);
+      alert('Failed to cancel order');
+    } finally {
+      setCancellingOrderIndex(null);
+    }
+  }, [cancelOrder, getOpenOrders]);
 
   // Format number with decimals
   const formatNumber = (num: number, decimals: number = 2) => {
@@ -470,6 +492,9 @@ export default function PortfolioPage() {
                       <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-[#848e9c] uppercase tracking-wider">
                         Status
                       </th>
+                      <th className="px-4 py-2.5 text-center text-[11px] font-semibold text-[#848e9c] uppercase tracking-wider">
+                        Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -478,6 +503,7 @@ export default function PortfolioPage() {
                       const isBuy = order.direction === 'buy' || order.direction === 'long';
                       const baseAmount = parseFloat(order.baseAssetAmount) / 1e9;
                       const price = parseFloat(order.price) / 1e6;
+                      const isCancelling = cancellingOrderIndex === order.orderIndex;
                       
                       return (
                         <tr 
@@ -524,6 +550,26 @@ export default function PortfolioPage() {
                             }`}>
                               {order.status.toUpperCase()}
                             </span>
+                          </td>
+                          <td className="px-4 py-2.5 whitespace-nowrap text-center">
+                            <button
+                              onClick={() => handleCancelOrder(order.orderIndex)}
+                              disabled={isCancelling || order.status !== 'open'}
+                              className="px-3 py-1.5 bg-[#f6465d]/10 hover:bg-[#f6465d]/20 text-[#f6465d] text-[11px] font-medium rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+                              title={order.status !== 'open' ? 'Order cannot be cancelled' : 'Cancel order'}
+                            >
+                              {isCancelling ? (
+                                <>
+                                  <Icon icon="ph:spinner" className="animate-spin" width={12} />
+                                  Cancelling...
+                                </>
+                              ) : (
+                                <>
+                                  <Icon icon="ph:x" width={12} />
+                                  Cancel
+                                </>
+                              )}
+                            </button>
                           </td>
                         </tr>
                       );
