@@ -32,7 +32,12 @@
   - `src/components/wallet/GenerateTronModal.tsx` - Removed TronWeb error handling
   - `next.config.ts` - Removed TronWeb webpack configurations
 
-### 3. TON Balance Implementation
+### 3. MongoDB Import Error
+- **Status**: ✅ RESOLVED
+- **Issue**: `src/services/spot/TransactionMonitor.ts` was importing `dbConnect` as default export, but `@/lib/mongodb` exports `connectDB` as named export
+- **Fix**: Changed `import dbConnect from '@/lib/mongodb'` to `import { connectDB } from '@/lib/mongodb'` and updated usage
+
+### 4. TON Balance Implementation
 - **Status**: ✅ COMPLETED
 - **Implementation**: 
   - TON balance fetching via TON Center API

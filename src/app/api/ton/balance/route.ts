@@ -18,9 +18,9 @@ export async function GET(request: NextRequest) {
 
     console.log('[TON Balance API] Fetching balance for:', address);
 
-    // Use TON Center API to get balance
+    // Use GetBlock.io TON RPC endpoint
     const response = await fetch(
-      `https://toncenter.com/api/v2/getAddressInformation?address=${address}`
+      `https://go.getblock.io/8a928018fe2741ed90779091f68c571d/getAddressInformation?address=${address}`
     );
 
     if (!response.ok) {
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
     const data = await response.json();
 
     if (!data.ok) {
-      throw new Error(data.error || 'Failed to fetch balance from TON API');
+      throw new Error(data.error || 'Failed to fetch balance from GetBlock TON API');
     }
 
     const balanceInNanoTon = data.result?.balance || '0';

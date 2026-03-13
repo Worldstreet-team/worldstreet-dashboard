@@ -39,7 +39,7 @@ const BACKOFF_MS = 90_000;    // 90 s cooldown after a 429
 // ── CoinGecko mapping ──────────────────────────────────────────────────────
 
 // Core coins we always need for wallet balance calculations
-const CORE_COINS = ["bitcoin", "ethereum", "solana", "tron", "tether", "usd-coin"];
+const CORE_COINS = ["bitcoin", "ethereum", "solana", "tron", "toncoin", "tether", "usd-coin"];
 
 // Additional popular coins for watchlist/market overview
 const MARKET_COINS = [
@@ -56,6 +56,7 @@ const ID_TO_SYMBOL: Record<string, string> = {
   "ethereum": "ETH",
   "solana": "SOL",
   "tron": "TRX",
+  "ton": "TON",
   "tether": "USDT",
   "usd-coin": "USDC",
   "ripple": "XRP",
@@ -82,7 +83,7 @@ const FALLBACK_PRICES: Record<string, number> = {
 // ── Fetch functions ────────────────────────────────────────────────────────
 
 async function fetchMarketData(): Promise<Omit<PricesResponse, 'cached' | 'stale'>> {
-  // Fetch coin market data
+  // Fetch main market data
   const coinsUrl = `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ALL_COIN_IDS.join(",")}&order=market_cap_desc&sparkline=false&price_change_percentage=24h`;
   
   const coinsRes = await fetch(coinsUrl, {
@@ -91,7 +92,6 @@ async function fetchMarketData(): Promise<Omit<PricesResponse, 'cached' | 'stale
   });
 
   if (coinsRes.status === 429) {
-    // Rate limited — set backoff so we stop retrying for a while
     backoffUntil = Date.now() + BACKOFF_MS;
     throw new Error("CoinGecko rate limited (429)");
   }
@@ -101,15 +101,13 @@ async function fetchMarketData(): Promise<Omit<PricesResponse, 'cached' | 'stale
   }
 
   const coinsData = await coinsRes.json();
-
-  // Build prices map and coins array
   const prices: Record<string, number> = {};
   const coins: CoinData[] = [];
 
   for (const coin of coinsData) {
     const symbol = ID_TO_SYMBOL[coin.id] || coin.symbol.toUpperCase();
     prices[symbol] = coin.current_price ?? FALLBACK_PRICES[symbol] ?? 0;
-    
+
     coins.push({
       id: coin.id,
       symbol,
@@ -122,11 +120,48 @@ async function fetchMarketData(): Promise<Omit<PricesResponse, 'cached' | 'stale
     });
   }
 
-  // Ensure stablecoins have fallback
+  // --- Manual TON fetch ---
+  if (!coinsData.find((c: any) => c.id === 'toncoin')) {
+    // --- Manual TON fetch via CryptoCompare ---
+    try {
+      const tonRes = await fetch(
+        "https://min-api.cryptocompare.com/data/price?fsym=TON&tsyms=USD",
+        { signal: AbortSignal.timeout(10_000) }
+      );
+
+      if (tonRes.ok) {
+        const tonData = await tonRes.json();
+        const tonPrice = tonData.USD ?? 0;
+
+        prices["TON"] = tonPrice;
+
+        // Push TON to coins array if not already there
+        if (!coins.find(c => c.id === "toncoin")) {
+          coins.push({
+            id: "toncoin",
+            symbol: "TON",
+            name: "Toncoin",
+            price: tonPrice,
+            change24h: 0,      // CryptoCompare free API does not return 24h % by default
+            marketCap: 0,      // You can add another endpoint if you want market cap
+            volume24h: 0,      // You can add another endpoint if you want volume
+            image: "",         // Optional: add an image URL if you have one
+          });
+        }
+      } else {
+        prices["TON"] = 0;
+      }
+    } catch (e) {
+      console.error("Failed to fetch TON from CryptoCompare:", e);
+      prices["TON"] = 0;
+    }
+  }
+
+  // Ensure stablecoins fallback
   if (!prices.USDT) prices.USDT = 1;
   if (!prices.USDC) prices.USDC = 1;
 
-  // Fetch global market data
+  // Fetch global market stats
   let globalStats = {
     totalMarketCap: 0,
     totalVolume: 0,
@@ -139,7 +174,6 @@ async function fetchMarketData(): Promise<Omit<PricesResponse, 'cached' | 'stale
       headers: { Accept: "application/json" },
       signal: AbortSignal.timeout(10_000),
     });
-
     if (globalRes.ok) {
       const globalData = await globalRes.json();
       globalStats = {

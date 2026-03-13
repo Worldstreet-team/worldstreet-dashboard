@@ -16,6 +16,7 @@
     "@iconify/react": "^6.0.0",
     "@mysten/sui": "^2.7.0",
     "@mysten/sui.js": "^0.54.1",
+    "@nktkas/hyperliquid": "^0.32.1",
     "@privy-io/node": "^0.10.1",
     "@privy-io/react-auth": "^3.17.0",
     "@privy-io/server-auth": "^1.32.5",

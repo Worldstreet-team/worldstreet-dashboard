@@ -11,7 +11,7 @@ export interface TonTransactionParams {
  */
 export async function getTonBalance(address: string) {
   try {
-    const response = await fetch(`https://toncenter.com/api/v2/getAddressInformation?address=${address}`);
+    const response = await fetch(`https://go.getblock.io/8a928018fe2741ed90779091f68c571d/getAddressInformation?address=${address}`);
     
     if (!response.ok) {
       throw new Error(`TON API request failed: ${response.status}`);
@@ -20,7 +20,7 @@ export async function getTonBalance(address: string) {
     const data = await response.json();
 
     if (!data.ok) {
-      throw new Error(data.error || 'Failed to fetch balance from TON API');
+      throw new Error(data.error || 'Failed to fetch balance from GetBlock TON API');
     }
 
     const balanceInNanoTon = data.result?.balance || '0';

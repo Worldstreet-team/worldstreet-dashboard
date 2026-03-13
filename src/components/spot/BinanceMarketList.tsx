@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Icon } from '@iconify/react';
 import { useDrift, type PerpMarketInfo } from '@/app/context/driftContext';
+import { useHyperliquidMarkets } from '@/hooks/useHyperliquidMarkets';
 
 type Chain = 'solana' | 'ethereum' | 'bitcoin';
 
@@ -24,9 +25,14 @@ interface MarketData {
 interface BinanceMarketListProps {
   selectedPair: string;
   onSelectPair: (pair: string, chain?: Chain, tokenAddress?: string) => void;
+  marketSource?: 'drift' | 'hyperliquid' | 'both';
 }
 
-export default function BinanceMarketList({ selectedPair, onSelectPair }: BinanceMarketListProps) {
+export default function BinanceMarketList({ 
+  selectedPair, 
+  onSelectPair, 
+  marketSource = 'drift' 
+}: BinanceMarketListProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [markets, setMarkets] = useState<MarketData[]>([]);
@@ -34,6 +40,16 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
   const [error, setError] = useState<string | null>(null);
 
   const { perpMarkets, getMarketPrice, isClientReady } = useDrift();
+  
+  // Hyperliquid markets for spot trading
+  const { 
+    markets: hyperliquidMarkets, 
+    loading: hyperliquidLoading, 
+    error: hyperliquidError 
+  } = useHyperliquidMarkets({
+    includeStats: true,
+    enabled: marketSource === 'hyperliquid' || marketSource === 'both'
+  });
 
   // Fetch market data from API route
   useEffect(() => {
@@ -44,8 +60,8 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
 
         let finalMarkets: MarketData[] = [];
 
-        // If Drift is ready, build market list from Drift PERP markets (for futures trading)
-        if (isClientReady && perpMarkets.size > 0) {
+        // Add Drift PERP markets if enabled
+        if ((marketSource === 'drift' || marketSource === 'both') && isClientReady && perpMarkets.size > 0) {
           console.log('[BinanceMarketList] Building market list from', perpMarkets.size, 'Drift perp markets');
 
           perpMarkets.forEach((info: PerpMarketInfo, index: number) => {
@@ -66,8 +82,37 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
           });
 
           console.log('[BinanceMarketList] Built', finalMarkets.length, 'perp markets from Drift');
-        } else {
-          console.log('[BinanceMarketList] Drift not ready yet, showing empty list');
+        }
+
+        // Add Hyperliquid spot markets if enabled
+        if ((marketSource === 'hyperliquid' || marketSource === 'both') && hyperliquidMarkets.length > 0) {
+          console.log('[BinanceMarketList] Adding', hyperliquidMarkets.length, 'Hyperliquid spot markets');
+
+          const hyperliquidData: MarketData[] = hyperliquidMarkets.map(market => ({
+            symbol: market.symbol,
+            baseAsset: market.baseAsset,
+            quoteAsset: market.quoteAsset,
+            price: market.price,
+            change24h: market.change24h,
+            volume24h: market.volume24h,
+            high24h: market.high24h,
+            low24h: market.low24h,
+            chain: 'ethereum',
+          }));
+
+          finalMarkets = [...finalMarkets, ...hyperliquidData];
+          console.log('[BinanceMarketList] Total markets:', finalMarkets.length);
+        }
+
+        // If no markets available, show appropriate message
+        if (finalMarkets.length === 0) {
+          if (marketSource === 'drift' && !isClientReady) {
+            console.log('[BinanceMarketList] Drift not ready yet, showing empty list');
+          } else if (marketSource === 'hyperliquid' && hyperliquidLoading) {
+            console.log('[BinanceMarketList] Hyperliquid loading, showing empty list');
+          } else {
+            console.log('[BinanceMarketList] No markets available for source:', marketSource);
+          }
         }
 
         setMarkets(finalMarkets);
@@ -84,7 +129,7 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
     // Refresh every 10 seconds to update prices
     const interval = setInterval(fetchMarketData, 10000);
     return () => clearInterval(interval);
-  }, [isClientReady, perpMarkets, getMarketPrice]);
+  }, [isClientReady, perpMarkets, getMarketPrice, marketSource, hyperliquidMarkets, hyperliquidLoading]);
 
   const filteredMarkets = useMemo(() => {
     return markets.filter(market => {
@@ -148,15 +193,15 @@ export default function BinanceMarketList({ selectedPair, onSelectPair }: Binanc
 
       {/* Market List */}
       <div className="flex-1 overflow-y-auto scrollbar-hide">
-        {loading ? (
+        {loading || (marketSource === 'hyperliquid' && hyperliquidLoading) ? (
           <div className="p-8 text-center">
             <Icon icon="ph:spinner" className="mx-auto mb-3 text-[#848e9c] animate-spin" width={40} />
             <p className="text-sm text-[#848e9c]">Loading markets...</p>
           </div>
-        ) : error ? (
+        ) : error || hyperliquidError ? (
           <div className="p-8 text-center">
             <Icon icon="ph:warning-circle" className="mx-auto mb-3 text-[#f6465d]" width={40} />
-            <p className="text-sm text-[#f6465d] mb-3">{error}</p>
+            <p className="text-sm text-[#f6465d] mb-3">{error || hyperliquidError}</p>
             <button
               onClick={() => window.location.reload()}
               className="text-sm text-[#f0b90b] hover:underline"

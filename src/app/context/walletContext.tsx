@@ -34,6 +34,22 @@ export interface PrivyWallets {
   tron: PrivyWallet;
 }
 
+// Trading wallet info
+export interface TradingWallet {
+  walletId: string;
+  address: string;
+  chainType: string;
+}
+
+// Hyperliquid setup status
+export interface HyperliquidStatus {
+  initialized: boolean;
+  tradingWallet?: TradingWallet;
+  testnet?: boolean;
+  error?: string;
+  timestamp?: string;
+}
+
 interface WalletContextType {
   // State
   wallets: PrivyWallets | null;
@@ -43,9 +59,15 @@ interface WalletContextType {
   isLoading: boolean;
   error: string | null;
   
+  // Trading wallet state
+  tradingWallet: TradingWallet | null;
+  hyperliquidStatus: HyperliquidStatus | null;
+  
   // Actions
   fetchWallets: () => Promise<void>;
   refreshWallets: () => Promise<void>;
+  setupTradingWallet: () => Promise<void>;
+  getTradingWalletStatus: () => Promise<void>;
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
@@ -63,6 +85,10 @@ export function WalletProvider({ children }: WalletProviderProps) {
   const [walletsGenerated, setWalletsGenerated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Trading wallet state
+  const [tradingWallet, setTradingWallet] = useState<TradingWallet | null>(null);
+  const [hyperliquidStatus, setHyperliquidStatus] = useState<HyperliquidStatus | null>(null);
 
   // Fetch Privy wallets from the API
   const fetchWallets = useCallback(async () => {
@@ -161,14 +187,115 @@ export function WalletProvider({ children }: WalletProviderProps) {
     }
   }, [user]);
 
+  // Setup trading wallet and Hyperliquid integration
+  const setupTradingWallet = useCallback(async () => {
+    if (!user?.primaryEmailAddress?.emailAddress || !user?.id) {
+      throw new Error("User not authenticated");
+    }
+
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      const email = user.primaryEmailAddress.emailAddress;
+      const clerkUserId = user.id;
+      
+      const response = await fetch("/api/privy/setup-trading-wallet", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, clerkUserId }),
+      });
+      
+      if (!response.ok) {
+        throw new Error("Failed to setup trading wallet");
+      }
+      
+      const data = await response.json();
+      
+      if (data.success && data.data) {
+        // Update trading wallet state
+        setTradingWallet(data.data.tradingWallet);
+        setHyperliquidStatus(data.data.hyperliquid);
+        
+        // Refresh main wallets to get updated state
+        await fetchWallets();
+        
+        return data.data;
+      } else {
+        throw new Error(data.error || "Failed to setup trading wallet");
+      }
+    } catch (err) {
+      console.error("Error setting up trading wallet:", err);
+      setError(err instanceof Error ? err.message : "Failed to setup trading wallet");
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user, fetchWallets]);
+
+  // Get trading wallet status
+  const getTradingWalletStatus = useCallback(async () => {
+    if (!user?.primaryEmailAddress?.emailAddress || !user?.id) {
+      return;
+    }
+
+    try {
+      const email = user.primaryEmailAddress.emailAddress;
+      const clerkUserId = user.id;
+      
+      const response = await fetch(
+        `/api/privy/setup-trading-wallet?email=${encodeURIComponent(email)}&clerkUserId=${encodeURIComponent(clerkUserId)}`
+      );
+      
+      if (!response.ok) {
+        throw new Error("Failed to get trading wallet status");
+      }
+      
+      const data = await response.json();
+      
+      if (data.success && data.data) {
+        // Check if user has multiple Ethereum wallets (indicating trading wallet exists)
+        if (data.data.totalEthereumWallets > 1) {
+          const tradingWallets = data.data.ethereumWallets.filter(
+            (w: any) => w.id !== data.data.allWallets.ethereum?.id
+          );
+          
+          if (tradingWallets.length > 0) {
+            setTradingWallet({
+              walletId: tradingWallets[0].id,
+              address: tradingWallets[0].address,
+              chainType: tradingWallets[0].chainType,
+            });
+            
+            setHyperliquidStatus({
+              initialized: true,
+              tradingWallet: {
+                walletId: tradingWallets[0].id,
+                address: tradingWallets[0].address,
+                chainType: tradingWallets[0].chainType,
+              },
+              testnet: process.env.NODE_ENV !== 'production',
+              timestamp: new Date().toISOString(),
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Error getting trading wallet status:", err);
+    }
+  }, [user]);
+
   // Fetch wallets when user is loaded
   useEffect(() => {
     if (clerkLoaded && user) {
       fetchWallets();
+      getTradingWalletStatus(); // Also check trading wallet status
     } else if (clerkLoaded && !user) {
       setIsLoading(false);
     }
-  }, [user, clerkLoaded, fetchWallets]);
+  }, [user, clerkLoaded, fetchWallets, getTradingWalletStatus]);
 
   const value: WalletContextType = {
     wallets,
@@ -177,8 +304,12 @@ export function WalletProvider({ children }: WalletProviderProps) {
     walletsGenerated,
     isLoading,
     error,
+    tradingWallet,
+    hyperliquidStatus,
     fetchWallets,
     refreshWallets,
+    setupTradingWallet,
+    getTradingWalletStatus,
   };
 
   return (
