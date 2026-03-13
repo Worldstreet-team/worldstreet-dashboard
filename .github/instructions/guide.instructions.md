@@ -9,19 +9,6 @@ Provide project context and coding guidelines that AI should follow when generat
 
 ## Primary Reference
 
-When implementing any cryptocurrency-related features on the WorldStreet Dashboard, **always use the `crypto-test-1` project as the authoritative reference and guide**. This includes but is not limited to:
-
-- UI components for crypto data display (charts, tables, cards, tickers)
-- API integration patterns for fetching crypto market data
-- State management approaches for real-time crypto data
-- Wallet connection and authentication flows
-- Token/coin listing, filtering, and sorting logic
-- Portfolio tracking and balance display
-- Transaction history and activity feeds
-- Price alerts and notification systems
-- Any crypto-specific utility functions, helpers, or hooks
-
-Before writing any crypto-related code, review the corresponding implementation in `crypto-test-1` and adapt it to fit the WorldStreet Dashboard's architecture and styling conventions (Next.js + Tailwind CSS).
 
 ## Detailed Questioning Protocol
 

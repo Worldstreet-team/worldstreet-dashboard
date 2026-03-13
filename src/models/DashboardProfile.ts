@@ -75,6 +75,9 @@ const DashboardProfileSchema = new Schema<IDashboardProfile>(
     email: {
       type: String,
       required: true,
+      unique: true,
+      index: true,
+      lowercase: true,
     },
 
     // Social / display

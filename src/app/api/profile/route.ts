@@ -24,6 +24,15 @@ export async function GET(request: NextRequest) {
     let profile = await DashboardProfile.findOne({ authUserId: authUser.userId });
 
     if (!profile) {
+      // Check if a profile with this email already exists (different user)
+      const existingEmail = await DashboardProfile.findOne({ email: authUser.email.toLowerCase() });
+      if (existingEmail) {
+        return NextResponse.json(
+          { success: false, message: "A profile with this email already exists" },
+          { status: 409 }
+        );
+      }
+
       profile = await DashboardProfile.create({
         authUserId: authUser.userId,
         email: authUser.email,
