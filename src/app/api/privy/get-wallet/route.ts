@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { PrivyClient as PrivyNodeClient } from '@privy-io/node';
 import { UserWallet } from '@/models/UserWallet';
 import { connectDB } from '@/lib/mongodb';
+import { auth } from "@clerk/nextjs/server";
 
 const privyNode = new PrivyNodeClient({
   appId: process.env.PRIVY_APP_ID!,
@@ -10,8 +11,7 @@ const privyNode = new PrivyNodeClient({
 
 /**
  * GET /api/privy/get-wallet?email=user@example.com&clerkUserId=user_xxx
- * Get or create multi-chain wallets for a user by email
- * Optionally links a Clerk user ID via custom_auth
+ * Authentication required via Clerk
  */
 export async function GET(request: NextRequest) {
   try {
@@ -19,144 +19,126 @@ export async function GET(request: NextRequest) {
     const email = searchParams.get('email');
     const clerkUserId = searchParams.get('clerkUserId');
 
-    if (!email) {
+    if (!email || !clerkUserId) {
       return NextResponse.json(
-        { error: 'Missing email parameter' },
+        { error: 'Email and clerkUserId are required' },
         { status: 400 }
       );
     }
 
-    console.log('[Privy] Fetching/creating wallets for email:', email);
-    if (clerkUserId) {
-      console.log('[Privy] Clerk user ID provided:', clerkUserId);
+    // Verify authentication
+    const { userId: authUserId } = await auth();
+    if (!authUserId || authUserId !== clerkUserId) {
+      console.error('[Privy] Authentication failed or user mismatch:', { authUserId, clerkUserId });
+      return NextResponse.json(
+        { error: 'Unauthorized - Authentication required' },
+        { status: 401 }
+      );
     }
 
     // Connect to database
     await connectDB();
 
-    // Check if we have a database record
+    // Strategy: Try to find in DB first, but if not found, create in Privy (Self-healing sync)
+    console.log('[Privy] Fetching wallets for email:', email);
+    
     let userWallet = await UserWallet.findOne({ email });
     
-    // If we have a DB record, verify the Privy user still exists
+    let privyUser;
     if (userWallet?.privyUserId) {
       try {
-        const existingUser = await privyNode.users().get(userWallet.privyUserId);
-        
-        if (existingUser) {
-          console.log('[Privy] Found existing user in Privy:', existingUser.id);
-          
-          // If clerkUserId is provided and not already saved, update the DB record
-          if (clerkUserId && userWallet.clerkUserId !== clerkUserId) {
-            console.log('[Privy] Updating Clerk user ID in database');
-            userWallet.clerkUserId = clerkUserId;
-            await userWallet.save();
-          }
-          
-          // Return the existing wallet data from DB
-          return NextResponse.json({
-            success: true,
-            privyUserId: userWallet.privyUserId,
-            wallets: userWallet.wallets,
-            clerkUserId: userWallet.clerkUserId,
-            source: 'database'
-          });
-        }
-      } catch (fetchError) {
-        console.log(
-          `[Privy] Privy user ID not found (${userWallet.privyUserId}), deleting old DB record`
-        );
-        // Privy user was deleted externally: remove db record
-        await UserWallet.deleteOne({ email });
-        userWallet = null;
+        privyUser = await privyNode.users().get(userWallet.privyUserId);
+        console.log('[Privy] Found existing user in Privy via DB record');
+      } catch (e) {
+        console.log('[Privy] User record in DB but not in Privy, will recreate');
       }
     }
 
-    // If we get here, we need to create a new user
-    console.log('[Privy] Creating new user with wallets');
-    
-    // Build linked accounts array
-    const linkedAccounts: any[] = [
-      { type: 'email', address: email }
-    ];
-    
-    // Add custom_auth if clerkUserId is provided
-    if (clerkUserId) {
-      linkedAccounts.unshift({
-        type: 'custom_auth',
-        custom_user_id: clerkUserId
-      });
-      console.log('[Privy] Adding custom_auth linked account for Clerk user');
+    // If we don't have a privyUser (either never created or sync broken), create/get it
+    if (!privyUser) {
+      console.log('[Privy] Creating/Getting user from Privy for:', email);
+      try {
+        privyUser = await privyNode.users().create({
+          linked_accounts: [
+            { type: 'custom_auth', custom_user_id: clerkUserId },
+            { type: 'email', address: email }
+          ],
+          wallets: [
+            { chain_type: 'ethereum' },
+            { chain_type: 'solana' },
+            { chain_type: 'sui' },
+            { chain_type: 'ton' },
+            { chain_type: 'tron' }
+          ]
+        });
+        console.log('[Privy] Created new Privy user');
+      } catch (error: any) {
+        // Handle the case where the user already exists in Privy (Conflict)
+        if (error.message?.includes('Input conflict') || error.status === 422) {
+          console.log('[Privy] User already exists in Privy, extracting DID from error');
+          
+          const conflictMatch = error.message?.match(/did:privy:[a-z0-9]+/i);
+          const existingDid = conflictMatch ? conflictMatch[0] : null;
+          
+          if (existingDid) {
+            privyUser = await privyNode.users().get(existingDid);
+            console.log('[Privy] Retrieved existing Privy user');
+          } else {
+            throw error;
+          }
+        } else {
+          throw error;
+        }
+      }
     }
-    
-    const user = await privyNode.users().create({
-      linked_accounts: linkedAccounts,
-      wallets: [
-        { chain_type: 'ethereum' },
-        { chain_type: 'solana' },
-        { chain_type: 'sui' },
-        { chain_type: 'ton' },
-        { chain_type: 'tron' }
-      ]
-    });
 
-    console.log('[Privy] User created with wallets:', user.id);
-
-    // Extract all wallet information
-    console.log('[Privy] User data:', JSON.stringify(user, null, 2));
-    
+    // Extract wallet info
     const wallets: any = {};
     const chainTypes = ['ethereum', 'solana', 'sui', 'ton', 'tron'];
-
-    // Try both linkedAccounts (camelCase) and linked_accounts (snake_case)
-    const accounts = (user as any).linkedAccounts || (user as any).linked_accounts || [];
-    
-    console.log('[Privy] Found accounts:', accounts.length);
+    const accounts = (privyUser as any).linkedAccounts || (privyUser as any).linked_accounts || [];
 
     for (const chainType of chainTypes) {
       const wallet = accounts.find(
-        (account: any) => 
-          account.type === 'wallet' && 
+        (account: any) =>
+          account.type === 'wallet' &&
           (account.chainType === chainType || account.chain_type === chainType)
       );
-
       if (wallet) {
         wallets[chainType] = {
           walletId: wallet.id,
           address: wallet.address,
           publicKey: wallet.publicKey || wallet.public_key || null
         };
-        console.log(`[Privy] Found ${chainType} wallet:`, wallet.address);
-      } else {
-        console.log(`[Privy] No ${chainType} wallet found`);
       }
     }
 
-    // Save to database (update if exists, create if not)
+    // Update/Sync database record
     userWallet = await UserWallet.findOneAndUpdate(
       { email },
       {
         email,
-        clerkUserId: clerkUserId || null,
-        privyUserId: user.id,
+        clerkUserId,
+        privyUserId: privyUser.id,
         wallets
       },
       { upsert: true, new: true }
     );
 
-    console.log('[Privy] Wallets saved to database');
+    console.log('[Privy] Database record synced successfully');
 
     return NextResponse.json({
       success: true,
-      privyUserId: user.id,
-      wallets,
-      clerkUserId: clerkUserId || null,
-      source: 'privy'
+      privyUserId: privyUser.id,
+      wallets: userWallet.wallets,
+      tradingWallet: userWallet.tradingWallet || null,
+      clerkUserId: userWallet.clerkUserId
     });
+
   } catch (error: any) {
-    console.error('[Privy] Error fetching/creating wallet:', error);
+    console.error('[Privy] Error in get-wallet:', error);
     return NextResponse.json(
       { 
-        error: 'Failed to fetch or create wallet',
+        error: 'Failed to fetch or create wallet', 
         details: error.message 
       },
       { status: 500 }

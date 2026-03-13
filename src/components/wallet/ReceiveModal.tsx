@@ -31,6 +31,11 @@ const CHAIN_INFO: Record<string, { name: string; color: string; icon: string }> 
     color: "#FF0013",
     icon: "https://tse1.mm.bing.net/th/id/OIP.jSQvLp4TC3q6vIDrO1GhkwHaFj?rs=1&pid=ImgDetMain&o=7&rm=3",
   },
+  arbitrum: {
+    name: "Arbitrum",
+    color: "#28a0f0",
+    icon: "https://th.bing.com/th/id/OIP.i-6rTfC5_9j-f_4_rXv-rQHaHa?rs=1&pid=ImgDetMain",
+  },
 };
 
 const ReceiveModal: React.FC<ReceiveModalProps> = ({ isOpen, onClose, chain, address }) => {

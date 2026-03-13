@@ -17,7 +17,7 @@ interface Asset {
   balanceRaw: string;
   decimals: number;
   usdValue: number;
-  chain: "solana" | "ethereum" | "sui" | "ton" | "tron";
+  chain: "solana" | "ethereum" | "arbitrum" | "sui" | "ton" | "tron";
   address?: string;
   icon: string;
 }
@@ -36,6 +36,7 @@ const CHAIN_ICONS: Record<string, string> = {
   sui: "https://tse4.mm.bing.net/th/id/OIP.DWTtTAPHJKclsuxvovZejgHaHa?rs=1&pid=ImgDetMain&o=7&rm=3",
   ton: "https://tse1.mm.bing.net/th/id/OIP.i349pQ2gXTFBH_xGCrBHmgHaHa?rs=1&pid=ImgDetMain&o=7&rm=3",
   tron: "https://tse1.mm.bing.net/th/id/OIP.jSQvLp4TC3q6vIDrO1GhkwHaFj?rs=1&pid=ImgDetMain&o=7&rm=3",
+  arbitrum: "https://th.bing.com/th/id/OIP.i-6rTfC5_9j-f_4_rXv-rQHaHa?rs=1&pid=ImgDetMain",
 };
 
 const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
@@ -146,7 +147,7 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
           // Native SOL
           hash = await sendSol(recipient, amountNum);
         }
-      } else if (asset.chain === "ethereum") {
+      } else if (asset.chain === "ethereum" || asset.chain === "arbitrum") {
         if (asset.address) {
           // ERC20 token - not yet supported via Privy
           throw new Error("ERC20 token transfers not yet supported. Use native ETH for now.");
@@ -213,6 +214,8 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
         return `https://tonscan.org/tx/${txHash}`;
       case "tron":
         return `https://tronscan.org/#/transaction/${txHash}`;
+      case "arbitrum":
+        return `https://sepolia.arbiscan.io/tx/${txHash}`;
       default:
         return "";
     }

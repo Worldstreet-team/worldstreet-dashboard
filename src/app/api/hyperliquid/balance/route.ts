@@ -33,19 +33,20 @@ export async function GET(request: NextRequest) {
     // Check well: Try finding by Clerk ID first
     let userWallet = await UserWallet.findOne({ clerkUserId });
 
-    // Fallback: If not found by Clerk ID, try to find by email if we can get it from the session
-    if (!userWallet && authUserId === clerkUserId) {
+    // Fallback: If not found by Clerk ID, try to find by email
+    if (!userWallet) {
       const user = await currentUser();
       const email = user?.primaryEmailAddress?.emailAddress;
+      
       if (email) {
         console.log('[Hyperliquid Balance] Not found by ID, checking by email:', email);
         userWallet = await UserWallet.findOne({ email });
         
-        // If found by email but Clerk ID is missing, update it now
+        // If found by email, sync the Clerk ID for future lookups
         if (userWallet && !userWallet.clerkUserId) {
           userWallet.clerkUserId = clerkUserId;
           await userWallet.save();
-          console.log('[Hyperliquid Balance] Synced Clerk ID to UserWallet record');
+          console.log('[Hyperliquid Balance] Synced Clerk ID to existing UserWallet record');
         }
       }
     }

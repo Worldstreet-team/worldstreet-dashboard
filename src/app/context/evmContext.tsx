@@ -13,7 +13,7 @@ import React, {
 import { ethers } from "ethers";
 import { convertRawToDisplay, convertDisplayToRaw } from "@/lib/wallet/amounts";
 import { decryptWithPIN } from "@/lib/wallet/encryption";
-import { ETHEREUM_TOKENS, TokenInfo } from "@/lib/wallet/tokenLists";
+import { ETHEREUM_TOKENS, ARBITRUM_TOKENS, TokenInfo } from "@/lib/wallet/tokenLists";
 import { batchFetchTokenBalances, isMulticallAvailable } from "@/lib/evm/multicall";
 import { useWallet } from "./walletContext";
 
@@ -53,6 +53,8 @@ interface EvmContextType {
   address: string | null;
   balance: number;
   tokenBalances: TokenBalance[];
+  arbitrumBalance: number;
+  arbitrumTokenBalances: TokenBalance[];
   customTokens: CustomToken[];
   loading: boolean;
   lastTx: string | null;
@@ -72,18 +74,26 @@ interface EvmContextType {
 
 const EvmContext = createContext<EvmContextType | undefined>(undefined);
 
-// Use Alchemy's Ethereum mainnet RPC (hardcoded)
-const ETH_RPC = "https://eth-mainnet.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITN";
+// RCPs from ENVs
+const ETH_RPC = process.env.NEXT_PUBLIC_ETH_RPC || "https://eth-mainnet.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITN";
+const ARB_RPC = process.env.NEXT_PUBLIC_ARBITRUM_SEPOLIA_RPC_URL || "https://arb-sepolia.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITN";
 
-// Singleton provider instance - created once and reused
-let providerInstance: ethers.JsonRpcProvider | null = null;
+// Singleton provider instances
+let ethProvider: ethers.JsonRpcProvider | null = null;
+let arbProvider: ethers.JsonRpcProvider | null = null;
 
-function getProvider(): ethers.JsonRpcProvider {
-  if (!providerInstance) {
-    providerInstance = new ethers.JsonRpcProvider(ETH_RPC);
-    console.log("[EvmContext] Provider instance created");
+function getEthProvider(): ethers.JsonRpcProvider {
+  if (!ethProvider) {
+    ethProvider = new ethers.JsonRpcProvider(ETH_RPC);
   }
-  return providerInstance;
+  return ethProvider;
+}
+
+function getArbProvider(): ethers.JsonRpcProvider {
+  if (!arbProvider) {
+    arbProvider = new ethers.JsonRpcProvider(ARB_RPC);
+  }
+  return arbProvider;
 }
 
 export function EvmProvider({ children }: { children: ReactNode }) {
@@ -92,14 +102,17 @@ export function EvmProvider({ children }: { children: ReactNode }) {
   
   const [balance, setBalance] = useState(0);
   const [tokenBalances, setTokenBalances] = useState<TokenBalance[]>([]);
+  const [arbitrumBalance, setArbitrumBalance] = useState(0);
+  const [arbitrumTokenBalances, setArbitrumTokenBalances] = useState<TokenBalance[]>([]);
   const [customTokens, setCustomTokens] = useState<CustomToken[]>([]);
   const [loading, setLoading] = useState(false);
   const [lastTx, setLastTx] = useState<string | null>(null);
 
   console.log('[EvmContext] Address from walletContext:', address);
 
-  // Use singleton provider
-  const provider = useMemo(() => getProvider(), []);
+  // Providers
+  const ethProvider = useMemo(() => getEthProvider(), []);
+  const arbProvider = useMemo(() => getArbProvider(), []);
 
   // Refs to track state and prevent unnecessary refetches
   const isFetchingRef = useRef(false);
@@ -125,145 +138,110 @@ export function EvmProvider({ children }: { children: ReactNode }) {
   }, []);
 
   /**
-   * Fetch balances using Multicall for efficiency
-   * Stable reference via useCallback with proper dependencies
+   * Helper to fetch balances for a specific chain
    */
+  const fetchChainData = async (
+    targetAddr: string, 
+    provider: ethers.JsonRpcProvider, 
+    chainTokens: TokenInfo[],
+    chainName: string
+  ) => {
+    // 1. Fetch native balance
+    const balanceWei = await provider.getBalance(targetAddr);
+    const balanceDisplay = convertRawToDisplay(balanceWei, 18);
+    
+    // 2. Fetch token balances
+    const allTokens: TokenInfo[] = [...chainTokens];
+    
+    // Add custom tokens if any match this chain
+    customTokens.forEach((ct) => {
+      if (ct.chain === chainName && !allTokens.find((t) => t.address.toLowerCase() === ct.address.toLowerCase())) {
+        allTokens.push({
+          symbol: ct.symbol,
+          name: ct.name,
+          address: ct.address,
+          decimals: ct.decimals,
+          logoURI: ct.logoURI,
+          coingeckoId: ct.coingeckoId,
+        });
+      }
+    });
+
+    const priorityTokens = allTokens.filter(t => t.isPopular || customTokens.some(ct => ct.address.toLowerCase() === t.address.toLowerCase()));
+    if (priorityTokens.length === 0) return { native: parseFloat(balanceDisplay), tokens: [] };
+
+    const multicallAvailable = await isMulticallAvailable(provider);
+    let results: TokenBalance[] = [];
+
+    if (multicallAvailable) {
+      const calls = priorityTokens.map(token => ({
+        tokenAddress: token.address,
+        walletAddress: targetAddr,
+      }));
+
+      const balances = await batchFetchTokenBalances(provider, calls);
+
+      balances.forEach((bal, index) => {
+        const token = priorityTokens[index];
+        if (bal !== null) {
+          const amount = parseFloat(convertRawToDisplay(bal, token.decimals));
+          if (amount > 0 || token.isPopular) {
+            results.push({
+              address: token.address,
+              symbol: token.symbol,
+              name: token.name,
+              decimals: token.decimals,
+              logoURI: token.logoURI,
+              amount,
+              isPopular: token.isPopular,
+            });
+          }
+        }
+      });
+    } else {
+      for (const token of priorityTokens) {
+        try {
+          const contract = new ethers.Contract(token.address, ERC20_ABI, provider);
+          const bal = await contract.balanceOf(targetAddr);
+          const amount = parseFloat(convertRawToDisplay(bal, token.decimals));
+          if (amount > 0 || token.isPopular) {
+            results.push({
+              address: token.address,
+              symbol: token.symbol,
+              name: token.name,
+              decimals: token.decimals,
+              logoURI: token.logoURI,
+              amount,
+            });
+          }
+        } catch (e) {}
+      }
+    }
+    
+    return { native: parseFloat(balanceDisplay), tokens: results };
+  };
+
   const fetchBalance = useCallback(
     async (addr?: string) => {
       const targetAddr = addr || address;
-      if (!targetAddr || isFetchingRef.current) {
-        console.log('[EvmContext] Skipping fetch - no address or already fetching');
-        return;
-      }
+      if (!targetAddr || isFetchingRef.current) return;
 
-      console.log('[EvmContext] Fetching balance for:', targetAddr);
       isFetchingRef.current = true;
       setLoading(true);
 
       try {
-        // 1. Fetch native ETH balance
-        const balanceWei = await provider.getBalance(targetAddr);
-        const balanceEth = convertRawToDisplay(balanceWei, 18);
-        console.log('[EvmContext] ETH Balance:', balanceEth);
-        setBalance(parseFloat(balanceEth));
-
-        // 2. Combine pre-loaded tokens with custom tokens
-        const allTokens: TokenInfo[] = [...ETHEREUM_TOKENS];
+        console.log('[EvmContext] Fetching multi-chain data for:', targetAddr);
         
-        // Add custom tokens that aren't already in the list
-        customTokens.forEach((ct) => {
-          if (!allTokens.find((t) => t.address.toLowerCase() === ct.address.toLowerCase())) {
-            allTokens.push({
-              symbol: ct.symbol,
-              name: ct.name,
-              address: ct.address,
-              decimals: ct.decimals,
-              logoURI: ct.logoURI,
-              coingeckoId: ct.coingeckoId,
-            });
-          }
-        });
+        // Fetch Ethereum
+        const ethData = await fetchChainData(targetAddr, ethProvider, ETHEREUM_TOKENS, 'ethereum');
+        setBalance(ethData.native);
+        setTokenBalances(ethData.tokens);
 
-        // 3. Filter to priority tokens (popular + custom)
-        const popularTokens = allTokens.filter(t => t.isPopular);
-        const customTokenAddrs = customTokens.map(ct => ct.address.toLowerCase());
-        const userCustomTokens = allTokens.filter(t => 
-          customTokenAddrs.includes(t.address.toLowerCase()) && !t.isPopular
-        );
-        
-        const priorityTokens = [...popularTokens, ...userCustomTokens];
+        // Fetch Arbitrum (Sepolia as testnet)
+        const arbData = await fetchChainData(targetAddr, arbProvider, ARBITRUM_TOKENS, 'arbitrum');
+        setArbitrumBalance(arbData.native);
+        setArbitrumTokenBalances(arbData.tokens);
 
-        if (priorityTokens.length === 0) {
-          setTokenBalances([]);
-          return;
-        }
-
-        // 4. Check if Multicall3 is available
-        const multicallAvailable = await isMulticallAvailable(provider);
-
-        let results: TokenBalance[] = [];
-
-        if (multicallAvailable) {
-          // Use Multicall3 for batched balance fetching (single RPC call)
-          console.log(`[EvmContext] Fetching ${priorityTokens.length} token balances via Multicall3`);
-          
-          const calls = priorityTokens.map(token => ({
-            tokenAddress: token.address,
-            walletAddress: targetAddr,
-          }));
-
-          const balances = await batchFetchTokenBalances(provider, calls);
-
-          // Process results
-          balances.forEach((balance, index) => {
-            const token = priorityTokens[index];
-            
-            if (balance !== null) {
-              const amount = parseFloat(convertRawToDisplay(balance, token.decimals));
-              
-              const customToken = customTokens.find(
-                (ct) => ct.address.toLowerCase() === token.address.toLowerCase()
-              );
-
-              // Show custom/popular tokens always, others only with balance
-              if (customToken || token.isPopular || amount > 0) {
-                results.push({
-                  address: token.address,
-                  symbol: token.symbol,
-                  name: token.name,
-                  decimals: token.decimals,
-                  logoURI: token.logoURI,
-                  amount,
-                  isCustom: !!customToken,
-                  customTokenId: customToken?._id,
-                  isPopular: token.isPopular,
-                });
-              }
-            }
-          });
-
-          setTokenBalances(results);
-        } else {
-          // Fallback: individual calls (less efficient but works without Multicall3)
-          console.log(`[EvmContext] Multicall3 not available, using individual calls`);
-          
-          for (const token of priorityTokens) {
-            try {
-              const normalizedAddress = ethers.getAddress(token.address.toLowerCase());
-              const contract = new ethers.Contract(
-                normalizedAddress,
-                ERC20_ABI,
-                provider
-              );
-              const bal = await contract.balanceOf(targetAddr);
-              const amount = parseFloat(convertRawToDisplay(bal, token.decimals));
-              
-              const customToken = customTokens.find(
-                (ct) => ct.address.toLowerCase() === token.address.toLowerCase()
-              );
-
-              if (customToken || token.isPopular || amount > 0) {
-                results.push({
-                  address: token.address,
-                  symbol: token.symbol,
-                  name: token.name,
-                  decimals: token.decimals,
-                  logoURI: token.logoURI,
-                  amount,
-                  isCustom: !!customToken,
-                  customTokenId: customToken?._id,
-                  isPopular: token.isPopular,
-                });
-              }
-            } catch (error) {
-              console.error(`[EvmContext] Failed to fetch balance for ${token.symbol}:`, error);
-            }
-          }
-
-          setTokenBalances(results);
-        }
-        
-        console.log('[EvmContext] Token balances:', results.length);
       } catch (error) {
         console.error("[EvmContext] fetchBalance error:", error);
       } finally {
@@ -271,7 +249,7 @@ export function EvmProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       }
     },
-    [address, provider, customTokens]
+    [address, ethProvider, arbProvider, customTokens]
   );
 
   // Fetch custom tokens on mount
@@ -299,7 +277,7 @@ export function EvmProvider({ children }: { children: ReactNode }) {
     };
 
     // Attach block listener
-    provider.on("block", handleNewBlock);
+    ethProvider.on("block", handleNewBlock);
 
     // Initial fetch
     console.log('[EvmContext] Initial balance fetch');
@@ -308,10 +286,10 @@ export function EvmProvider({ children }: { children: ReactNode }) {
     // Cleanup
     return () => {
       console.log("[EvmContext] Removing block listener");
-      provider.off("block", handleNewBlock);
+      ethProvider.off("block", handleNewBlock);
       blockListenerAttachedRef.current = false;
     };
-  }, [address, provider, fetchBalance]);
+  }, [address, ethProvider, fetchBalance]);
 
   const sendTransaction = useCallback(
     async (
@@ -402,6 +380,8 @@ export function EvmProvider({ children }: { children: ReactNode }) {
         address,
         balance,
         tokenBalances,
+        arbitrumBalance,
+        arbitrumTokenBalances,
         customTokens,
         loading,
         lastTx,

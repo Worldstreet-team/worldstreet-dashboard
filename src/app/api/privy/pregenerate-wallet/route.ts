@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { PrivyClient as PrivyNodeClient } from '@privy-io/node';
 import { UserWallet } from '@/models/UserWallet';
 import { connectDB } from '@/lib/mongodb';
+import { auth } from "@clerk/nextjs/server";
 
 const privyNode = new PrivyNodeClient({
   appId: process.env.PRIVY_APP_ID!,
@@ -14,69 +15,106 @@ const privyNode = new PrivyNodeClient({
  */
 export async function POST(request: NextRequest) {
   try {
-    const { clerkUserId, email } = await request.json();
+    const { userId: authUserId, getToken } = await auth();
+    const clerkToken = await getToken();
+    
+    const { email } = await request.json();
 
-    if (!email || !clerkUserId) {
+    if (!email || !authUserId || !clerkToken) {
+      console.error('[Privy Pregenerate] Missing required auth info:', { email, authUserId, hasToken: !!clerkToken });
       return NextResponse.json(
-        { error: 'Email and clerkUserId are required' },
+        { error: 'Authentication and email are required' },
         { status: 400 }
       );
     }
 
-    console.log('[Privy] Creating user with wallets for email:', email, 'clerkUserId:', clerkUserId);
+    const clerkUserId = authUserId;
 
-    // Try to connect to MongoDB with better error handling
-    try {
-      await connectDB();
-      console.log('[Privy] Database connected successfully');
-    } catch (dbError: any) {
-      console.error('[Privy] Database connection failed:', dbError.message);
-      return NextResponse.json(
-        { 
-          error: 'Database connection failed', 
-          details: dbError.message,
-          suggestion: 'Please check your network connection and try again later.'
-        },
-        { status: 503 }
-      );
-    }
+    console.log('[Privy Pregenerate] Process for:', email);
 
-    // Prevent duplicates
-    let userWallet = await UserWallet.findOne({ email });
-    if (userWallet) {
-      console.log('[Privy] User already exists in database');
-      return NextResponse.json({
-        success: true,
-        privyUserId: userWallet.privyUserId,
-        wallets: userWallet.wallets,
-        message: 'User already exists'
-      });
-    }
+    await connectDB();
 
-    // Create Privy user with both custom_auth and email linked
-    const privyUser = await privyNode.users().create({
-      linked_accounts: [
-        {
-          type: 'custom_auth',
-          custom_user_id: clerkUserId
-        },
-        {
-          type: 'email',
-          address: email
+    // Helper: Get user profile with Clerk JWT fallback
+    const getExistingUser = async (did: string) => {
+      try {
+        // Try SDK first
+        return await privyNode.users().get(did);
+      } catch (sdkError: any) {
+        console.log('[Privy Pregenerate] SDK get failed, trying fetch fallback with clerkToken');
+        // Fallback: Fetch directly using clerkToken as user JWT
+        const response = await fetch(`https://api.privy.io/v1/users/${did}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Basic ${Buffer.from(`${process.env.PRIVY_APP_ID}:${process.env.PRIVY_APP_SECRET}`).toString('base64')}`,
+            'privy-app-id': process.env.PRIVY_APP_ID!,
+            'privy-user-jwt': clerkToken // Pass the Clerk JWT as the user context
+          }
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Privy API fallback failed: ${response.status} - ${errorText}`);
         }
-      ],
-      wallets: [
-        { chain_type: 'ethereum' },
-        { chain_type: 'solana' },
-        { chain_type: 'sui' },
-        { chain_type: 'ton' },
-        { chain_type: 'tron' }
-      ]
-    });
+        
+        return await response.json();
+      }
+    };
 
-    console.log('[Privy] User created:', privyUser.id);
+    // 1. Check DB first
+    let userWallet = await UserWallet.findOne({ email });
+    if (userWallet?.privyUserId) {
+      console.log('[Privy Pregenerate] User found in DB');
+      try {
+        const verifyUser = await getExistingUser(userWallet.privyUserId);
+        if (verifyUser) {
+          return NextResponse.json({
+            success: true,
+            privyUserId: userWallet.privyUserId,
+            wallets: userWallet.wallets,
+            tradingWallet: userWallet.tradingWallet || null
+          });
+        }
+      } catch (e) {
+        console.log('[Privy Pregenerate] DB record recovery failed, attempting create/get conflict');
+      }
+    }
 
-    // Extract wallet info
+    // 2. Try to create or get from Privy
+    let privyUser;
+    try {
+      privyUser = await privyNode.users().create({
+        linked_accounts: [
+          { type: 'custom_auth', custom_user_id: clerkUserId },
+          { type: 'email', address: email }
+        ],
+        wallets: [
+          { chain_type: 'ethereum' },
+          { chain_type: 'solana' },
+          { chain_type: 'sui' },
+          { chain_type: 'ton' },
+          { chain_type: 'tron' }
+        ]
+      });
+      console.log('[Privy Pregenerate] Created new user:', privyUser.id);
+    } catch (error: any) {
+      if (error.message?.includes('Input conflict') || error.status === 422) {
+        console.log('[Privy Pregenerate] Conflict detected, extracting DID');
+        const conflictMatch = error.message?.match(/did:privy:[a-z0-9]+/i);
+        const existingDid = conflictMatch ? conflictMatch[0] : (error.cause || null);
+        
+        if (existingDid) {
+          console.log('[Privy Pregenerate] Attempting get for DID:', existingDid);
+          privyUser = await getExistingUser(existingDid as string);
+          console.log('[Privy Pregenerate] Retrieved existing user profile');
+        } else {
+          throw error;
+        }
+      } else {
+        throw error;
+      }
+    }
+
+    // 3. Extract wallet info
     const wallets: any = {};
     const chainTypes = ['ethereum', 'solana', 'sui', 'ton', 'tron'];
     const accounts = (privyUser as any).linkedAccounts || (privyUser as any).linked_accounts || [];
@@ -96,52 +134,32 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Save to DB
-    userWallet = await UserWallet.create({
-      email,
-      clerkUserId,
-      privyUserId: privyUser.id,
-      wallets
-    });
+    // 4. Update/Create DB record
+    userWallet = await UserWallet.findOneAndUpdate(
+      { email },
+      {
+        email,
+        clerkUserId,
+        privyUserId: privyUser.id,
+        wallets
+      },
+      { upsert: true, new: true }
+    );
 
-    console.log('[Privy] Wallets saved to database');
+    console.log('[Privy Pregenerate] Synced with database');
 
     return NextResponse.json({
       success: true,
       privyUserId: privyUser.id,
-      wallets
+      wallets: userWallet.wallets,
+      tradingWallet: userWallet.tradingWallet || null
     });
+
   } catch (error: any) {
-    console.error('[Privy] Error creating wallets:', error);
-    
-    // Provide more specific error messages based on error type
-    if (error.message?.includes('MongoDB') || error.message?.includes('database')) {
-      return NextResponse.json(
-        { 
-          error: 'Database error', 
-          details: error.message,
-          suggestion: 'Please try again later or contact support if the issue persists.'
-        },
-        { status: 503 }
-      );
-    } else if (error.message?.includes('Privy') || error.status) {
-      return NextResponse.json(
-        { 
-          error: 'Privy API error', 
-          details: error.message,
-          suggestion: 'Please check your Privy configuration and try again.'
-        },
-        { status: error.status || 500 }
-      );
-    }
-    
+    console.error('[Privy Pregenerate] Error:', error);
     return NextResponse.json(
-      { 
-        error: 'Failed to create wallets', 
-        details: error.message,
-        suggestion: 'Please try again later.'
-      },
+      { error: 'Failed to process wallet request', details: error.message },
       { status: 500 }
     );
   }
-}
+}

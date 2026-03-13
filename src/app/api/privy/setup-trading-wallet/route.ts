@@ -87,6 +87,13 @@ export async function POST(request: NextRequest) {
       try {
         privyUser = await privyNode.users().get(userWallet.privyUserId);
         console.log('[Trading Wallet] Found existing Privy user:', privyUser.id);
+        
+        // Sync clerkUserId if it's missing or different
+        if (userWallet.clerkUserId !== clerkUserId) {
+          userWallet.clerkUserId = clerkUserId;
+          await userWallet.save();
+          console.log('[Trading Wallet] Synced Clerk ID to existing UserWallet record');
+        }
       } catch (error) {
         console.log('[Trading Wallet] Privy user not found, will create new one');
         privyUser = null;
@@ -105,18 +112,38 @@ export async function POST(request: NextRequest) {
         { type: 'email', address: email }
       ];
       
-      privyUser = await privyNode.users().create({
-        linked_accounts: linkedAccounts,
-        wallets: [
-          { chain_type: 'ethereum' },
-          { chain_type: 'solana' },
-          { chain_type: 'sui' },
-          { chain_type: 'ton' },
-          { chain_type: 'tron' }
-        ]
-      });
-
-      console.log('[Trading Wallet] Created Privy user:', privyUser.id);
+      try {
+        privyUser = await privyNode.users().create({
+          linked_accounts: linkedAccounts,
+          wallets: [
+            { chain_type: 'ethereum' },
+            { chain_type: 'solana' },
+            { chain_type: 'sui' },
+            { chain_type: 'ton' },
+            { chain_type: 'tron' }
+          ]
+        });
+        console.log('[Trading Wallet] Created Privy user:', privyUser.id);
+      } catch (createError: any) {
+        // Handle the case where the user already exists in Privy but not in our DB
+        if (createError.message?.includes('Input conflict') || createError.status === 422) {
+          console.log('[Trading Wallet] User already exists in Privy (conflict), retrieving DID');
+          
+          // Extract DID from error message
+          const conflictMatch = createError.message?.match(/did:privy:[a-z0-9]+/i);
+          const existingDid = conflictMatch ? conflictMatch[0] : null;
+          
+          if (existingDid) {
+            console.log('[Trading Wallet] Found existing DID:', existingDid);
+            privyUser = await privyNode.users().get(existingDid);
+            console.log('[Trading Wallet] Retrieved existing user profile');
+          } else {
+            throw createError;
+          }
+        } else {
+          throw createError;
+        }
+      }
 
       // FIXED: Use wallets().list() to get actual wallets instead of parsing linked_accounts
       const wallets: any = {};
@@ -344,14 +371,20 @@ export async function GET(request: NextRequest) {
     // Connect to database
     await connectDB();
 
-    // Get user from database
-    const userWallet = await UserWallet.findOne({ email });
+    // Get user from database - check both email and clerkUserId
+    let userWallet = await UserWallet.findOne({ 
+      $or: [{ email }, { clerkUserId }]
+    });
     
     if (!userWallet?.privyUserId) {
+      // If we have clerkUserId but no record, this might be a fresh user
+      // Let's not return 404 yet, try to find in Privy directly if possible
+      // But for status check, 404 is technically correct if not in our DB
       return NextResponse.json(
         { 
           success: false, 
-          error: "User not found" 
+          error: "User record not found in database",
+          code: "USER_NOT_FOUND"
         },
         { status: 404 }
       );

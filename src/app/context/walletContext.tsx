@@ -58,16 +58,16 @@ interface WalletContextType {
   walletsGenerated: boolean;
   isLoading: boolean;
   error: string | null;
-  
+
   // Trading wallet state
   tradingWallet: TradingWallet | null;
   hyperliquidStatus: HyperliquidStatus | null;
-  
+
   // Actions
   fetchWallets: () => Promise<void>;
   refreshWallets: () => Promise<void>;
-  setupTradingWallet: () => Promise<void>;
-  getTradingWalletStatus: () => Promise<void>;
+  setupTradingWallet: () => Promise<any>;
+  getTradingWalletStatus: () => Promise<any>;
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
@@ -78,14 +78,14 @@ interface WalletProviderProps {
 
 export function WalletProvider({ children }: WalletProviderProps) {
   const { user, isLoaded: clerkLoaded } = useUser();
-  
+
   const [wallets, setWallets] = useState<PrivyWallets | null>(null);
   const [addresses, setAddresses] = useState<PrivyWalletAddresses | null>(null);
   const [privyUserId, setPrivyUserId] = useState<string | null>(null);
   const [walletsGenerated, setWalletsGenerated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Trading wallet state
   const [tradingWallet, setTradingWallet] = useState<TradingWallet | null>(null);
   const [hyperliquidStatus, setHyperliquidStatus] = useState<HyperliquidStatus | null>(null);
@@ -100,24 +100,27 @@ export function WalletProvider({ children }: WalletProviderProps) {
     try {
       setIsLoading(true);
       setError(null);
-      
+
       const email = user.primaryEmailAddress.emailAddress;
-      const clerkUserId = user.id;
-      
-      const response = await fetch(
-        `/api/privy/get-wallet?email=${encodeURIComponent(email)}&clerkUserId=${encodeURIComponent(clerkUserId)}`
-      );
-      
+
+      const response = await fetch("/api/privy/pregenerate-wallet", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email }),
+      });
+
       if (!response.ok) {
         throw new Error("Failed to fetch wallets");
       }
-      
+
       const data = await response.json();
-      
+
       if (data.success && data.wallets) {
         setWallets(data.wallets);
         setPrivyUserId(data.privyUserId);
-        
+
         // Extract addresses
         setAddresses({
           ethereum: data.wallets.ethereum?.address || "",
@@ -126,7 +129,12 @@ export function WalletProvider({ children }: WalletProviderProps) {
           ton: data.wallets.ton?.address || "",
           tron: data.wallets.tron?.address || "",
         });
-        
+
+        // If the API returns trading wallet info, update it
+        if (data.tradingWallet) {
+          setTradingWallet(data.tradingWallet);
+        }
+
         setWalletsGenerated(true);
       }
     } catch (err) {
@@ -146,10 +154,10 @@ export function WalletProvider({ children }: WalletProviderProps) {
     try {
       setIsLoading(true);
       setError(null);
-      
+
       const email = user.primaryEmailAddress.emailAddress;
       const clerkUserId = user.id;
-      
+
       const response = await fetch("/api/privy/refresh-wallet", {
         method: "POST",
         headers: {
@@ -157,17 +165,17 @@ export function WalletProvider({ children }: WalletProviderProps) {
         },
         body: JSON.stringify({ email, clerkUserId }),
       });
-      
+
       if (!response.ok) {
         throw new Error("Failed to refresh wallets");
       }
-      
+
       const data = await response.json();
-      
+
       if (data.success && data.wallets) {
         setWallets(data.wallets);
         setPrivyUserId(data.privyUserId);
-        
+
         // Extract addresses
         setAddresses({
           ethereum: data.wallets.ethereum?.address || "",
@@ -176,7 +184,12 @@ export function WalletProvider({ children }: WalletProviderProps) {
           ton: data.wallets.ton?.address || "",
           tron: data.wallets.tron?.address || "",
         });
-        
+
+        // If the API returns trading wallet info, update it
+        if (data.tradingWallet) {
+          setTradingWallet(data.tradingWallet);
+        }
+
         setWalletsGenerated(true);
       }
     } catch (err) {
@@ -196,10 +209,10 @@ export function WalletProvider({ children }: WalletProviderProps) {
     try {
       setIsLoading(true);
       setError(null);
-      
+
       const email = user.primaryEmailAddress.emailAddress;
       const clerkUserId = user.id;
-      
+
       const response = await fetch("/api/privy/setup-trading-wallet", {
         method: "POST",
         headers: {
@@ -207,21 +220,21 @@ export function WalletProvider({ children }: WalletProviderProps) {
         },
         body: JSON.stringify({ email, clerkUserId }),
       });
-      
+
       if (!response.ok) {
         throw new Error("Failed to setup trading wallet");
       }
-      
+
       const data = await response.json();
-      
+
       if (data.success && data.data) {
         // Update trading wallet state
         setTradingWallet(data.data.tradingWallet);
         setHyperliquidStatus(data.data.hyperliquid);
-        
+
         // Refresh main wallets to get updated state
         await fetchWallets();
-        
+
         return data.data;
       } else {
         throw new Error(data.error || "Failed to setup trading wallet");
@@ -238,52 +251,55 @@ export function WalletProvider({ children }: WalletProviderProps) {
   // Get trading wallet status
   const getTradingWalletStatus = useCallback(async () => {
     if (!user?.primaryEmailAddress?.emailAddress || !user?.id) {
-      return;
+      return null;
     }
 
     try {
       const email = user.primaryEmailAddress.emailAddress;
       const clerkUserId = user.id;
-      
+
       const response = await fetch(
         `/api/privy/setup-trading-wallet?email=${encodeURIComponent(email)}&clerkUserId=${encodeURIComponent(clerkUserId)}`
       );
-      
-      if (!response.ok) {
-        throw new Error("Failed to get trading wallet status");
+
+      if (response.status === 404) {
+        return { success: false, error: "Not initialized" };
       }
-      
+
       const data = await response.json();
-      
+
       if (data.success && data.data) {
         // Check if user has multiple Ethereum wallets (indicating trading wallet exists)
         if (data.data.totalEthereumWallets > 1) {
+          const mainWalletId = data.data.mainWallet?.id || data.data.mainWalletIdFromDB;
           const tradingWallets = data.data.ethereumWallets.filter(
-            (w: any) => w.id !== data.data.allWallets.ethereum?.id
+            (w: any) => w.id !== mainWalletId
           );
-          
+
           if (tradingWallets.length > 0) {
-            setTradingWallet({
+            const tw = {
               walletId: tradingWallets[0].id,
               address: tradingWallets[0].address,
               chainType: tradingWallets[0].chainType,
-            });
-            
+            };
+            setTradingWallet(tw);
+
             setHyperliquidStatus({
               initialized: true,
-              tradingWallet: {
-                walletId: tradingWallets[0].id,
-                address: tradingWallets[0].address,
-                chainType: tradingWallets[0].chainType,
-              },
+              tradingWallet: tw,
               testnet: process.env.NODE_ENV !== 'production',
               timestamp: new Date().toISOString(),
             });
           }
+        } else if (data.data.tradingWallet) {
+          setTradingWallet(data.data.tradingWallet);
         }
+        return data.data;
       }
+      return data;
     } catch (err) {
       console.error("Error getting trading wallet status:", err);
+      return null;
     }
   }, [user]);
 

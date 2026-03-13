@@ -31,20 +31,23 @@ export function usePregeneratedWallet(): PregeneratedWallet {
 
       try {
         const email = user.primaryEmailAddress.emailAddress;
-        const clerkUserId = user.id;
         
-        console.log('[usePregeneratedWallet] Fetching wallet for:', email, 'clerkUserId:', clerkUserId);
+        console.log('[usePregeneratedWallet] Fetching/Generating wallet for:', email);
 
-        const response = await fetch(
-          `/api/privy/get-wallet?email=${encodeURIComponent(email)}&clerkUserId=${encodeURIComponent(clerkUserId)}`
-        );
+        const response = await fetch("/api/privy/pregenerate-wallet", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ email }),
+        });
         
         const data = await response.json();
 
-        if (response.ok && data.success) {
-          console.log('[usePregeneratedWallet] Wallet found:', data.solanaAddress);
+        if (response.ok && data.success && data.wallets?.solana?.address) {
+          console.log('[usePregeneratedWallet] Wallet found:', data.wallets.solana.address);
           setWallet({
-            solanaAddress: data.solanaAddress,
+            solanaAddress: data.wallets.solana.address,
             privyUserId: data.privyUserId,
             loading: false,
             error: null,

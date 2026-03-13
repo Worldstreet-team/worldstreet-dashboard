@@ -33,7 +33,10 @@ const CONFIG = {
   chain: process.env.NODE_ENV === 'production' ? arbitrum : arbitrumSepolia,
   usdcAddress: process.env.NODE_ENV === 'production'
     ? '0xaf88d065e77c8cC2239327C5EDb3A432268e5831' // Arbitrum USDC
-    : '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d'  // Sepolia USDC (example)
+    : '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d', // Sepolia USDC
+  ethChainId: 1,
+  rbChainId: 42161,
+  arbSepoliaChainId: 421614
 };
 
 export async function POST(request: NextRequest) {
@@ -50,12 +53,54 @@ export async function POST(request: NextRequest) {
     }
 
     await connectDB();
-    const userWallet = await UserWallet.findOne({ clerkUserId: authUserId });
+    
+    // First attempt: Find by clerkUserId
+    let userWallet = await UserWallet.findOne({ clerkUserId: authUserId });
+    console.log(`[Internal Transfer] Lookup by clerkUserId (${authUserId}): ${userWallet ? 'Found ✓' : 'Not Found ✗'}`);
+    
+    // Fallback: If not found by Clerk ID, try to find by Email if possible
+    if (!userWallet) {
+      const { currentUser } = await import("@clerk/nextjs/server");
+      const clerkUser = await currentUser();
+      const email = clerkUser?.emailAddresses[0]?.emailAddress;
+      
+      if (email) {
+        userWallet = await UserWallet.findOne({ email });
+        console.log(`[Internal Transfer] Lookup by email (${email}): ${userWallet ? 'Found ✓' : 'Not Found ✗'}`);
+        
+        // If found by email, link the clerkUserId for future lookups
+        if (userWallet && !userWallet.clerkUserId) {
+          userWallet.clerkUserId = authUserId;
+          await userWallet.save();
+          console.log(`[Internal Transfer] Linked clerkUserId ${authUserId} to existing wallet record`);
+        }
+      }
+    }
 
     if (!userWallet || !userWallet.tradingWallet?.address || !userWallet.wallets?.ethereum?.address) {
+      console.log(`[Internal Transfer] Wallet validation failed:`, {
+        hasUserWallet: !!userWallet,
+        hasTradingWallet: !!userWallet?.tradingWallet?.address,
+        hasMainWallet: !!userWallet?.wallets?.ethereum?.address,
+        tradingWallet: userWallet?.tradingWallet,
+        mainWallet: userWallet?.wallets?.ethereum
+      });
+
+      const missingDetails = [];
+      if (!userWallet) missingDetails.push("No wallet record found");
+      else {
+        if (!userWallet.tradingWallet?.address) missingDetails.push("Trading wallet missing in DB");
+        if (!userWallet.wallets?.ethereum?.address) missingDetails.push("Main wallet missing in DB");
+      }
+
       return NextResponse.json({
         success: false,
-        error: "Wallets not fully initialized. Please set up your trading wallet first."
+        error: "Wallets not fully initialized. Please set up your trading wallet first.",
+        details: missingDetails.join(", "),
+        debug: {
+          clerkUserId: authUserId,
+          foundEmail: userWallet?.email || 'unknown'
+        }
       }, { status: 404 });
     }
 
@@ -63,7 +108,7 @@ export async function POST(request: NextRequest) {
     const tradingWalletAddress = userWallet.tradingWallet.address;
     const mainWalletId = userWallet.wallets.ethereum.walletId;
 
-    console.log(`[Internal Transfer] Initiating transfer of ${amount} ${asset} from ${mainWalletAddress} to ${tradingWalletAddress}`);
+    console.log(`[Internal Transfer] Validated profiles. Main: ${mainWalletAddress}, Trading: ${tradingWalletAddress}`);
 
     // Get Auth Context for signing from Main Wallet
     const clerkJwt = await getToken();
