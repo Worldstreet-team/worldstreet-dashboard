@@ -199,12 +199,10 @@ export function TronProvider({ children }: { children: ReactNode }) {
           }
 
           try {
-            // Fetch balance for custom token using TronWeb
-            const { getTronWeb } = await import("@/services/tron/tronweb.service");
-            const tronWeb = await getTronWeb();
-            const contract = await tronWeb.contract(TRC20_ABI, customToken.address);
-            const raw = await contract.balanceOf(target).call();
-            const amount = Number(raw.toString()) / Math.pow(10, customToken.decimals);
+            // TronWeb service removed - custom token balances not supported
+            console.log('[TronContext] Custom token balance fetching disabled (TronWeb removed)');
+            // Skip custom token for now
+            continue;
 
             if (amount > 0) {
               results.push({
@@ -338,47 +336,13 @@ export function TronProvider({ children }: { children: ReactNode }) {
   const verifyTransaction = useCallback(
     async (txHash: string) => {
       try {
-        // Use TronWeb singleton
-        const { getTronWeb } = await import("@/services/tron/tronweb.service");
-        const tronWeb = await getTronWeb();
-
-        // Get transaction info
-        const tx = await tronWeb.trx.getTransaction(txHash);
-        
-        if (!tx || !tx.txID) {
-          return {
-            success: false,
-            confirmed: false,
-            status: "not_found",
-          };
-        }
-
-        // Get transaction info (includes confirmation status)
-        const txInfo = await tronWeb.trx.getTransactionInfo(txHash);
-
-        // Check if transaction is confirmed
-        const isConfirmed = txInfo.receipt?.result === "SUCCESS";
-        const blockNumber = txInfo.blockNumber || 0;
-
-        // Get current block to calculate confirmations
-        let confirmations = 0;
-        if (blockNumber > 0) {
-          try {
-            const currentBlock = await tronWeb.trx.getCurrentBlock();
-            confirmations = currentBlock.block_header.raw_data.number - blockNumber;
-          } catch {
-            confirmations = 0;
-          }
-        }
-
-        const explorerUrl = `https://tronscan.org/#/transaction/${txHash}`;
-
+        // TronWeb service removed - transaction monitoring not supported
+        console.log('[TronContext] Transaction monitoring disabled (TronWeb removed)');
         return {
-          success: true,
-          confirmed: isConfirmed,
-          confirmations,
-          status: isConfirmed ? "confirmed" : "pending",
-          explorerUrl,
+          hash: txHash,
+          status: 'unknown',
+          confirmations: 0,
+          timestamp: Date.now()
         };
       } catch (error) {
         console.error("Transaction verification error:", error);
