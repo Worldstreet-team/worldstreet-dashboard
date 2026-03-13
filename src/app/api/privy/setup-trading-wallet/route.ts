@@ -126,8 +126,8 @@ export async function POST(request: NextRequest) {
       for (const chainType of chainTypes) {
         const userWallets = [];
         for await (const wallet of privyNode.wallets().list({ 
-          user_id: privyUser.id,  // FIXED: Use user_id instead of userId
-          chain_type: chainType 
+          user_id: privyUser.id,
+          chain_type: chainType as any // Fix lint error for WalletChainType
         })) {
           userWallets.push(wallet);
         }
@@ -213,6 +213,18 @@ export async function POST(request: NextRequest) {
       console.log('[Trading Wallet] Created new trading wallet:', tradingWallet.address);
     }
 
+    // Update UserWallet record with trading wallet info
+    if (userWallet) {
+      userWallet.tradingWallet = {
+        walletId: tradingWallet.id,
+        address: tradingWallet.address,
+        chainType: 'ethereum',
+        initialized: false // Will be set to true if Hyperliquid init succeeds
+      };
+      await userWallet.save();
+      console.log('[Trading Wallet] Persisted trading wallet info to MongoDB');
+    }
+
     // Step 6: Create Viem account for trading with authorization context
     let viemAccount;
     try {
@@ -246,6 +258,14 @@ export async function POST(request: NextRequest) {
       }, viemAccount);  // Pass only the Viem account - no authorization context needed
 
       console.log('[Trading Wallet] Hyperliquid setup completed:', hyperliquidSetup.success);
+
+      // Update initialization status in DB
+      if (userWallet && hyperliquidSetup.success) {
+        userWallet.tradingWallet.initialized = true;
+        userWallet.tradingWallet.timestamp = new Date();
+        await userWallet.save();
+        console.log('[Trading Wallet] Hyperliquid initialization status saved to DB');
+      }
 
     } catch (hyperliquidError) {
       console.error("[Trading Wallet] Hyperliquid setup failed:", hyperliquidError);

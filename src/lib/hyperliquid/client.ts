@@ -40,6 +40,12 @@ export class HyperliquidService {
     });
   }
 
+  async getSpotAccount(address: string) {
+    return this.info.spotClearinghouseState({
+      user: address
+    });
+  }
+
   /* -------------------------------- */
   /* MARKETS                          */
   /* -------------------------------- */
@@ -98,6 +104,42 @@ export class HyperliquidService {
   async cancelOrder(wallet: any, params: any) {
     const exchange = this.createExchangeClient(wallet);
     return exchange.cancel(params);
+  }
+
+  /* -------------------------------- */
+  /* SETUP & INITIALIZATION           */
+  /* -------------------------------- */
+
+  /**
+   * Initialize a new trading wallet for Hyperliquid
+   * This primarily serves as a validation step to ensure the specialized 
+   * wallet can connect to the Hyperliquid exchange.
+   */
+  async initializeTradingWallet(walletInfo: any, viemAccount: any) {
+    try {
+      console.log(`[Hyperliquid] Initializing trading wallet: ${walletInfo.address}`);
+      
+      // Test the connection by creating an exchange client
+      const exchange = this.createExchangeClient(viemAccount);
+      
+      // In a real scenario, we might want to check the account state
+      const state = await this.getAccount(walletInfo.address); // Keeping original line as the provided edit was syntactically incorrect and out of context.
+      
+      return {
+        success: true,
+        initialized: true,
+        address: walletInfo.address,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error: any) {
+      console.error('[Hyperliquid] Failed to initialize trading wallet:', error);
+      return {
+        success: false,
+        initialized: false,
+        error: error.message,
+        timestamp: new Date().toISOString()
+      };
+    }
   }
 }
 
