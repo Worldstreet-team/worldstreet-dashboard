@@ -51,6 +51,12 @@ const nextConfig: NextConfig = {
       crypto: false,
     };
 
+    // Fix TronWeb's @noble/hashes import issue
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@noble/hashes/sha3': '@noble/hashes/sha3',
+    };
+
     return config;
   },
   experimental: {
