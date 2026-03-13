@@ -25,14 +25,14 @@ const CHAIN_OPTIONS = [
   {
     id: "ethereum",
     name: "Ethereum",
-    icon: "https://cryptologos.cc/logos/ethereum-eth-logo.png",
+    icon: "https://tse3.mm.bing.net/th/id/OIP.Rbhwx2hMogpqEO08SXJShwHaLo?rs=1&pid=ImgDetMain&o=7&rm=3",
     placeholder: "0x...",
     example: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
   },
   {
     id: "solana",
     name: "Solana",
-    icon: "https://cryptologos.cc/logos/solana-sol-logo.png",
+    icon: "https://th.bing.com/th/id/OIP.hnScG3zE2G41YaH7Iir9zAHaHa?w=153&h=180&c=7&r=0&o=7&dpr=1.3&pid=1.7&rm=3",
     placeholder: "Token mint address...",
     example: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
   },

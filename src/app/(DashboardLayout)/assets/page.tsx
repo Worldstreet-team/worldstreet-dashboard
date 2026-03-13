@@ -1,15 +1,17 @@
 "use client";
 
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { useSolana } from "@/app/context/solanaContext";
 import { useEvm } from "@/app/context/evmContext";
-import { useBitcoin } from "@/app/context/bitcoinContext";
+import { useSui } from "@/app/context/suiContext";
+import { useTon } from "@/app/context/tonContext";
 import { useTron } from "@/app/context/tronContext";
 import { useWallet } from "@/app/context/walletContext";
 import { formatAmount, formatUSD } from "@/lib/wallet/amounts";
 import { usePrices, getPrice } from "@/lib/wallet/usePrices";
 import Footer from "@/components/dashboard/Footer";
-import { ReceiveModal, SendModal, AddTokenModal, GenerateTronModal } from "@/components/wallet";
+import { ReceiveModal, SendModal, AddTokenModal } from "@/components/wallet";
+import { useUser } from "@clerk/nextjs";
 
 // Asset type definition
 interface Asset {
@@ -20,55 +22,51 @@ interface Asset {
   balanceRaw: string;
   decimals: number;
   usdValue: number;
-  chain: "solana" | "ethereum" | "bitcoin" | "tron";
+  chain: "solana" | "ethereum" | "sui" | "ton" | "tron";
   address?: string; // Token address for SPL/ERC20/TRC20
   icon: string;
   isCustom?: boolean;
   customTokenId?: string;
 }
 
-// Chain icons
+// Chain icons - accurate URLs
 const CHAIN_ICONS: Record<string, string> = {
-  solana: "https://cryptologos.cc/logos/solana-sol-logo.png",
-  ethereum: "https://cryptologos.cc/logos/ethereum-eth-logo.png",
-  bitcoin: "https://cryptologos.cc/logos/bitcoin-btc-logo.png",
-  tron: "https://logowik.com/content/uploads/images/tron-trx-icon3386.logowik.com.webp",
-  USDT: "https://cryptologos.cc/logos/tether-usdt-logo.png",
-  USDC: "https://cryptologos.cc/logos/usd-coin-usdc-logo.png",
+  solana: "https://th.bing.com/th/id/OIP.hnScG3zE2G41YaH7Iir9zAHaHa?w=153&h=180&c=7&r=0&o=7&dpr=1.3&pid=1.7&rm=3",
+  ethereum: "https://tse3.mm.bing.net/th/id/OIP.Rbhwx2hMogpqEO08SXJShwHaLo?rs=1&pid=ImgDetMain&o=7&rm=3",
+  sui: "https://tse4.mm.bing.net/th/id/OIP.DWTtTAPHJKclsuxvovZejgHaHa?rs=1&pid=ImgDetMain&o=7&rm=3",
+  ton: "https://tse1.mm.bing.net/th/id/OIP.i349pQ2gXTFBH_xGCrBHmgHaHa?rs=1&pid=ImgDetMain&o=7&rm=3",
+  tron: "https://tse1.mm.bing.net/th/id/OIP.jSQvLp4TC3q6vIDrO1GhkwHaFj?rs=1&pid=ImgDetMain&o=7&rm=3",
+  USDT: "https://tse3.mm.bing.net/th/id/OIP.JvFO5DAdev4wAmpKOqg-ugAAAA?rs=1&pid=ImgDetMain&o=7&rm=3",
+  USDC: "https://th.bing.com/th/id/R.c76b33ca42c5730ab77f3341ce9764a7?rik=C%2bj2cYEsyGdFKA&pid=ImgRaw&r=0",
+  SOL: "https://th.bing.com/th/id/OIP.hnScG3zE2G41YaH7Iir9zAHaHa?w=153&h=180&c=7&r=0&o=7&dpr=1.3&pid=1.7&rm=3",
+  ETH: "https://tse3.mm.bing.net/th/id/OIP.Rbhwx2hMogpqEO08SXJShwHaLo?rs=1&pid=ImgDetMain&o=7&rm=3",
+  SUI: "https://tse4.mm.bing.net/th/id/OIP.DWTtTAPHJKclsuxvovZejgHaHa?rs=1&pid=ImgDetMain&o=7&rm=3",
+  TON: "https://tse1.mm.bing.net/th/id/OIP.i349pQ2gXTFBH_xGCrBHmgHaHa?rs=1&pid=ImgDetMain&o=7&rm=3",
+  TRX: "https://tse1.mm.bing.net/th/id/OIP.jSQvLp4TC3q6vIDrO1GhkwHaFj?rs=1&pid=ImgDetMain&o=7&rm=3",
 };
 
 const AssetsPage = () => {
-  const { addresses, walletsGenerated, getEncryptedKeys, fetchWalletStatus } = useWallet();
+  const { addresses, walletsGenerated, fetchWallets } = useWallet();
   const { balance: solBalance, tokenBalances: solTokens, loading: solLoading, fetchBalance: fetchSolBalance, refreshCustomTokens: refreshSolCustom } = useSolana();
   const { balance: ethBalance, tokenBalances: ethTokens, loading: ethLoading, fetchBalance: fetchEthBalance, refreshCustomTokens: refreshEthCustom } = useEvm();
-  const { balance: btcBalance, loading: btcLoading, fetchBalance: fetchBtcBalance } = useBitcoin();
+  const { balance: suiBalance, loading: suiLoading, fetchBalance: fetchSuiBalance } = useSui();
+  const { balance: tonBalance, loading: tonLoading, fetchBalance: fetchTonBalance } = useTon();
   const { balance: trxBalance, tokenBalances: trxTokens, loading: trxLoading, fetchBalance: fetchTrxBalance, refreshCustomTokens: refreshTrxCustom } = useTron();
   const { prices } = usePrices();
 
   const [receiveModal, setReceiveModal] = useState<{ open: boolean; chain?: string; address?: string }>({ open: false });
   const [sendModal, setSendModal] = useState<{ open: boolean; asset?: Asset }>({ open: false });
   const [addTokenModal, setAddTokenModal] = useState(false);
-  const [generateTronModal, setGenerateTronModal] = useState(false);
   const [removingTokenId, setRemovingTokenId] = useState<string | null>(null);
 
-    const handleRefresh = useCallback(() => {
+  const {user} = useUser()
+  const handleRefresh = useCallback(() => {
     if (addresses?.solana) fetchSolBalance(addresses.solana);
     if (addresses?.ethereum) fetchEthBalance(addresses.ethereum);
-    if (addresses?.bitcoin) fetchBtcBalance(addresses.bitcoin);
+    if (addresses?.sui) fetchSuiBalance(addresses.sui);
+    if (addresses?.ton) fetchTonBalance(addresses.ton);
     if (addresses?.tron) fetchTrxBalance(addresses.tron);
-  }, [addresses, fetchSolBalance, fetchEthBalance, fetchBtcBalance, fetchTrxBalance]);
-
-  // Handle Tron wallet generation success
-  const handleTronGenerated = useCallback(async (address: string) => {
-    // Refresh wallet status to get new Tron address
-    await fetchWalletStatus();
-    // Fetch Tron balance
-    if (address) {
-      fetchTrxBalance(address);
-    }
-    // Refresh all balances to ensure everything is up to date
-    handleRefresh();
-  }, [fetchWalletStatus, fetchTrxBalance, handleRefresh]);
+  }, [addresses, fetchSolBalance, fetchEthBalance, fetchSuiBalance, fetchTonBalance, fetchTrxBalance]);
 
   // Handle token added - refresh custom tokens lists
   const handleTokenAdded = useCallback(async () => {
@@ -96,6 +94,28 @@ const AssetsPage = () => {
     }
   }, [handleTokenAdded]);
 
+  // Track loading state per asset
+  const getAssetLoadingState = useCallback((chain: string, address?: string) => {
+    switch (chain) {
+      case "solana":
+        return solLoading;
+      case "ethereum":
+        return ethLoading;
+      case "sui":
+        return suiLoading;
+      case "ton":
+        return tonLoading;
+      case "tron":
+        return trxLoading;
+      default:
+        return false;
+    }
+  }, [solLoading, ethLoading, suiLoading, tonLoading, trxLoading]);
+
+
+  useEffect(() => {
+    if (user) console.log("USERID: ", user?.id)
+  }, [user])
   // Combine all assets into unified list
   const assets = useMemo<Asset[]>(() => {
     const list: Asset[] = [];
@@ -111,7 +131,7 @@ const AssetsPage = () => {
         decimals: 9,
         usdValue: solBalance * getPrice(prices, "SOL"),
         chain: "solana",
-        icon: CHAIN_ICONS.solana,
+        icon: CHAIN_ICONS.SOL,
       });
     }
 
@@ -144,7 +164,7 @@ const AssetsPage = () => {
         decimals: 18,
         usdValue: ethBalance * getPrice(prices, "ETH"),
         chain: "ethereum",
-        icon: CHAIN_ICONS.ethereum,
+        icon: CHAIN_ICONS.ETH,
       });
     }
 
@@ -166,18 +186,33 @@ const AssetsPage = () => {
       });
     });
 
-    // Bitcoin native
-    if (addresses?.bitcoin) {
+    // Sui native
+    if (addresses?.sui) {
       list.push({
-        id: "btc-native",
-        symbol: "BTC",
-        name: "Bitcoin",
-        balance: btcBalance,
-        balanceRaw: Math.floor(btcBalance * 1e8).toString(),
-        decimals: 8,
-        usdValue: btcBalance * getPrice(prices, "BTC"),
-        chain: "bitcoin",
-        icon: CHAIN_ICONS.bitcoin,
+        id: "sui-native",
+        symbol: "SUI",
+        name: "Sui",
+        balance: suiBalance,
+        balanceRaw: Math.floor(suiBalance * 1e9).toString(),
+        decimals: 9,
+        usdValue: suiBalance * getPrice(prices, "SUI"),
+        chain: "sui",
+        icon: CHAIN_ICONS.SUI,
+      });
+    }
+
+    // TON native
+    if (addresses?.ton) {
+      list.push({
+        id: "ton-native",
+        symbol: "TON",
+        name: "Toncoin",
+        balance: tonBalance,
+        balanceRaw: Math.floor(tonBalance * 1e9).toString(),
+        decimals: 9,
+        usdValue: tonBalance * getPrice(prices, "TON"),
+        chain: "ton",
+        icon: CHAIN_ICONS.TON,
       });
     }
 
@@ -192,7 +227,7 @@ const AssetsPage = () => {
         decimals: 6,
         usdValue: trxBalance * getPrice(prices, "TRX"),
         chain: "tron",
-        icon: CHAIN_ICONS.tron,
+        icon: CHAIN_ICONS.TRX,
       });
     }
 
@@ -215,16 +250,12 @@ const AssetsPage = () => {
     });
 
     return list;
-  }, [addresses, solBalance, solTokens, ethBalance, ethTokens, btcBalance, trxBalance, trxTokens, prices]);
+  }, [addresses, solBalance, solTokens, ethBalance, ethTokens, suiBalance, tonBalance, trxBalance, trxTokens, prices]);
 
   // Total portfolio value
   const totalValue = useMemo(() => {
     return assets.reduce((sum, asset) => sum + asset.usdValue, 0);
   }, [assets]);
-
-  const isLoading = solLoading || ethLoading || btcLoading || trxLoading;
-
-
 
   const getChainAddress = (chain: string) => {
     switch (chain) {
@@ -232,8 +263,10 @@ const AssetsPage = () => {
         return addresses?.solana || "";
       case "ethereum":
         return addresses?.ethereum || "";
-      case "bitcoin":
-        return addresses?.bitcoin || "";
+      case "sui":
+        return addresses?.sui || "";
+      case "ton":
+        return addresses?.ton || "";
       case "tron":
         return addresses?.tron || "";
       default:
@@ -270,11 +303,10 @@ const AssetsPage = () => {
               </div>
               <button
                 onClick={handleRefresh}
-                disabled={isLoading}
-                className="p-2 rounded-lg bg-muted/30 dark:bg-white/5 hover:bg-muted/40 dark:hover:bg-white/10 transition-colors disabled:opacity-50"
+                className="p-2 rounded-lg bg-muted/30 dark:bg-white/5 hover:bg-muted/40 dark:hover:bg-white/10 transition-colors"
               >
                 <svg
-                  className={`w-5 h-5 text-muted ${isLoading ? "animate-spin" : ""}`}
+                  className="w-5 h-5 text-muted"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -321,7 +353,7 @@ const AssetsPage = () => {
         <div className="col-span-12">
           <div className="bg-white dark:bg-black border border-border/50 dark:border-darkborder rounded-2xl p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-dark dark:text-white mb-4">Wallet Addresses</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
               {/* Solana Address */}
               {addresses?.solana && (
                 <div
@@ -356,16 +388,33 @@ const AssetsPage = () => {
                 </div>
               )}
 
-              {/* Bitcoin Address */}
-              {addresses?.bitcoin && (
+              {/* Sui Address */}
+              {addresses?.sui && (
                 <div
-                  onClick={() => setReceiveModal({ open: true, chain: "bitcoin", address: addresses.bitcoin })}
+                  onClick={() => setReceiveModal({ open: true, chain: "sui", address: addresses.sui })}
                   className="flex items-center gap-3 p-3 bg-muted/30 dark:bg-white/5 rounded-xl cursor-pointer hover:bg-muted/40 dark:hover:bg-white/10 transition-colors"
                 >
-                  <img src={CHAIN_ICONS.bitcoin} alt="BTC" className="w-8 h-8 rounded-full" />
+                  <img src={CHAIN_ICONS.sui} alt="SUI" className="w-8 h-8 rounded-full" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-dark dark:text-white">Bitcoin</p>
-                    <p className="text-xs text-muted truncate">{addresses.bitcoin}</p>
+                    <p className="text-sm font-medium text-dark dark:text-white">Sui</p>
+                    <p className="text-xs text-muted truncate">{addresses.sui}</p>
+                  </div>
+                  <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                </div>
+              )}
+
+              {/* TON Address */}
+              {addresses?.ton && (
+                <div
+                  onClick={() => setReceiveModal({ open: true, chain: "ton", address: addresses.ton })}
+                  className="flex items-center gap-3 p-3 bg-muted/30 dark:bg-white/5 rounded-xl cursor-pointer hover:bg-muted/40 dark:hover:bg-white/10 transition-colors"
+                >
+                  <img src={CHAIN_ICONS.ton} alt="TON" className="w-8 h-8 rounded-full" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-dark dark:text-white">TON</p>
+                    <p className="text-xs text-muted truncate">{addresses.ton}</p>
                   </div>
                   <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -374,7 +423,7 @@ const AssetsPage = () => {
               )}
 
               {/* Tron Address */}
-              {addresses?.tron ? (
+              {addresses?.tron && (
                 <div
                   onClick={() => setReceiveModal({ open: true, chain: "tron", address: addresses.tron })}
                   className="flex items-center gap-3 p-3 bg-muted/30 dark:bg-white/5 rounded-xl cursor-pointer hover:bg-muted/40 dark:hover:bg-white/10 transition-colors"
@@ -386,24 +435,6 @@ const AssetsPage = () => {
                   </div>
                   <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
-                </div>
-              ) : (
-                <div
-                  onClick={() => setGenerateTronModal(true)}
-                  className="flex items-center gap-3 p-3 bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-950/30 dark:to-orange-950/30 border-2 border-dashed border-red-200 dark:border-red-800 rounded-xl cursor-pointer hover:border-red-300 dark:hover:border-red-700 transition-colors group"
-                >
-                  <div className="w-8 h-8 rounded-full bg-red-100 dark:bg-red-900/50 flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <svg className="w-4 h-4 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-red-700 dark:text-red-300">Generate Tron Wallet</p>
-                    <p className="text-xs text-red-600 dark:text-red-400">Click to create TRX wallet</p>
-                  </div>
-                  <svg className="w-4 h-4 text-red-500 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </div>
               )}
@@ -427,82 +458,89 @@ const AssetsPage = () => {
               </button>
             </div>
 
-            {isLoading && assets.length === 0 ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-              </div>
-            ) : assets.length === 0 ? (
+            {assets.length === 0 && !isLoading ? (
               <div className="text-center py-12">
                 <p className="text-muted">No assets found</p>
               </div>
             ) : (
               <div className="space-y-2">
-                {assets.map((asset) => (
-                  <div
-                    key={asset.id}
-                    className="flex items-center justify-between p-4 bg-muted/30 dark:bg-white/5 rounded-xl hover:bg-muted/40 dark:hover:bg-white/10 transition-colors group"
-                  >
+                {assets.map((asset) => {
+                  const assetLoading = getAssetLoadingState(asset.chain, asset.address);
+                  
+                  return (
                     <div
-                      className="flex items-center gap-3 flex-1 cursor-pointer"
-                      onClick={() => setSendModal({ open: true, asset })}
+                      key={asset.id}
+                      className="flex items-center justify-between p-4 bg-muted/30 dark:bg-white/5 rounded-xl hover:bg-muted/40 dark:hover:bg-white/10 transition-colors group"
                     >
-                      <div className="relative">
-                        <img
-                          src={asset.icon}
-                          alt={asset.symbol}
-                          className="w-10 h-10 rounded-full"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = CHAIN_ICONS[asset.chain];
-                          }}
-                        />
-                        {/* Chain badge */}
-                        <img
-                          src={CHAIN_ICONS[asset.chain]}
-                          alt={asset.chain}
-                          className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white dark:border-black"
-                        />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium text-dark dark:text-white">{asset.symbol}</p>
-                          {asset.isCustom && (
-                            <span className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary rounded">Custom</span>
-                          )}
-                        </div>
-                        <p className="text-sm text-muted">{asset.name}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
                       <div
-                        className="text-right cursor-pointer"
-                        onClick={() => setSendModal({ open: true, asset })}
+                        className="flex items-center gap-3 flex-1 cursor-pointer"
+                        onClick={() => !assetLoading && setSendModal({ open: true, asset })}
                       >
-                        <p className="font-medium text-dark dark:text-white">{formatAmount(asset.balance)}</p>
-                        <p className="text-sm text-muted">{formatUSD(asset.usdValue)}</p>
+                        <div className="relative">
+                          <img
+                            src={asset.icon}
+                            alt={asset.symbol}
+                            className="w-10 h-10 rounded-full"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = CHAIN_ICONS[asset.chain];
+                            }}
+                          />
+                          {/* Chain badge */}
+                          <img
+                            src={CHAIN_ICONS[asset.chain]}
+                            alt={asset.chain}
+                            className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white dark:border-black"
+                          />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-dark dark:text-white">{asset.symbol}</p>
+                            {asset.isCustom && (
+                              <span className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary rounded">Custom</span>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted">{asset.name}</p>
+                        </div>
                       </div>
-                      {/* Remove button for custom tokens */}
-                      {asset.isCustom && asset.customTokenId && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRemoveToken(asset.customTokenId!);
-                          }}
-                          disabled={removingTokenId === asset.customTokenId}
-                          className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all disabled:opacity-50"
-                          title="Remove token"
-                        >
-                          {removingTokenId === asset.customTokenId ? (
-                            <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
-                          ) : (
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          )}
-                        </button>
-                      )}
+                      <div className="flex items-center gap-3">
+                        {assetLoading ? (
+                          <div className="flex items-center gap-2 px-3">
+                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary/20 border-t-primary"></div>
+                            <span className="text-xs text-muted">Loading...</span>
+                          </div>
+                        ) : (
+                          <div
+                            className="text-right cursor-pointer"
+                            onClick={() => setSendModal({ open: true, asset })}
+                          >
+                            <p className="font-medium text-dark dark:text-white">{formatAmount(asset.balance)}</p>
+                            <p className="text-sm text-muted">{formatUSD(asset.usdValue)}</p>
+                          </div>
+                        )}
+                        {/* Remove button for custom tokens */}
+                        {asset.isCustom && asset.customTokenId && !assetLoading && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveToken(asset.customTokenId!);
+                            }}
+                            disabled={removingTokenId === asset.customTokenId}
+                            className="p-2 text-red-500 hover:bg-red-500/10 rounded-lg opacity-0 group-hover:opacity-100 transition-all disabled:opacity-50"
+                            title="Remove token"
+                          >
+                            {removingTokenId === asset.customTokenId ? (
+                              <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            )}
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -538,13 +576,6 @@ const AssetsPage = () => {
         isOpen={addTokenModal}
         onClose={() => setAddTokenModal(false)}
         onTokenAdded={handleTokenAdded}
-      />
-
-      {/* Generate Tron Modal */}
-      <GenerateTronModal
-        isOpen={generateTronModal}
-        onClose={() => setGenerateTronModal(false)}
-        onSuccess={handleTronGenerated}
       />
     </>
   );

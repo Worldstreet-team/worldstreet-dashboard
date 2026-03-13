@@ -8,6 +8,7 @@ import React, {
   useCallback,
   ReactNode,
 } from "react";
+import { useWallet } from "./walletContext";
 
 /* ----------------------------- TYPES ----------------------------- */
 
@@ -41,18 +42,13 @@ interface TronContextType {
   customTokens: CustomToken[];
   loading: boolean;
   lastTx: string | null;
-  setAddress: (address: string | null) => void;
   fetchBalance: (address?: string) => Promise<void>;
   refreshCustomTokens: () => Promise<void>;
   sendTransaction: (
-    encryptedKey: string,
-    pin: string,
     recipient: string,
     amount: number
   ) => Promise<string>;
   sendTokenTransaction: (
-    encryptedKey: string,
-    pin: string,
     recipient: string,
     amount: number,
     tokenAddress: string,
@@ -115,12 +111,16 @@ const TRC20_ABI = [
 /* ----------------------------- PROVIDER ----------------------------- */
 
 export function TronProvider({ children }: { children: ReactNode }) {
-  const [address, setAddress] = useState<string | null>(null);
+  const { addresses } = useWallet();
+  const address = addresses?.tron || null;
+  
   const [balance, setBalance] = useState(0);
   const [tokenBalances, setTokenBalances] = useState<TokenBalance[]>([]);
   const [customTokens, setCustomTokens] = useState<CustomToken[]>([]);
   const [loading, setLoading] = useState(false);
   const [lastTx, setLastTx] = useState<string | null>(null);
+
+  console.log('[TronContext] Address from walletContext:', address);
 
   /* ----------------------------- INIT ----------------------------- */
 
@@ -250,41 +250,50 @@ export function TronProvider({ children }: { children: ReactNode }) {
 
   const sendTransaction = useCallback(
     async (
-      encryptedKey: string,
-      pin: string,
       recipient: string,
       amount: number
     ): Promise<string> => {
       setLoading(true);
       try {
-        // Call backend API to sign and send transaction
-        const response = await fetch("/api/tron/send", {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
+        // Use Privy API to send TRX
+        const response = await fetch('/api/privy/wallet/tron/send', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
           body: JSON.stringify({
-            pin,
-            recipient,
-            amount,
-          }),
+            to: recipient,
+            amount: amount.toString()
+          })
         });
 
-        const data = await response.json();
-        console.log("Response find: ", response)
-        if (!response.ok || !data.success) {
-          console.log("DAta errors: ", data)
-          throw new Error(data.message || "Transaction failed");
+        // Check if response is JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          const text = await response.text();
+          console.error('Non-JSON response:', text);
+          throw new Error('Server error - please check your authentication');
         }
 
-        const txId = data.txHash;
-        setLastTx(txId);
+        const data = await response.json();
 
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || 'Transaction failed');
+        }
+
+        const txId = data.txid;
+        setLastTx(txId);
+        
         // Refresh balance after transaction
         if (address) {
           await fetchBalance(address);
         }
-
+        
         return txId;
+      } catch (error) {
+        console.error('Tron send transaction error:', error);
+        throw error;
       } finally {
         setLoading(false);
       }
@@ -296,8 +305,6 @@ export function TronProvider({ children }: { children: ReactNode }) {
 
   const sendTokenTransaction = useCallback(
     async (
-      encryptedKey: string,
-      pin: string,
       recipient: string,
       amount: number,
       tokenAddress: string,
@@ -305,33 +312,20 @@ export function TronProvider({ children }: { children: ReactNode }) {
     ): Promise<string> => {
       setLoading(true);
       try {
-        // Call backend API to sign and send token transaction
-        const response = await fetch("/api/tron/send", {
-          method: "POST",
-          credentials: "include", // IMPORTANT
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            pin,
-            recipient,
-            amount,
-          }),
-        });
-
-        const data = await response.json();
-
-        if (!response.ok || !data.success) {
-          throw new Error(data.message || "Token transfer failed");
-        }
-
-        const txId = data.txHash;
-        setLastTx(txId);
-
-        // Refresh balance after transaction
-        if (address) {
-          await fetchBalance(address);
-        }
-
-        return txId;
+        // TODO: Implement TRC20 token transfer via Privy API
+        // For now, this would need a custom endpoint that handles TRC20 tokens
+        throw new Error('TRC20 token transfers via Privy not yet implemented. Use native TRX transfers for now.');
+        
+        // Future implementation would call something like:
+        // const response = await fetch('/api/privy/wallet/tron/send-token', {
+        //   method: 'POST',
+        //   credentials: 'include',
+        //   headers: { 'Content-Type': 'application/json' },
+        //   body: JSON.stringify({ to: recipient, amount: amount.toString(), tokenAddress, decimals })
+        // });
+      } catch (error) {
+        console.error('Tron token send error:', error);
+        throw error;
       } finally {
         setLoading(false);
       }
@@ -407,7 +401,6 @@ export function TronProvider({ children }: { children: ReactNode }) {
         customTokens,
         loading,
         lastTx,
-        setAddress,
         fetchBalance,
         refreshCustomTokens,
         sendTransaction,

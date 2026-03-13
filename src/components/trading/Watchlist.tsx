@@ -12,6 +12,9 @@ const CRYPTO_ICONS: Record<string, string> = {
   BTC: "cryptocurrency-color:btc",
   ETH: "cryptocurrency-color:eth",
   SOL: "cryptocurrency-color:sol",
+  SUI: "token-branded:sui",
+  TON: "cryptocurrency-color:ton",
+  TRX: "cryptocurrency-color:trx",
   XRP: "cryptocurrency-color:xrp",
   ADA: "cryptocurrency-color:ada",
   DOGE: "cryptocurrency-color:doge",
@@ -25,16 +28,15 @@ const CRYPTO_ICONS: Record<string, string> = {
   ATOM: "cryptocurrency-color:atom",
   NEAR: "cryptocurrency-color:near",
   APT: "simple-icons:aptos",
-  SUI: "token-branded:sui",
   USDT: "cryptocurrency-color:usdt",
   USDC: "cryptocurrency-color:usdc",
 };
 
-// Initial watchlist symbols
-const INITIAL_WATCHLIST = ["BTC", "ETH", "SOL", "XRP", "DOGE", "LINK", "ADA"];
+// Initial watchlist symbols - main native tokens for supported chains
+const INITIAL_WATCHLIST = ["SOL", "ETH", "SUI", "TON", "TRX", "USDT", "USDC"];
 
-// Coins that cannot be charted (stablecoins)
-const EXCLUDED = new Set(["USDT", "USDC"]);
+// Coins that cannot be charted (none - we want to show all coins including stablecoins)
+const EXCLUDED = new Set<string>();
 
 interface WatchlistProps {
   selectedSymbol?: string;
@@ -44,7 +46,7 @@ interface WatchlistProps {
 const Watchlist = ({ selectedSymbol, onSelectPair }: WatchlistProps) => {
   const { coins, loading } = usePrices();
   const [watchlistSymbols, setWatchlistSymbols] = useState<string[]>(INITIAL_WATCHLIST);
-  const [starred, setStarred] = useState<string[]>(["BTC", "ETH", "SOL"]);
+  const [starred, setStarred] = useState<string[]>(["SOL", "ETH", "SUI"]);
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [addSearch, setAddSearch] = useState("");
   const addMenuRef = useRef<HTMLDivElement>(null);

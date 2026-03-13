@@ -39,7 +39,7 @@ export const FuturesWalletBalance: React.FC = () => {
         <div className="flex items-center justify-between p-3 bg-[#2b3139] rounded">
           <div className="flex items-center gap-2">
             <img 
-              src="https://cryptologos.cc/logos/usd-coin-usdc-logo.png" 
+              src="https://th.bing.com/th/id/R.c76b33ca42c5730ab77f3341ce9764a7?rik=C%2bj2cYEsyGdFKA&pid=ImgRaw&r=0" 
               alt="USDC" 
               className="w-5 h-5 rounded-full"
             />

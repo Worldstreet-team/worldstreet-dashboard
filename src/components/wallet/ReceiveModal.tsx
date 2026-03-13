@@ -14,22 +14,22 @@ const CHAIN_INFO: Record<string, { name: string; color: string; icon: string }> 
   solana: {
     name: "Solana",
     color: "#14F195",
-    icon: "https://cryptologos.cc/logos/solana-sol-logo.png",
+    icon: "https://th.bing.com/th/id/OIP.hnScG3zE2G41YaH7Iir9zAHaHa?w=153&h=180&c=7&r=0&o=7&dpr=1.3&pid=1.7&rm=3",
   },
   ethereum: {
     name: "Ethereum",
     color: "#627EEA",
-    icon: "https://cryptologos.cc/logos/ethereum-eth-logo.png",
+    icon: "https://tse3.mm.bing.net/th/id/OIP.Rbhwx2hMogpqEO08SXJShwHaLo?rs=1&pid=ImgDetMain&o=7&rm=3",
   },
   bitcoin: {
     name: "Bitcoin",
     color: "#F7931A",
-    icon: "https://cryptologos.cc/logos/bitcoin-btc-logo.png",
+    icon: "https://th.bing.com/th/id/OIP.ycETPYXmeQfKBhBNLoTwQQHaJz?w=126&h=180&c=7&r=0&o=7&dpr=1.3&pid=1.7&rm=3",
   },
   tron: {
     name: "Tron",
     color: "#FF0013",
-    icon: "https://cryptologos.cc/logos/tron-trx-logo.png",
+    icon: "https://tse1.mm.bing.net/th/id/OIP.jSQvLp4TC3q6vIDrO1GhkwHaFj?rs=1&pid=ImgDetMain&o=7&rm=3",
   },
 };
 

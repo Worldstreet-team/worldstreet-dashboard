@@ -526,7 +526,7 @@ export default function TronBridgeInterface() {
                 
                 <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-black rounded-xl">
                   <img 
-                    src="https://cryptologos.cc/logos/tether-usdt-logo.png"
+                    src="https://tse3.mm.bing.net/th/id/OIP.JvFO5DAdev4wAmpKOqg-ugAAAA?rs=1&pid=ImgDetMain&o=7&rm=3"
                     alt="USDT" 
                     className="w-6 h-6 rounded-full" 
                   />
@@ -577,7 +577,7 @@ export default function TronBridgeInterface() {
                 
                 <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-black rounded-xl">
                   <img 
-                    src="https://cryptologos.cc/logos/tether-usdt-logo.png"
+                    src="https://tse3.mm.bing.net/th/id/OIP.JvFO5DAdev4wAmpKOqg-ugAAAA?rs=1&pid=ImgDetMain&o=7&rm=3"
                     alt="USDT" 
                     className="w-6 h-6 rounded-full" 
                   />
@@ -590,7 +590,7 @@ export default function TronBridgeInterface() {
                 <span className="text-xs text-muted">Network:</span>
                 <div className="flex items-center gap-1.5">
                   <img 
-                    src="https://cryptologos.cc/logos/ethereum-eth-logo.png" 
+                    src="https://tse3.mm.bing.net/th/id/OIP.Rbhwx2hMogpqEO08SXJShwHaLo?rs=1&pid=ImgDetMain&o=7&rm=3" 
                     alt="Ethereum" 
                     className="w-4 h-4" 
                   />

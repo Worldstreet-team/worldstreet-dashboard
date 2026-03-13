@@ -15,6 +15,7 @@ import { convertRawToDisplay, convertDisplayToRaw } from "@/lib/wallet/amounts";
 import { decryptWithPIN } from "@/lib/wallet/encryption";
 import { ETHEREUM_TOKENS, TokenInfo } from "@/lib/wallet/tokenLists";
 import { batchFetchTokenBalances, isMulticallAvailable } from "@/lib/evm/multicall";
+import { useWallet } from "./walletContext";
 
 // ERC20 ABI (minimal)
 const ERC20_ABI = [
@@ -55,18 +56,13 @@ interface EvmContextType {
   customTokens: CustomToken[];
   loading: boolean;
   lastTx: string | null;
-  setAddress: (address: string | null) => void;
   fetchBalance: (address?: string) => Promise<void>;
   refreshCustomTokens: () => Promise<void>;
   sendTransaction: (
-    encryptedKey: string,
-    pin: string,
     recipient: string,
     amount: number
   ) => Promise<string>;
   sendTokenTransaction: (
-    encryptedKey: string,
-    pin: string,
     recipient: string,
     amount: number,
     tokenAddress: string,
@@ -76,10 +72,8 @@ interface EvmContextType {
 
 const EvmContext = createContext<EvmContextType | undefined>(undefined);
 
-// Use Cloudflare's free public RPC as default (no API key needed)
-const ETH_RPC =
-  process.env.NEXT_PUBLIC_ETH_RPC ||
-  "https://cloudflare-eth.com";
+// Use Alchemy's Ethereum mainnet RPC (hardcoded)
+const ETH_RPC = "https://eth-mainnet.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITN";
 
 // Singleton provider instance - created once and reused
 let providerInstance: ethers.JsonRpcProvider | null = null;
@@ -93,12 +87,16 @@ function getProvider(): ethers.JsonRpcProvider {
 }
 
 export function EvmProvider({ children }: { children: ReactNode }) {
-  const [address, setAddress] = useState<string | null>(null);
+  const { addresses } = useWallet();
+  const address = addresses?.ethereum || null;
+  
   const [balance, setBalance] = useState(0);
   const [tokenBalances, setTokenBalances] = useState<TokenBalance[]>([]);
   const [customTokens, setCustomTokens] = useState<CustomToken[]>([]);
   const [loading, setLoading] = useState(false);
   const [lastTx, setLastTx] = useState<string | null>(null);
+
+  console.log('[EvmContext] Address from walletContext:', address);
 
   // Use singleton provider
   const provider = useMemo(() => getProvider(), []);
@@ -133,14 +131,20 @@ export function EvmProvider({ children }: { children: ReactNode }) {
   const fetchBalance = useCallback(
     async (addr?: string) => {
       const targetAddr = addr || address;
-      if (!targetAddr || isFetchingRef.current) return;
+      if (!targetAddr || isFetchingRef.current) {
+        console.log('[EvmContext] Skipping fetch - no address or already fetching');
+        return;
+      }
 
+      console.log('[EvmContext] Fetching balance for:', targetAddr);
       isFetchingRef.current = true;
+      setLoading(true);
 
       try {
         // 1. Fetch native ETH balance
         const balanceWei = await provider.getBalance(targetAddr);
         const balanceEth = convertRawToDisplay(balanceWei, 18);
+        console.log('[EvmContext] ETH Balance:', balanceEth);
         setBalance(parseFloat(balanceEth));
 
         // 2. Combine pre-loaded tokens with custom tokens
@@ -177,6 +181,8 @@ export function EvmProvider({ children }: { children: ReactNode }) {
         // 4. Check if Multicall3 is available
         const multicallAvailable = await isMulticallAvailable(provider);
 
+        let results: TokenBalance[] = [];
+
         if (multicallAvailable) {
           // Use Multicall3 for batched balance fetching (single RPC call)
           console.log(`[EvmContext] Fetching ${priorityTokens.length} token balances via Multicall3`);
@@ -189,7 +195,6 @@ export function EvmProvider({ children }: { children: ReactNode }) {
           const balances = await batchFetchTokenBalances(provider, calls);
 
           // Process results
-          const results: TokenBalance[] = [];
           balances.forEach((balance, index) => {
             const token = priorityTokens[index];
             
@@ -221,8 +226,6 @@ export function EvmProvider({ children }: { children: ReactNode }) {
         } else {
           // Fallback: individual calls (less efficient but works without Multicall3)
           console.log(`[EvmContext] Multicall3 not available, using individual calls`);
-          
-          const results: TokenBalance[] = [];
           
           for (const token of priorityTokens) {
             try {
@@ -259,10 +262,13 @@ export function EvmProvider({ children }: { children: ReactNode }) {
 
           setTokenBalances(results);
         }
+        
+        console.log('[EvmContext] Token balances:', results.length);
       } catch (error) {
         console.error("[EvmContext] fetchBalance error:", error);
       } finally {
         isFetchingRef.current = false;
+        setLoading(false);
       }
     },
     [address, provider, customTokens]
@@ -296,6 +302,7 @@ export function EvmProvider({ children }: { children: ReactNode }) {
     provider.on("block", handleNewBlock);
 
     // Initial fetch
+    console.log('[EvmContext] Initial balance fetch');
     fetchBalance(address);
 
     // Cleanup
@@ -308,38 +315,59 @@ export function EvmProvider({ children }: { children: ReactNode }) {
 
   const sendTransaction = useCallback(
     async (
-      encryptedKey: string,
-      pin: string,
       recipient: string,
       amount: number
     ): Promise<string> => {
       setLoading(true);
       try {
-        // Decrypt the private key with PIN
-        const privateKey = decryptWithPIN(encryptedKey, pin);
-        const wallet = new ethers.Wallet(privateKey, provider);
-        const fromAddress = wallet.address;
-
-        const tx = await wallet.sendTransaction({
-          to: recipient,
-          value: ethers.parseEther(amount.toString()),
+        // Use Privy API to send ETH
+        const response = await fetch('/api/privy/wallet/ethereum/send', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            to: recipient,
+            amount: amount.toString()
+          })
         });
 
-        setLastTx(tx.hash);
-        await tx.wait();
-        await fetchBalance(fromAddress);
-        return tx.hash;
+        // Check if response is JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          const text = await response.text();
+          console.error('Non-JSON response:', text);
+          throw new Error('Server error - please check your authentication');
+        }
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || 'Transaction failed');
+        }
+
+        const txHash = data.transactionHash;
+        setLastTx(txHash);
+        
+        // Refresh balance after transaction
+        if (address) {
+          await fetchBalance(address);
+        }
+        
+        return txHash;
+      } catch (error) {
+        console.error('Ethereum send transaction error:', error);
+        throw error;
       } finally {
         setLoading(false);
       }
     },
-    [provider, fetchBalance]
+    [address, fetchBalance]
   );
 
   const sendTokenTransaction = useCallback(
     async (
-      encryptedKey: string,
-      pin: string,
       recipient: string,
       amount: number,
       tokenAddress: string,
@@ -347,24 +375,25 @@ export function EvmProvider({ children }: { children: ReactNode }) {
     ): Promise<string> => {
       setLoading(true);
       try {
-        const privateKey = decryptWithPIN(encryptedKey, pin);
-        const wallet = new ethers.Wallet(privateKey, provider);
-        const fromAddress = wallet.address;
-
-        const contract = new ethers.Contract(tokenAddress, ERC20_ABI, wallet);
-        const rawAmount = BigInt(convertDisplayToRaw(amount, decimals));
-
-        const tx = await contract.transfer(recipient, rawAmount);
-
-        setLastTx(tx.hash);
-        await tx.wait();
-        await fetchBalance(fromAddress);
-        return tx.hash;
+        // TODO: Implement ERC20 token transfer via Privy API
+        // For now, this would need a custom endpoint that handles ERC20 tokens
+        throw new Error('ERC20 token transfers via Privy not yet implemented. Use native ETH transfers for now.');
+        
+        // Future implementation would call something like:
+        // const response = await fetch('/api/privy/wallet/ethereum/send-token', {
+        //   method: 'POST',
+        //   credentials: 'include',
+        //   headers: { 'Content-Type': 'application/json' },
+        //   body: JSON.stringify({ to: recipient, amount: amount.toString(), tokenAddress, decimals })
+        // });
+      } catch (error) {
+        console.error('Ethereum token send error:', error);
+        throw error;
       } finally {
         setLoading(false);
       }
     },
-    [provider, fetchBalance]
+    [address, fetchBalance]
   );
 
   return (
@@ -376,7 +405,6 @@ export function EvmProvider({ children }: { children: ReactNode }) {
         customTokens,
         loading,
         lastTx,
-        setAddress,
         fetchBalance,
         refreshCustomTokens,
         sendTransaction,

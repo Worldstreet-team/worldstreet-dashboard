@@ -3,8 +3,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useSolana } from "@/app/context/solanaContext";
 import { useEvm } from "@/app/context/evmContext";
-import { useBitcoin } from "@/app/context/bitcoinContext";
 import { useTron } from "@/app/context/tronContext";
+import { useSui } from "@/app/context/suiContext";
 import { useWallet } from "@/app/context/walletContext";
 import { formatAmount, formatUSD } from "@/lib/wallet/amounts";
 import { usePrices, getPrice } from "@/lib/wallet/usePrices";
@@ -17,7 +17,7 @@ interface Asset {
   balanceRaw: string;
   decimals: number;
   usdValue: number;
-  chain: "solana" | "ethereum" | "bitcoin" | "tron";
+  chain: "solana" | "ethereum" | "sui" | "ton" | "tron";
   address?: string;
   icon: string;
 }
@@ -28,31 +28,28 @@ interface SendModalProps {
   asset?: Asset;
 }
 
-type Step = "details" | "confirm" | "pin" | "sending" | "success" | "error";
+type Step = "details" | "confirm" | "sending" | "success" | "error";
 
 const CHAIN_ICONS: Record<string, string> = {
-  solana: "https://cryptologos.cc/logos/solana-sol-logo.png",
-  ethereum: "https://cryptologos.cc/logos/ethereum-eth-logo.png",
-  bitcoin: "https://cryptologos.cc/logos/bitcoin-btc-logo.png",
-  tron: "https://cryptologos.cc/logos/tron-trx-logo.png",
+  solana: "https://th.bing.com/th/id/OIP.hnScG3zE2G41YaH7Iir9zAHaHa?w=153&h=180&c=7&r=0&o=7&dpr=1.3&pid=1.7&rm=3",
+  ethereum: "https://tse3.mm.bing.net/th/id/OIP.Rbhwx2hMogpqEO08SXJShwHaLo?rs=1&pid=ImgDetMain&o=7&rm=3",
+  sui: "https://tse4.mm.bing.net/th/id/OIP.DWTtTAPHJKclsuxvovZejgHaHa?rs=1&pid=ImgDetMain&o=7&rm=3",
+  ton: "https://tse1.mm.bing.net/th/id/OIP.i349pQ2gXTFBH_xGCrBHmgHaHa?rs=1&pid=ImgDetMain&o=7&rm=3",
+  tron: "https://tse1.mm.bing.net/th/id/OIP.jSQvLp4TC3q6vIDrO1GhkwHaFj?rs=1&pid=ImgDetMain&o=7&rm=3",
 };
 
 const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
   const [step, setStep] = useState<Step>("details");
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
-  const [pin, setPin] = useState(["", "", "", "", "", ""]);
   const [error, setError] = useState("");
   const [txHash, setTxHash] = useState("");
 
-  const pinInputRefs = useRef<(HTMLInputElement | null)[]>([]);
-
   const { prices } = usePrices();
-  const { getEncryptedKeys } = useWallet();
   const { sendTransaction: sendSol, sendTokenTransaction: sendSolToken } = useSolana();
   const { sendTransaction: sendEth, sendTokenTransaction: sendEthToken } = useEvm();
-  const { sendTransaction: sendBtc } = useBitcoin();
   const { sendTransaction: sendTrx, sendTokenTransaction: sendTrxToken } = useTron();
+  const { sendTransaction: sendSui } = useSui();
 
   // Reset state when modal opens/closes
   useEffect(() => {
@@ -60,56 +57,15 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
       setStep("details");
       setRecipient("");
       setAmount("");
-      setPin(["", "", "", "", "", ""]);
       setError("");
       setTxHash("");
     }
   }, [isOpen]);
 
-  // Focus first PIN input when entering PIN step
-  useEffect(() => {
-    if (step === "pin") {
-      setTimeout(() => pinInputRefs.current[0]?.focus(), 100);
-    }
-  }, [step]);
-
-  const handlePinChange = (index: number, value: string) => {
-    if (!/^\d*$/.test(value)) return;
-
-    const newPin = [...pin];
-    newPin[index] = value.slice(-1);
-    setPin(newPin);
-
-    // Auto-advance to next input
-    if (value && index < 5) {
-      pinInputRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const handlePinKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === "Backspace" && !pin[index] && index > 0) {
-      pinInputRefs.current[index - 1]?.focus();
-    }
-  };
-
-  const handlePaste = (e: React.ClipboardEvent) => {
-    e.preventDefault();
-    const pastedData = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
-    const newPin = [...pin];
-    for (let i = 0; i < pastedData.length; i++) {
-      newPin[i] = pastedData[i];
-    }
-    setPin(newPin);
-    if (pastedData.length === 6) {
-      pinInputRefs.current[5]?.focus();
-    }
-  };
-
   const amountNum = parseFloat(amount) || 0;
   const usdValue = amountNum * getPrice(prices, asset?.symbol || "");
   const isValidAmount = amountNum > 0 && amountNum <= (asset?.balance || 0);
   const isValidRecipient = recipient.length > 0;
-  const pinComplete = pin.every((d) => d !== "");
 
   const handleContinue = () => {
     setError("");
@@ -124,67 +80,106 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
       }
       setStep("confirm");
     } else if (step === "confirm") {
-      setStep("pin");
+      handleSend();
     }
   };
 
+  // Sanitize error messages for better user experience
+  const sanitizeError = (error: string): string => {
+    // Insufficient balance errors
+    if (error.includes("Balance of gas object") && error.includes("is lower than the needed amount")) {
+      return "Insufficient balance for transaction fees. Please ensure you have enough SUI to cover gas costs.";
+    }
+    
+    if (error.includes("insufficient funds") || error.includes("Insufficient balance")) {
+      return "Insufficient balance to complete this transaction.";
+    }
+
+    // Network/RPC errors
+    if (error.includes("Network request failed") || error.includes("fetch")) {
+      return "Network error. Please check your connection and try again.";
+    }
+
+    // Invalid address errors
+    if (error.includes("invalid address") || error.includes("Invalid address")) {
+      return "Invalid recipient address. Please check the address and try again.";
+    }
+
+    // Gas/fee related errors
+    if (error.includes("gas") && (error.includes("too low") || error.includes("insufficient"))) {
+      return "Transaction fee too low. Please try again with a higher fee.";
+    }
+
+    // Transaction timeout
+    if (error.includes("timeout") || error.includes("timed out")) {
+      return "Transaction timed out. Please try again.";
+    }
+
+    // User rejection
+    if (error.includes("rejected") || error.includes("denied")) {
+      return "Transaction was rejected. Please try again.";
+    }
+
+    // Generic blockchain errors
+    if (error.includes("Error checking transaction input objects")) {
+      return "Transaction validation failed. Please check your balance and try again.";
+    }
+
+    // Return original error if no match found, but clean it up
+    return error.replace(/^Error:\s*/, "").trim();
+  };
+
   const handleSend = async () => {
-    if (!pinComplete || !asset) return;
+    if (!asset) return;
 
     setStep("sending");
     setError("");
 
-    const pinString = pin.join("");
-
     try {
-      // Get encrypted keys (PIN is verified server-side)
-      const encryptedKeys = await getEncryptedKeys(pinString);
-      if (!encryptedKeys) {
-        throw new Error("Invalid PIN or failed to get wallet keys");
-      }
-
       let hash = "";
 
       if (asset.chain === "solana") {
-        const encryptedKey = encryptedKeys.solana.encryptedPrivateKey;
         if (asset.address) {
-          // SPL token
-          hash = await sendSolToken(encryptedKey, pinString, recipient, amountNum, asset.address, asset.decimals);
+          // SPL token - not yet supported via Privy
+          throw new Error("SPL token transfers not yet supported. Use native SOL for now.");
         } else {
           // Native SOL
-          hash = await sendSol(encryptedKey, pinString, recipient, amountNum);
+          hash = await sendSol(recipient, amountNum);
         }
       } else if (asset.chain === "ethereum") {
-        const encryptedKey = encryptedKeys.ethereum.encryptedPrivateKey;
         if (asset.address) {
-          // ERC20 token
-          hash = await sendEthToken(encryptedKey, pinString, recipient, amountNum, asset.address, asset.decimals);
+          // ERC20 token - not yet supported via Privy
+          throw new Error("ERC20 token transfers not yet supported. Use native ETH for now.");
         } else {
           // Native ETH
-          hash = await sendEth(encryptedKey, pinString, recipient, amountNum);
+          hash = await sendEth(recipient, amountNum);
         }
-      } else if (asset.chain === "bitcoin") {
-        const encryptedKey = encryptedKeys.bitcoin.encryptedPrivateKey;
-        hash = await sendBtc(encryptedKey, pinString, recipient, amountNum);
       } else if (asset.chain === "tron") {
-        if (!encryptedKeys.tron) {
-          throw new Error("Tron wallet not found");
-        }
-        const encryptedKey = encryptedKeys.tron.encryptedPrivateKey;
         if (asset.address) {
-          // TRC20 token
-          hash = await sendTrxToken(encryptedKey, pinString, recipient, amountNum, asset.address, asset.decimals);
+          // TRC20 token - not yet supported via Privy
+          throw new Error("TRC20 token transfers not yet supported. Use native TRX for now.");
         } else {
           // Native TRX
-          hash = await sendTrx(encryptedKey, pinString, recipient, amountNum);
+          hash = await sendTrx(recipient, amountNum);
         }
+      } else if (asset.chain === "sui") {
+        if (asset.address) {
+          // SUI token - not yet supported via Privy
+          throw new Error("SUI token transfers not yet supported. Use native SUI for now.");
+        } else {
+          // Native SUI
+          hash = await sendSui(recipient, amountNum);
+        }
+      } else if (asset.chain === "ton") {
+        throw new Error(`${asset.chain.toUpperCase()} transfers not yet supported`);
       }
 
       setTxHash(hash);
       setStep("success");
     } catch (err: unknown) {
       console.error("Send error:", err);
-      setError(err instanceof Error ? err.message : "Transaction failed");
+      const errorMessage = err instanceof Error ? err.message : "Transaction failed";
+      setError(sanitizeError(errorMessage));
       setStep("error");
     }
   };
@@ -194,9 +189,9 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
       // Leave a small buffer for gas on native tokens
       if (!asset.address) {
         const buffer = 
-          asset.chain === "bitcoin" ? 0.0001 : 
           asset.chain === "ethereum" ? 0.001 : 
           asset.chain === "tron" ? 1 : // Leave 1 TRX for fees
+          asset.chain === "sui" ? 0.02 : // Leave 0.02 SUI for fees (more conservative)
           0.01;
         setAmount(Math.max(0, asset.balance - buffer).toString());
       } else {
@@ -212,8 +207,10 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
         return `https://solscan.io/tx/${txHash}`;
       case "ethereum":
         return `https://etherscan.io/tx/${txHash}`;
-      case "bitcoin":
-        return `https://blockstream.info/tx/${txHash}`;
+      case "sui":
+        return `https://suiscan.xyz/mainnet/tx/${txHash}`;
+      case "ton":
+        return `https://tonscan.org/tx/${txHash}`;
       case "tron":
         return `https://tronscan.org/#/transaction/${txHash}`;
       default:
@@ -241,7 +238,6 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
               <p className="text-sm text-muted">
                 {step === "details" && "Enter recipient and amount"}
                 {step === "confirm" && "Review transaction"}
-                {step === "pin" && "Enter PIN to confirm"}
                 {step === "sending" && "Processing..."}
                 {step === "success" && "Transaction sent!"}
                 {step === "error" && "Transaction failed"}
@@ -364,58 +360,7 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
                   onClick={handleContinue}
                   className="flex-1 py-3 px-4 bg-primary hover:bg-primary/90 text-white font-medium rounded-xl transition-colors"
                 >
-                  Confirm
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* PIN Step */}
-          {step === "pin" && (
-            <div className="space-y-6">
-              <p className="text-center text-muted">
-                Enter your 6-digit PIN to authorize this transaction
-              </p>
-
-              {/* PIN Input */}
-              <div className="flex justify-center gap-3" onPaste={handlePaste}>
-                {pin.map((digit, index) => (
-                  <input
-                    key={index}
-                    ref={(el) => { pinInputRefs.current[index] = el; }}
-                    type="password"
-                    inputMode="numeric"
-                    maxLength={1}
-                    value={digit}
-                    onChange={(e) => handlePinChange(index, e.target.value)}
-                    onKeyDown={(e) => handlePinKeyDown(index, e)}
-                    className="w-12 h-14 text-center text-xl font-bold bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-darkborder rounded-xl text-dark dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
-                  />
-                ))}
-              </div>
-
-              {error && (
-                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                  <p className="text-sm text-red-400 text-center">{error}</p>
-                </div>
-              )}
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setPin(["", "", "", "", "", ""]);
-                    setStep("confirm");
-                  }}
-                  className="flex-1 py-3 px-4 bg-muted/30 dark:bg-white/5 hover:bg-muted/40 dark:hover:bg-white/10 text-dark dark:text-white font-medium rounded-xl transition-colors"
-                >
-                  Back
-                </button>
-                <button
-                  onClick={handleSend}
-                  disabled={!pinComplete}
-                  className="flex-1 py-3 px-4 bg-primary hover:bg-primary/90 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium rounded-xl transition-colors"
-                >
-                  Send
+                  Send Now
                 </button>
               </div>
             </div>
@@ -481,10 +426,7 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
 
               <div className="flex gap-3">
                 <button
-                  onClick={() => {
-                    setPin(["", "", "", "", "", ""]);
-                    setStep("pin");
-                  }}
+                  onClick={() => setStep("details")}
                   className="flex-1 py-3 px-4 bg-muted/30 dark:bg-white/5 hover:bg-muted/40 dark:hover:bg-white/10 text-dark dark:text-white font-medium rounded-xl transition-colors"
                 >
                   Try Again

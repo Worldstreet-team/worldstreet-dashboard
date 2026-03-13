@@ -8,7 +8,8 @@ import { useAuth } from "@/app/context/authContext";
 import { useWallet } from "@/app/context/walletContext";
 import { useSolana } from "@/app/context/solanaContext";
 import { useEvm } from "@/app/context/evmContext";
-import { useBitcoin } from "@/app/context/bitcoinContext";
+import { useSui } from "@/app/context/suiContext";
+import { useTon } from "@/app/context/tonContext";
 import { useTron } from "@/app/context/tronContext";
 import { usePrices, getPrice, calculateDailyPnL } from "@/lib/wallet/usePrices";
 import { formatUSD } from "@/lib/wallet/amounts";
@@ -19,7 +20,8 @@ const PortfolioStats = () => {
   const { walletsGenerated, addresses } = useWallet();
   const { balance: solBalance, tokenBalances: solTokens } = useSolana();
   const { balance: ethBalance, tokenBalances: ethTokens } = useEvm();
-  const { balance: btcBalance } = useBitcoin();
+  const { balance: suiBalance } = useSui();
+  const { balance: tonBalance } = useTon();
   const { balance: trxBalance, tokenBalances: trxTokens } = useTron();
   const { prices, coins, loading: pricesLoading } = usePrices();
 
@@ -103,7 +105,8 @@ const PortfolioStats = () => {
     // Native coins
     total += solBalance * getPrice(prices, "SOL");
     total += ethBalance * getPrice(prices, "ETH");
-    total += btcBalance * getPrice(prices, "BTC");
+    total += suiBalance * getPrice(prices, "SUI");
+    total += tonBalance * getPrice(prices, "TON");
     total += trxBalance * getPrice(prices, "TRX");
     
     // Solana tokens
@@ -122,7 +125,7 @@ const PortfolioStats = () => {
     });
     
     return total;
-  }, [walletsGenerated, solBalance, ethBalance, btcBalance, trxBalance, solTokens, ethTokens, trxTokens, prices]);
+  }, [walletsGenerated, solBalance, ethBalance, suiBalance, tonBalance, trxBalance, solTokens, ethTokens, trxTokens, prices]);
 
   // Calculate holdings map for P&L
   const holdings = useMemo(() => {
@@ -133,7 +136,8 @@ const PortfolioStats = () => {
     // Native coins
     h["SOL"] = solBalance;
     h["ETH"] = ethBalance;
-    h["BTC"] = btcBalance;
+    h["SUI"] = suiBalance;
+    h["TON"] = tonBalance;
     h["TRX"] = trxBalance;
     
     // Solana tokens
@@ -152,7 +156,7 @@ const PortfolioStats = () => {
     });
     
     return h;
-  }, [walletsGenerated, solBalance, ethBalance, btcBalance, trxBalance, solTokens, ethTokens, trxTokens]);
+  }, [walletsGenerated, solBalance, ethBalance, suiBalance, tonBalance, trxBalance, solTokens, ethTokens, trxTokens]);
 
   // Calculate 24h P&L
   const dailyPnL = useMemo(() => {
@@ -203,8 +207,8 @@ const PortfolioStats = () => {
     },
     {
       label: "Networks",
-      value: walletsGenerated ? (addresses?.tron ? "4" : "3") : "0",
-      change: walletsGenerated ? (addresses?.tron ? "SOL, ETH, BTC, TRX" : "SOL, ETH, BTC") : "Set up wallet",
+      value: walletsGenerated ? "5" : "0",
+      change: walletsGenerated ? "SOL, ETH, SUI, TON, TRX" : "Set up wallet",
       changePercent: "",
       isPositive: true,
       icon: "solar:safe-circle-bold-duotone",
@@ -268,8 +272,8 @@ const PortfolioStats = () => {
                 </select>
                 <img
                   src={selectedNetwork === 'solana'
-                    ? "https://cryptologos.cc/logos/solana-sol-logo.png"
-                    : "https://cryptologos.cc/logos/ethereum-eth-logo.png"}
+                    ? "https://th.bing.com/th/id/OIP.hnScG3zE2G41YaH7Iir9zAHaHa?w=153&h=180&c=7&r=0&o=7&dpr=1.3&pid=1.7&rm=3"
+                    : "https://tse3.mm.bing.net/th/id/OIP.Rbhwx2hMogpqEO08SXJShwHaLo?rs=1&pid=ImgDetMain&o=7&rm=3"}
                   alt=""
                   className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full pointer-events-none"
                 />

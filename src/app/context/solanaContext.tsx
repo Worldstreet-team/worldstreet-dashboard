@@ -26,6 +26,7 @@ import {
 import { convertRawToDisplay, convertDisplayToRaw } from "@/lib/wallet/amounts";
 import { decryptWithPIN } from "@/lib/wallet/encryption";
 import { SOLANA_TOKENS, getTokenByAddress } from "@/lib/wallet/tokenLists";
+import { useWallet } from "./walletContext";
 
 // Custom token from user's saved list
 interface CustomToken {
@@ -53,25 +54,19 @@ export interface TokenBalance {
 }
 
 interface SolanaContextType {
-  address: string | null;
   balance: number;
   tokenBalances: TokenBalance[];
   customTokens: CustomToken[];
   loading: boolean;
   lastTx: string | null;
-  setAddress: (address: string | null) => void;
   fetchBalance: (address?: string) => Promise<void>;
   refreshCustomTokens: () => Promise<void>;
   getUsdtBalance: () => number;
   sendTransaction: (
-    encryptedKey: string,
-    pin: string,
     recipient: string,
     amount: number
   ) => Promise<string>;
   sendTokenTransaction: (
-    encryptedKey: string,
-    pin: string,
     recipient: string,
     amount: number,
     mint: string,
@@ -81,12 +76,10 @@ interface SolanaContextType {
 
 const SolanaContext = createContext<SolanaContextType | undefined>(undefined);
 
-const SOL_RPC =
-  process.env.NEXT_PUBLIC_SOL_RPC ||
-  "https://solana-mainnet.g.alchemy.com/v2/m15B-STIDlwShr712rmVB";
+const SOL_RPC = "https://solana-mainnet.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITN";
 
-export function SolanaProvider({ children }: { children: ReactNode }) {
-  const [address, setAddress] = useState<string | null>(null);
+export function SolanaProvider({ children }: { children: ReactNode}) {
+  const { addresses } = useWallet();
   const [balance, setBalance] = useState(0);
   const [tokenBalances, setTokenBalances] = useState<TokenBalance[]>([]);
   const [customTokens, setCustomTokens] = useState<CustomToken[]>([]);
@@ -94,6 +87,9 @@ export function SolanaProvider({ children }: { children: ReactNode }) {
   const [lastTx, setLastTx] = useState<string | null>(null);
 
   const connection = useMemo(() => new Connection(SOL_RPC), []);
+  
+  // Get address directly from wallet context
+  const address = addresses?.solana || null;
 
   // Fetch user's custom tokens from API
   const refreshCustomTokens = useCallback(async () => {
@@ -115,14 +111,22 @@ export function SolanaProvider({ children }: { children: ReactNode }) {
   const fetchBalance = useCallback(
     async (addr?: string) => {
       const targetAddr = addr || address;
-      if (!targetAddr) return;
+      if (!targetAddr) {
+        console.log('[SolanaContext] No address to fetch balance for');
+        return;
+      }
+
+      console.log('[SolanaContext] Fetching balance for:', targetAddr);
+      setLoading(true);
 
       try {
         const pubKey = new PublicKey(targetAddr);
 
         // 1. Fetch SOL Balance
         const lamports = await connection.getBalance(pubKey);
-        setBalance(parseFloat(convertRawToDisplay(lamports, 9)));
+        const solBalance = parseFloat(convertRawToDisplay(lamports, 9));
+        console.log('[SolanaContext] SOL Balance:', solBalance);
+        setBalance(solBalance);
 
         // 2. Fetch SPL Token Balances
         const processedTokens: TokenBalance[] = [];
@@ -225,9 +229,12 @@ export function SolanaProvider({ children }: { children: ReactNode }) {
           }
         });
 
+        console.log('[SolanaContext] Token balances:', processedTokens.length);
         setTokenBalances(processedTokens);
       } catch (error) {
         console.error("Solana fetchBalance error:", error);
+      } finally {
+        setLoading(false);
       }
     },
     [address, connection, customTokens]
@@ -240,60 +247,70 @@ export function SolanaProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (address) {
+      console.log('[SolanaContext] Address set, fetching balance:', address);
       fetchBalance(address);
       const interval = setInterval(() => fetchBalance(address), 40000);
       return () => clearInterval(interval);
+    } else {
+      console.log('[SolanaContext] No address set yet');
     }
   }, [address, fetchBalance]);
 
   const sendTransaction = useCallback(
     async (
-      encryptedKey: string,
-      pin: string,
       recipient: string,
       amount: number
     ): Promise<string> => {
       setLoading(true);
       try {
-        // Decrypt the private key with PIN (stored as Base64)
-        const privateKeyBase64 = decryptWithPIN(encryptedKey, pin);
-        const secretKey = new Uint8Array(Buffer.from(privateKeyBase64, "base64"));
-        const keypair = Keypair.fromSecretKey(secretKey);
-        const fromAddress = keypair.publicKey.toBase58();
-
-        const transaction = new Transaction().add(
-          SystemProgram.transfer({
-            fromPubkey: keypair.publicKey,
-            toPubkey: new PublicKey(recipient),
-            lamports: BigInt(convertDisplayToRaw(amount, 9)),
+        // Use Privy API to send SOL
+        const response = await fetch('/api/privy/wallet/solana/send', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            to: recipient,
+            amount: amount.toString()
           })
-        );
+        });
 
-        const { blockhash, lastValidBlockHeight } =
-          await connection.getLatestBlockhash();
-        transaction.recentBlockhash = blockhash;
-        transaction.feePayer = keypair.publicKey;
-        transaction.sign(keypair);
+        // Check if response is JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          const text = await response.text();
+          console.error('Non-JSON response:', text);
+          throw new Error('Server error - please check your authentication');
+        }
 
-        const signature = await connection.sendRawTransaction(
-          transaction.serialize(),
-          { maxRetries: 5, skipPreflight: false }
-        );
+        const data = await response.json();
 
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || 'Transaction failed');
+        }
+
+        const signature = data.signature;
         setLastTx(signature);
-        await fetchBalance(fromAddress);
+        
+        // Refresh balance after transaction
+        if (address) {
+          await fetchBalance(address);
+        }
+        
         return signature;
+      } catch (error) {
+        console.error('Solana send transaction error:', error);
+        throw error;
       } finally {
         setLoading(false);
       }
     },
-    [connection, fetchBalance]
+    [address, fetchBalance]
   );
 
   const sendTokenTransaction = useCallback(
     async (
-      encryptedKey: string,
-      pin: string,
       recipient: string,
       amount: number,
       mint: string,
@@ -301,66 +318,25 @@ export function SolanaProvider({ children }: { children: ReactNode }) {
     ): Promise<string> => {
       setLoading(true);
       try {
-        // Decrypt the private key with PIN (stored as Base64)
-        const privateKeyBase64 = decryptWithPIN(encryptedKey, pin);
-        const secretKey = new Uint8Array(Buffer.from(privateKeyBase64, "base64"));
-        const keypair = Keypair.fromSecretKey(secretKey);
-        const fromAddress = keypair.publicKey.toBase58();
-
-        const mintPubkey = new PublicKey(mint);
-        const recipientPubkey = new PublicKey(recipient);
-
-        const fromAta = await getAssociatedTokenAddress(
-          mintPubkey,
-          keypair.publicKey
-        );
-        const toAta = await getAssociatedTokenAddress(
-          mintPubkey,
-          recipientPubkey
-        );
-
-        const transaction = new Transaction();
-
-        // Check if recipient ATA exists
-        const toAtaInfo = await connection.getAccountInfo(toAta);
-        if (!toAtaInfo) {
-          transaction.add(
-            createAssociatedTokenAccountInstruction(
-              keypair.publicKey,
-              toAta,
-              recipientPubkey,
-              mintPubkey
-            )
-          );
-        }
-
-        transaction.add(
-          createTransferInstruction(
-            fromAta,
-            toAta,
-            keypair.publicKey,
-            BigInt(convertDisplayToRaw(amount, decimals))
-          )
-        );
-
-        const { blockhash } = await connection.getLatestBlockhash();
-        transaction.recentBlockhash = blockhash;
-        transaction.feePayer = keypair.publicKey;
-        transaction.sign(keypair);
-
-        const signature = await connection.sendRawTransaction(
-          transaction.serialize(),
-          { maxRetries: 5, skipPreflight: false }
-        );
-
-        setLastTx(signature);
-        await fetchBalance(fromAddress);
-        return signature;
+        // TODO: Implement SPL token transfer via Privy API
+        // For now, this would need a custom endpoint that handles SPL tokens
+        throw new Error('SPL token transfers via Privy not yet implemented. Use native SOL transfers for now.');
+        
+        // Future implementation would call something like:
+        // const response = await fetch('/api/privy/wallet/solana/send-token', {
+        //   method: 'POST',
+        //   credentials: 'include',
+        //   headers: { 'Content-Type': 'application/json' },
+        //   body: JSON.stringify({ to: recipient, amount: amount.toString(), mint, decimals })
+        // });
+      } catch (error) {
+        console.error('Solana token send error:', error);
+        throw error;
       } finally {
         setLoading(false);
       }
     },
-    [connection, fetchBalance]
+    [address, fetchBalance]
   );
 
   // Helper to get USDT balance from token balances
@@ -375,13 +351,11 @@ export function SolanaProvider({ children }: { children: ReactNode }) {
   return (
     <SolanaContext.Provider
       value={{
-        address,
         balance,
         tokenBalances,
         customTokens,
         loading,
         lastTx,
-        setAddress,
         fetchBalance,
         refreshCustomTokens,
         getUsdtBalance,

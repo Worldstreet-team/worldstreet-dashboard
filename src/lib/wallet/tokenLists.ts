@@ -843,8 +843,8 @@ export function getTokenLogo(symbol: string, chain: "ethereum" | "solana"): stri
   
   // Fallback to chain icon
   return chain === "ethereum"
-    ? "https://cryptologos.cc/logos/ethereum-eth-logo.png"
-    : "https://cryptologos.cc/logos/solana-sol-logo.png";
+    ? "https://tse3.mm.bing.net/th/id/OIP.Rbhwx2hMogpqEO08SXJShwHaLo?rs=1&pid=ImgDetMain&o=7&rm=3"
+    : "https://th.bing.com/th/id/OIP.hnScG3zE2G41YaH7Iir9zAHaHa?w=153&h=180&c=7&r=0&o=7&dpr=1.3&pid=1.7&rm=3";
 }
 
 /**

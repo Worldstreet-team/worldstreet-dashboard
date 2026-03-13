@@ -13,13 +13,14 @@ import { ProfileProvider } from "@/app/context/profileContext";
 import { WalletProvider } from "@/app/context/walletContext";
 import { SolanaProvider } from "@/app/context/solanaContext";
 import { EvmProvider } from "@/app/context/evmContext";
-import { BitcoinProvider } from "@/app/context/bitcoinContext";
+import { SuiProvider } from "@/app/context/suiContext";
+import { TonProvider } from "@/app/context/tonContext";
 import { TronProvider } from "@/app/context/tronContext";
 import { SwapProvider } from "@/app/context/swapContext";
 import { DriftProvider } from "@/app/context/driftContext";
 import { TransactionNotifications } from "@/components/drift/TransactionNotifications";
+import { WalletPregenerator } from "@/components/privy/WalletPregenerator";
 
-import { PinSetupModal, WalletAddressSync } from "@/components/wallet";
 import DashboardVividProvider from "@/components/dashboard/DashboardVividProvider";
 
 // Routes that render full-screen without sidebar/header chrome
@@ -78,14 +79,16 @@ export default function Layout({
               <WalletProvider>
                 <SolanaProvider>
                   <EvmProvider>
-                    <BitcoinProvider>
-                      <TronProvider>
-                        <SwapProvider>
-                          <DriftProvider>
+                    <SuiProvider>
+                      <TonProvider>
+                        <TronProvider>
+                          <SwapProvider>
+                            <DriftProvider>
 
-                            {/* Syncs wallet addresses to chain contexts */}
-                            <WalletAddressSync />
-                            <DashboardVividProvider>
+                              {/* Pregenerate Privy wallet on first login */}
+                              <WalletPregenerator />
+
+                              <DashboardVividProvider>
                             {isFullscreen ? (
                               // Fullscreen routes - completely independent, no wrapper padding
                               <div className="fixed inset-0 bg-[#181a20]">
@@ -128,9 +131,6 @@ export default function Layout({
                                 </div>
                               </div>
                             )}
-                        
-                            {/* Wallet PIN Setup Modal */}
-                            <PinSetupModal />
                             
                             {/* Transaction Notifications */}
                             <TransactionNotifications />
@@ -139,11 +139,12 @@ export default function Layout({
                         </DriftProvider>
                       </SwapProvider>
                     </TronProvider>
-                  </BitcoinProvider>
-                </EvmProvider>
-              </SolanaProvider>
-            </WalletProvider>
-            </AuthGate>
+                  </TonProvider>
+                </SuiProvider>
+              </EvmProvider>
+            </SolanaProvider>
+          </WalletProvider>
+          </AuthGate>
           </AuthProvider>
         </ProfileProvider>
       </ThemeProvider>

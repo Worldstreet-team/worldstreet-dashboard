@@ -29,18 +29,39 @@ export async function connectDB(): Promise<typeof mongoose> {
   }
 
   if (!cached.promise) {
-    cached.promise = mongoose.connect(MONGODB_URI, {
+    const options = {
       bufferCommands: false,
       dbName: "user-account",
-    });
+      // Connection timeout settings
+      serverSelectionTimeoutMS: 10000, // 10 seconds
+      socketTimeoutMS: 45000, // 45 seconds
+      connectTimeoutMS: 10000, // 10 seconds
+      // Retry settings
+      maxPoolSize: 10,
+      retryWrites: true,
+      retryReads: true,
+    };
+
+    cached.promise = mongoose.connect(MONGODB_URI, options);
   }
 
   try {
     cached.conn = await cached.promise;
-  } catch (e) {
+    console.log('[MongoDB] Connected successfully');
+    return cached.conn;
+  } catch (e: any) {
     cached.promise = null;
+    console.error('[MongoDB] Connection failed:', e.message);
+    
+    // Provide more specific error messages
+    if (e.message.includes('ECONNREFUSED') || e.message.includes('querySrv')) {
+      throw new Error('Unable to connect to MongoDB Atlas. Please check your network connection and MongoDB cluster status.');
+    } else if (e.message.includes('authentication failed')) {
+      throw new Error('MongoDB authentication failed. Please check your credentials.');
+    } else if (e.message.includes('timeout')) {
+      throw new Error('MongoDB connection timeout. Please try again later.');
+    }
+    
     throw e;
   }
-
-  return cached.conn;
 }

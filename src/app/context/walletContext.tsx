@@ -8,50 +8,44 @@ import React, {
   useEffect,
   ReactNode,
 } from "react";
-import { useProfile } from "./profileContext";
+import { useUser } from "@clerk/nextjs";
 
-// Wallet addresses only (no private keys in memory by default)
-export interface WalletAddresses {
-  solana: string;
+// Privy wallet addresses (5 chains)
+export interface PrivyWalletAddresses {
   ethereum: string;
-  bitcoin: string;
-  tron?: string; // Optional for backward compatibility
+  solana: string;
+  sui: string;
+  ton: string;
+  tron: string;
 }
 
-// Full wallet data with encrypted keys (only loaded when needed)
-export interface WalletWithKeys {
+// Full Privy wallet data with IDs
+export interface PrivyWallet {
+  walletId: string;
   address: string;
-  encryptedPrivateKey: string;
+  publicKey: string | null;
 }
 
-export interface WalletsWithKeys {
-  solana: WalletWithKeys;
-  ethereum: WalletWithKeys;
-  bitcoin: WalletWithKeys;
-  tron?: WalletWithKeys; // Optional for backward compatibility
+export interface PrivyWallets {
+  ethereum: PrivyWallet;
+  solana: PrivyWallet;
+  sui: PrivyWallet;
+  ton: PrivyWallet;
+  tron: PrivyWallet;
 }
 
 interface WalletContextType {
   // State
-  addresses: WalletAddresses | null;
+  wallets: PrivyWallets | null;
+  addresses: PrivyWalletAddresses | null;
+  privyUserId: string | null;
   walletsGenerated: boolean;
   isLoading: boolean;
   error: string | null;
-  showPinSetupModal: boolean;
-  showPinEntryModal: boolean;
   
   // Actions
-  fetchWalletStatus: () => Promise<void>;
-  openPinSetupModal: () => void;
-  closePinSetupModal: () => void;
-  openPinEntryModal: () => void;
-  closePinEntryModal: () => void;
-  
-  // Called after wallet setup completes
-  onWalletSetupComplete: (addresses: WalletAddresses) => void;
-  
-  // Get encrypted keys (requires PIN verification)
-  getEncryptedKeys: (pin: string) => Promise<WalletsWithKeys | null>;
+  fetchWallets: () => Promise<void>;
+  refreshWallets: () => Promise<void>;
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
@@ -61,144 +55,130 @@ interface WalletProviderProps {
 }
 
 export function WalletProvider({ children }: WalletProviderProps) {
-  const { profile, profileLoading } = useProfile();
+  const { user, isLoaded: clerkLoaded } = useUser();
   
-  const [addresses, setAddresses] = useState<WalletAddresses | null>(null);
+  const [wallets, setWallets] = useState<PrivyWallets | null>(null);
+  const [addresses, setAddresses] = useState<PrivyWalletAddresses | null>(null);
+  const [privyUserId, setPrivyUserId] = useState<string | null>(null);
   const [walletsGenerated, setWalletsGenerated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  // Modal states
-  const [showPinSetupModal, setShowPinSetupModal] = useState(false);
-  const [showPinEntryModal, setShowPinEntryModal] = useState(false);
 
-  // Fetch wallet status from the API
-  const fetchWalletStatus = useCallback(async () => {
+  // Fetch Privy wallets from the API
+  const fetchWallets = useCallback(async () => {
+    if (!user?.primaryEmailAddress?.emailAddress || !user?.id) {
+      setIsLoading(false);
+      return;
+    }
+
     try {
       setIsLoading(true);
       setError(null);
       
-      const response = await fetch("/api/wallet/setup", {
-        method: "GET",
-        credentials: "include",
-      });
+      const email = user.primaryEmailAddress.emailAddress;
+      const clerkUserId = user.id;
+      
+      const response = await fetch(
+        `/api/privy/get-wallet?email=${encodeURIComponent(email)}&clerkUserId=${encodeURIComponent(clerkUserId)}`
+      );
       
       if (!response.ok) {
-        if (response.status === 401) {
-          // Not authenticated, don't show error
-          setAddresses(null);
-          setWalletsGenerated(false);
-          return;
-        }
-        throw new Error("Failed to fetch wallet status");
+        throw new Error("Failed to fetch wallets");
       }
       
       const data = await response.json();
       
-      if (data.success) {
-        setWalletsGenerated(data.walletsGenerated);
-        if (data.wallets) {
-          // API returns { solana: { address: "..." }, ... }
-          // Extract the address strings
-          setAddresses({
-            solana: data.wallets.solana?.address || "",
-            ethereum: data.wallets.ethereum?.address || "",
-            bitcoin: data.wallets.bitcoin?.address || "",
-            tron: data.wallets.tron?.address || "",
-          });
-        }
+      if (data.success && data.wallets) {
+        setWallets(data.wallets);
+        setPrivyUserId(data.privyUserId);
+        
+        // Extract addresses
+        setAddresses({
+          ethereum: data.wallets.ethereum?.address || "",
+          solana: data.wallets.solana?.address || "",
+          sui: data.wallets.sui?.address || "",
+          ton: data.wallets.ton?.address || "",
+          tron: data.wallets.tron?.address || "",
+        });
+        
+        setWalletsGenerated(true);
       }
     } catch (err) {
-      console.error("Error fetching wallet status:", err);
-      setError(err instanceof Error ? err.message : "Failed to load wallet");
+      console.error("Error fetching Privy wallets:", err);
+      setError(err instanceof Error ? err.message : "Failed to load wallets");
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [user]);
 
-  // Fetch wallet status when profile is loaded
-  useEffect(() => {
-    if (!profileLoading && profile) {
-      fetchWalletStatus();
-    } else if (!profileLoading && !profile) {
-      setIsLoading(false);
+  // Force refresh wallets from Privy
+  const refreshWallets = useCallback(async () => {
+    if (!user?.primaryEmailAddress?.emailAddress || !user?.id) {
+      return;
     }
-  }, [profile, profileLoading, fetchWalletStatus]);
-  
-  // Auto-show PIN setup modal if wallets not generated
-  useEffect(() => {
-    if (!isLoading && !walletsGenerated && profile) {
-      // Small delay to let the UI settle
-      const timer = setTimeout(() => {
-        setShowPinSetupModal(true);
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [isLoading, walletsGenerated, profile]);
 
-  // Modal controls
-  const openPinSetupModal = useCallback(() => {
-    setShowPinSetupModal(true);
-  }, []);
-  
-  const closePinSetupModal = useCallback(() => {
-    setShowPinSetupModal(false);
-  }, []);
-  
-  const openPinEntryModal = useCallback(() => {
-    setShowPinEntryModal(true);
-  }, []);
-  
-  const closePinEntryModal = useCallback(() => {
-    setShowPinEntryModal(false);
-  }, []);
-
-  // Called after wallet setup completes successfully
-  const onWalletSetupComplete = useCallback((newAddresses: WalletAddresses) => {
-    setAddresses(newAddresses);
-    setWalletsGenerated(true);
-    setShowPinSetupModal(false);
-  }, []);
-
-  // Get encrypted keys for signing (requires PIN verification)
-  const getEncryptedKeys = useCallback(async (pin: string): Promise<WalletsWithKeys | null> => {
     try {
-      const response = await fetch("/api/wallet/keys", {
+      setIsLoading(true);
+      setError(null);
+      
+      const email = user.primaryEmailAddress.emailAddress;
+      const clerkUserId = user.id;
+      
+      const response = await fetch("/api/privy/refresh-wallet", {
         method: "POST",
-        credentials: "include",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ pin }),
+        body: JSON.stringify({ email, clerkUserId }),
       });
       
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || "Failed to retrieve keys");
+        throw new Error("Failed to refresh wallets");
       }
       
       const data = await response.json();
-      return data.wallets;
+      
+      if (data.success && data.wallets) {
+        setWallets(data.wallets);
+        setPrivyUserId(data.privyUserId);
+        
+        // Extract addresses
+        setAddresses({
+          ethereum: data.wallets.ethereum?.address || "",
+          solana: data.wallets.solana?.address || "",
+          sui: data.wallets.sui?.address || "",
+          ton: data.wallets.ton?.address || "",
+          tron: data.wallets.tron?.address || "",
+        });
+        
+        setWalletsGenerated(true);
+      }
     } catch (err) {
-      console.error("Error getting encrypted keys:", err);
-      throw err;
+      console.error("Error refreshing Privy wallets:", err);
+      setError(err instanceof Error ? err.message : "Failed to refresh wallets");
+    } finally {
+      setIsLoading(false);
     }
-  }, []);
+  }, [user]);
+
+  // Fetch wallets when user is loaded
+  useEffect(() => {
+    if (clerkLoaded && user) {
+      fetchWallets();
+    } else if (clerkLoaded && !user) {
+      setIsLoading(false);
+    }
+  }, [user, clerkLoaded, fetchWallets]);
 
   const value: WalletContextType = {
+    wallets,
     addresses,
+    privyUserId,
     walletsGenerated,
     isLoading,
     error,
-    showPinSetupModal,
-    showPinEntryModal,
-    fetchWalletStatus,
-    openPinSetupModal,
-    closePinSetupModal,
-    openPinEntryModal,
-    closePinEntryModal,
-    onWalletSetupComplete,
-    getEncryptedKeys,
+    fetchWallets,
+    refreshWallets,
   };
 
   return (
