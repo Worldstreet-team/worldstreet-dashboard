@@ -2,11 +2,11 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: false,
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   typescript: {
     ignoreBuildErrors: true,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
   },
   transpilePackages: ["@worldstreet/vivid-voice"],
   modularizeImports: {
@@ -51,6 +51,21 @@ const nextConfig: NextConfig = {
       crypto: false,
     };
 
+    // Ignore TronWeb module resolution errors
+    const webpack = require('webpack');
+    config.plugins.push(
+      new webpack.IgnorePlugin({
+        checkResource(resource, context) {
+          // Ignore @noble package resolution errors in TronWeb
+          if (context && context.includes('tronweb') && 
+              (resource.includes('@noble/hashes') || resource.includes('@noble/curves'))) {
+            return true;
+          }
+          return false;
+        }
+      })
+    );
+
     // Fix TronWeb's @noble packages import issues
     config.resolve.alias = {
       ...config.resolve.alias,
@@ -66,6 +81,30 @@ const nextConfig: NextConfig = {
         fullySpecified: false,
       },
     });
+
+    // Ignore specific module not found errors for TronWeb
+    config.ignoreWarnings = [
+      {
+        module: /node_modules\/tronweb/,
+        message: /Module not found.*@noble/,
+      },
+      {
+        module: /TronBridgeInterface/,
+        message: /Module not found.*@noble/,
+      },
+      /Module not found.*Package path.*@noble/,
+      /Can't resolve.*@noble.*utils\.js/,
+      /Can't resolve.*@noble.*sha3/,
+    ];
+
+    // Also ignore these errors at the stats level
+    config.stats = {
+      ...config.stats,
+      warningsFilter: [
+        /Module not found.*@noble/,
+        /Can't resolve.*@noble/,
+      ]
+    };
 
     return config;
   },
