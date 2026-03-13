@@ -9,15 +9,13 @@
  * - Shows price, amount, time, and side (buy/sell)
  * 
  * My Trades Tab:
- * - Shows Drift Protocol spot positions (all markets)
+ * - Shows user's completed trades from our database
  * - Paginated display (10 per page)
- * - Real-time balance updates
  */
 
 import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { useAuth } from '@/app/context/authContext';
-import { useDrift } from '@/app/context/driftContext';
 
 interface Trade {
   id: string;
@@ -56,7 +54,6 @@ interface KuCoinTrade {
 
 export default function MarketTrades({ selectedPair }: MarketTradesProps) {
   const { user } = useAuth();
-  const { spotPositions, summary, isClientReady, refreshPositions } = useDrift();
   const [trades, setTrades] = useState<Trade[]>([]);
   const [userTrades, setUserTrades] = useState<UserTrade[]>([]);
   const [activeTab, setActiveTab] = useState<'market' | 'my'>('market');
@@ -64,7 +61,7 @@ export default function MarketTrades({ selectedPair }: MarketTradesProps) {
   const [userTradesLoading, setUserTradesLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Pagination for My Trades (Drift positions)
+  // Pagination for My Trades
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -115,11 +112,11 @@ export default function MarketTrades({ selectedPair }: MarketTradesProps) {
 
   // Fetch user trades when switching to "My Trades" tab
   useEffect(() => {
-    if (activeTab === 'my' && user?.userId && isClientReady) {
-      refreshPositions(); // Refresh Drift positions
+    if (activeTab === 'my' && user?.userId) {
+      fetchUserTrades();
       setCurrentPage(1); // Reset to first page
     }
-  }, [activeTab, user?.userId, isClientReady, refreshPositions]);
+  }, [activeTab, user?.userId]);
 
   const fetchUserTrades = async () => {
     if (!user?.userId) return;
@@ -283,69 +280,44 @@ export default function MarketTrades({ selectedPair }: MarketTradesProps) {
           )}
         </>
       ) : (
-        /* My Trades Tab - Show Drift Spot Positions */
+        /* My Trades Tab - Show User's Completed Trades */
         <>
           {/* Column Headers */}
           <div className="px-2 py-1 border-b border-[#2b3139] grid grid-cols-4 gap-2 text-[9px] text-[#848e9c] font-medium">
-            <div className="text-left">Token</div>
-            <div className="text-right">Balance</div>
+            <div className="text-left">Pair</div>
+            <div className="text-right">Amount</div>
             <div className="text-right">Price</div>
-            <div className="text-right">Value</div>
+            <div className="text-right">Time</div>
           </div>
 
           {/* Loading State */}
-          {!isClientReady ? (
+          {userTradesLoading ? (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center">
                 <Icon icon="ph:spinner" className="mx-auto mb-2 text-[#848e9c] animate-spin" width={24} />
-                <p className="text-xs text-[#848e9c]">Loading positions...</p>
+                <p className="text-xs text-[#848e9c]">Loading trades...</p>
               </div>
             </div>
           ) : !user?.userId ? (
             <div className="flex-1 flex items-center justify-center p-4">
               <div className="text-center">
                 <Icon icon="ph:user" className="mx-auto mb-2 text-[#848e9c]" width={24} />
-                <p className="text-xs text-[#848e9c]">Sign in to view positions</p>
+                <p className="text-xs text-[#848e9c]">Sign in to view trades</p>
               </div>
             </div>
           ) : (() => {
-            // Prepare all positions including USDC
-            const allPositions = [];
-            
-            // Add USDC collateral
-            if (summary?.freeCollateral) {
-              allPositions.push({
-                marketIndex: 0,
-                marketName: 'USDC',
-                amount: summary.freeCollateral,
-                price: 1.00,
-                value: summary.freeCollateral,
-                balanceType: 'deposit',
-                isCollateral: true,
-              });
-            }
-            
-            // Add all other spot positions
-            spotPositions.forEach(pos => {
-              if (pos.marketIndex === 0) return; // Skip USDC (already added)
-              allPositions.push({
-                ...pos,
-                isCollateral: false,
-              });
-            });
-
             // Pagination
-            const totalPages = Math.ceil(allPositions.length / itemsPerPage);
+            const totalPages = Math.ceil(userTrades.length / itemsPerPage);
             const startIndex = (currentPage - 1) * itemsPerPage;
             const endIndex = startIndex + itemsPerPage;
-            const currentPositions = allPositions.slice(startIndex, endIndex);
+            const currentTrades = userTrades.slice(startIndex, endIndex);
 
-            if (allPositions.length === 0) {
+            if (userTrades.length === 0) {
               return (
                 <div className="flex-1 flex items-center justify-center p-4">
                   <div className="text-center">
                     <Icon icon="ph:coins" className="mx-auto mb-2 text-[#848e9c]" width={24} />
-                    <p className="text-xs text-[#848e9c]">No positions yet</p>
+                    <p className="text-xs text-[#848e9c]">No trades yet</p>
                   </div>
                 </div>
               );
@@ -353,34 +325,31 @@ export default function MarketTrades({ selectedPair }: MarketTradesProps) {
 
             return (
               <>
-                {/* Positions List */}
+                {/* Trades List */}
                 <div className="flex-1 overflow-y-auto scrollbar-hide">
-                  {currentPositions.map((position, index) => (
+                  {currentTrades.map((trade) => (
                     <div
-                      key={`${position.marketIndex}-${index}`}
+                      key={trade.id}
                       className="px-2 py-0.5 hover:bg-[#2b3139]/50 transition-colors"
                     >
                       <div className="grid grid-cols-4 gap-2 text-[10px] font-mono">
-                        <div className="text-left flex items-center gap-1">
+                        <div className="text-left">
                           <span className="text-white truncate font-semibold">
-                            {position.marketName}
+                            {trade.token_in}/{trade.token_out}
                           </span>
-                          {position.isCollateral && (
-                            <span className="text-[8px] px-1 py-0.5 rounded bg-[#fcd535]/10 text-[#fcd535]">
-                              COL
-                            </span>
-                          )}
                         </div>
-                        <div className={`text-right ${
-                          position.balanceType === 'deposit' ? 'text-[#0ecb81]' : 'text-[#f6465d]'
-                        }`}>
-                          {position.amount.toFixed(4)}
+                        <div className="text-right text-[#0ecb81]">
+                          {parseFloat(trade.amount_out).toFixed(4)}
                         </div>
                         <div className="text-right text-white">
-                          ${position.price.toFixed(2)}
+                          ${parseFloat(trade.price).toFixed(4)}
                         </div>
                         <div className="text-right text-[#848e9c]">
-                          ${position.value.toFixed(2)}
+                          {new Date(trade.created_at).toLocaleTimeString('en-US', { 
+                            hour: '2-digit', 
+                            minute: '2-digit',
+                            hour12: false 
+                          })}
                         </div>
                       </div>
                     </div>

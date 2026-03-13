@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { Icon } from '@iconify/react';
-import { useHyperliquidMarkets } from '@/hooks/useHyperliquidMarkets';
+import { useSimpleHyperliquid } from '@/hooks/useSimpleHyperliquid';
 
 type Chain = 'solana' | 'ethereum' | 'bitcoin';
 
@@ -35,35 +35,16 @@ export default function BinanceMarketList({
   const [searchQuery, setSearchQuery] = useState('');
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
-  // Use Hyperliquid markets for spot trading
+  // Use simple Hyperliquid hook
   const { 
-    markets: hyperliquidMarkets, 
+    markets, 
     loading, 
     error,
     refetch 
-  } = useHyperliquidMarkets({
-    includeStats,
-    refreshInterval: 10000, // 10 seconds
+  } = useSimpleHyperliquid({
+    refreshInterval: 180000, // 3 minutes
     enabled: true
   });
-
-  // Convert Hyperliquid markets to MarketData format
-  const markets: MarketData[] = useMemo(() => {
-    return hyperliquidMarkets.map(market => ({
-      symbol: market.symbol,
-      baseAsset: market.baseAsset,
-      quoteAsset: market.quoteAsset,
-      price: market.price,
-      change24h: market.change24h,
-      volume24h: market.volume24h,
-      high24h: market.high24h,
-      low24h: market.low24h,
-      chain: 'ethereum' as Chain,
-      szDecimals: market.szDecimals,
-      maxLeverage: market.maxLeverage,
-      onlyIsolated: market.onlyIsolated
-    }));
-  }, [hyperliquidMarkets]);
 
   const filteredMarkets = useMemo(() => {
     return markets.filter(market => {
@@ -210,9 +191,7 @@ export default function BinanceMarketList({
                           {market.baseAsset}<span className="text-[#848e9c]">/{market.quoteAsset}</span>
                         </div>
                         <div className="text-[10px] text-[#848e9c] flex items-center gap-2">
-                          {includeStats && (
-                            <span>Vol {formatVolume(market.volume24h)}</span>
-                          )}
+                          <span>Basic Data</span>
                           {market.maxLeverage && (
                             <span>Max {market.maxLeverage}x</span>
                           )}
@@ -232,16 +211,9 @@ export default function BinanceMarketList({
 
                     {/* Change */}
                     <div className="text-right min-w-[70px]">
-                      {includeStats ? (
-                        <div className={`text-xs font-semibold px-2.5 py-1 rounded ${isPositive ? 'bg-[rgba(14,203,129,0.12)] text-[#0ecb81]' : 'bg-[rgba(246,70,93,0.12)] text-[#f6465d]'
-                          }`}>
-                          {isPositive ? '+' : ''}{market.change24h.toFixed(2)}%
-                        </div>
-                      ) : (
-                        <div className="text-xs text-[#848e9c] px-2.5 py-1">
-                          --
-                        </div>
-                      )}
+                      <div className="text-xs text-[#848e9c] px-2.5 py-1">
+                        --
+                      </div>
                     </div>
                   </div>
                 </div>

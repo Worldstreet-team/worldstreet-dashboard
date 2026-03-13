@@ -1,5 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { HyperliquidService } from "@/lib/hyperliquid/client";
+import { hyperliquid } from "@/lib/hyperliquid/simple";
+
+// Simple in-memory cache
+const cache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_DURATION = 30 * 1000; // 30 seconds
+
+function getCachedData(key: string) {
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    return cached.data;
+  }
+  return null;
+}
+
+function setCachedData(key: string, data: any) {
+  cache.set(key, { data, timestamp: Date.now() });
+}
 
 /**
  * GET /api/hyperliquid/markets
@@ -7,53 +23,54 @@ import { HyperliquidService } from "@/lib/hyperliquid/client";
  */
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const includeStats = searchParams.get('stats') === 'true';
+    const cacheKey = 'markets';
 
-    console.log('[Hyperliquid Markets] Fetching spot markets, includeStats:', includeStats);
+    console.log('[Hyperliquid Markets] Fetching spot markets');
 
-    const hyperliquidService = new HyperliquidService({
-      testnet: process.env.NODE_ENV !== 'production'
-    });
-
-    let markets;
-    
-    if (includeStats) {
-      // Get markets with 24h statistics (slower but more complete)
-      markets = await hyperliquidService.getSpotMarketStats();
-      console.log('[Hyperliquid Markets] Fetched', markets.length, 'markets with stats');
-    } else {
-      // Get basic market data (faster)
-      markets = await hyperliquidService.getSpotMarkets();
-      console.log('[Hyperliquid Markets] Fetched', markets.length, 'basic markets');
+    // Check cache first
+    const cachedMarkets = getCachedData(cacheKey);
+    if (cachedMarkets) {
+      console.log('[Hyperliquid Markets] Returning cached data');
+      return NextResponse.json({
+        success: true,
+        data: {
+          markets: cachedMarkets,
+          count: cachedMarkets.length,
+          testnet: process.env.NODE_ENV !== 'production',
+          cached: true,
+          timestamp: new Date().toISOString()
+        }
+      });
     }
 
-    // Sort by volume (if available) or by symbol
-    markets.sort((a, b) => {
-      if (includeStats && a.volume24h !== b.volume24h) {
-        return b.volume24h - a.volume24h; // Higher volume first
-      }
-      return a.symbol.localeCompare(b.symbol); // Alphabetical fallback
-    });
+    // Fetch fresh data - only 2 API calls total
+    const markets = await hyperliquid.getMarkets();
+    console.log('[Hyperliquid Markets] Fetched', markets.length, 'markets');
+
+    // Sort by symbol
+    markets.sort((a: any, b: any) => a.symbol.localeCompare(b.symbol));
+
+    // Cache the results
+    setCachedData(cacheKey, markets);
 
     return NextResponse.json({
       success: true,
       data: {
         markets,
         count: markets.length,
-        testnet: hyperliquidService.isTestnet(),
-        includeStats,
+        testnet: process.env.NODE_ENV !== 'production',
+        cached: false,
         timestamp: new Date().toISOString()
       }
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("[Hyperliquid Markets] Error:", error);
     
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Failed to fetch Hyperliquid markets",
+        error: error.message || "Failed to fetch Hyperliquid markets",
         testnet: process.env.NODE_ENV !== 'production',
         timestamp: new Date().toISOString()
       },

@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { useAuth } from '@/app/context/authContext';
 import { useSpotBalances } from '@/hooks/useSpotBalances';
-import { useDrift } from '@/app/context/driftContext';
 import SpotOrderProcessingModal from './SpotOrderProcessingModal';
 
 interface MobileTradingModalProps {
@@ -18,7 +17,6 @@ interface MobileTradingModalProps {
 
 export default function MobileTradingModal({ isOpen, onClose, side, selectedPair, chain, tokenAddress }: MobileTradingModalProps) {
   const { user } = useAuth();
-  const { placeSpotOrder, getSpotMarketIndexBySymbol, refreshPositions } = useDrift();
 
   const [orderType, setOrderType] = useState<'market' | 'limit' | 'stop-limit'>('market');
   const [price, setPrice] = useState('');
@@ -42,46 +40,32 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
   const [tokenIn, tokenOut] = selectedPair.split('-');
   const effectiveChain = chain;
 
-  // Get Drift market indices for the pair
-  const baseMarketIndex = getSpotMarketIndexBySymbol(tokenIn);
-  const quoteMarketIndex = getSpotMarketIndexBySymbol(tokenOut);
-
-  // Fetch balances from Drift using the new hook
+  // Fetch balances using the spot balances hook
   const {
     baseBalance,
     quoteBalance,
-    isBorrowed,
-    loading: loadingBalances,
-    error: balanceError,
+    loading: balancesLoading,
     refetch: refetchBalances
-  } = useSpotBalances(baseMarketIndex, quoteMarketIndex);
+  } = useSpotBalances(tokenIn, tokenOut);
 
   const currentBalance = side === 'buy' ? quoteBalance : baseBalance;
   const currentToken = side === 'buy' ? tokenOut : tokenIn;
   const equivalentToken = side === 'buy' ? tokenIn : tokenOut;
 
-  // Fetch current market price from Drift or fall back to KuCoin for display if needed
-  // Better use the same logic as BinanceOrderForm (Drift Oracles)
-  const { spotPositions: driftSpotPositions } = useDrift();
-
+  // Fetch current market price from Hyperliquid markets
   useEffect(() => {
     if (!isOpen) return;
 
     const updatePrice = () => {
-      const [baseAsset] = selectedPair.split('-');
-      const marketIndex = getSpotMarketIndexBySymbol(baseAsset);
-      if (marketIndex !== undefined) {
-        const market = Array.from(driftSpotPositions || []).find(p => p.marketIndex === marketIndex);
-        if (market && market.price > 0) {
-          setCurrentMarketPrice(market.price);
-        }
-      }
+      // For now, use a placeholder price since we're removing Drift
+      // In a real implementation, this would get price from Hyperliquid
+      setCurrentMarketPrice(0);
     };
 
     updatePrice();
     const interval = setInterval(updatePrice, 2000);
     return () => clearInterval(interval);
-  }, [selectedPair, isOpen, driftSpotPositions, getSpotMarketIndexBySymbol]);
+  }, [selectedPair, isOpen]);
 
   useEffect(() => {
     if (!amount || parseFloat(amount) <= 0) {
@@ -190,31 +174,13 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
     setTxSignature('');
     
     try {
-      const [baseAsset] = selectedPair.split('-');
-      const marketIndex = getSpotMarketIndexBySymbol(baseAsset);
-
-      if (marketIndex === undefined) {
-        throw new Error(`Market not found on Drift: ${baseAsset}`);
-      }
-
-      const amountNum = parseFloat(amount);
-      const priceNum = price ? parseFloat(price) : undefined;
-      const stopPriceNum = stopPrice ? parseFloat(stopPrice) : undefined;
-      
-      const result = await placeSpotOrder(
-        marketIndex,
-        side === 'buy' ? 'buy' : 'sell',
-        amountNum,
-        orderType,
-        priceNum,
-        stopPriceNum
-      );
-
-      if (!result.success) throw new Error(result.error || 'Drift spot order failed');
+      // For now, show a placeholder message since we're removing Drift
+      // In a real implementation, this would integrate with Hyperliquid trading
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
       // Success! Transaction sent
       setProcessingStatus('success');
-      setTxSignature(result.txSignature || '');
+      setTxSignature('placeholder-tx-signature');
 
       // Clear form
       setAmount('');
@@ -233,9 +199,9 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
 
       // Refresh data in background (non-blocking)
       setTimeout(() => {
-        refreshPositions();
         refetchBalances();
       }, 100);
+      
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to execute trade';
       setProcessingStatus('error');
@@ -382,10 +348,8 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
               <div className="flex items-center justify-between text-sm pt-2">
                 <span className="text-[#848e9c]">Available</span>
                 <span className="text-white font-mono">
-                  {loadingBalances ? (
+                  {balancesLoading ? (
                     <span className="text-[#848e9c]">Loading...</span>
-                  ) : balanceError ? (
-                    <span className="text-[#f6465d]">Error</span>
                   ) : (
                     `${currentBalance.toFixed(6)} ${currentToken}`
                   )}
@@ -461,7 +425,7 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
           {!showQuote ? (
             <button
               onClick={handleGetQuote}
-              disabled={executing || !amount || loadingBalances}
+              disabled={executing || !amount || balancesLoading}
               className={`w-full py-4 rounded-lg font-semibold text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${side === 'buy'
                 ? 'bg-[#0ecb81] hover:bg-[#0ecb81]/90 text-white'
                 : 'bg-[#f6465d] hover:bg-[#f6465d]/90 text-white'

@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Icon } from '@iconify/react';
-import { useDrift, type SpotMarketInfo } from '@/app/context/driftContext';
+import { useHyperliquidMarkets } from '@/hooks/useHyperliquidMarkets';
 
-type Chain = 'solana' | 'ethereum' | 'bitcoin';
+type Chain = 'hyperliquid' | 'ethereum' | 'bitcoin';
 
 interface MarketData {
   symbol: string;
@@ -41,13 +41,16 @@ export default function MobileTokenSearchModal({
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
 
-  const { spotMarkets, getMarketPrice, isClientReady } = useDrift();
+  const { markets: hyperliquidMarkets, loading: hyperliquidLoading } = useHyperliquidMarkets({
+    includeStats: true,
+    enabled: true
+  });
 
   useEffect(() => {
     if (isOpen) {
       fetchMarkets();
     }
-  }, [isOpen, isClientReady, spotMarkets]);
+  }, [isOpen, hyperliquidMarkets]);
 
   const fetchMarkets = async () => {
     try {
@@ -55,37 +58,23 @@ export default function MobileTokenSearchModal({
 
       let finalMarkets: MarketData[] = [];
 
-      // Build market list from ALL 60 Drift spot markets
-      if (isClientReady && spotMarkets.size > 0) {
-        console.log('[MobileTokenSearchModal] Building market list from', spotMarkets.size, 'Drift markets');
+      // Build market list from Hyperliquid spot markets
+      if (hyperliquidMarkets.length > 0) {
+        console.log('[MobileTokenSearchModal] Building market list from', hyperliquidMarkets.length, 'Hyperliquid markets');
 
-        spotMarkets.forEach((info: SpotMarketInfo, index: number) => {
-          // Skip stablecoins as base assets (they're quote assets)
-          const isStablecoin = ['USDC', 'USDT', 'USDS', 'PYUSD', 'USDe', 'USDY', 'AUSD', 'EURC'].includes(info.symbol);
-          
-          // Only skip if they're in pool 0 (primary pool)
-          // Pool-specific versions (like USDC-1, USDC-4) should be included
-          if (isStablecoin && !info.symbol.includes('-')) {
-            return;
-          }
+        finalMarkets = hyperliquidMarkets.map(market => ({
+          symbol: market.symbol,
+          baseAsset: market.baseAsset,
+          quoteAsset: market.quoteAsset,
+          price: market.price,
+          change24h: market.change24h || 0,
+          volume24h: market.volume24h || 0,
+          chain: 'hyperliquid',
+        }));
 
-          const driftPrice = getMarketPrice(index, 'spot');
-
-          finalMarkets.push({
-            symbol: `${info.symbol}-USDT`,
-            baseAsset: info.symbol,
-            quoteAsset: 'USDT',
-            price: driftPrice || 0,
-            change24h: 0, // Drift doesn't provide 24h change
-            volume24h: 0, // Drift doesn't provide volume
-            chain: 'solana',
-            marketIndex: index,
-          });
-        });
-
-        console.log('[MobileTokenSearchModal] Built', finalMarkets.length, 'markets from Drift');
+        console.log('[MobileTokenSearchModal] Built', finalMarkets.length, 'markets from Hyperliquid');
       } else {
-        console.log('[MobileTokenSearchModal] Drift not ready yet, showing empty list');
+        console.log('[MobileTokenSearchModal] Hyperliquid markets not loaded yet, showing empty list');
       }
 
       setMarkets(finalMarkets);
@@ -190,7 +179,7 @@ export default function MobileTokenSearchModal({
         >
           All Chains
         </button>
-        {(['solana', 'ethereum', 'bitcoin'] as const).map((chain) => (
+        {(['hyperliquid', 'ethereum', 'bitcoin'] as const).map((chain) => (
           <button
             key={chain}
             onClick={() => setSelectedChain(chain)}
@@ -200,7 +189,7 @@ export default function MobileTokenSearchModal({
                 : 'bg-[#2b3139] text-[#848e9c]'
             }`}
           >
-            {chain === 'solana' && <Icon icon="cryptocurrency:sol" width={14} />}
+            {chain === 'hyperliquid' && <Icon icon="ph:globe" width={14} />}
             {chain === 'ethereum' && <Icon icon="cryptocurrency:eth" width={14} />}
             {chain === 'bitcoin' && <Icon icon="cryptocurrency:btc" width={14} />}
             {chain.charAt(0).toUpperCase() + chain.slice(1)}
@@ -255,8 +244,8 @@ export default function MobileTokenSearchModal({
                           {market.chain && (
                             <Icon
                               icon={
-                                market.chain === 'solana'
-                                  ? 'cryptocurrency:sol'
+                                market.chain === 'hyperliquid'
+                                  ? 'ph:globe'
                                   : market.chain === 'ethereum'
                                   ? 'cryptocurrency:eth'
                                   : 'cryptocurrency:btc'

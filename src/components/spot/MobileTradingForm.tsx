@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { useAuth } from '@/app/context/authContext';
 import { useSpotBalances } from '@/hooks/useSpotBalances';
-import { useDrift } from '@/app/context/driftContext';
+import { useHyperliquidMarkets } from '@/hooks/useHyperliquidMarkets';
 
 interface MobileTradingFormProps {
   selectedPair: string;
@@ -14,7 +14,10 @@ interface MobileTradingFormProps {
 
 export default function MobileTradingForm({ selectedPair, chain, tokenAddress }: MobileTradingFormProps) {
   const { user } = useAuth();
-  const { getSpotMarketIndexBySymbol, placeSpotOrder, spotPositions: driftSpotPositions } = useDrift();
+  const { markets: hyperliquidMarkets } = useHyperliquidMarkets({
+    includeStats: true,
+    enabled: true
+  });
   
   const [side, setSide] = useState<'buy' | 'sell'>('buy');
   const [orderType, setOrderType] = useState<'market' | 'limit' | 'stop-limit'>('market');
@@ -30,41 +33,34 @@ export default function MobileTradingForm({ selectedPair, chain, tokenAddress }:
 
   const [baseAsset, quoteAsset] = selectedPair.split('-');
 
-  // Get Drift market indices for the pair
-  const baseMarketIndex = getSpotMarketIndexBySymbol(baseAsset);
-  const quoteMarketIndex = getSpotMarketIndexBySymbol(quoteAsset);
-
-  // Fetch balances from Drift using the new hook
+  // Fetch balances using the spot balances hook
   const {
     baseBalance,
     quoteBalance,
-    isBorrowed,
     loading: loadingBalances,
     refetch: refetchBalances
-  } = useSpotBalances(baseMarketIndex, quoteMarketIndex);
+  } = useSpotBalances(baseAsset, quoteAsset);
 
   // Current balance based on buy/sell side
   const balance = side === 'buy' ? quoteBalance : baseBalance;
   const currentToken = side === 'buy' ? quoteAsset : baseAsset;
   const equivalentToken = side === 'buy' ? baseAsset : quoteAsset;
-  const isCurrentBorrowed = side === 'buy' ? isBorrowed.quote : isBorrowed.base;
 
-  // Update market price
+  // Update market price from Hyperliquid
   useEffect(() => {
     const updatePrice = () => {
-      const marketIndex = getSpotMarketIndexBySymbol(baseAsset);
-      if (marketIndex !== undefined) {
-        const market = Array.from(driftSpotPositions || []).find(p => p.marketIndex === marketIndex);
-        if (market && market.price > 0) {
-          setCurrentMarketPrice(market.price);
-        }
+      const market = hyperliquidMarkets.find(m => 
+        m.baseAsset === baseAsset || m.symbol === selectedPair
+      );
+      if (market && market.price > 0) {
+        setCurrentMarketPrice(market.price);
       }
     };
 
     updatePrice();
     const interval = setInterval(updatePrice, 2000);
     return () => clearInterval(interval);
-  }, [selectedPair, driftSpotPositions, getSpotMarketIndexBySymbol, baseAsset]);
+  }, [selectedPair, hyperliquidMarkets, baseAsset]);
 
   // Update total calculation
   useEffect(() => {
@@ -149,27 +145,10 @@ export default function MobileTradingForm({ selectedPair, chain, tokenAddress }:
     setExecuting(true);
     
     try {
-      const marketIndex = getSpotMarketIndexBySymbol(baseAsset);
-
-      if (marketIndex === undefined) {
-        throw new Error(`Spot market not found on Drift: ${baseAsset}`);
-      }
-
-      const amountNum = parseFloat(amount);
-      const priceNum = price ? parseFloat(price) : undefined;
-      const stopPriceNum = stopPrice ? parseFloat(stopPrice) : undefined;
+      // For now, show a placeholder message since we're removing Drift
+      // In a real implementation, this would integrate with Hyperliquid trading
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
-      const result = await placeSpotOrder(
-        marketIndex,
-        side === 'buy' ? 'buy' : 'sell',
-        amountNum,
-        orderType,
-        priceNum,
-        stopPriceNum
-      );
-
-      if (!result.success) throw new Error(result.error || 'Drift spot order failed');
-
       setSuccess(`${side === 'buy' ? 'Buy' : 'Sell'} order placed successfully!`);
       
       // Reset form
@@ -327,8 +306,8 @@ export default function MobileTradingForm({ selectedPair, chain, tokenAddress }:
       {/* Available Balance Section */}
       <div className="flex flex-col text-[10px] text-muted gap-0.5">
         <div className="flex justify-between">
-          <span>{isCurrentBorrowed ? 'Borrowed' : 'Avbl'}</span>
-          <span className={`font-mono ${isCurrentBorrowed ? 'text-error' : 'text-dark dark:text-white'}`}>
+          <span>Available</span>
+          <span className="font-mono text-dark dark:text-white">
             {loadingBalances ? 'Loading...' : `${balance.toFixed(6)} ${currentToken}`}
           </span>
         </div>

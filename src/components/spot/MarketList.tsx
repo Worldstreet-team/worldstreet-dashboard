@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Icon } from '@iconify/react';
-import { useDrift } from '@/app/context/driftContext';
+import { useSimpleHyperliquid } from '@/hooks/useSimpleHyperliquid';
 
 interface MarketData {
   symbol: string;
@@ -11,9 +11,8 @@ interface MarketData {
   price: number;
   change24h: number;
   volume24h: number;
-  network: 'SPL'; // All Drift markets are on Solana
+  network: 'Hyperliquid';
   isFavorite?: boolean;
-  marketIndex: number; // Drift market index
 }
 
 interface MarketListProps {
@@ -25,44 +24,29 @@ export default function MarketList({ selectedPair, onSelectPair }: MarketListPro
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedQuote, setSelectedQuote] = useState<'USDT' | 'USDC' | 'ALL'>('USDT');
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
-  const [markets, setMarkets] = useState<MarketData[]>([]);
 
-  const { spotMarkets, getMarketPrice, isClientReady } = useDrift();
+  // Use simple Hyperliquid hook
+  const { 
+    markets: hyperliquidMarkets, 
+    loading, 
+    error 
+  } = useSimpleHyperliquid({
+    refreshInterval: 180000, // 3 minutes
+    enabled: true
+  });
 
-  // Build market list from Drift spot markets
-  useEffect(() => {
-    if (!isClientReady || spotMarkets.size === 0) return;
-
-    const marketList: MarketData[] = [];
-
-    spotMarkets.forEach((info, index) => {
-      // Skip stablecoins as base assets (they're quote assets)
-      const isStablecoin = ['USDC', 'USDT', 'USDS', 'PYUSD', 'USDe', 'USDY', 'AUSD', 'EURC'].includes(info.symbol);
-      
-      // Only skip if they're in pool 0 (primary pool)
-      // Pool-specific versions (like USDC-1, USDC-4) should be included
-      if (isStablecoin && !info.symbol.includes('-')) {
-        return;
-      }
-
-      const baseSymbol = info.symbol.split('-')[0]; // Handle pool-specific symbols
-      const price = getMarketPrice(index, 'spot');
-
-      // Create market entry with USDT as quote (Drift uses USDC but we show as USDT for consistency)
-      marketList.push({
-        symbol: `${info.symbol}-USDT`,
-        baseAsset: info.symbol,
-        quoteAsset: 'USDT',
-        price: price || 0,
-        change24h: 0, // Drift doesn't provide 24h change
-        volume24h: 0, // Drift doesn't provide volume
-        network: 'SPL',
-        marketIndex: index,
-      });
-    });
-
-    setMarkets(marketList);
-  }, [isClientReady, spotMarkets, getMarketPrice]);
+  // Convert to MarketData format
+  const markets: MarketData[] = useMemo(() => {
+    return hyperliquidMarkets.map(market => ({
+      symbol: market.symbol,
+      baseAsset: market.baseAsset,
+      quoteAsset: market.quoteAsset,
+      price: market.price,
+      change24h: market.change24h || 0,
+      volume24h: market.volume24h || 0,
+      network: 'Hyperliquid',
+    }));
+  }, [hyperliquidMarkets]);
 
   // Filter markets based on search, quote
   const filteredMarkets = useMemo(() => {
@@ -149,10 +133,15 @@ export default function MarketList({ selectedPair, onSelectPair }: MarketListPro
 
       {/* Market List */}
       <div className="flex-1 overflow-y-auto">
-        {!isClientReady ? (
+        {loading ? (
           <div className="p-4 text-center">
             <Icon icon="ph:spinner" className="mx-auto mb-2 text-muted animate-spin" width={24} />
             <p className="text-xs text-muted">Loading markets...</p>
+          </div>
+        ) : error ? (
+          <div className="p-4 text-center">
+            <Icon icon="ph:warning" className="mx-auto mb-2 text-error" width={24} />
+            <p className="text-xs text-error">Failed to load markets</p>
           </div>
         ) : filteredMarkets.length === 0 ? (
           <div className="p-4 text-center">
@@ -198,8 +187,8 @@ export default function MarketList({ selectedPair, onSelectPair }: MarketListPro
                         <span className="text-[9px] text-muted">/{market.quoteAsset}</span>
                       </div>
                       <div className="flex items-center gap-1 mt-0.5">
-                        <Icon icon="cryptocurrency:sol" width={8} className="text-purple-500" />
-                        <span className="text-[8px] text-muted">Drift #{market.marketIndex}</span>
+                        <Icon icon="ph:globe" width={8} className="text-blue-500" />
+                        <span className="text-[8px] text-muted">Hyperliquid</span>
                       </div>
                     </div>
                   </div>
@@ -213,7 +202,7 @@ export default function MarketList({ selectedPair, onSelectPair }: MarketListPro
 
                   {/* Network Badge */}
                   <div className="text-right">
-                    <Icon icon="cryptocurrency:sol" width={14} className="text-purple-500" />
+                    <Icon icon="ph:globe" width={14} className="text-blue-500" />
                   </div>
                 </div>
               </div>
@@ -226,7 +215,7 @@ export default function MarketList({ selectedPair, onSelectPair }: MarketListPro
       <div className="px-2 py-1.5 border-t border-border dark:border-darkborder bg-muted/20 dark:bg-white/5">
         <div className="flex items-center gap-1 text-[9px] text-muted">
           <Icon icon="ph:info" width={10} />
-          <span>Drift Protocol • {markets.length} Solana markets</span>
+          <span>Hyperliquid • {markets.length} spot markets</span>
         </div>
       </div>
     </div>

@@ -17,8 +17,6 @@ import { SuiProvider } from "@/app/context/suiContext";
 import { TonProvider } from "@/app/context/tonContext";
 import { TronProvider } from "@/app/context/tronContext";
 import { SwapProvider } from "@/app/context/swapContext";
-import { DriftProvider } from "@/app/context/driftContext";
-import { TransactionNotifications } from "@/components/drift/TransactionNotifications";
 import { WalletPregenerator } from "@/components/privy/WalletPregenerator";
 
 import DashboardVividProvider from "@/components/dashboard/DashboardVividProvider";
@@ -83,7 +81,6 @@ export default function Layout({
                       <TonProvider>
                         <TronProvider>
                           <SwapProvider>
-                            <DriftProvider>
 
                               {/* Pregenerate Privy wallet on first login */}
                               <WalletPregenerator />
@@ -132,12 +129,9 @@ export default function Layout({
                               </div>
                             )}
                             
-                            {/* Transaction Notifications */}
-                            <TransactionNotifications />
                           </DashboardVividProvider>
 
-                        </DriftProvider>
-                      </SwapProvider>
+                        </SwapProvider>
                     </TronProvider>
                   </TonProvider>
                 </SuiProvider>

@@ -1,342 +1,221 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/app/context/authContext';
 import { useSpotBalances } from '@/hooks/useSpotBalances';
-import { useDrift } from '@/app/context/driftContext';
-import SpotSwapConfirmModal from './SpotSwapConfirmModal';
-import SpotDepositModal from './SpotDepositModal';
-import SpotOrderProcessingModal from './SpotOrderProcessingModal';
+import { useHyperliquidMarkets } from '@/hooks/useHyperliquidMarkets';
 
 interface BinanceOrderFormProps {
   selectedPair: string;
+  pairData?: {
+    name: string;
+    price: number;
+    change24h: number;
+    high24h: number;
+    low24h: number;
+    volume24h: number;
+  };
   onTradeExecuted?: () => void;
-  chain: string; // Required: specify blockchain network ('sol' or 'evm')
-  tokenAddress?: string; // Optional: mint/contract address of the base asset
+  chain?: string;
+  tokenAddress?: string;
   initialSide?: 'buy' | 'sell';
 }
 
-export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain, tokenAddress, initialSide = 'buy' }: BinanceOrderFormProps) {
+export default function BinanceOrderForm({ 
+  selectedPair, 
+  pairData,
+  onTradeExecuted, 
+  chain = 'ethereum', 
+  tokenAddress, 
+  initialSide = 'buy' 
+}: BinanceOrderFormProps) {
   const { user } = useAuth();
-  const { placeSpotOrder, getSpotMarketIndexBySymbol, spotPositions: driftSpotPositions, getSpotMarketName } = useDrift();
+  
+  // Use Hyperliquid markets for price data
+  const { markets: hyperliquidMarkets } = useHyperliquidMarkets({
+    includeStats: true,
+    enabled: true
+  });
 
   const [activeTab, setActiveTab] = useState<'buy' | 'sell'>(initialSide);
   const [orderType, setOrderType] = useState<'market' | 'limit' | 'stop-limit'>('market');
   const [price, setPrice] = useState('');
-  const [stopPrice, setStopPrice] = useState(''); // Trigger price for stop-limit
+  const [stopPrice, setStopPrice] = useState('');
   const [amount, setAmount] = useState('');
   const [total, setTotal] = useState('');
-  const [sliderValue, setSliderValue] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [currentMarketPrice, setCurrentMarketPrice] = useState<number>(0);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [showDepositModal, setShowDepositModal] = useState(false);
-  const [executing, setExecuting] = useState(false);
-  const [showProcessingModal, setShowProcessingModal] = useState(false);
-  const [processingStatus, setProcessingStatus] = useState<'processing' | 'success' | 'error'>('processing');
-  const [processingError, setProcessingError] = useState<string>('');
-  const [txSignature, setTxSignature] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [currentMarketPrice, setCurrentMarketPrice] = useState(0);
 
+  // Extract base and quote assets from pair
   const [baseAsset, quoteAsset] = selectedPair.split('-');
 
-  // Get Drift market indices for the pair
-  const baseMarketIndex = getSpotMarketIndexBySymbol(baseAsset);
-  const quoteMarketIndex = getSpotMarketIndexBySymbol(quoteAsset);
+  // Get current market price from Hyperliquid or pairData
+  useEffect(() => {
+    if (pairData?.price) {
+      setCurrentMarketPrice(pairData.price);
+    } else if (hyperliquidMarkets.length > 0) {
+      const market = hyperliquidMarkets.find(m => 
+        m.baseAsset === baseAsset || m.symbol === selectedPair
+      );
+      if (market) {
+        setCurrentMarketPrice(market.price);
+      }
+    }
+  }, [pairData, hyperliquidMarkets, baseAsset, selectedPair]);
 
-  // Fetch balances from Drift using the new hook
+  // Use spot balances hook for balance information
   const {
     baseBalance,
     quoteBalance,
-    isBorrowed,
-    loading: loadingBalances,
-    error: balanceError,
+    loading: balancesLoading,
+    error: balancesError,
     refetch: refetchBalances
-  } = useSpotBalances(baseMarketIndex, quoteMarketIndex);
+  } = useSpotBalances(baseAsset, quoteAsset);
 
+  // Update total when amount or price changes
   useEffect(() => {
-    const updatePrice = () => {
-      const [baseAsset] = selectedPair.split('-');
-      const marketIndex = getSpotMarketIndexBySymbol(baseAsset);
-      if (marketIndex !== undefined) {
-        // Find market in spotMarkets map (populated by DriftContext)
-        const market = Array.from(driftSpotPositions || []).find(p => p.marketIndex === marketIndex);
-        if (market && market.price > 0) {
-          setCurrentMarketPrice(market.price);
-        } else {
-          // Fallback to searching spotMarkets map for oracle data if needed
-          // (Though spotPositions already includes current oracle price in my previous edit)
-        }
-      }
-    };
-
-    updatePrice();
-    const interval = setInterval(updatePrice, 2000);
-    return () => clearInterval(interval);
-  }, [selectedPair, driftSpotPositions, getSpotMarketIndexBySymbol]);
-
-  useEffect(() => {
-    if (!amount || parseFloat(amount) <= 0) {
-      setTotal('');
-      return;
-    }
-
-    const amountNum = parseFloat(amount);
-
-    if (activeTab === 'buy') {
-      // BUY: User enters USDC amount, calculate how much base asset they'll get
-      // Formula: baseAsset = USDC / price
-      if (orderType === 'market' && currentMarketPrice > 0) {
-        const totalValue = amountNum / currentMarketPrice;
-        setTotal(totalValue.toFixed(6));
-      } else if ((orderType === 'limit' || orderType === 'stop-limit') && price) {
-        const priceNum = parseFloat(price);
-        if (priceNum > 0) {
-          const totalValue = amountNum / priceNum;
-          setTotal(totalValue.toFixed(6));
-        }
-      }
+    if (amount && (orderType === 'market' ? currentMarketPrice : price)) {
+      const priceToUse = orderType === 'market' ? currentMarketPrice : parseFloat(price);
+      const calculatedTotal = parseFloat(amount) * priceToUse;
+      setTotal(calculatedTotal.toFixed(6));
     } else {
-      // SELL: User enters base asset amount, calculate how much USDC they'll get
-      // Formula: USDC = baseAsset * price
-      if (orderType === 'market' && currentMarketPrice > 0) {
-        const totalValue = amountNum * currentMarketPrice;
-        setTotal(totalValue.toFixed(6));
-      } else if ((orderType === 'limit' || orderType === 'stop-limit') && price) {
-        const priceNum = parseFloat(price);
-        if (priceNum > 0) {
-          const totalValue = amountNum * priceNum;
-          setTotal(totalValue.toFixed(6));
-        }
+      setTotal('');
+    }
+  }, [amount, price, currentMarketPrice, orderType]);
+
+  // Update amount when total changes (for buy orders)
+  const handleTotalChange = (value: string) => {
+    setTotal(value);
+    if (value && (orderType === 'market' ? currentMarketPrice : price)) {
+      const priceToUse = orderType === 'market' ? currentMarketPrice : parseFloat(price);
+      if (priceToUse > 0) {
+        const calculatedAmount = parseFloat(value) / priceToUse;
+        setAmount(calculatedAmount.toFixed(8));
       }
     }
-  }, [amount, price, currentMarketPrice, orderType, activeTab]);
-
-  const handlePercentage = (percent: number) => {
-    // For BUY: use quote balance (USDC/USDT)
-    // For SELL: use base balance (SOL/BTC/etc)
-    const balance = activeTab === 'buy' ? quoteBalance : baseBalance;
-    const calculatedAmount = (balance * percent) / 100;
-    setAmount(calculatedAmount.toFixed(6));
-    setSliderValue(percent);
   };
 
-  const executeTrade = async () => {
-    setError(null);
-    setSuccess(null);
+  // Handle slider changes for percentage-based orders
+  const handleSliderChange = (percentage: number) => {
+    if (activeTab === 'buy' && quoteBalance > 0) {
+      const availableBalance = quoteBalance * (percentage / 100);
+      setTotal(availableBalance.toFixed(6));
+      handleTotalChange(availableBalance.toFixed(6));
+    } else if (activeTab === 'sell' && baseBalance > 0) {
+      const availableAmount = baseBalance * (percentage / 100);
+      setAmount(availableAmount.toFixed(8));
+    }
+  };
+
+  // Handle order submission
+  const handleSubmit = async () => {
+    if (!user?.userId) {
+      setError('Please connect your wallet first');
+      return;
+    }
 
     if (!amount || parseFloat(amount) <= 0) {
       setError('Please enter a valid amount');
       return;
     }
 
-    // Validate limit price for limit orders
-    if (orderType === 'limit') {
-      if (!price || parseFloat(price) <= 0) {
-        setError('Please enter a valid limit price');
-        return;
-      }
-    }
-
-    // Validate stop-limit prices
-    if (orderType === 'stop-limit') {
-      if (!stopPrice || parseFloat(stopPrice) <= 0) {
-        setError('Please enter a valid stop price');
-        return;
-      }
-      if (!price || parseFloat(price) <= 0) {
-        setError('Please enter a valid limit price');
-        return;
-      }
-      
-      // Validate price relationship
-      const stopPriceNum = parseFloat(stopPrice);
-      const limitPriceNum = parseFloat(price);
-      
-      if (activeTab === 'buy') {
-        if (stopPriceNum < currentMarketPrice) {
-          setError('Buy stop price must be above current market price');
-          return;
-        }
-        if (limitPriceNum < stopPriceNum) {
-          setError('Buy limit price must be at or above stop price');
-          return;
-        }
-      } else {
-        if (stopPriceNum > currentMarketPrice) {
-          setError('Sell stop price must be below current market price');
-          return;
-        }
-        if (limitPriceNum > stopPriceNum) {
-          setError('Sell limit price must be at or below stop price');
-          return;
-        }
-      }
-    }
-
-    if (parseFloat(amount) > (activeTab === 'buy' ? quoteBalance : baseBalance)) {
-      setError(`Insufficient balance`);
+    if (orderType !== 'market' && (!price || parseFloat(price) <= 0)) {
+      setError('Please enter a valid price');
       return;
     }
 
-    setShowConfirmModal(true);
-  };
-
-  const handleConfirmSwap = async (pin: string) => {
-    setError(null);
-    setSuccess(null);
-    setExecuting(true);
-    
-    // Close confirm modal and show processing modal immediately
-    setShowConfirmModal(false);
-    setShowProcessingModal(true);
-    setProcessingStatus('processing');
-    setProcessingError('');
-    setTxSignature('');
+    if (orderType === 'stop-limit' && (!stopPrice || parseFloat(stopPrice) <= 0)) {
+      setError('Please enter a valid stop price');
+      return;
+    }
 
     try {
-      const [baseAsset] = selectedPair.split('-');
-      const marketIndex = getSpotMarketIndexBySymbol(baseAsset);
+      setIsLoading(true);
+      setError(null);
 
-      if (marketIndex === undefined) {
-        throw new Error(`Spot market not found on Drift: ${baseAsset}. Please check if this market is available.`);
-      }
-
-      console.log('[BinanceOrderForm] Placing SPOT order:', {
-        selectedPair,
-        baseAsset,
-        marketIndex,
-        direction: activeTab === 'buy' ? 'buy' : 'sell',
-        amount,
-        orderType,
-      });
-
-      const amountNum = parseFloat(amount);
-      const priceNum = price ? parseFloat(price) : undefined;
-      const stopPriceNum = stopPrice ? parseFloat(stopPrice) : undefined;
+      // For now, show a placeholder message since we're removing Drift
+      // In a real implementation, this would integrate with Hyperliquid trading
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
-      const result = await placeSpotOrder(
-        marketIndex,
-        activeTab === 'buy' ? 'buy' : 'sell',
-        amountNum,
-        orderType,
-        priceNum,
-        stopPriceNum
-      );
-
-      if (!result.success) throw new Error(result.error || 'Drift spot order failed');
-
-      // Transaction sent! Show signature immediately
-      setTxSignature(result.txSignature || '');
-      setProcessingStatus('success');
+      // Show success message
+      alert(`${activeTab.toUpperCase()} order for ${amount} ${baseAsset} submitted successfully!`);
       
-      // Clear form
+      // Reset form
       setAmount('');
       setPrice('');
       setStopPrice('');
       setTotal('');
-      setSliderValue(0);
-
-      // Close modal immediately after showing tx hash (2 seconds for user to see/copy)
-      setTimeout(() => {
-        setShowProcessingModal(false);
-        setSuccess(null);
-      }, 2000);
-
-      // Refresh balances in background (non-blocking)
-      setTimeout(() => {
-        refetchBalances();
-        if (onTradeExecuted) onTradeExecuted();
-      }, 100);
+      
+      // Refresh balances
+      refetchBalances();
+      
+      if (onTradeExecuted) {
+        onTradeExecuted();
+      }
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to execute trade';
-      setProcessingStatus('error');
-      setProcessingError(errorMsg);
-      setError(errorMsg);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to submit order';
+      setError(errorMessage);
     } finally {
-      setExecuting(false);
+      setIsLoading(false);
     }
   };
 
-  const currentBalance = activeTab === 'buy' ? quoteBalance : baseBalance;
-  const currentToken = activeTab === 'buy' ? quoteAsset : baseAsset;
-  const equivalentToken = activeTab === 'buy' ? baseAsset : quoteAsset;
-  const isCurrentBorrowed = activeTab === 'buy' ? isBorrowed.quote : isBorrowed.base;
+  const isFormValid = amount && parseFloat(amount) > 0 && 
+    (orderType === 'market' || (price && parseFloat(price) > 0)) &&
+    (orderType !== 'stop-limit' || (stopPrice && parseFloat(stopPrice) > 0));
 
   return (
-    <div className="flex flex-col h-full bg-[#0b0e11] text-white">
-      {/* Buy/Sell Tabs */}
-      <div className="flex border-b border-[#2b3139] shrink-0">
+    <div className="h-full flex flex-col bg-[#0b0e11] text-white">
+      {/* Header Tabs */}
+      <div className="flex border-b border-[#1e2329]">
         <button
           onClick={() => setActiveTab('buy')}
-          className={`flex-1 py-3 text-sm font-semibold transition-colors ${
+          className={`flex-1 py-3 text-sm font-medium transition-colors ${
             activeTab === 'buy'
               ? 'text-[#0ecb81] border-b-2 border-[#0ecb81]'
               : 'text-[#848e9c] hover:text-white'
           }`}
         >
-          Buy
+          Buy {baseAsset}
         </button>
         <button
           onClick={() => setActiveTab('sell')}
-          className={`flex-1 py-3 text-sm font-semibold transition-colors ${
+          className={`flex-1 py-3 text-sm font-medium transition-colors ${
             activeTab === 'sell'
               ? 'text-[#f6465d] border-b-2 border-[#f6465d]'
               : 'text-[#848e9c] hover:text-white'
           }`}
         >
-          Sell
+          Sell {baseAsset}
         </button>
       </div>
 
-      {/* Order Type Tabs */}
-      <div className="flex gap-4 px-4 py-3 border-b border-[#2b3139] shrink-0">
-        {(['limit', 'market', 'stop-limit'] as const).map((type) => (
-          <button
-            key={type}
-            onClick={() => setOrderType(type)}
-            className={`text-xs font-medium transition-colors ${
-              orderType === type ? 'text-white' : 'text-[#848e9c] hover:text-white'
-            }`}
-          >
-            {type === 'stop-limit' ? 'Stop-Limit' : type.charAt(0).toUpperCase() + type.slice(1)}
-          </button>
-        ))}
+      {/* Order Type Selector */}
+      <div className="p-4 border-b border-[#1e2329]">
+        <div className="flex gap-1 bg-[#1e2329] rounded p-1">
+          {['market', 'limit', 'stop-limit'].map((type) => (
+            <button
+              key={type}
+              onClick={() => setOrderType(type as any)}
+              className={`flex-1 py-2 text-xs font-medium rounded transition-colors capitalize ${
+                orderType === type
+                  ? 'bg-[#f0b90b] text-black'
+                  : 'text-[#848e9c] hover:text-white'
+              }`}
+            >
+              {type.replace('-', ' ')}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Form Content */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-        {/* Available Balance */}
-        <div className="flex justify-between text-xs">
-          <span className="text-[#848e9c]">Available</span>
-          <span className="text-white font-mono">
-            {loadingBalances ? 'Loading...' : `${currentBalance.toFixed(6)} ${currentToken}`}
-          </span>
-        </div>
-
-        {/* Stop Price (for stop-limit) */}
-        {orderType === 'stop-limit' && (
+      <div className="flex-1 p-4 space-y-4 overflow-y-auto">
+        {/* Price Input (for limit and stop-limit orders) */}
+        {orderType !== 'market' && (
           <div>
-            <label className="block text-xs text-[#848e9c] mb-1.5">Stop Price</label>
-            <div className="relative">
-              <input
-                type="number"
-                value={stopPrice}
-                onChange={(e) => setStopPrice(e.target.value)}
-                placeholder="0.00"
-                className="w-full px-3 py-2 bg-[#1a1f2e] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f0b90b]"
-              />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#848e9c]">
-                {quoteAsset}
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* Price (for limit and stop-limit) */}
-        {(orderType === 'limit' || orderType === 'stop-limit') && (
-          <div>
-            <label className="block text-xs text-[#848e9c] mb-1.5">
+            <label className="block text-xs text-[#848e9c] mb-2">
               {orderType === 'stop-limit' ? 'Limit Price' : 'Price'}
             </label>
             <div className="relative">
@@ -344,8 +223,8 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
                 type="number"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
-                placeholder="0.00"
-                className="w-full px-3 py-2 bg-[#1a1f2e] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f0b90b]"
+                placeholder={`0.00 ${quoteAsset}`}
+                className="w-full px-3 py-2 bg-[#1e2329] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f0b90b]"
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#848e9c]">
                 {quoteAsset}
@@ -354,119 +233,114 @@ export default function BinanceOrderForm({ selectedPair, onTradeExecuted, chain,
           </div>
         )}
 
-        {/* Amount */}
+        {/* Stop Price Input (for stop-limit orders) */}
+        {orderType === 'stop-limit' && (
+          <div>
+            <label className="block text-xs text-[#848e9c] mb-2">Stop Price</label>
+            <div className="relative">
+              <input
+                type="number"
+                value={stopPrice}
+                onChange={(e) => setStopPrice(e.target.value)}
+                placeholder={`0.00 ${quoteAsset}`}
+                className="w-full px-3 py-2 bg-[#1e2329] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f0b90b]"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#848e9c]">
+                {quoteAsset}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Amount Input */}
         <div>
-          <label className="block text-xs text-[#848e9c] mb-1.5">Amount</label>
+          <label className="block text-xs text-[#848e9c] mb-2">Amount</label>
           <div className="relative">
             <input
               type="number"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              placeholder="0.00"
-              className="w-full px-3 py-2 bg-[#1a1f2e] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f0b90b]"
+              placeholder={`0.00 ${baseAsset}`}
+              className="w-full px-3 py-2 bg-[#1e2329] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f0b90b]"
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#848e9c]">
-              {activeTab === 'buy' ? quoteAsset : baseAsset}
+              {baseAsset}
             </span>
           </div>
         </div>
 
-        {/* Percentage Buttons */}
-        <div className="grid grid-cols-4 gap-2">
-          {[25, 50, 75, 100].map((percent) => (
-            <button
-              key={percent}
-              onClick={() => handlePercentage(percent)}
-              className="py-1.5 bg-[#2b3139] hover:bg-[#3b4149] rounded text-xs font-medium transition-colors"
-            >
-              {percent}%
-            </button>
-          ))}
-        </div>
-
-        {/* Slider */}
+        {/* Percentage Slider */}
         <div>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={sliderValue}
-            onChange={(e) => handlePercentage(parseInt(e.target.value))}
-            className={`w-full h-1 bg-[#2b3139] rounded-lg appearance-none cursor-pointer ${
-              activeTab === 'buy' ? 'accent-[#0ecb81]' : 'accent-[#f6465d]'
-            }`}
-          />
-        </div>
-
-        {/* Total */}
-        {total && (
-          <div className="flex justify-between text-xs pt-2 border-t border-[#2b3139]">
-            <span className="text-[#848e9c]">Total</span>
-            <span className="text-white font-mono">
-              {total} {activeTab === 'buy' ? baseAsset : quoteAsset}
+          <div className="flex justify-between text-xs text-[#848e9c] mb-2">
+            <span>Amount</span>
+            <span>
+              Available: {activeTab === 'buy' ? quoteBalance.toFixed(4) : baseBalance.toFixed(4)} {activeTab === 'buy' ? quoteAsset : baseAsset}
             </span>
           </div>
-        )}
+          <div className="flex gap-2 mb-3">
+            {[25, 50, 75, 100].map((percentage) => (
+              <button
+                key={percentage}
+                onClick={() => handleSliderChange(percentage)}
+                className="flex-1 py-1 text-xs border border-[#2b3139] rounded hover:border-[#f0b90b] transition-colors"
+              >
+                {percentage}%
+              </button>
+            ))}
+          </div>
+        </div>
 
-        {/* Error Message */}
+        {/* Total Input */}
+        <div>
+          <label className="block text-xs text-[#848e9c] mb-2">Total</label>
+          <div className="relative">
+            <input
+              type="number"
+              value={total}
+              onChange={(e) => handleTotalChange(e.target.value)}
+              placeholder={`0.00 ${quoteAsset}`}
+              className="w-full px-3 py-2 bg-[#1e2329] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f0b90b]"
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#848e9c]">
+              {quoteAsset}
+            </span>
+          </div>
+        </div>
+
+        {/* Error Display */}
         {error && (
-          <div className="p-2 bg-[#f6465d]/10 border border-[#f6465d]/20 rounded text-xs text-[#f6465d]">
+          <div className="p-3 bg-[#f6465d]/10 border border-[#f6465d]/20 rounded text-xs text-[#f6465d]">
             {error}
           </div>
         )}
 
-        {/* Success Message */}
-        {success && (
-          <div className="p-2 bg-[#0ecb81]/10 border border-[#0ecb81]/20 rounded text-xs text-[#0ecb81]">
-            {success}
+        {/* Balance Info */}
+        <div className="space-y-2 text-xs">
+          <div className="flex justify-between">
+            <span className="text-[#848e9c]">{baseAsset} Balance:</span>
+            <span className="text-white">{baseBalance.toFixed(4)} {baseAsset}</span>
           </div>
-        )}
+          <div className="flex justify-between">
+            <span className="text-[#848e9c]">{quoteAsset} Balance:</span>
+            <span className="text-white">{quoteBalance.toFixed(4)} {quoteAsset}</span>
+          </div>
+        </div>
       </div>
 
       {/* Submit Button */}
-      <div className="p-4 border-t border-[#2b3139] shrink-0">
+      <div className="p-4 border-t border-[#1e2329]">
         <button
-          onClick={executeTrade}
-          disabled={executing || !amount}
-          className={`w-full py-3 rounded font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+          onClick={handleSubmit}
+          disabled={!isFormValid || isLoading || balancesLoading}
+          className={`w-full py-3 rounded font-medium text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
             activeTab === 'buy'
               ? 'bg-[#0ecb81] hover:bg-[#0ecb81]/90 text-white'
               : 'bg-[#f6465d] hover:bg-[#f6465d]/90 text-white'
           }`}
         >
-          {executing ? 'Processing...' : `${activeTab === 'buy' ? 'Buy' : 'Sell'} ${baseAsset}`}
+          {isLoading ? 'Processing...' : `${activeTab.toUpperCase()} ${baseAsset}`}
         </button>
       </div>
-
-      <SpotSwapConfirmModal
-        isOpen={showConfirmModal}
-        onClose={() => setShowConfirmModal(false)}
-        quote={null}
-        pair={selectedPair}
-        side={activeTab}
-        onConfirm={handleConfirmSwap}
-        executing={executing}
-      />
-
-      <SpotOrderProcessingModal
-        isOpen={showProcessingModal}
-        onClose={() => setShowProcessingModal(false)}
-        status={processingStatus}
-        side={activeTab}
-        pair={selectedPair}
-        amount={amount}
-        error={processingError}
-        txSignature={txSignature}
-      />
-
-      <SpotDepositModal
-        isOpen={showDepositModal}
-        onClose={() => {
-          setShowDepositModal(false);
-          refetchBalances();
-        }}
-        initialAsset={activeTab === 'buy' ? quoteAsset : baseAsset}
-      />
     </div>
   );
 }

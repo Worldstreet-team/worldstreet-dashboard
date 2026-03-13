@@ -4,8 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useDrift } from '@/app/context/driftContext';
-import { useFuturesData } from '@/hooks/useFuturesData';
+import { useHyperliquidMarkets } from '@/hooks/useHyperliquidMarkets';
 import { FuturesChart } from '@/components/futures/FuturesChart';
 import BinanceOrderBook from '@/components/spot/BinanceOrderBook';
 import BinanceMarketList from '@/components/spot/BinanceMarketList';
@@ -14,9 +13,6 @@ import { PositionPanel } from '@/components/futures/PositionPanel';
 import { CollateralPanel } from '@/components/futures/CollateralPanel';
 import { FuturesWalletBalance } from '@/components/futures/FuturesWalletBalance';
 import { RiskPanel } from '@/components/futures/RiskPanel';
-import { WalletModal } from '@/components/futures/WalletModal';
-import { DriftAccountStatus } from '@/components/futures/DriftAccountStatus';
-import { InsufficientSolModal } from '@/components/futures/InsufficientSolModal';
 import FuturesTradingModal from '@/components/futures/FuturesTradingModal';
 
 type OrderSide = 'long' | 'short';
@@ -56,129 +52,83 @@ const BottomPanel: React.FC = () => {
         {activeTab === 'positions' ? (
           <PositionPanel />
         ) : (
-          <DriftAccountStatus />
+          <div className="p-4">
+            <div className="text-center text-[#848e9c]">
+              <Icon icon="ph:chart-line" width={48} className="mx-auto mb-2 opacity-50" />
+              <p className="text-sm">Hyperliquid Futures Trading</p>
+              <p className="text-xs mt-1">Connect your trading wallet to view assets</p>
+            </div>
+          </div>
         )}
       </div>
     </div>
   );
 };
 
-export default function BinanceFuturesPage() {
-  const [selectedMarketIndex, setSelectedMarketIndex] = useState<number | null>(null);
+export default function HyperliquidFuturesPage() {
+  const [selectedPair, setSelectedPair] = useState<string>('BTC-USD');
   const [tradingSide, setTradingSide] = useState<OrderSide>('long');
   const [showTradingModal, setShowTradingModal] = useState(false);
-  const {
-    isInitialized,
-    startAutoRefresh,
-    stopAutoRefresh,
-    showInsufficientSol,
-    setShowInsufficientSol,
-    solBalanceInfo,
-    resetInitializationFailure,
-    refreshSummary,
-    summary,
-    needsInitialization,
-    perpMarkets,
-    getMarketPrice,
-    getMarketName,
-    isClientReady,
-  } = useDrift();
-  const { fetchWallet } = useFuturesData();
+  
+  // Use Hyperliquid markets for futures trading
+  const { 
+    markets: hyperliquidMarkets, 
+    loading: marketsLoading, 
+    error: marketsError 
+  } = useHyperliquidMarkets({
+    includeStats: true,
+    enabled: true
+  });
 
   const [mobileActiveTab, setMobileActiveTab] = useState<'chart' | 'positions' | 'info'>('chart');
   const [showMarketDropdown, setShowMarketDropdown] = useState(false);
-  const [showWalletModal, setShowWalletModal] = useState(false);
-  const [walletChecked, setWalletChecked] = useState(false);
-  const [initializing, setInitializing] = useState(false);
-  const [isLoadingMarkets, setIsLoadingMarkets] = useState(true);
 
-  // Set default market when Drift is ready
+  // Set default market when Hyperliquid markets are loaded
   useEffect(() => {
-    if (!isClientReady || perpMarkets.size === 0) {
-      setIsLoadingMarkets(true);
-      return;
+    if (hyperliquidMarkets.length > 0 && selectedPair === 'BTC-USD') {
+      // Find BTC market or use first available
+      const btcMarket = hyperliquidMarkets.find(m => 
+        m.symbol.includes('BTC') || m.baseAsset === 'BTC'
+      );
+      const defaultMarket = btcMarket || hyperliquidMarkets[0];
+      setSelectedPair(defaultMarket.symbol);
     }
+  }, [hyperliquidMarkets, selectedPair]);
 
-    console.log('[FuturesPage] Drift ready with', perpMarkets.size, 'perp markets');
-    setIsLoadingMarkets(false);
-
-    // Set first market as default if none selected
-    if (selectedMarketIndex === null) {
-      const firstMarketIndex = Array.from(perpMarkets.keys()).sort((a, b) => a - b)[0];
-      if (firstMarketIndex !== undefined) {
-        setSelectedMarketIndex(firstMarketIndex);
-        console.log('[FuturesPage] Selected default market:', firstMarketIndex);
-      }
-    }
-  }, [perpMarkets, isClientReady, selectedMarketIndex]);
-
-  const handleInitialize = async () => {
-    setInitializing(true);
-    resetInitializationFailure();
-    await refreshSummary();
-    setInitializing(false);
-  };
-
-  const handleRetryInitialization = async () => {
-    resetInitializationFailure();
-    await refreshSummary();
-  };
-
-  useEffect(() => {
-    if (isInitialized) {
-      startAutoRefresh(30000);
-      return () => stopAutoRefresh();
-    }
-  }, [isInitialized, startAutoRefresh, stopAutoRefresh]);
-
-  useEffect(() => {
-    const checkWallet = async () => {
-      try {
-        const result = await fetchWallet();
-        if (!result.exists) {
-          setShowWalletModal(true);
-        }
-      } catch (error) {
-        console.error('Error checking wallet:', error);
-      } finally {
-        setWalletChecked(true);
-      }
-    };
-    checkWallet();
-  }, [fetchWallet]);
-
-  const handleWalletCreated = (address: string) => {
-    console.log('Wallet created:', address);
-    setShowWalletModal(false);
-  };
-
-  const handleSelectMarket = (marketIndex: number) => {
-    setSelectedMarketIndex(marketIndex);
+  const handleSelectMarket = (pair: string) => {
+    setSelectedPair(pair);
     setShowMarketDropdown(false);
   };
 
   // Get current market data
-  const currentMarketName = selectedMarketIndex !== null ? getMarketName(selectedMarketIndex) : 'Select Market';
-  const currentPrice = selectedMarketIndex !== null ? getMarketPrice(selectedMarketIndex, 'perp') : 0;
-  const priceChange = 0;
+  const currentMarket = hyperliquidMarkets.find(m => m.symbol === selectedPair);
+  const currentPrice = currentMarket?.price || 0;
+  const priceChange = currentMarket?.change24h || 0;
   const isPositive = priceChange >= 0;
 
   // Get top 10 markets for dropdown
-  const topMarkets = Array.from(perpMarkets.entries())
-    .sort(([a], [b]) => a - b)
+  const topMarkets = hyperliquidMarkets
+    .sort((a, b) => b.volume24h - a.volume24h)
     .slice(0, 10);
 
-  if (!walletChecked || isLoadingMarkets) {
+  if (marketsLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#0a0a0a]">
         <div className="text-center">
           <Icon icon="svg-spinners:ring-resize" className="mx-auto mb-4 text-[#f0b90b]" height={48} />
-          <p className="text-white text-sm">
-            {!walletChecked ? 'Loading futures trading...' : 'Loading markets from Drift Protocol...'}
-          </p>
-          {isLoadingMarkets && perpMarkets.size > 0 && (
-            <p className="text-gray-400 text-xs mt-2">Found {perpMarkets.size} markets</p>
-          )}
+          <p className="text-white text-sm">Loading Hyperliquid markets...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (marketsError) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-[#0a0a0a]">
+        <div className="text-center">
+          <Icon icon="ph:warning-circle" className="mx-auto mb-4 text-[#f6465d]" height={48} />
+          <p className="text-white text-sm mb-2">Failed to load markets</p>
+          <p className="text-[#848e9c] text-xs">{marketsError}</p>
         </div>
       </div>
     );
@@ -216,13 +166,11 @@ export default function BinanceFuturesPage() {
           {/* Status Bar */}
           <div className="px-4 pb-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-[#848e9c]">Futures Trading</span>
-              {isInitialized && (
-                <div className="flex items-center gap-1 px-2 py-0.5 bg-[#0ecb81]/10 rounded-full">
-                  <div className="w-1.5 h-1.5 rounded-full bg-[#0ecb81] animate-pulse" />
-                  <span className="text-[9px] font-medium text-[#0ecb81]">Active</span>
-                </div>
-              )}
+              <span className="text-xs font-medium text-[#848e9c]">Hyperliquid Futures</span>
+              <div className="flex items-center gap-1 px-2 py-0.5 bg-[#0ecb81]/10 rounded-full">
+                <div className="w-1.5 h-1.5 rounded-full bg-[#0ecb81] animate-pulse" />
+                <span className="text-[9px] font-medium text-[#0ecb81]">Live</span>
+              </div>
             </div>
           </div>
         </div>
@@ -236,7 +184,7 @@ export default function BinanceFuturesPage() {
                 className="flex items-center gap-1 px-2 py-1 rounded active:bg-white/5"
               >
                 <span className="text-sm font-bold text-white">
-                  {currentMarketName}
+                  {selectedPair}
                 </span>
                 <Icon icon="ph:caret-down" width={12} className="text-gray-400" />
               </button>
@@ -245,17 +193,17 @@ export default function BinanceFuturesPage() {
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowMarketDropdown(false)} />
                   <div className="absolute top-full left-0 mt-1 bg-[#1e2329] border border-[#2b3139] rounded-lg shadow-xl z-50 min-w-[120px] max-h-[250px] overflow-y-auto scrollbar-hide">
-                    {topMarkets.map(([marketIndex, market]) => (
+                    {topMarkets.map((market) => (
                       <button
-                        key={marketIndex}
-                        onClick={() => handleSelectMarket(marketIndex)}
+                        key={market.symbol}
+                        onClick={() => handleSelectMarket(market.symbol)}
                         className={`w-full text-left px-3 py-2 text-xs ${
-                          selectedMarketIndex === marketIndex ? 'bg-[#f0b90b]/10 text-[#f0b90b] font-medium' : 'text-white hover:bg-[#2b3139]'
+                          selectedPair === market.symbol ? 'bg-[#f0b90b]/10 text-[#f0b90b] font-medium' : 'text-white hover:bg-[#2b3139]'
                         }`}
                       >
                         <div className="flex justify-between items-center">
                           <span>{market.symbol}</span>
-                          <span className="text-[10px] text-gray-400">${(getMarketPrice(marketIndex, 'perp') || 0).toFixed(2)}</span>
+                          <span className="text-[10px] text-gray-400">${market.price.toFixed(2)}</span>
                         </div>
                       </button>
                     ))}
@@ -296,7 +244,7 @@ export default function BinanceFuturesPage() {
         <div className="flex-1 overflow-y-auto">
           {mobileActiveTab === 'chart' && (
             <div className="h-[400px] bg-[#0b0e11]">
-              <FuturesChart symbol={currentMarketName} isDarkMode={true} />
+              <FuturesChart symbol={selectedPair} isDarkMode={true} />
             </div>
           )}
 
@@ -308,50 +256,15 @@ export default function BinanceFuturesPage() {
 
           {mobileActiveTab === 'info' && (
             <div className="p-3 space-y-3 pb-24">
-              {/* Drift Account Status */}
+              {/* Hyperliquid Account Status */}
               <div className="bg-[#1e2329] rounded-xl border border-[#2b3139] p-3">
-                <h3 className="text-xs font-bold text-white mb-2 uppercase">Drift Account</h3>
-                {needsInitialization ? (
-                  <div className="space-y-2">
-                    <p className="text-xs text-gray-400">Account not initialized</p>
-                    <button
-                      onClick={handleInitialize}
-                      disabled={initializing}
-                      className="w-full py-2 bg-warning hover:bg-warning/90 text-white rounded-lg text-xs font-bold disabled:opacity-50"
-                    >
-                      {initializing ? 'Initializing...' : 'Initialize Account'}
-                    </button>
-                  </div>
-                ) : isInitialized && summary ? (
-                  <div className="space-y-2">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="bg-white/5 rounded-lg p-2">
-                        <p className="text-[9px] text-gray-400 mb-0.5">Total Collateral</p>
-                        <p className="text-xs font-bold text-white">${summary.totalCollateral.toFixed(2)}</p>
-                      </div>
-                      <div className="bg-white/5 rounded-lg p-2">
-                        <p className="text-[9px] text-gray-400 mb-0.5">Available</p>
-                        <p className="text-xs font-bold text-success">${summary.freeCollateral.toFixed(2)}</p>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="bg-white/5 rounded-lg p-2">
-                        <p className="text-[9px] text-gray-400 mb-0.5">Unrealized PnL</p>
-                        <p className={`text-xs font-bold ${summary.unrealizedPnl >= 0 ? 'text-success' : 'text-error'}`}>
-                          {summary.unrealizedPnl >= 0 ? '+' : ''}${summary.unrealizedPnl.toFixed(2)}
-                        </p>
-                      </div>
-                      <div className="bg-white/5 rounded-lg p-2">
-                        <p className="text-[9px] text-gray-400 mb-0.5">Open Positions</p>
-                        <p className="text-xs font-bold text-white">{summary.openPositions}</p>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center py-4">
-                    <Icon icon="svg-spinners:ring-resize" className="text-primary" height={20} />
-                  </div>
-                )}
+                <h3 className="text-xs font-bold text-white mb-2 uppercase">Hyperliquid Account</h3>
+                <div className="space-y-2">
+                  <p className="text-xs text-gray-400">Connect your trading wallet to view account details</p>
+                  <button className="w-full py-2 bg-warning hover:bg-warning/90 text-white rounded-lg text-xs font-bold">
+                    Connect Wallet
+                  </button>
+                </div>
               </div>
 
               {/* Futures Wallet Balance */}
@@ -426,9 +339,9 @@ export default function BinanceFuturesPage() {
                 className="flex items-center gap-1 px-3 py-1.5 hover:bg-[#1a1f26] rounded transition-colors"
               >
                 <span className="text-[14px] font-bold text-white">
-                  {currentMarketName}
+                  {selectedPair}
                 </span>
-                <span className="text-[11px] text-[#848e9c]">Perpetual</span>
+                <span className="text-[11px] text-[#848e9c]">Hyperliquid</span>
                 <Icon 
                   icon="ph:caret-down" 
                   width={14} 
@@ -440,19 +353,19 @@ export default function BinanceFuturesPage() {
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowMarketDropdown(false)} />
                   <div className="absolute top-full left-0 mt-1 bg-[#0f1419] border border-[#1f2329] rounded shadow-xl z-50 min-w-[180px] max-h-[350px] overflow-y-auto scrollbar-thin scrollbar-thumb-[#1f2329]">
-                    {topMarkets.map(([marketIndex, market]) => (
+                    {topMarkets.map((market) => (
                       <button
-                        key={marketIndex}
-                        onClick={() => handleSelectMarket(marketIndex)}
+                        key={market.symbol}
+                        onClick={() => handleSelectMarket(market.symbol)}
                         className={`w-full text-left px-3 py-2 text-[12px] font-medium transition-colors ${
-                          selectedMarketIndex === marketIndex 
+                          selectedPair === market.symbol 
                             ? 'bg-[#1a1f26] text-[#f0b90b]' 
                             : 'text-white hover:bg-[#1a1f26]'
                         }`}
                       >
                         <div className="flex justify-between items-center">
                           <span>{market.symbol}</span>
-                          <span className="text-[11px] text-[#848e9c]">${(getMarketPrice(marketIndex, 'perp') || 0).toFixed(2)}</span>
+                          <span className="text-[11px] text-[#848e9c]">${market.price.toFixed(2)}</span>
                         </div>
                       </button>
                     ))}
@@ -480,21 +393,12 @@ export default function BinanceFuturesPage() {
 
           {/* Right: Account Status */}
           <div className="flex items-center gap-4">
-            {isInitialized && summary && (
-              <div className="flex items-center gap-3 text-[12px]">
-                <div className="flex flex-col items-end">
-                  <span className="text-[11px] text-[#848e9c]">Available</span>
-                  <span className="text-white font-medium">${summary.freeCollateral.toFixed(2)}</span>
-                </div>
-                <div className="w-px h-6 bg-[#1f2329]" />
-                <div className="flex flex-col items-end">
-                  <span className="text-[11px] text-[#848e9c]">Unrealized PnL</span>
-                  <span className={`font-medium ${summary.unrealizedPnl >= 0 ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
-                    {summary.unrealizedPnl >= 0 ? '+' : ''}${summary.unrealizedPnl.toFixed(2)}
-                  </span>
-                </div>
+            <div className="flex items-center gap-3 text-[12px]">
+              <div className="flex flex-col items-end">
+                <span className="text-[11px] text-[#848e9c]">Hyperliquid</span>
+                <span className="text-white font-medium">Connect Wallet</span>
               </div>
-            )}
+            </div>
           </div>
         </div>
 
@@ -504,36 +408,30 @@ export default function BinanceFuturesPage() {
           {/* COLUMN 1: Market List (15%) */}
           <div className="h-full bg-[#0b0e11] border-r border-[#1f2329] overflow-hidden">
             <BinanceMarketList 
-              selectedPair={currentMarketName}
-              onSelectPair={(pair) => {
-                const market = Array.from(perpMarkets.entries()).find(([_, info]) => 
-                  info.symbol === pair || `${info.symbol}-PERP` === pair
-                );
-                if (market) {
-                  handleSelectMarket(market[0]);
-                }
-              }}
+              selectedPair={selectedPair}
+              onSelectPair={(pair) => handleSelectMarket(pair)}
+              includeStats={true}
             />
           </div>
 
           {/* COLUMN 2: Chart (50%) */}
           <div className="h-full bg-[#0b0e11] border-r border-[#1f2329] p-2">
             <div className="h-full">
-              <FuturesChart symbol={currentMarketName} isDarkMode={true} />
+              <FuturesChart symbol={selectedPair} isDarkMode={true} />
             </div>
           </div>
 
           {/* COLUMN 3: Order Book (15%) */}
           <div className="h-full bg-[#0b0e11] border-r border-[#1f2329] overflow-hidden">
-            <BinanceOrderBook selectedPair={currentMarketName} />
+            <BinanceOrderBook selectedPair={selectedPair} />
           </div>
 
           {/* COLUMN 4: Trading Panel (20%) */}
           <div className="h-full bg-[#0b0e11] overflow-y-auto scrollbar-thin scrollbar-thumb-[#1f2329]">
             <div className="p-2">
               <FuturesOrderForm 
-                marketIndex={selectedMarketIndex ?? 0}
-                marketName={currentMarketName}
+                marketIndex={0}
+                marketName={selectedPair}
               />
             </div>
           </div>
@@ -545,30 +443,12 @@ export default function BinanceFuturesPage() {
         </div>
       </div>
 
-      <WalletModal
-        isOpen={showWalletModal}
-        onClose={() => setShowWalletModal(false)}
-        onWalletCreated={handleWalletCreated}
-      />
-
-      {solBalanceInfo && (
-        <InsufficientSolModal
-          isOpen={showInsufficientSol}
-          onClose={() => {
-            setShowInsufficientSol(false);
-          }}
-          requiredSol={solBalanceInfo.required}
-          currentSol={solBalanceInfo.current}
-          walletAddress={solBalanceInfo.address}
-        />
-      )}
-
       <FuturesTradingModal
         isOpen={showTradingModal}
         onClose={() => setShowTradingModal(false)}
         side={tradingSide}
-        marketIndex={selectedMarketIndex ?? 0}
-        marketName={currentMarketName}
+        marketIndex={0}
+        marketName={selectedPair}
       />
     </>
   );
