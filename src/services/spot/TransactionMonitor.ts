@@ -4,7 +4,7 @@
  */
 
 import SpotTrade from '@/models/SpotTrade';
-import dbConnect from '@/lib/mongodb';
+import { connectDB } from '@/lib/mongodb';
 
 const LIFI_API = 'https://li.quest/v1';
 
@@ -112,7 +112,7 @@ export class TransactionMonitor {
     userId: string
   ): Promise<void> {
     try {
-      await dbConnect();
+      await connectDB();
 
       const trade = await SpotTrade.findOne({ txHash, userId });
       if (!trade) {
