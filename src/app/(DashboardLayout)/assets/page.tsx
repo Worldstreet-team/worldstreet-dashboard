@@ -22,7 +22,7 @@ interface Asset {
   balanceRaw: string;
   decimals: number;
   usdValue: number;
-  chain: "solana" | "ethereum" | "sui" | "ton" | "tron";
+  chain: "solana" | "ethereum" | "arbitrum" | "sui" | "ton" | "tron";
   address?: string; // Token address for SPL/ERC20/TRC20
   icon: string;
   isCustom?: boolean;
@@ -35,20 +35,21 @@ const CHAIN_ICONS: Record<string, string> = {
   ethereum: "https://tse3.mm.bing.net/th/id/OIP.Rbhwx2hMogpqEO08SXJShwHaLo?rs=1&pid=ImgDetMain&o=7&rm=3",
   sui: "https://tse4.mm.bing.net/th/id/OIP.DWTtTAPHJKclsuxvovZejgHaHa?rs=1&pid=ImgDetMain&o=7&rm=3",
   ton: "https://tse1.mm.bing.net/th/id/OIP.i349pQ2gXTFBH_xGCrBHmgHaHa?rs=1&pid=ImgDetMain&o=7&rm=3",
-  tron: "https://tse1.mm.bing.net/th/id/OIP.jSQvLp4TC3q6vIDrO1GhkwHaFj?rs=1&pid=ImgDetMain&o=7&rm=3",
-  USDT: "https://tse3.mm.bing.net/th/id/OIP.JvFO5DAdev4wAmpKOqg-ugAAAA?rs=1&pid=ImgDetMain&o=7&rm=3",
+  arbitrum: "https://th.bing.com/th/id/OIP.i-6rTfC5_9j-f_4_rXv-rQHaHa?rs=1&pid=ImgDetMain",
+  USDT: "https://tse3.mm.bing.net/th/id/OIP.JvFO5DAdev4wAmpKOqg-ugAAAA?rs=1&pid=ImgDetMain",
   USDC: "https://th.bing.com/th/id/R.c76b33ca42c5730ab77f3341ce9764a7?rik=C%2bj2cYEsyGdFKA&pid=ImgRaw&r=0",
   SOL: "https://th.bing.com/th/id/OIP.hnScG3zE2G41YaH7Iir9zAHaHa?w=153&h=180&c=7&r=0&o=7&dpr=1.3&pid=1.7&rm=3",
   ETH: "https://tse3.mm.bing.net/th/id/OIP.Rbhwx2hMogpqEO08SXJShwHaLo?rs=1&pid=ImgDetMain&o=7&rm=3",
-  SUI: "https://tse4.mm.bing.net/th/id/OIP.DWTtTAPHJKclsuxvovZejgHaHa?rs=1&pid=ImgDetMain&o=7&rm=3",
-  TON: "https://tse1.mm.bing.net/th/id/OIP.i349pQ2gXTFBH_xGCrBHmgHaHa?rs=1&pid=ImgDetMain&o=7&rm=3",
-  TRX: "https://tse1.mm.bing.net/th/id/OIP.jSQvLp4TC3q6vIDrO1GhkwHaFj?rs=1&pid=ImgDetMain&o=7&rm=3",
+  ARB: "https://th.bing.com/th/id/OIP.i-6rTfC5_9j-f_4_rXv-rQHaHa?rs=1&pid=ImgDetMain",
+  SUI: "https://tse4.mm.bing.net/th/id/OIP.DWTtTAPHJKclsuxvovZejgHaHa?rs=1&pid=ImgDetMain",
+  TON: "https://tse1.mm.bing.net/th/id/OIP.i349pQ2gXTFBH_xGCrBHmgHaHa?rs=1&pid=ImgDetMain",
+  TRX: "https://tse1.mm.bing.net/th/id/OIP.jSQvLp4TC3q6vIDrO1GhkwHaFj?rs=1&pid=ImgDetMain",
 };
 
 const AssetsPage = () => {
   const { addresses, walletsGenerated, fetchWallets } = useWallet();
   const { balance: solBalance, tokenBalances: solTokens, loading: solLoading, fetchBalance: fetchSolBalance, refreshCustomTokens: refreshSolCustom } = useSolana();
-  const { balance: ethBalance, tokenBalances: ethTokens, loading: ethLoading, fetchBalance: fetchEthBalance, refreshCustomTokens: refreshEthCustom } = useEvm();
+  const { balance: ethBalance, tokenBalances: ethTokens, arbitrumBalance: arbBalance, arbitrumTokenBalances: arbTokens, loading: ethLoading, fetchBalance: fetchEthBalance, refreshCustomTokens: refreshEthCustom } = useEvm();
   const { balance: suiBalance, loading: suiLoading, fetchBalance: fetchSuiBalance } = useSui();
   const { balance: tonBalance, loading: tonLoading, fetchBalance: fetchTonBalance } = useTon();
   const { balance: trxBalance, tokenBalances: trxTokens, loading: trxLoading, fetchBalance: fetchTrxBalance, refreshCustomTokens: refreshTrxCustom } = useTron();
@@ -100,6 +101,7 @@ const AssetsPage = () => {
       case "solana":
         return solLoading;
       case "ethereum":
+      case "arbitrum": // Arbitrum uses the same loading state as Ethereum for now
         return ethLoading;
       case "sui":
         return suiLoading;
@@ -186,6 +188,39 @@ const AssetsPage = () => {
       });
     });
 
+    // Arbitrum native
+    if (addresses?.ethereum) { // Arbitrum uses the same address as Ethereum
+      list.push({
+        id: "arb-native",
+        symbol: "ETH",
+        name: "Arbitrum ETH",
+        balance: arbBalance,
+        balanceRaw: Math.floor(arbBalance * 1e18).toString(),
+        decimals: 18,
+        usdValue: arbBalance * getPrice(prices, "ETH"),
+        chain: "arbitrum",
+        icon: CHAIN_ICONS.arbitrum, // Use Arbitrum specific icon
+      });
+    }
+
+    // Arbitrum Arbitrum tokens
+    arbTokens.forEach((token) => {
+      list.push({
+        id: `arb-${token.address}`,
+        symbol: token.symbol,
+        name: token.name || token.symbol,
+        balance: token.amount,
+        balanceRaw: Math.floor(token.amount * Math.pow(10, token.decimals)).toString(),
+        decimals: token.decimals,
+        usdValue: token.amount * getPrice(prices, token.symbol),
+        chain: "arbitrum",
+        address: token.address,
+        icon: token.logoURI || CHAIN_ICONS[token.symbol] || CHAIN_ICONS.arbitrum,
+        isCustom: token.isCustom,
+        customTokenId: token.customTokenId,
+      });
+    });
+
     // Sui native
     if (addresses?.sui) {
       list.push({
@@ -250,7 +285,7 @@ const AssetsPage = () => {
     });
 
     return list;
-  }, [addresses, solBalance, solTokens, ethBalance, ethTokens, suiBalance, tonBalance, trxBalance, trxTokens, prices]);
+  }, [addresses, solBalance, solTokens, ethBalance, ethTokens, arbBalance, arbTokens, suiBalance, tonBalance, trxBalance, trxTokens, prices]);
 
   // Total portfolio value
   const totalValue = useMemo(() => {
@@ -262,6 +297,7 @@ const AssetsPage = () => {
       case "solana":
         return addresses?.solana || "";
       case "ethereum":
+      case "arbitrum": // Arbitrum uses the same address as Ethereum
         return addresses?.ethereum || "";
       case "sui":
         return addresses?.sui || "";
@@ -388,6 +424,23 @@ const AssetsPage = () => {
                 </div>
               )}
 
+              {/* Arbitrum Address */}
+              {addresses?.ethereum && ( // Arbitrum uses the same address as Ethereum
+                <div
+                  onClick={() => setReceiveModal({ open: true, chain: "arbitrum", address: addresses.ethereum })}
+                  className="flex items-center gap-3 p-3 bg-muted/30 dark:bg-white/5 rounded-xl cursor-pointer hover:bg-muted/40 dark:hover:bg-white/10 transition-colors"
+                >
+                  <img src={CHAIN_ICONS.arbitrum} alt="ARB" className="w-8 h-8 rounded-full" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-dark dark:text-white">Arbitrum</p>
+                    <p className="text-xs text-muted truncate">{addresses.ethereum}</p>
+                  </div>
+                  <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                </div>
+              )}
+
               {/* Sui Address */}
               {addresses?.sui && (
                 <div
@@ -458,7 +511,7 @@ const AssetsPage = () => {
               </button>
             </div>
 
-            {assets.length === 0 && !isLoading ? (
+            {assets.length === 0 && !(solLoading || ethLoading || suiLoading || tonLoading || trxLoading) ? (
               <div className="text-center py-12">
                 <p className="text-muted">No assets found</p>
               </div>

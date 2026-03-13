@@ -41,9 +41,10 @@ const EXCLUDED = new Set<string>();
 interface WatchlistProps {
   selectedSymbol?: string;
   onSelectPair?: (symbol: string) => void;
+  hideScrollbar?: boolean;
 }
 
-const Watchlist = ({ selectedSymbol, onSelectPair }: WatchlistProps) => {
+const Watchlist = ({ selectedSymbol, onSelectPair, hideScrollbar = true }: WatchlistProps) => {
   const { coins, loading } = usePrices();
   const [watchlistSymbols, setWatchlistSymbols] = useState<string[]>(INITIAL_WATCHLIST);
   const [starred, setStarred] = useState<string[]>(["SOL", "ETH", "SUI"]);
@@ -235,7 +236,7 @@ const Watchlist = ({ selectedSymbol, onSelectPair }: WatchlistProps) => {
         </div>
       </CardHeader>
       <CardContent className="pt-1">
-        <ScrollArea className="h-[460px] pr-2">
+        <ScrollArea className={cn("h-[460px] pr-2", hideScrollbar && "scrollbar-hide")}>
           <div className="space-y-0.5">
             {watchlistCoins.map((coin, index) => {
               const isPositive = coin.change24h >= 0;

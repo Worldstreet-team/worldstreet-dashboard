@@ -43,6 +43,13 @@ const UserWalletSchema = new mongoose.Schema({
       address: String,
       publicKey: String
     }
+  },
+  tradingWallet: {
+    walletId: String,
+    address: String,
+    chainType: String,
+    initialized: { type: Boolean, default: false },
+    timestamp: Date
   }
 }, {
   timestamps: true // This automatically adds createdAt and updatedAt

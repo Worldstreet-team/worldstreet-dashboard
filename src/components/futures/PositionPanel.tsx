@@ -2,13 +2,20 @@
 
 import React, { useEffect } from 'react';
 import { useFuturesStore } from '@/store/futuresStore';
-import { useDrift } from '@/app/context/driftContext';
 import { usePostActionPolling } from '@/hooks/useFuturesPolling';
 import { Icon } from '@iconify/react';
 
 export const PositionPanel: React.FC = () => {
   const { markets } = useFuturesStore();
-  const { positions, refreshPositions, refreshSummary, isLoading, closePosition: closePositionClient, getMarketName } = useDrift();
+  
+  // Drift removal - placeholders
+  const positions: any[] = [];
+  const refreshPositions = () => {};
+  const refreshSummary = () => {};
+  const isLoading = false;
+  const closePositionClient = async (idx: number) => ({ success: false, error: 'Not implemented' });
+  const getMarketName = (idx: number) => 'Unknown';
+
   const [closingMarketIndex, setClosingMarketIndex] = React.useState<number | null>(null);
   const { isPolling: isConfirmingClose, startPostActionPolling } = usePostActionPolling();
 
@@ -76,7 +83,7 @@ export const PositionPanel: React.FC = () => {
       <div className="bg-[#0b0e11] h-full flex flex-col items-center justify-center">
         <Icon icon="ph:chart-line" className="text-[#848e9c] mb-3" height={28} />
         <p className="text-[#848e9c] text-[11px]">No open positions</p>
-        <p className="text-[10px] text-[#848e9c]/60 mt-1">Open a long or short position to get started</p>
+        <p className="text-[10px] text-[#848e9c]/60 mt-1">Visit official Hyperliquid interface to manage positions for now</p>
       </div>
     );
   }

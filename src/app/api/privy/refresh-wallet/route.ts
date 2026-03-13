@@ -28,10 +28,6 @@ export async function POST(request: NextRequest) {
     // Connect to database
     await connectDB();
 
-    // Delete existing record
-    const deleteResult = await UserWallet.deleteOne({ email });
-    console.log('[Privy] Deleted old records:', deleteResult.deletedCount);
-
     // Fetch user from Privy
     let user;
     try {
@@ -44,16 +40,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Extract all wallet information
-    console.log('[Privy] User data:', JSON.stringify(user, null, 2));
-    
+    if (!user) {
+       return NextResponse.json(
+        { error: 'User data not found.' },
+        { status: 404 }
+      );
+    }
+
     const wallets: any = {};
     const chainTypes = ['ethereum', 'solana', 'sui', 'ton', 'tron'];
-
-    // Try both linkedAccounts (camelCase) and linked_accounts (snake_case)
     const accounts = (user as any).linkedAccounts || (user as any).linked_accounts || [];
-    
-    console.log('[Privy] Found accounts:', accounts.length);
 
     for (const chainType of chainTypes) {
       const wallet = accounts.find(
@@ -68,23 +64,28 @@ export async function POST(request: NextRequest) {
           address: wallet.address,
           publicKey: wallet.publicKey || wallet.public_key || null
         };
-        console.log(`[Privy] ${chainType}:`, wallet.address);
       }
     }
 
-    // Save fresh data to database
-    const userWallet = await UserWallet.create({
-      email,
-      privyUserId: user.id,
-      wallets
-    });
+    // Update existing record or create new one, but PRESERVE tradingWallet if it exists
+    const userWallet = await UserWallet.findOneAndUpdate(
+      { email },
+      { 
+        $set: { 
+          privyUserId: user.id,
+          wallets: wallets
+        }
+      },
+      { upsert: true, new: true }
+    );
 
-    console.log('[Privy] Fresh wallet data saved to database');
+    console.log('[Privy] Wallet data updated in database');
 
     return NextResponse.json({
       success: true,
       privyUserId: user.id,
       wallets,
+      tradingWallet: userWallet.tradingWallet || null,
       message: 'Wallet data refreshed successfully'
     });
   } catch (error: any) {

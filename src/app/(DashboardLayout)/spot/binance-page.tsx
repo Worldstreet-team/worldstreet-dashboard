@@ -2,9 +2,10 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { Icon } from '@iconify/react';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useUser } from '@clerk/nextjs';
 import BinanceOrderBook from '@/components/spot/BinanceOrderBook';
 import BinanceMarketList from '@/components/spot/BinanceMarketList';
 import BinanceOrderForm from '@/components/spot/BinanceOrderForm';
@@ -14,6 +15,7 @@ import MarketTrades from '@/components/spot/MarketTrades';
 import MobileTradingModal from '@/components/spot/MobileTradingModal';
 import PositionsPanel from '@/components/spot/PositionsPanel';
 import MobileTokenSearchModal from '@/components/spot/MobileTokenSearchModal';
+import HyperliquidBalanceDisplay from '@/components/spot/HyperliquidBalanceDisplay';
 import { useHyperliquidMarkets } from '@/hooks/useHyperliquidMarkets';
 
 interface PairData {
@@ -26,8 +28,10 @@ interface PairData {
 }
 
 export default function BinanceSpotPage() {
-  const pathname = usePathname();
   const searchParams = useSearchParams();
+  
+  // Clerk authentication
+  const { user, isLoaded } = useUser();
   
   // Use Hyperliquid markets for spot trading
   const { 
@@ -98,7 +102,7 @@ export default function BinanceSpotPage() {
     }
   }, [searchParams, AVAILABLE_PAIRS]);
 
-  const handlePairSelect = useCallback((pair: string, chain?: string) => {
+  const handlePairSelect = useCallback((pair: string) => {
     // Extract base asset from pair (e.g., "BTC-USD" -> "BTC")
     const baseAsset = pair.split('-')[0] || pair;
     setSelectedPair(baseAsset);
@@ -309,12 +313,21 @@ export default function BinanceSpotPage() {
 
           {/* Right: Account Status */}
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-3 text-[12px]">
-              <div className="flex flex-col items-end">
-                <span className="text-[11px] text-[#848e9c]">Hyperliquid</span>
-                <span className="text-white font-medium">Connect Wallet</span>
+            {isLoaded && user ? (
+              <HyperliquidBalanceDisplay 
+                userId={user.id}
+                className="text-[12px]"
+              />
+            ) : (
+              <div className="flex items-center gap-3 text-[12px]">
+                <div className="flex flex-col items-end">
+                  <span className="text-[11px] text-[#848e9c]">Hyperliquid</span>
+                  <span className="text-white font-medium">
+                    {isLoaded ? 'No Wallet' : 'Loading...'}
+                  </span>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
 
@@ -365,17 +378,18 @@ export default function BinanceSpotPage() {
         onClose={() => setShowMobileTradingModal(false)}
         side={mobileOrderSide}
         selectedPair={`${pairData.name}-USD`}
-        pairData={pairData}
+        chain="ethereum"
       />
 
       <MobileTokenSearchModal
         isOpen={showTokenSearchModal}
         onClose={() => setShowTokenSearchModal(false)}
-        onSelectToken={(token) => {
-          setSelectedPair(token);
+        onSelectPair={(pair) => {
+          const baseAsset = pair.split('-')[0] || pair;
+          setSelectedPair(baseAsset);
           setShowTokenSearchModal(false);
         }}
-        availableTokens={AVAILABLE_PAIRS}
+        selectedPair={`${selectedPair}-USD`}
       />
     </>
   );

@@ -808,6 +808,37 @@ export const SOLANA_TOKENS: TokenInfo[] = [
   },
 ];
 
+// Arbitrum Tokens (Mainnet + Sepolia)
+export const ARBITRUM_TOKENS: TokenInfo[] = [
+  {
+    symbol: "USDC",
+    name: "USD Coin",
+    address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", // Mainnet
+    decimals: 6,
+    logoURI: "https://assets.coingecko.com/coins/images/6319/small/usdc.png",
+    coingeckoId: "usd-coin",
+    isPopular: true,
+  },
+  {
+    symbol: "USDC_TEST",
+    name: "USDC (Sepolia)",
+    address: "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d", // Sepolia
+    decimals: 6,
+    logoURI: "https://assets.coingecko.com/coins/images/6319/small/usdc.png",
+    coingeckoId: "usd-coin",
+    isPopular: true,
+  },
+  {
+    symbol: "ARB",
+    name: "Arbitrum",
+    address: "0x912CE59144191C1204E64559FE8253a0e49E6548",
+    decimals: 18,
+    logoURI: "https://assets.coingecko.com/coins/images/16547/small/photo_2023-03-29_21.47.00.jpeg",
+    coingeckoId: "arbitrum",
+    isPopular: true,
+  }
+];
+
 /**
  * Get token info by address
  */

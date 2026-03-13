@@ -29,6 +29,14 @@ class HyperliquidClient {
       }));
   }
 
+  async getAccount(address: string) {
+    return this.info.clearinghouseState({ user: address });
+  }
+
+  async getSpotAccount(address: string) {
+    return this.info.spotClearinghouseState({ user: address });
+  }
+
   async getOrderBook(symbol: string) {
     return this.info.l2Book({ coin: symbol });
   }

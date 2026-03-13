@@ -19,14 +19,14 @@ const PortfolioStats = () => {
   const { user } = useAuth();
   const { walletsGenerated, addresses } = useWallet();
   const { balance: solBalance, tokenBalances: solTokens } = useSolana();
-  const { balance: ethBalance, tokenBalances: ethTokens } = useEvm();
+  const { balance: ethBalance, tokenBalances: ethTokens, arbitrumBalance: arbBalance, arbitrumTokenBalances: arbTokens } = useEvm();
   const { balance: suiBalance } = useSui();
   const { balance: tonBalance } = useTon();
   const { balance: trxBalance, tokenBalances: trxTokens } = useTron();
   const { prices, coins, loading: pricesLoading } = usePrices();
 
   // State for network selection and balances
-  const [selectedNetwork, setSelectedNetwork] = useState<'solana' | 'ethereum'>('solana');
+  const [selectedNetwork, setSelectedNetwork] = useState<'solana' | 'ethereum' | 'arbitrum'>('solana');
   const [spotBalance, setSpotBalance] = useState(0);
   const [futuresBalance, setFuturesBalance] = useState(0);
   const [loadingSpot, setLoadingSpot] = useState(false);
@@ -37,11 +37,14 @@ const PortfolioStats = () => {
     if (selectedNetwork === 'solana') {
       const usdtToken = solTokens.find(t => t.symbol === "USDT");
       return usdtToken?.amount ?? 0;
-    } else {
+    } else if (selectedNetwork === 'ethereum') {
       const usdtToken = ethTokens.find(t => t.symbol === "USDT");
       return usdtToken?.amount ?? 0;
+    } else {
+      const usdtToken = arbTokens.find(t => t.symbol === "USDC" || t.symbol === "USDT");
+      return usdtToken?.amount ?? 0;
     }
-  }, [selectedNetwork, solTokens, ethTokens]);
+  }, [selectedNetwork, solTokens, ethTokens, arbTokens]);
 
   // Fetch spot balance (sum of open positions invested value)
   useEffect(() => {
@@ -105,6 +108,7 @@ const PortfolioStats = () => {
     // Native coins
     total += solBalance * getPrice(prices, "SOL");
     total += ethBalance * getPrice(prices, "ETH");
+    total += arbBalance * getPrice(prices, "ETH"); // Arbitrum ETH
     total += suiBalance * getPrice(prices, "SUI");
     total += tonBalance * getPrice(prices, "TON");
     total += trxBalance * getPrice(prices, "TRX");
@@ -114,8 +118,13 @@ const PortfolioStats = () => {
       total += token.amount * getPrice(prices, token.symbol);
     });
     
-    // ERC20 tokens
+    // ERC20 tokens (Ethereum)
     ethTokens.forEach((token) => {
+      total += token.amount * getPrice(prices, token.symbol);
+    });
+
+    // ERC20 tokens (Arbitrum)
+    arbTokens.forEach((token) => {
       total += token.amount * getPrice(prices, token.symbol);
     });
     
@@ -135,7 +144,7 @@ const PortfolioStats = () => {
     
     // Native coins
     h["SOL"] = solBalance;
-    h["ETH"] = ethBalance;
+    h["ETH"] = (h["ETH"] || 0) + ethBalance + arbBalance;
     h["SUI"] = suiBalance;
     h["TON"] = tonBalance;
     h["TRX"] = trxBalance;
@@ -145,8 +154,13 @@ const PortfolioStats = () => {
       h[token.symbol] = (h[token.symbol] || 0) + token.amount;
     });
     
-    // ERC20 tokens
+    // ERC20 tokens (Ethereum)
     ethTokens.forEach((token) => {
+      h[token.symbol] = (h[token.symbol] || 0) + token.amount;
+    });
+
+    // ERC20 tokens (Arbitrum)
+    arbTokens.forEach((token) => {
       h[token.symbol] = (h[token.symbol] || 0) + token.amount;
     });
     
@@ -207,8 +221,8 @@ const PortfolioStats = () => {
     },
     {
       label: "Networks",
-      value: walletsGenerated ? "5" : "0",
-      change: walletsGenerated ? "SOL, ETH, SUI, TON, TRX" : "Set up wallet",
+      value: walletsGenerated ? "6" : "0",
+      change: walletsGenerated ? "SOL, ETH, ARB, SUI, TON, TRX" : "Set up wallet",
       changePercent: "",
       isPositive: true,
       icon: "solar:safe-circle-bold-duotone",
@@ -264,16 +278,19 @@ const PortfolioStats = () => {
               <div className="relative">
                 <select
                   value={selectedNetwork}
-                  onChange={(e) => setSelectedNetwork(e.target.value as 'solana' | 'ethereum')}
+                  onChange={(e) => setSelectedNetwork(e.target.value as 'solana' | 'ethereum' | 'arbitrum')}
                   className="appearance-none bg-muted/20 dark:bg-white/5 border border-border/50 dark:border-white/10 rounded-lg pl-7 pr-6 py-1.5 text-[11px] font-medium text-dark dark:text-white cursor-pointer hover:bg-muted/30 dark:hover:bg-white/10 transition-colors focus:outline-none focus:ring-1 focus:ring-primary/50"
                 >
                   <option value="solana">Solana</option>
                   <option value="ethereum">Ethereum</option>
+                  <option value="arbitrum">Arbitrum</option>
                 </select>
                 <img
                   src={selectedNetwork === 'solana'
                     ? "https://th.bing.com/th/id/OIP.hnScG3zE2G41YaH7Iir9zAHaHa?w=153&h=180&c=7&r=0&o=7&dpr=1.3&pid=1.7&rm=3"
-                    : "https://tse3.mm.bing.net/th/id/OIP.Rbhwx2hMogpqEO08SXJShwHaLo?rs=1&pid=ImgDetMain&o=7&rm=3"}
+                    : selectedNetwork === 'ethereum'
+                    ? "https://tse3.mm.bing.net/th/id/OIP.Rbhwx2hMogpqEO08SXJShwHaLo?rs=1&pid=ImgDetMain&o=7&rm=3"
+                    : "https://th.bing.com/th/id/OIP.i-6rTfC5_9j-f_4_rXv-rQHaHa?rs=1&pid=ImgDetMain"}
                   alt=""
                   className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full pointer-events-none"
                 />
@@ -285,8 +302,10 @@ const PortfolioStats = () => {
               ${mainWalletBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </h3>
             <p className="text-xs text-muted">
-              {walletsGenerated && addresses?.[selectedNetwork]
-                ? `${addresses[selectedNetwork].slice(0, 8)}...${addresses[selectedNetwork].slice(-6)}`
+              {walletsGenerated && addresses
+                ? (selectedNetwork === 'arbitrum' 
+                    ? `${addresses.ethereum.slice(0, 8)}...${addresses.ethereum.slice(-6)}`
+                    : `${addresses[selectedNetwork].slice(0, 8)}...${addresses[selectedNetwork].slice(-6)}`)
                 : "Set up wallet to view address"
               }
             </p>
