@@ -76,7 +76,7 @@ const EvmContext = createContext<EvmContextType | undefined>(undefined);
 
 // RCPs from ENVs
 const ETH_RPC = process.env.NEXT_PUBLIC_ETH_RPC || "https://eth-mainnet.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITN";
-const ARB_RPC = process.env.NEXT_PUBLIC_ARBITRUM_SEPOLIA_RPC_URL || "https://arb-sepolia.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITN";
+const ARB_RPC = process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL || "https://arb-mainnet.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITN";
 
 // Singleton provider instances
 let ethProvider: ethers.JsonRpcProvider | null = null;
@@ -237,7 +237,7 @@ export function EvmProvider({ children }: { children: ReactNode }) {
         setBalance(ethData.native);
         setTokenBalances(ethData.tokens);
 
-        // Fetch Arbitrum (Sepolia as testnet)
+        // Fetch Arbitrum Mainnet
         const arbData = await fetchChainData(targetAddr, arbProvider, ARBITRUM_TOKENS, 'arbitrum');
         setArbitrumBalance(arbData.native);
         setArbitrumTokenBalances(arbData.tokens);

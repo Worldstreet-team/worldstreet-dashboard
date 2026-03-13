@@ -808,7 +808,7 @@ export const SOLANA_TOKENS: TokenInfo[] = [
   },
 ];
 
-// Arbitrum Tokens (Mainnet + Sepolia)
+// Arbitrum Tokens (Mainnet)
 export const ARBITRUM_TOKENS: TokenInfo[] = [
   {
     symbol: "USDC",
@@ -820,12 +820,12 @@ export const ARBITRUM_TOKENS: TokenInfo[] = [
     isPopular: true,
   },
   {
-    symbol: "USDC_TEST",
-    name: "USDC (Sepolia)",
-    address: "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d", // Sepolia
+    symbol: "USDT",
+    name: "Tether USD",
+    address: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9",
     decimals: 6,
-    logoURI: "https://assets.coingecko.com/coins/images/6319/small/usdc.png",
-    coingeckoId: "usd-coin",
+    logoURI: "https://assets.coingecko.com/coins/images/325/small/Tether.png",
+    coingeckoId: "tether",
     isPopular: true,
   },
   {

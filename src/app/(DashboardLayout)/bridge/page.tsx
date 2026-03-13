@@ -53,7 +53,14 @@ const CHAIN_TOKEN_MAP: Record<number, Record<string, string>> = {
 
 export default function BridgePage() {
   const { addresses } = useWallet();
-  const { balance, tokenBalances, loading: evmLoading, fetchBalance } = useEvm();
+  const { 
+    balance: ethBalance, 
+    tokenBalances: ethTokenBalances, 
+    arbitrumBalance,
+    arbitrumTokenBalances,
+    loading: evmLoading, 
+    fetchBalance 
+  } = useEvm();
 
   const [fromChain, setFromChain] = useState(CHAINS[0]);
   const [toChain, setToChain] = useState(CHAINS[1]);
@@ -67,7 +74,28 @@ export default function BridgePage() {
   
   const [isExecuting, setIsExecuting] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
-  const [status, setStatus] = useState<'idle' | 'quoting' | 'executing' | 'success' | 'failed'>('idle');
+  const [status, setStatus] = useState<'idle' | 'quoting' | 'approving' | 'executing' | 'success' | 'failed'>('idle');
+
+  // Determine correct balances based on selected fromChain. (Currently supporting ETH & ARB)
+  const currentNativeBalance = fromChain.id === 42161 ? arbitrumBalance : ethBalance;
+  const currentTokenBalances = fromChain.id === 42161 ? arbitrumTokenBalances : ethTokenBalances;
+
+  // Prevent same-chain bridging by swapping if identical
+  const handleFromChainChange = (val: string) => {
+    const newChain = CHAINS.find(c => c.name === val)!;
+    if (newChain.id === toChain.id) {
+      setToChain(fromChain);
+    }
+    setFromChain(newChain);
+  };
+
+  const handleToChainChange = (val: string) => {
+    const newChain = CHAINS.find(c => c.name === val)!;
+    if (newChain.id === fromChain.id) {
+      setFromChain(toChain);
+    }
+    setToChain(newChain);
+  };
 
   // Helper to get token object with correct address for current chain
   const getTokenForChain = (symbol: string, chainId: number) => {
@@ -111,19 +139,29 @@ export default function BridgePage() {
       setQuote(data);
     } catch (err: any) {
       console.error('Bridge Quote Error:', err);
+      // Optional: avoid showing loud errors on background requotes, but we keep it for now.
       setError(err.message || 'Failed to get bridge quote');
     } finally {
       setIsLoadingQuote(false);
     }
-  }, [amount, fromChain, toChain, fromToken, toToken, addresses]);
+  }, [amount, fromChain.id, toChain.id, fromToken.address, fromToken.decimals, toToken.address, addresses?.ethereum]);
 
-  // Debounce quote fetching
+  // Debounce quote fetching for user inputs
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchQuote();
     }, 1000);
     return () => clearTimeout(timer);
   }, [fetchQuote]);
+
+  // Periodic requote every 30 seconds
+  useEffect(() => {
+    if (!amount || parseFloat(amount) <= 0) return;
+    const interval = setInterval(() => {
+      fetchQuote();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [fetchQuote, amount]);
 
   const handleBridge = async () => {
     if (!quote || !addresses?.ethereum) return;
@@ -133,11 +171,65 @@ export default function BridgePage() {
     setError(null);
 
     try {
-      // 1. Check if approval is needed (if Li.Fi suggests it)
-      // For simplicity, we assume native ETH or pre-approved for now, 
-      // but a full implementation should handle ERC20 approvals.
-      
-      // 2. Execute the bridge transaction
+      const fromAmountRaw = ethers.parseUnits(amount, fromToken.decimals).toString();
+
+      // 1. Check if approval is needed for ERC20s (if Li.Fi suggests it)
+      const approvalAddress = quote.estimate.approvalAddress;
+      if (fromToken.address !== '0x0000000000000000000000000000000000000000' && approvalAddress) {
+        const rpcUrl = fromChain.id === 42161 
+          ? (process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL || "https://arb-mainnet.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITN")
+          : (process.env.NEXT_PUBLIC_ETH_RPC || "https://eth-mainnet.g.alchemy.com/v2/uvE7piT7UVw4cgmTePITN");
+          
+        const provider = new ethers.JsonRpcProvider(rpcUrl);
+        const erc20Abi = [
+          "function allowance(address owner, address spender) view returns (uint256)",
+          "function approve(address spender, uint256 amount) returns (bool)"
+        ];
+        const tokenContract = new ethers.Contract(fromToken.address, erc20Abi, provider);
+
+        const allowance = await tokenContract.allowance(addresses.ethereum, approvalAddress);
+        
+        if (BigInt(allowance) < BigInt(fromAmountRaw)) {
+          setStatus('approving');
+          console.log('[Bridge Token Approval] Initiating approval for amount', fromAmountRaw);
+          const approveData = tokenContract.interface.encodeFunctionData("approve", [approvalAddress, ethers.MaxUint256]);
+          
+          const approveResponse = await fetch('/api/privy/wallet/ethereum/execute-transaction', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: fromToken.address,
+              data: approveData,
+              value: "0x0",
+              chainId: fromChain.id,
+            })
+          });
+
+          const approveResult = await approveResponse.json();
+          if (!approveResult.success) {
+            throw new Error(approveResult.error || 'Token approval failed');
+          }
+
+          console.log('[Bridge Token Approval] Broadcasted:', approveResult.transactionHash);
+
+          // Wait for approval confirmation (max 45 seconds for safety)
+          let receipt = null;
+          let retries = 0;
+          while (!receipt && retries < 15) {
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            receipt = await provider.getTransactionReceipt(approveResult.transactionHash);
+            retries++;
+          }
+          if (!receipt || receipt.status !== 1) {
+            throw new Error("Approval transaction failed or timed out.");
+          }
+          
+          console.log('[Bridge Token Approval] Confirmed!');
+          setStatus('executing'); 
+        }
+      }
+
+      // 2. Execute the bridge/swap transaction
       const txRequest = quote.transactionRequest;
       
       const response = await fetch('/api/privy/wallet/ethereum/execute-transaction', {
@@ -177,42 +269,42 @@ export default function BridgePage() {
   };
 
   return (
-    <div className="min-h-full bg-[#0b0e11] text-white p-6 md:p-12">
+    <div className="min-h-full bg-slate-50 text-slate-900 p-6 md:p-12">
       <div className="max-w-2xl mx-auto">
         <div className="flex items-center gap-3 mb-8">
-          <div className="p-3 bg-[#fcd535]/10 rounded-2xl">
-            <Icon icon="ph:bridge-bold" className="text-[#fcd535]" width={28} />
+          <div className="p-3 bg-[#fcd535]/20 rounded-2xl">
+            <Icon icon="ph:bridge-bold" className="text-yellow-600" width={28} />
           </div>
           <div>
             <h1 className="text-3xl font-bold">Cross-Chain Bridge</h1>
-            <p className="text-slate-400 text-sm">Powered by LI.FI Protocol</p>
+            <p className="text-slate-500 text-sm">Powered by LI.FI Protocol</p>
           </div>
         </div>
 
-        <Card className="bg-[#161a1e] border-[#2b3139] shadow-2xl overflow-hidden p-0">
+        <Card className="bg-white border-slate-200 shadow-xl overflow-hidden p-0">
           <div className="bg-[#fcd535] h-1 w-full" />
           <CardContent className="p-8">
             <div className="space-y-6">
               {/* FROM SECTION */}
               <div className="space-y-3">
                 <div className="flex justify-between items-center text-sm font-medium">
-                  <span className="text-slate-400">From</span>
+                  <span className="text-slate-500">From</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-slate-500">Balance:</span>
-                    <span className="text-white">
-                      {fromToken.symbol === 'ETH' ? balance.toFixed(4) : (tokenBalances.find(t => t.symbol === fromToken.symbol)?.amount || 0).toFixed(2)} {fromToken.symbol}
+                    <span className="text-slate-400">Balance:</span>
+                    <span className="text-slate-900 font-bold">
+                      {fromToken.symbol === 'ETH' ? currentNativeBalance.toFixed(4) : (currentTokenBalances.find(t => t.symbol === fromToken.symbol)?.amount || 0).toFixed(2)} {fromToken.symbol}
                     </span>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Select 
-                    onValueChange={(val) => setFromChain(CHAINS.find(c => c.name === val)!)}
-                    defaultValue={fromChain.name}
+                    onValueChange={handleFromChainChange}
+                    value={fromChain.name}
                   >
-                    <SelectTrigger className="bg-[#0b0e11] border-[#2b3139] h-14">
+                    <SelectTrigger className="bg-slate-50 border-slate-200 h-14">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-[#161a1e] border-[#2b3139] text-white">
+                    <SelectContent className="bg-white border-slate-200 text-slate-900">
                       {CHAINS.map(chain => (
                         <SelectItem key={chain.id} value={chain.name}>
                           <div className="flex items-center gap-2">
@@ -228,10 +320,10 @@ export default function BridgePage() {
                     onValueChange={(val) => setFromTokenSymbol(val)}
                     defaultValue={fromTokenSymbol}
                   >
-                    <SelectTrigger className="bg-[#0b0e11] border-[#2b3139] h-14">
+                    <SelectTrigger className="bg-slate-50 border-slate-200 h-14">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-[#161a1e] border-[#2b3139] text-white">
+                    <SelectContent className="bg-white border-slate-200 text-slate-900">
                       {POPULAR_TOKENS.map(token => (
                         <SelectItem key={token.symbol} value={token.symbol}>
                           <div className="flex items-center gap-2">
@@ -250,11 +342,14 @@ export default function BridgePage() {
                     placeholder="0.00"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
-                    className="bg-[#0b0e11] border-[#2b3139] h-20 text-3xl font-bold focus:border-[#fcd535] transition-all pr-20"
+                    className="bg-slate-50 border-slate-200 h-20 text-3xl font-bold focus:border-[#fcd535] transition-all pr-20 text-slate-900"
                   />
                   <button 
-                    onClick={() => setAmount(balance.toString())}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-[#fcd535] font-bold text-sm hover:text-[#fcd535]/80"
+                    onClick={() => {
+                      const maxBal = fromToken.symbol === 'ETH' ? currentNativeBalance : (currentTokenBalances.find(t => t.symbol === fromToken.symbol)?.amount || 0);
+                      setAmount(maxBal.toString());
+                    }}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-yellow-600 font-bold text-sm hover:text-yellow-700"
                   >
                     MAX
                   </button>
@@ -265,26 +360,26 @@ export default function BridgePage() {
               <div className="flex justify-center -my-3 relative z-10">
                 <button 
                   onClick={swapChains}
-                  className="bg-[#2b3139] p-3 rounded-xl hover:bg-[#fcd535] hover:text-[#0b0e11] transition-all shadow-lg group"
+                  className="bg-slate-100 p-3 rounded-xl hover:bg-[#fcd535] hover:text-white transition-all shadow-md border border-slate-200 group"
                 >
-                  <Icon icon="ph:arrows-down-up-bold" className="group-hover:rotate-180 transition-transform duration-500" />
+                  <Icon icon="ph:arrows-down-up-bold" className="group-hover:rotate-180 transition-transform duration-500 text-slate-600 group-hover:text-white" />
                 </button>
               </div>
 
               {/* TO SECTION */}
               <div className="space-y-3">
                 <div className="flex justify-between items-center text-sm font-medium">
-                  <span className="text-slate-400">To</span>
+                  <span className="text-slate-500">To</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Select 
-                    onValueChange={(val) => setToChain(CHAINS.find(c => c.name === val)!)}
-                    defaultValue={toChain.name}
+                    onValueChange={handleToChainChange}
+                    value={toChain.name}
                   >
-                    <SelectTrigger className="bg-[#0b0e11] border-[#2b3139] h-14">
+                    <SelectTrigger className="bg-slate-50 border-slate-200 h-14">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-[#161a1e] border-[#2b3139] text-white">
+                    <SelectContent className="bg-white border-slate-200 text-slate-900">
                       {CHAINS.map(chain => (
                         <SelectItem key={chain.id} value={chain.name}>
                           <div className="flex items-center gap-2">
@@ -300,10 +395,10 @@ export default function BridgePage() {
                     onValueChange={(val) => setToTokenSymbol(val)}
                     defaultValue={toTokenSymbol}
                   >
-                    <SelectTrigger className="bg-[#0b0e11] border-[#2b3139] h-14">
+                    <SelectTrigger className="bg-slate-50 border-slate-200 h-14">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-[#161a1e] border-[#2b3139] text-white">
+                    <SelectContent className="bg-white border-slate-200 text-slate-900">
                       {POPULAR_TOKENS.map(token => (
                         <SelectItem key={token.symbol} value={token.symbol}>
                           <div className="flex items-center gap-2">
@@ -316,28 +411,63 @@ export default function BridgePage() {
                   </Select>
                 </div>
 
-                <div className="bg-[#0b0e11] border border-[#2b3139] rounded-xl h-20 px-4 flex items-center justify-between">
-                  <span className={`text-3xl font-bold ${isLoadingQuote ? 'animate-pulse text-slate-700' : 'text-white'}`}>
-                    {quote ? parseFloat(quote.estimate.toAmount).toFixed(6) : '0.00'}
+                <div className="bg-slate-50 border border-slate-200 rounded-xl h-20 px-4 flex items-center justify-between">
+                  <span className={`text-3xl font-bold ${isLoadingQuote ? 'animate-pulse text-slate-400' : 'text-slate-900'}`}>
+                    {quote ? parseFloat(ethers.formatUnits(quote.estimate.toAmount, toToken.decimals)).toFixed(6) : '0.00'}
                   </span>
-                  <span className="text-slate-500 font-bold">{toToken.symbol}</span>
+                  <span className="text-slate-600 font-bold">{toToken.symbol}</span>
                 </div>
               </div>
 
               {/* ESTIMATES & FEES */}
               {quote && (
-                <div className="p-4 bg-[#0b0e11]/50 rounded-xl border border-[#2b3139] space-y-3 text-sm">
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-500">Estimated Arrival</span>
-                    <span className="text-slate-300 font-medium">{Math.floor(quote.estimate.executionDuration / 60)} min</span>
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3 text-sm">
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+                    <span className="text-slate-500 font-semibold">Route Summary</span>
+                    <span className="text-xs bg-[#fcd535]/20 text-yellow-700 px-2 py-1 rounded capitalize font-bold">
+                      Via {quote.tool}
+                    </span>
                   </div>
+                  
                   <div className="flex justify-between items-center">
-                    <span className="text-slate-500">Bridge Fee</span>
-                    <span className="text-slate-300 font-medium">${parseFloat(quote.estimate.feeCosts?.[0]?.amountUSD || '0').toFixed(2)}</span>
+                    <span className="text-slate-500">Expected Output</span>
+                    <div className="text-right">
+                      <div className="text-slate-900 font-bold">
+                        {parseFloat(ethers.formatUnits(quote.estimate.toAmount, toToken.decimals)).toFixed(6)} {toToken.symbol}
+                      </div>
+                      <div className="text-[10px] text-slate-500">~${parseFloat(quote.estimate.toAmountUSD || '0').toFixed(2)}</div>
+                    </div>
                   </div>
+                  
                   <div className="flex justify-between items-center">
-                    <span className="text-slate-500">Gas Cost</span>
-                    <span className="text-slate-300 font-medium">${parseFloat(quote.estimate.gasCosts?.[0]?.amountUSD || '0').toFixed(2)}</span>
+                    <span className="text-slate-500">Minimum Output</span>
+                    <div className="text-right">
+                      <div className="text-slate-700 font-medium">
+                        {parseFloat(ethers.formatUnits(quote.estimate.toAmountMin, toToken.decimals)).toFixed(6)} {toToken.symbol}
+                      </div>
+                      <div className="text-[10px] text-slate-500">Max Slippage: {(quote.action.slippage * 100).toFixed(2)}%</div>
+                    </div>
+                  </div>
+
+                  <div className="h-px bg-slate-200 my-1 w-full" />
+
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500">Protocol Fees</span>
+                    <span className="text-slate-700 font-medium">
+                      ${quote.estimate.feeCosts?.reduce((sum: number, fee: any) => sum + parseFloat(fee.amountUSD || '0'), 0).toFixed(4) || '0.0000'}
+                    </span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500">Gas Cost (Est.)</span>
+                    <span className="text-slate-700 font-medium">
+                      ${quote.estimate.gasCosts?.reduce((sum: number, fee: any) => sum + parseFloat(fee.amountUSD || '0'), 0).toFixed(4) || '0.0000'}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-500">Est. Time</span>
+                    <span className="text-slate-700 font-medium">{Math.ceil(quote.estimate.executionDuration / 60)} min(s)</span>
                   </div>
                 </div>
               )}

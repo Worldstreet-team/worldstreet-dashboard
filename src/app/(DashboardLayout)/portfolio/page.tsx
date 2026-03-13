@@ -81,6 +81,12 @@ export default function PortfolioPage() {
 
   const [activeTab, setActiveTab] = useState<'overview' | 'wallets' | 'fund'>('overview');
   const [transferAmount, setTransferAmount] = useState('');
+  
+  // Find Arbitrum USDC specifically for funding
+  const arbUsdc = React.useMemo(() => {
+    return arbTokenBalances.find(t => t.symbol === 'USDC') || { symbol: 'USDC', amount: 0, decimals: 6 };
+  }, [arbTokenBalances]);
+
   const [selectedAsset, setSelectedAsset] = useState(mainBalances[0] || { asset: 'ETH', chain: 'ethereum', balance: 0, usdValue: 0 });
   const [isTransferring, setIsTransferring] = useState(false);
   const [transferStatus, setTransferStatus] = useState<{ success?: boolean; error?: string } | null>(null);
@@ -412,35 +418,23 @@ export default function PortfolioPage() {
                   <h3 className="text-xl font-bold mb-6 text-white">Fund Trading Wallet</h3>
                   
                   <div className="space-y-6">
-                    {/* Source Asset Selection */}
+                    {/* Fixed Source Asset for HL Funding */}
                     <div>
-                      <label className="text-sm text-slate-400 mb-2 block">Source Asset</label>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        {mainBalances.length > 0 ? (
-                          mainBalances.slice(0, 4).map((b) => (
-                            <button
-                              key={`${b.chain}-${b.asset}`}
-                              onClick={() => setSelectedAsset(b)}
-                              className={`p-3 rounded-xl border transition-all flex flex-col items-center gap-2 ${
-                                selectedAsset.asset === b.asset && selectedAsset.chain === b.chain
-                                  ? 'bg-[#fcd535]/10 border-[#fcd535]'
-                                  : 'bg-[#0b0e11] border-[#2b3139] hover:bg-[#2b3139]/30'
-                              }`}
-                            >
-                              <div className="w-8 h-8 rounded-full bg-[#161a1e] flex items-center justify-center">
-                                <Icon icon={b.asset === 'ETH' ? 'logos:ethereum' : `cryptocurrency-color:${b.asset.toLowerCase()}`} />
-                              </div>
-                              <div className="text-center">
-                                <p className="text-xs font-bold text-white">{b.asset}</p>
-                                <p className="text-[10px] text-slate-500 capitalize">{b.chain}</p>
-                              </div>
-                            </button>
-                          ))
-                        ) : (
-                          <div className="col-span-full p-4 bg-[#0b0e11] rounded-xl border border-dashed border-[#2b3139] text-center text-slate-500 text-sm">
-                            No fundable assets found
+                      <label className="text-sm text-slate-400 mb-2 block">Deposit Asset</label>
+                      <div className="p-4 bg-[#fcd535]/5 border border-[#fcd535] rounded-xl flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-[#161a1e] flex items-center justify-center border border-[#fcd535]/20">
+                            <Icon icon="cryptocurrency-color:usdc" width={24} />
                           </div>
-                        )}
+                          <div>
+                            <p className="font-bold text-white">USDC</p>
+                            <p className="text-xs text-slate-400">Arbitrum Mainnet</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-bold text-[#0ecb81]">{arbUsdc.amount.toFixed(2)}</p>
+                          <p className="text-[10px] text-slate-500">Available</p>
+                        </div>
                       </div>
                     </div>
 
@@ -450,10 +444,10 @@ export default function PortfolioPage() {
                         <div className="p-4 bg-[#0b0e11] rounded-xl border border-[#2b3139]">
                           <p className="text-slate-500 text-xs uppercase mb-2">From</p>
                           <div className="flex justify-between items-center">
-                            <span className="font-bold text-white">Main Account</span>
+                            <span className="font-bold text-white">Main Wallet</span>
                             <div className="flex items-center gap-1.5 text-slate-400 text-sm">
-                              <Icon icon={selectedAsset.chain === 'arbitrum' ? 'logos:arbitrum' : 'logos:ethereum'} width={14} />
-                              {selectedAsset.chain.charAt(0).toUpperCase() + selectedAsset.chain.slice(1)}
+                              <Icon icon="logos:arbitrum" width={14} />
+                              Arbitrum
                             </div>
                           </div>
                         </div>
@@ -475,11 +469,11 @@ export default function PortfolioPage() {
                       </div>
                     </div>
 
-                    {/* Amount Input */}
+                     {/* Amount Input */}
                     <div>
                       <div className="flex justify-between mb-2">
-                        <label className="text-sm text-slate-400">Transfer Amount ({selectedAsset.asset})</label>
-                        <span className="text-xs text-slate-500">Max: {selectedAsset.balance.toFixed(4)} {selectedAsset.asset}</span>
+                        <label className="text-sm text-slate-400">Amount (USDC)</label>
+                        <span className="text-xs text-slate-500">Available: {arbUsdc.amount.toFixed(2)} USDC</span>
                       </div>
                       <div className="relative">
                         <input 
@@ -490,36 +484,14 @@ export default function PortfolioPage() {
                           className="w-full bg-[#0b0e11] border border-[#2b3139] rounded-xl px-4 py-4 text-xl font-bold text-white focus:outline-none focus:border-[#fcd535] transition-colors"
                         />
                         <button 
-                          onClick={() => setTransferAmount(selectedAsset.balance.toString())}
+                          onClick={() => setTransferAmount(arbUsdc.amount.toString())}
                           className="absolute right-4 top-1/2 -translate-y-1/2 text-[#fcd535] font-bold text-sm"
                         >
                           MAX
                         </button>
                       </div>
 
-                      {/* Bridge Preview */}
-                      {(selectedAsset.chain !== 'arbitrum' || selectedAsset.asset !== 'USDC') && (
-                        <div className="mt-4 p-4 bg-[#1f2329]/50 rounded-xl border border-[#2b3139] space-y-2">
-                          <div className="flex justify-between items-center text-sm">
-                            <span className="text-slate-400">Estimated Output</span>
-                            <div className="flex items-center gap-2">
-                              {isQuoting ? (
-                                <Icon icon="ph:spinner" className="animate-spin text-[#fcd535]" />
-                              ) : (
-                                <span className="font-bold text-[#0ecb81]">
-                                  {quote ? `${quote.toAmount.toFixed(2)} USDC` : '--'}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex justify-between items-center text-[10px]">
-                            <span className="text-slate-500">Bridge & Swap Fee</span>
-                            <span className="text-slate-400">{quote ? `${quote.fee} USDC` : '--'}</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
+                      </div>
                     {transferStatus?.success && (
                       <Alert className="bg-[#0ecb81]/10 border-[#0ecb81]/20 text-[#0ecb81]">
                         <Icon icon="ph:check-circle-fill" className="h-4 w-4 text-[#0ecb81]" />
