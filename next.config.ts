@@ -51,11 +51,21 @@ const nextConfig: NextConfig = {
       crypto: false,
     };
 
-    // Fix TronWeb's @noble/hashes import issue
+    // Fix TronWeb's @noble packages import issues
     config.resolve.alias = {
       ...config.resolve.alias,
       '@noble/hashes/sha3': '@noble/hashes/sha3',
+      '@noble/hashes/utils': '@noble/hashes/utils', 
+      '@noble/curves/secp256k1': '@noble/curves/secp256k1',
     };
+
+    // Add module resolution for TronWeb compatibility
+    config.module.rules.push({
+      test: /node_modules\/tronweb/,
+      resolve: {
+        fullySpecified: false,
+      },
+    });
 
     return config;
   },

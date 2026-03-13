@@ -6,6 +6,7 @@ settings:
 
 overrides:
   '@noble/hashes': 1.3.3
+  '@noble/curves': 1.9.7
 
 importers:
 
@@ -29,6 +30,12 @@ importers:
       '@mysten/sui.js':
         specifier: ^0.54.1
         version: 0.54.1(typescript@5.9.3)
+      '@noble/curves':
+        specifier: 1.9.7
+        version: 1.9.7
+      '@noble/hashes':
+        specifier: 1.3.3
+        version: 1.3.3
       '@privy-io/node':
         specifier: ^0.10.1
         version: 0.10.1(@solana/kit@6.3.1(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6))(viem@2.47.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.3.6))
@@ -59,9 +66,6 @@ importers:
       '@radix-ui/react-tabs':
         specifier: ^1.1.13
         version: 1.1.13(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      '@scure/base':
-        specifier: ^2.0.0
-        version: 2.0.0
       '@solana/kit':
         specifier: ^6.3.1
         version: 6.3.1(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
@@ -1622,35 +1626,9 @@ packages:
     resolution: {integrity: sha512-2I0gnIVPtfnMw9ee9h1dJG7tp81+8Ob3OJb3Mv37rx5L40/b0i7djjCVvGOVqc9AEIQyvyu1i6ypKdFw8R8gQw==}
     engines: {node: ^14.21.3 || >=16}
 
-  '@noble/curves@1.2.0':
-    resolution: {integrity: sha512-oYclrNgRaM9SsBUBVbb8M6DTV7ZHRTKugureoYEncY5c65HOmRzvSiTE3y5CYaPYJA/GVkrhXEoF0M3Ya9PMnw==}
-
-  '@noble/curves@1.4.2':
-    resolution: {integrity: sha512-TavHr8qycMChk8UwMld0ZDRvatedkzWfH8IiaeGCfymOP5i0hSCozz9vHOL0nkwk7HRMlFnAiKpS2jrUmSybcw==}
-
-  '@noble/curves@1.8.0':
-    resolution: {integrity: sha512-j84kjAbzEnQHaSIhRPUmB3/eVXu2k3dKPl2LOrR8fSOIL+89U+7lV117EWHtq/GHM3ReGHM46iRBdZfpc4HRUQ==}
-    engines: {node: ^14.21.3 || >=16}
-
-  '@noble/curves@1.8.1':
-    resolution: {integrity: sha512-warwspo+UYUPep0Q+vtdVB4Ugn8GGQj8iyB3gnRWsztmUHTI3S1nhdiWNsPUGL0vud7JlRRk1XEu7Lq1KGTnMQ==}
-    engines: {node: ^14.21.3 || >=16}
-
-  '@noble/curves@1.9.1':
-    resolution: {integrity: sha512-k11yZxZg+t+gWvBbIswW0yoJlu8cHOC7dhunwOzoWH/mXGBiYyR4YY6hAEK/3EUs4UpB8la1RfdRpeGsFHkWsA==}
-    engines: {node: ^14.21.3 || >=16}
-
-  '@noble/curves@1.9.6':
-    resolution: {integrity: sha512-GIKz/j99FRthB8icyJQA51E8Uk5hXmdyThjgQXRKiv9h0zeRlzSCLIzFw6K1LotZ3XuB7yzlf76qk7uBmTdFqA==}
-    engines: {node: ^14.21.3 || >=16}
-
   '@noble/curves@1.9.7':
     resolution: {integrity: sha512-gbKGcRUYIjA3/zCCNaWDciTMFI0dCkvou3TL8Zmy5Nc7sJ47a0jtOeZoTaMxkuqRo9cRhjOdZJXegxYE5FN/xw==}
     engines: {node: ^14.21.3 || >=16}
-
-  '@noble/curves@2.0.1':
-    resolution: {integrity: sha512-vs1Az2OOTBiP4q0pwjW5aF0xp9n4MxVrmkFBxc6EKZc6ddYx5gaZiAsZoq0uRRXWbi3AT/sBqn05eRPtn1JCPw==}
-    engines: {node: '>= 20.19.0'}
 
   '@noble/hashes@1.3.3':
     resolution: {integrity: sha512-V7/fPHgl+jsVPXqqeOzT8egNj2iBIVt+ECeMMG8TdcnTikP3oaBtUVqpT/gYCR68aEBJSF+XbYUxStjbFMqIIA==}
@@ -10490,7 +10468,7 @@ snapshots:
       '@graphql-typed-document-node/core': 3.2.0(graphql@16.13.0)
       '@mysten/bcs': 2.0.2
       '@mysten/utils': 0.3.1
-      '@noble/curves': 2.0.1
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.3.3
       '@protobuf-ts/grpcweb-transport': 2.11.1
       '@protobuf-ts/runtime': 2.11.1
@@ -10598,35 +10576,7 @@ snapshots:
 
   '@noble/ciphers@1.3.0': {}
 
-  '@noble/curves@1.2.0':
-    dependencies:
-      '@noble/hashes': 1.3.3
-
-  '@noble/curves@1.4.2':
-    dependencies:
-      '@noble/hashes': 1.3.3
-
-  '@noble/curves@1.8.0':
-    dependencies:
-      '@noble/hashes': 1.3.3
-
-  '@noble/curves@1.8.1':
-    dependencies:
-      '@noble/hashes': 1.3.3
-
-  '@noble/curves@1.9.1':
-    dependencies:
-      '@noble/hashes': 1.3.3
-
-  '@noble/curves@1.9.6':
-    dependencies:
-      '@noble/hashes': 1.3.3
-
   '@noble/curves@1.9.7':
-    dependencies:
-      '@noble/hashes': 1.3.3
-
-  '@noble/curves@2.0.1':
     dependencies:
       '@noble/hashes': 1.3.3
 
@@ -12018,13 +11968,13 @@ snapshots:
 
   '@scure/bip32@1.4.0':
     dependencies:
-      '@noble/curves': 1.4.2
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.3.3
       '@scure/base': 1.1.9
 
   '@scure/bip32@1.6.2':
     dependencies:
-      '@noble/curves': 1.8.1
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.3.3
       '@scure/base': 1.2.6
 
@@ -12036,7 +11986,7 @@ snapshots:
 
   '@scure/bip32@2.0.1':
     dependencies:
-      '@noble/curves': 2.0.1
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.3.3
       '@scure/base': 2.0.0
 
@@ -14720,7 +14670,7 @@ snapshots:
 
   '@walletconnect/relay-auth@1.1.0':
     dependencies:
-      '@noble/curves': 1.8.0
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.3.3
       '@walletconnect/safe-json': 1.0.2
       '@walletconnect/time': 1.0.2
@@ -15157,7 +15107,7 @@ snapshots:
   '@walletconnect/utils@2.21.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@3.25.76)':
     dependencies:
       '@noble/ciphers': 1.2.1
-      '@noble/curves': 1.8.1
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.3.3
       '@walletconnect/jsonrpc-utils': 1.0.8
       '@walletconnect/keyvaluestorage': 1.1.1
@@ -15201,7 +15151,7 @@ snapshots:
   '@walletconnect/utils@2.21.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@3.25.76)':
     dependencies:
       '@noble/ciphers': 1.2.1
-      '@noble/curves': 1.8.1
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.3.3
       '@walletconnect/jsonrpc-utils': 1.0.8
       '@walletconnect/keyvaluestorage': 1.1.1
@@ -16613,7 +16563,7 @@ snapshots:
 
   ethereum-cryptography@2.2.1:
     dependencies:
-      '@noble/curves': 1.4.2
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.3.3
       '@scure/bip32': 1.4.0
       '@scure/bip39': 1.3.0
@@ -16621,7 +16571,7 @@ snapshots:
   ethers@6.13.5(bufferutil@4.1.0)(utf-8-validate@6.0.6):
     dependencies:
       '@adraffy/ens-normalize': 1.10.1
-      '@noble/curves': 1.2.0
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.3.3
       '@types/node': 22.7.5
       aes-js: 4.0.0-beta.5
@@ -16634,7 +16584,7 @@ snapshots:
   ethers@6.16.0(bufferutil@4.1.0)(utf-8-validate@6.0.6):
     dependencies:
       '@adraffy/ens-normalize': 1.10.1
-      '@noble/curves': 1.2.0
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.3.3
       '@types/node': 22.7.5
       aes-js: 4.0.0-beta.5
@@ -17894,7 +17844,7 @@ snapshots:
     dependencies:
       '@adraffy/ens-normalize': 1.11.1
       '@noble/ciphers': 1.3.0
-      '@noble/curves': 1.9.1
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.3.3
       '@scure/bip32': 1.7.0
       '@scure/bip39': 1.6.0
@@ -17909,7 +17859,7 @@ snapshots:
     dependencies:
       '@adraffy/ens-normalize': 1.11.1
       '@noble/ciphers': 1.3.0
-      '@noble/curves': 1.9.1
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.3.3
       '@scure/bip32': 1.7.0
       '@scure/bip39': 1.6.0
@@ -17924,7 +17874,7 @@ snapshots:
     dependencies:
       '@adraffy/ens-normalize': 1.11.1
       '@noble/ciphers': 1.3.0
-      '@noble/curves': 1.9.1
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.3.3
       '@scure/bip32': 1.7.0
       '@scure/bip39': 1.6.0
@@ -17982,7 +17932,7 @@ snapshots:
     dependencies:
       '@adraffy/ens-normalize': 1.11.1
       '@noble/ciphers': 1.3.0
-      '@noble/curves': 1.9.1
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.3.3
       '@scure/bip32': 1.7.0
       '@scure/bip39': 1.6.0
@@ -17997,7 +17947,7 @@ snapshots:
     dependencies:
       '@adraffy/ens-normalize': 1.11.1
       '@noble/ciphers': 1.3.0
-      '@noble/curves': 1.9.1
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.3.3
       '@scure/bip32': 1.7.0
       '@scure/bip39': 1.6.0
@@ -19379,7 +19329,7 @@ snapshots:
 
   viem@2.23.2(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@3.25.76):
     dependencies:
-      '@noble/curves': 1.8.1
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.3.3
       '@scure/bip32': 1.6.2
       '@scure/bip39': 1.5.4
@@ -19396,7 +19346,7 @@ snapshots:
 
   viem@2.36.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.3.6):
     dependencies:
-      '@noble/curves': 1.9.6
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.3.3
       '@scure/bip32': 1.7.0
       '@scure/bip39': 1.6.0
@@ -19413,7 +19363,7 @@ snapshots:
 
   viem@2.47.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@3.22.4):
     dependencies:
-      '@noble/curves': 1.9.1
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.3.3
       '@scure/bip32': 1.7.0
       '@scure/bip39': 1.6.0
@@ -19430,7 +19380,7 @@ snapshots:
 
   viem@2.47.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@3.25.76):
     dependencies:
-      '@noble/curves': 1.9.1
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.3.3
       '@scure/bip32': 1.7.0
       '@scure/bip39': 1.6.0
@@ -19447,7 +19397,7 @@ snapshots:
 
   viem@2.47.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.3.6):
     dependencies:
-      '@noble/curves': 1.9.1
+      '@noble/curves': 1.9.7
       '@noble/hashes': 1.3.3
       '@scure/bip32': 1.7.0
       '@scure/bip39': 1.6.0
