@@ -17,7 +17,7 @@ import { SuiProvider } from "@/app/context/suiContext";
 import { TonProvider } from "@/app/context/tonContext";
 import { TronProvider } from "@/app/context/tronContext";
 import { SwapProvider } from "@/app/context/swapContext";
-import { WalletPregenerator } from "@/components/privy/WalletPregenerator";
+import { WalletGenerationModal } from "@/components/privy/WalletGenerationModal";
 
 import DashboardVividProvider from "@/components/dashboard/DashboardVividProvider";
 
@@ -81,9 +81,8 @@ export default function Layout({
                       <TonProvider>
                         <TronProvider>
                           <SwapProvider>
-
-                              {/* Pregenerate Privy wallet on first login */}
-                              <WalletPregenerator />
+                              {/* Show modal while wallets are being checked/generated */}
+                              <WalletGenerationModal />
 
                               <DashboardVividProvider>
                             {isFullscreen ? (

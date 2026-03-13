@@ -65,7 +65,7 @@ const SidebarContent: MenuItem[] = [
         icon: 'ph:bridge-duotone',
         id: uniqueId(),
         url: "/bridge",
-        subtitle: "Bridge Tron assets",
+        subtitle: "Bridge between chains",
       },
       {
         name: "Deposits",
