@@ -56,16 +56,23 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
   useEffect(() => {
     if (!isOpen) return;
 
-    const updatePrice = () => {
-      // For now, use a placeholder price since we're removing Drift
-      // In a real implementation, this would get price from Hyperliquid
-      setCurrentMarketPrice(0);
+    const updatePrice = async () => {
+      try {
+        const response = await fetch(`/api/hyperliquid/markets`);
+        const data = await response.json();
+        if (data.success && data.data.markets) {
+           const market = data.data.markets.find((m: any) => m.baseAsset === tokenIn || m.symbol === `${tokenIn}/USDC`);
+           if (market) setCurrentMarketPrice(market.price);
+        }
+      } catch (e) {
+        console.error("Failed to fetch price", e);
+      }
     };
 
     updatePrice();
-    const interval = setInterval(updatePrice, 2000);
+    const interval = setInterval(updatePrice, 5000);
     return () => clearInterval(interval);
-  }, [selectedPair, isOpen]);
+  }, [tokenIn, isOpen]);
 
   useEffect(() => {
     if (!amount || parseFloat(amount) <= 0) {
@@ -123,30 +130,6 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
         setError('Please enter a valid limit price');
         return;
       }
-      
-      // Validate price relationship
-      const stopPriceNum = parseFloat(stopPrice);
-      const limitPriceNum = parseFloat(price);
-      
-      if (side === 'buy') {
-        if (stopPriceNum < currentMarketPrice) {
-          setError('Buy stop price must be above current market price');
-          return;
-        }
-        if (limitPriceNum < stopPriceNum) {
-          setError('Buy limit price must be at or above stop price');
-          return;
-        }
-      } else {
-        if (stopPriceNum > currentMarketPrice) {
-          setError('Sell stop price must be below current market price');
-          return;
-        }
-        if (limitPriceNum > stopPriceNum) {
-          setError('Sell limit price must be at or below stop price');
-          return;
-        }
-      }
     }
 
     if (parseFloat(amount) > currentBalance) {
@@ -154,6 +137,8 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
       return;
     }
 
+    // For Hyperliquid, we skip the "quote" step as it's a direct order
+    // But we use the PIN logic for security if required by the flow
     setShowQuote(true);
   };
 
@@ -174,33 +159,47 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
     setTxSignature('');
     
     try {
-      // For now, show a placeholder message since we're removing Drift
-      // In a real implementation, this would integrate with Hyperliquid trading
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const response = await fetch('/api/hyperliquid/order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          asset: tokenIn,
+          side: side,
+          amount: parseFloat(amount),
+          price: orderType === 'market' ? 0 : parseFloat(price),
+          orderType,
+          stopPrice: orderType === 'stop-limit' ? parseFloat(stopPrice) : undefined
+        })
+      });
 
-      // Success! Transaction sent
-      setProcessingStatus('success');
-      setTxSignature('placeholder-tx-signature');
+      const result = await response.json();
 
-      // Clear form
-      setAmount('');
-      setPrice('');
-      setStopPrice('');
-      setTotal('');
-      setSliderValue(0);
-      setPin('');
+      if (result.success) {
+        // Success! Transaction sent
+        setProcessingStatus('success');
+        // Extract hash or first order result
+        const hash = result.data?.response?.data?.any_perps_failed ? 'Failed' : 'Broadcast Succesful';
+        setTxSignature(hash);
 
-      // Close modal immediately after showing tx hash (2 seconds for user to see/copy)
-      setTimeout(() => {
-        setShowProcessingModal(false);
-        setSuccess(null);
-        onClose();
-      }, 2000);
+        // Clear form
+        setAmount('');
+        setPrice('');
+        setStopPrice('');
+        setTotal('');
+        setSliderValue(0);
+        setPin('');
 
-      // Refresh data in background (non-blocking)
-      setTimeout(() => {
+        // Close modal after showing success
+        setTimeout(() => {
+          setShowProcessingModal(false);
+          onClose();
+        }, 3000);
+
+        // Refresh data in background
         refetchBalances();
-      }, 100);
+      } else {
+        throw new Error(result.error || 'Failed to execute trade');
+      }
       
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to execute trade';

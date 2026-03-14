@@ -82,10 +82,10 @@ export default function HyperliquidBalanceDisplay({
         <Icon icon="cryptocurrency:usdc" width={16} className="text-[#2775ca]" />
         <div className="flex flex-col">
           <span className="text-xs font-medium text-white">
-            ${usdcBalance.available.toFixed(2)}
+            ${accountValue.toFixed(2)}
           </span>
           <span className="text-[9px] text-[#848e9c]">
-            Available USDC
+            Total Balance
           </span>
         </div>
       </div>

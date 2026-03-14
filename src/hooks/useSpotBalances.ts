@@ -22,7 +22,7 @@ export interface UseSpotBalancesReturn {
 export function useSpotBalances(
   baseAsset: string,
   quoteAsset: string
-): UseSpotBalancesReturn {
+ ): UseSpotBalancesReturn {
   const [baseBalance, setBaseBalance] = useState<number>(0);
   const [quoteBalance, setQuoteBalance] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
@@ -33,10 +33,33 @@ export function useSpotBalances(
       setLoading(true);
       setError(null);
 
-      // For now, return mock balances since we're removing Drift
-      // In a real implementation, this would fetch from Hyperliquid or other APIs
-      setBaseBalance(0);
-      setQuoteBalance(0);
+      const response = await fetch('/api/hyperliquid/balance');
+      const data = await response.json();
+
+      if (data.success) {
+        // Use accountValue (Total Equity) for the quote balance if available
+        if (data.data.accountValue !== undefined) {
+          setQuoteBalance(data.data.accountValue);
+        }
+
+        if (data.data.balances) {
+          const balances = data.data.balances;
+          
+          // Find base asset balance
+          const base = balances.find((b: any) => b.coin === baseAsset);
+          setBaseBalance(base ? base.available : 0);
+          
+          // Fallback if accountValue wasn't found (for quoteBalance)
+          if (data.data.accountValue === undefined) {
+             const quote = balances.find((b: any) => b.coin === quoteAsset || (quoteAsset === 'USD' && b.coin === 'USDC'));
+             setQuoteBalance(quote ? quote.total : 0);
+          }
+        }
+      } else {
+        // Fallback or error
+        setBaseBalance(0);
+        setQuoteBalance(0);
+      }
     } catch (err) {
       console.error('Error fetching balances:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch balances');

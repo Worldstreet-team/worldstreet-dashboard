@@ -134,24 +134,39 @@ export default function BinanceOrderForm({
       setIsLoading(true);
       setError(null);
 
-      // For now, show a placeholder message since we're removing Drift
-      // In a real implementation, this would integrate with Hyperliquid trading
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const response = await fetch('/api/hyperliquid/order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          asset: baseAsset,
+          side: activeTab,
+          amount: parseFloat(amount),
+          price: orderType === 'market' ? 0 : parseFloat(price),
+          orderType,
+          stopPrice: orderType === 'stop-limit' ? parseFloat(stopPrice) : undefined
+        })
+      });
+
+      const result = await response.json();
       
-      // Show success message
-      alert(`${activeTab.toUpperCase()} order for ${amount} ${baseAsset} submitted successfully!`);
-      
-      // Reset form
-      setAmount('');
-      setPrice('');
-      setStopPrice('');
-      setTotal('');
-      
-      // Refresh balances
-      refetchBalances();
-      
-      if (onTradeExecuted) {
-        onTradeExecuted();
+      if (result.success) {
+        // Show success message
+        alert(`${activeTab.toUpperCase()} order for ${amount} ${baseAsset} submitted successfully!`);
+        
+        // Reset form
+        setAmount('');
+        if (orderType !== 'market') setPrice('');
+        setStopPrice('');
+        setTotal('');
+        
+        // Refresh balances
+        refetchBalances();
+        
+        if (onTradeExecuted) {
+          onTradeExecuted();
+        }
+      } else {
+        setError(result.error || 'Failed to submit order');
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to submit order';
@@ -274,7 +289,7 @@ export default function BinanceOrderForm({
           <div className="flex justify-between text-xs text-[#848e9c] mb-2">
             <span>Amount</span>
             <span>
-              Available: {activeTab === 'buy' ? quoteBalance.toFixed(4) : baseBalance.toFixed(4)} {activeTab === 'buy' ? quoteAsset : baseAsset}
+              Balance: {activeTab === 'buy' ? quoteBalance.toFixed(4) : baseBalance.toFixed(4)} {activeTab === 'buy' ? quoteAsset : baseAsset}
             </span>
           </div>
           <div className="flex gap-2 mb-3">
