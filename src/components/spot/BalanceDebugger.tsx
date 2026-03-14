@@ -15,8 +15,8 @@ export function BalanceDebugger({ selectedPair }: BalanceDebuggerProps) {
 
   return (
     <div className="fixed bottom-4 right-4 bg-gray-900 text-white p-4 rounded-lg shadow-lg max-w-md text-xs font-mono z-50 overflow-y-auto max-h-[400px]">
-      <h3 className="font-bold mb-2 text-sm text-[#fcd535]">🔍 Hyperliquid Balance Debugger</h3>
-      
+      <h3 className="font-bold mb-2 text-sm text-[#fcd535]">🔍 Trading Session Balance Debugger</h3>
+
       <div className="space-y-3">
         <div className="border-b border-gray-700 pb-2">
           <div className="text-[#fcd535]">Account Status:</div>

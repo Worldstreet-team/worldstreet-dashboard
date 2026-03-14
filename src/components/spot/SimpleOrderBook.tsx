@@ -94,7 +94,7 @@ export default function SimpleOrderBook({ symbol, className = '' }: SimpleOrderB
         {/* Spread */}
         <div className="px-3 py-2 border-y border-border dark:border-darkborder bg-muted/10">
           <div className="text-xs text-center text-muted">
-            Spread: {bids.length > 0 && asks.length > 0 
+            Spread: {bids.length > 0 && asks.length > 0
               ? (parseFloat(asks[0]?.px || '0') - parseFloat(bids[0]?.px || '0')).toFixed(2)
               : '--'
             }
@@ -122,7 +122,7 @@ export default function SimpleOrderBook({ symbol, className = '' }: SimpleOrderB
       {/* Footer */}
       <div className="px-3 py-2 border-t border-border dark:border-darkborder bg-muted/5">
         <div className="text-xs text-muted text-center">
-          Hyperliquid • Last updated: {new Date().toLocaleTimeString()}
+          WorldStreet • Last updated: {new Date().toLocaleTimeString()}
         </div>
       </div>
     </div>

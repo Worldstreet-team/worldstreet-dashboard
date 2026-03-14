@@ -27,20 +27,20 @@ interface BinanceMarketListProps {
   includeStats?: boolean;
 }
 
-export default function BinanceMarketList({ 
-  selectedPair, 
-  onSelectPair, 
-  includeStats = true 
+export default function BinanceMarketList({
+  selectedPair,
+  onSelectPair,
+  includeStats = true
 }: BinanceMarketListProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
   // Use simple Hyperliquid hook
-  const { 
-    markets, 
-    loading, 
+  const {
+    markets,
+    loading,
     error,
-    refetch 
+    refetch
   } = useSimpleHyperliquid({
     refreshInterval: 180000, // 3 minutes
     enabled: true
@@ -87,7 +87,7 @@ export default function BinanceMarketList({
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-medium text-white flex items-center gap-2">
             <Icon icon="cryptocurrency:eth" width={16} />
-            Hyperliquid Spot Markets
+            Spot Markets
           </h3>
           <button
             onClick={refetch}
@@ -101,7 +101,7 @@ export default function BinanceMarketList({
             />
           </button>
         </div>
-        
+
         {/* Search Bar */}
         <div className="relative">
           <Icon
@@ -131,7 +131,7 @@ export default function BinanceMarketList({
         {loading ? (
           <div className="p-8 text-center">
             <Icon icon="ph:spinner" className="mx-auto mb-3 text-[#848e9c] animate-spin" width={40} />
-            <p className="text-sm text-[#848e9c]">Loading Hyperliquid markets...</p>
+            <p className="text-sm text-[#848e9c]">Loading Trading markets...</p>
           </div>
         ) : error ? (
           <div className="p-8 text-center">
@@ -229,7 +229,7 @@ export default function BinanceMarketList({
           <span>{filteredMarkets.length} markets</span>
           <span className="flex items-center gap-1">
             <Icon icon="cryptocurrency:eth" width={12} />
-            Ethereum • Hyperliquid
+            Ethereum • WorldStreet
           </span>
         </div>
       </div>

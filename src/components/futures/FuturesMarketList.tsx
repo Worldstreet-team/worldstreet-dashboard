@@ -82,7 +82,7 @@ export default function FuturesMarketList({ selectedMarketSymbol, onSelectMarket
 
       {/* Header */}
       <div className="px-3 py-2 border-b border-[#1e2329]">
-        <h3 className="text-xs font-bold text-white uppercase">Hyperliquid Futures</h3>
+        <h3 className="text-xs font-bold text-white uppercase">Futures</h3>
       </div>
 
       {/* Column Headers */}
@@ -109,7 +109,7 @@ export default function FuturesMarketList({ selectedMarketSymbol, onSelectMarket
             <p className="text-xs text-[#848e9c]">Loading markets...</p>
           </div>
         ) : error ? (
-           <div className="p-6 text-center">
+          <div className="p-6 text-center">
             <p className="text-xs text-error">{error}</p>
           </div>
         ) : filteredMarkets.length === 0 ? (
@@ -127,9 +127,8 @@ export default function FuturesMarketList({ selectedMarketSymbol, onSelectMarket
               <div
                 key={market.symbol}
                 onClick={() => onSelectMarket(market.symbol)}
-                className={`px-3 py-2 cursor-pointer transition-colors ${
-                  isSelected ? 'bg-[#1e2329]' : 'hover:bg-[#1e2329]'
-                }`}
+                className={`px-3 py-2 cursor-pointer transition-colors ${isSelected ? 'bg-[#1e2329]' : 'hover:bg-[#1e2329]'
+                  }`}
               >
                 <div className="grid grid-cols-[1fr_auto_auto] gap-2 items-center">
                   <div className="flex items-center gap-2 min-w-0">
@@ -163,11 +162,10 @@ export default function FuturesMarketList({ selectedMarketSymbol, onSelectMarket
                   </div>
 
                   <div className="text-right min-w-[60px]">
-                    <div className={`text-xs font-semibold px-2 py-0.5 rounded ${
-                      isPositive 
-                        ? 'bg-[rgba(14,203,129,0.12)] text-[#0ecb81]' 
+                    <div className={`text-xs font-semibold px-2 py-0.5 rounded ${isPositive
+                        ? 'bg-[rgba(14,203,129,0.12)] text-[#0ecb81]'
                         : 'bg-[rgba(246,70,93,0.12)] text-[#f6465d]'
-                    }`}>
+                      }`}>
                       {isPositive ? '+' : ''}{market.change24h.toFixed(2)}%
                     </div>
                   </div>

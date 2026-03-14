@@ -5,10 +5,10 @@ import { useHyperliquid } from '@/app/context/hyperliquidContext';
 import { Icon } from '@iconify/react';
 
 export const HyperliquidAccountStatus: React.FC = () => {
-  const { 
-    isInitialized, 
-    needsInitialization, 
-    canTrade, 
+  const {
+    isInitialized,
+    needsInitialization,
+    canTrade,
     summary,
     isLoading,
     error,
@@ -68,9 +68,9 @@ export const HyperliquidAccountStatus: React.FC = () => {
         <div className="flex items-start gap-3">
           <Icon icon="ph:info" className="text-[#fcd535] flex-shrink-0 mt-0.5" height={20} />
           <div className="flex-1">
-            <h4 className="text-sm font-bold text-[#fcd535] mb-1">Hyperliquid Account Not Initialized</h4>
+            <h4 className="text-sm font-bold text-[#fcd535] mb-1">Trading Account Not Initialized</h4>
             <p className="text-xs text-[#fcd535]/80 mb-4">
-              Your trading wallet needs to be registered with Hyperliquid. Click below to start the process.
+              Your trading wallet needs to be registered. Click below to start the process.
             </p>
             <button
               onClick={handleInitialize}
@@ -85,7 +85,7 @@ export const HyperliquidAccountStatus: React.FC = () => {
               ) : (
                 <span className="flex items-center gap-2">
                   <Icon icon="ph:rocket-launch" height={14} />
-                  Initialize Hyperliquid Account
+                  Initialize Trading Account
                 </span>
               )}
             </button>
@@ -101,7 +101,7 @@ export const HyperliquidAccountStatus: React.FC = () => {
         <div className="flex items-start gap-3">
           <Icon icon="svg-spinners:ring-resize" className="text-[#fcd535] flex-shrink-0 mt-0.5" height={20} />
           <div className="flex-1">
-            <h4 className="text-sm font-bold text-[#fcd535] mb-1">Connecting to Hyperliquid</h4>
+            <h4 className="text-sm font-bold text-[#fcd535] mb-1">Connecting to Trading Session</h4>
             <p className="text-xs text-[#fcd535]/80">
               Please wait while we fetch your account details...
             </p>
@@ -127,10 +127,10 @@ export const HyperliquidAccountStatus: React.FC = () => {
           className="p-1.5 hover:bg-[#2b3139] rounded transition-colors disabled:opacity-50"
           title="Refresh account data"
         >
-          <Icon 
-            icon="ph:arrow-clockwise" 
+          <Icon
+            icon="ph:arrow-clockwise"
             className={`text-[#848e9c] ${refreshing ? 'animate-spin' : ''}`}
-            height={14} 
+            height={14}
           />
         </button>
       </div>
@@ -146,7 +146,7 @@ export const HyperliquidAccountStatus: React.FC = () => {
                 ${summary.totalCollateral.toFixed(2)}
               </p>
             </div>
-            
+
             <div className="bg-[#0ecb81]/10 border border-[#0ecb81]/20 rounded p-1.5">
               <p className="text-[9px] font-medium text-[#0ecb81] mb-0.5 uppercase">
                 Free
@@ -160,13 +160,12 @@ export const HyperliquidAccountStatus: React.FC = () => {
               <p className="text-[9px] font-medium text-[#848e9c] mb-0.5 uppercase">
                 UPnL
               </p>
-              <p className={`text-[12px] font-bold tabular-nums ${
-                summary.unrealizedPnl >= 0 ? 'text-[#0ecb81]' : 'text-[#f6465d]'
-              }`}>
+              <p className={`text-[12px] font-bold tabular-nums ${summary.unrealizedPnl >= 0 ? 'text-[#0ecb81]' : 'text-[#f6465d]'
+                }`}>
                 {summary.unrealizedPnl >= 0 ? '+' : ''}${summary.unrealizedPnl.toFixed(2)}
               </p>
             </div>
-            
+
             <div className="bg-[#1f2329] rounded p-1.5">
               <p className="text-[9px] font-medium text-[#848e9c] mb-0.5 uppercase">
                 Lev
@@ -178,11 +177,10 @@ export const HyperliquidAccountStatus: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-2 gap-2 mt-2">
-            <div className={`rounded p-1.5 ${
-              summary.marginRatio > 0.5 
-                ? 'bg-[#0ecb81]/10 border border-[#0ecb81]/20' 
-                : 'bg-[#f6465d]/10 border border-[#f6465d]/20'
-            }`}>
+            <div className={`rounded p-1.5 ${summary.marginRatio > 0.5
+              ? 'bg-[#0ecb81]/10 border border-[#0ecb81]/20'
+              : 'bg-[#f6465d]/10 border border-[#f6465d]/20'
+              }`}>
               <p className="text-[9px] font-medium text-[#848e9c] mb-0.5 uppercase">
                 Margin Ratio
               </p>
@@ -190,7 +188,7 @@ export const HyperliquidAccountStatus: React.FC = () => {
                 {(summary.marginRatio * 100).toFixed(1)}%
               </p>
             </div>
-            
+
             <div className="bg-[#1f2329] rounded p-1.5">
               <p className="text-[9px] font-medium text-[#848e9c] mb-0.5 uppercase">
                 Positions

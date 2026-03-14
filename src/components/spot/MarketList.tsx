@@ -26,10 +26,10 @@ export default function MarketList({ selectedPair, onSelectPair }: MarketListPro
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
   // Use simple Hyperliquid hook
-  const { 
-    markets: hyperliquidMarkets, 
-    loading, 
-    error 
+  const {
+    markets: hyperliquidMarkets,
+    loading,
+    error
   } = useSimpleHyperliquid({
     refreshInterval: 180000, // 3 minutes
     enabled: true
@@ -52,7 +52,7 @@ export default function MarketList({ selectedPair, onSelectPair }: MarketListPro
   const filteredMarkets = useMemo(() => {
     return markets.filter(market => {
       // Search filter
-      const matchesSearch = searchQuery === '' || 
+      const matchesSearch = searchQuery === '' ||
         market.baseAsset.toLowerCase().includes(searchQuery.toLowerCase()) ||
         market.symbol.toLowerCase().includes(searchQuery.toLowerCase());
 
@@ -92,10 +92,10 @@ export default function MarketList({ selectedPair, onSelectPair }: MarketListPro
       {/* Search Bar */}
       <div className="p-2 border-b border-border dark:border-darkborder">
         <div className="relative">
-          <Icon 
-            icon="ph:magnifying-glass" 
-            width={14} 
-            className="absolute left-2 top-1/2 -translate-y-1/2 text-muted" 
+          <Icon
+            icon="ph:magnifying-glass"
+            width={14}
+            className="absolute left-2 top-1/2 -translate-y-1/2 text-muted"
           />
           <input
             type="text"
@@ -113,11 +113,10 @@ export default function MarketList({ selectedPair, onSelectPair }: MarketListPro
           <button
             key={quote}
             onClick={() => setSelectedQuote(quote)}
-            className={`flex-1 px-2 py-1.5 text-[10px] font-medium transition-colors border-b-2 ${
-              selectedQuote === quote
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted hover:text-dark dark:hover:text-white'
-            }`}
+            className={`flex-1 px-2 py-1.5 text-[10px] font-medium transition-colors border-b-2 ${selectedQuote === quote
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted hover:text-dark dark:hover:text-white'
+              }`}
           >
             {quote}
           </button>
@@ -157,11 +156,10 @@ export default function MarketList({ selectedPair, onSelectPair }: MarketListPro
               <div
                 key={market.symbol}
                 onClick={() => onSelectPair(market.symbol)}
-                className={`px-2 py-1.5 cursor-pointer transition-colors ${
-                  isSelected
-                    ? 'bg-primary/10 border-l-2 border-primary'
-                    : 'hover:bg-muted/20 dark:hover:bg-white/5 border-l-2 border-transparent'
-                }`}
+                className={`px-2 py-1.5 cursor-pointer transition-colors ${isSelected
+                  ? 'bg-primary/10 border-l-2 border-primary'
+                  : 'hover:bg-muted/20 dark:hover:bg-white/5 border-l-2 border-transparent'
+                  }`}
               >
                 <div className="grid grid-cols-[1fr_auto_auto] gap-2 items-center">
                   {/* Pair + Network */}
@@ -188,7 +186,7 @@ export default function MarketList({ selectedPair, onSelectPair }: MarketListPro
                       </div>
                       <div className="flex items-center gap-1 mt-0.5">
                         <Icon icon="ph:globe" width={8} className="text-blue-500" />
-                        <span className="text-[8px] text-muted">Hyperliquid</span>
+                        <span className="text-[8px] text-muted">WorldStreet</span>
                       </div>
                     </div>
                   </div>
@@ -215,7 +213,7 @@ export default function MarketList({ selectedPair, onSelectPair }: MarketListPro
       <div className="px-2 py-1.5 border-t border-border dark:border-darkborder bg-muted/20 dark:bg-white/5">
         <div className="flex items-center gap-1 text-[9px] text-muted">
           <Icon icon="ph:info" width={10} />
-          <span>Hyperliquid • {markets.length} spot markets</span>
+          <span>WorldStreet • {markets.length} spot markets</span>
         </div>
       </div>
     </div>

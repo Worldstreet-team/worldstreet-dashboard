@@ -12,7 +12,7 @@ export const HyperliquidAccountGuard: React.FC<{ children: React.ReactNode }> = 
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px]">
         <Icon icon="svg-spinners:ring-resize" className="text-[#fcd535] mb-4" width={48} />
-        <p className="text-[#848e9c]">Connecting to Hyperliquid...</p>
+        <p className="text-[#848e9c]">Connecting to Trading Session...</p>
       </div>
     );
   }
@@ -24,7 +24,7 @@ export const HyperliquidAccountGuard: React.FC<{ children: React.ReactNode }> = 
           <Icon icon="ph:warning-circle" className="mx-auto text-[#f6465d] mb-4" width={48} />
           <h2 className="text-white font-bold text-lg mb-2">Connection Error</h2>
           <p className="text-[#848e9c] mb-6">{error}</p>
-          <button 
+          <button
             onClick={() => window.location.reload()}
             className="px-6 py-2 bg-[#f6465d] text-white rounded-lg font-bold"
           >

@@ -19,7 +19,7 @@ export const CollateralPanel: React.FC = () => {
 
     setProcessing(true);
     setError('');
-    
+
     try {
       const response = await fetch('/api/futures/collateral/deposit', {
         method: 'POST',
@@ -27,7 +27,7 @@ export const CollateralPanel: React.FC = () => {
         body: JSON.stringify({ amount: parseFloat(amount) })
       });
       const result = await response.json();
-      
+
       if (result.success) {
         setSuccess('Deposit initiated! Check your wallet for confirmation.');
         setAmount('');
@@ -54,7 +54,7 @@ export const CollateralPanel: React.FC = () => {
     return (
       <div className="bg-[#181a20] border border-[#2b3139] rounded p-4">
         <h3 className="text-xs font-medium text-[#848e9c] mb-2 uppercase">Collateral</h3>
-        <p className="text-xs text-[#848e9c]">Initialize your Hyperliquid account to manage collateral.</p>
+        <p className="text-xs text-[#848e9c]">Initialize your Trading account to manage collateral.</p>
       </div>
     );
   }

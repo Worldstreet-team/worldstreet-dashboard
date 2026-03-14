@@ -19,7 +19,7 @@ export const RiskPanel: React.FC = () => {
     return (
       <div className="bg-[#181a20] border border-[#2b3139] rounded p-4">
         <h3 className="text-xs font-medium text-[#848e9c] mb-2 uppercase">Risk Analysis</h3>
-        <p className="text-[10px] text-[#848e9c]">Initialize your Hyperliquid account to view risk metrics.</p>
+        <p className="text-[10px] text-[#848e9c]">Initialize your Trading account to view risk metrics.</p>
       </div>
     );
   }
@@ -30,7 +30,7 @@ export const RiskPanel: React.FC = () => {
   return (
     <div className="bg-[#181a20] border border-[#2b3139] rounded p-4">
       <h3 className="text-xs font-medium text-[#848e9c] mb-4 uppercase">Risk Analysis</h3>
-      
+
       <div className="space-y-4">
         <div>
           <div className="flex justify-between mb-1 text-[10px]">
@@ -40,7 +40,7 @@ export const RiskPanel: React.FC = () => {
             </span>
           </div>
           <div className="w-full h-1 bg-[#2b3139] rounded-full overflow-hidden">
-            <div 
+            <div
               className={`h-full transition-all duration-500 ${healthPercent > 50 ? 'bg-[#0ecb81]' : healthPercent > 20 ? 'bg-[#f0b90b]' : 'bg-[#f6465d]'}`}
               style={{ width: `${healthPercent}%` }}
             />

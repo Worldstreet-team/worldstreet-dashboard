@@ -83,9 +83,8 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <h3 className="text-white font-bold">{side === 'long' ? 'Long' : 'Short'} {marketName}</h3>
-            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-               side === 'long' ? 'bg-[#0ecb81]/10 text-[#0ecb81]' : 'bg-[#f6465d]/10 text-[#f6465d]'
-            }`}>
+            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${side === 'long' ? 'bg-[#0ecb81]/10 text-[#0ecb81]' : 'bg-[#f6465d]/10 text-[#f6465d]'
+              }`}>
               {side.toUpperCase()}
             </span>
           </div>
@@ -96,7 +95,7 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
           <div className="text-center py-10">
             <Icon icon="ph:check-circle" className="mx-auto text-[#0ecb81] mb-2" width={64} />
             <h4 className="text-white font-bold text-lg">Order Placed</h4>
-            <p className="text-[#848e9c] text-sm mt-1">Your order has been submitted to Hyperliquid</p>
+            <p className="text-[#848e9c] text-sm mt-1">Your order has been submitted to the network</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -105,11 +104,10 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
                 <button
                   key={t}
                   onClick={() => setOrderType(t === 'stop' ? 'stop-limit' : t as any)}
-                  className={`py-1.5 text-[10px] rounded font-bold transition-all ${
-                    (orderType === t || (t === 'stop' && orderType === 'stop-limit')) 
-                      ? 'bg-[#2b3139] text-white shadow-sm' 
+                  className={`py-1.5 text-[10px] rounded font-bold transition-all ${(orderType === t || (t === 'stop' && orderType === 'stop-limit'))
+                      ? 'bg-[#2b3139] text-white shadow-sm'
                       : 'text-[#848e9c] hover:text-white'
-                  }`}
+                    }`}
                 >
                   {t.toUpperCase()}
                 </button>
@@ -174,11 +172,10 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
             <button
               onClick={handleSubmit}
               disabled={executing}
-              className={`w-full py-3 rounded-lg font-bold text-sm text-[#0b0e11] transition-all transform active:scale-95 ${
-                side === 'long' 
-                  ? 'bg-[#0ecb81] hover:bg-[#0ecb81]/90' 
+              className={`w-full py-3 rounded-lg font-bold text-sm text-[#0b0e11] transition-all transform active:scale-95 ${side === 'long'
+                  ? 'bg-[#0ecb81] hover:bg-[#0ecb81]/90'
                   : 'bg-[#f6465d] hover:bg-[#f6465d]/90'
-              } disabled:opacity-50 disabled:cursor-not-allowed shadow-lg`}
+                } disabled:opacity-50 disabled:cursor-not-allowed shadow-lg`}
             >
               {executing ? (
                 <span className="flex items-center justify-center gap-2">

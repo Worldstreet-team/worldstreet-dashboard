@@ -12,10 +12,10 @@ interface HyperliquidMarketListProps {
   includeStats?: boolean;
 }
 
-export default function HyperliquidMarketList({ 
-  selectedPair, 
-  onSelectPair, 
-  includeStats = false 
+export default function HyperliquidMarketList({
+  selectedPair,
+  onSelectPair,
+  includeStats = false
 }: HyperliquidMarketListProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
@@ -67,7 +67,7 @@ export default function HyperliquidMarketList({
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-medium text-white flex items-center gap-2">
             <Icon icon="cryptocurrency:eth" width={16} />
-            Hyperliquid Spot
+            Spot
           </h3>
           <div className="flex items-center gap-2">
             {lastUpdated && (
@@ -88,7 +88,7 @@ export default function HyperliquidMarketList({
             </button>
           </div>
         </div>
-        
+
         {/* Search Bar */}
         <div className="relative">
           <Icon
@@ -100,7 +100,7 @@ export default function HyperliquidMarketList({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search Hyperliquid markets..."
+            placeholder="Search Trading markets..."
             className="w-full pl-10 pr-3 py-2.5 bg-[#1e2329] border border-[#2b3139] rounded text-sm text-white placeholder:text-[#848e9c] focus:outline-none focus:border-[#f0b90b]"
           />
         </div>
@@ -118,7 +118,7 @@ export default function HyperliquidMarketList({
         {loading ? (
           <div className="p-8 text-center">
             <Icon icon="ph:spinner" className="mx-auto mb-3 text-[#848e9c] animate-spin" width={40} />
-            <p className="text-sm text-[#848e9c]">Loading Hyperliquid markets...</p>
+            <p className="text-sm text-[#848e9c]">Loading Trading markets...</p>
           </div>
         ) : error ? (
           <div className="p-8 text-center">

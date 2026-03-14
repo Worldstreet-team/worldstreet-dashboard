@@ -29,14 +29,14 @@ interface PairData {
 
 export default function BinanceSpotPage() {
   const searchParams = useSearchParams();
-  
+
   // Clerk authentication
   const { user, isLoaded } = useUser();
-  
+
   // Use Hyperliquid markets for spot trading
-  const { 
-    markets: hyperliquidMarkets, 
-    loading: marketsLoading 
+  const {
+    markets: hyperliquidMarkets,
+    loading: marketsLoading
   } = useHyperliquidMarkets({
     includeStats: true,
     enabled: true
@@ -50,7 +50,7 @@ export default function BinanceSpotPage() {
       const hyperliquidPairs = hyperliquidMarkets
         .map(market => market.baseAsset)
         .filter(asset => asset && asset !== 'USD');
-      
+
       return [...new Set([...defaultPairs, ...hyperliquidPairs])];
     }
 
@@ -77,10 +77,10 @@ export default function BinanceSpotPage() {
   // Update pair data when Hyperliquid markets change
   useEffect(() => {
     if (hyperliquidMarkets.length > 0) {
-      const market = hyperliquidMarkets.find(m => 
+      const market = hyperliquidMarkets.find(m =>
         m.baseAsset === selectedPair || m.symbol === selectedPair
       );
-      
+
       if (market) {
         setPairData({
           name: market.baseAsset,
@@ -106,7 +106,7 @@ export default function BinanceSpotPage() {
     // Extract base asset from pair (e.g., "BTC-USD" -> "BTC")
     const baseAsset = pair.split('-')[0] || pair;
     setSelectedPair(baseAsset);
-    
+
     // Update URL without navigation
     const url = new URL(window.location.href);
     url.searchParams.set('pair', baseAsset);
@@ -125,7 +125,7 @@ export default function BinanceSpotPage() {
       <div className="flex items-center justify-center min-h-screen bg-[#0b0e11]">
         <div className="text-center">
           <Icon icon="svg-spinners:ring-resize" className="mx-auto mb-4 text-[#f0b90b]" height={48} />
-          <p className="text-white text-sm">Loading Hyperliquid markets...</p>
+          <p className="text-white text-sm">Loading Trading markets...</p>
         </div>
       </div>
     );
@@ -148,7 +148,7 @@ export default function BinanceSpotPage() {
               />
               <span className="text-sm font-semibold text-white">WorldStreet</span>
             </div>
-            
+
             {/* Navigation Icons */}
             <div className="flex items-center gap-3">
               <Link href="/assets" className="p-2 hover:bg-[#1e2329] rounded-lg transition-colors">
@@ -159,11 +159,11 @@ export default function BinanceSpotPage() {
               </Link>
             </div>
           </div>
-          
+
           {/* Status Bar */}
           <div className="px-4 pb-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-[#848e9c]">Hyperliquid Spot</span>
+              <span className="text-xs font-medium text-[#848e9c]">Spot</span>
               <div className="flex items-center gap-1 px-2 py-0.5 bg-[#0ecb81]/10 rounded-full">
                 <div className="w-1.5 h-1.5 rounded-full bg-[#0ecb81] animate-pulse" />
                 <span className="text-[9px] font-medium text-[#0ecb81]">Live</span>
@@ -175,14 +175,14 @@ export default function BinanceSpotPage() {
         {/* Mobile Pair Header */}
         <div className="flex-shrink-0 px-4 py-3 bg-[#0b0e11] border-b border-[#2b3139]">
           <div className="flex items-center justify-between">
-            <button 
+            <button
               onClick={() => setShowTokenSearchModal(true)}
               className="flex items-center gap-2"
             >
               <span className="text-lg font-bold text-white">{pairData.name}/USD</span>
               <Icon icon="ph:caret-down" width={16} className="text-[#848e9c]" />
             </button>
-            
+
             <div className="text-right">
               <div className={`text-lg font-bold ${isPositive ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
                 ${pairData.price.toFixed(2)}
@@ -197,14 +197,13 @@ export default function BinanceSpotPage() {
         {/* Mobile Tab Navigation */}
         <div className="flex-shrink-0 flex items-center gap-4 px-4 py-2 border-b border-[#2b3139] bg-[#181a20]">
           {['chart', 'orderbook', 'trades', 'positions'].map((tab) => (
-            <button 
+            <button
               key={tab}
               onClick={() => setMobileActiveTab(tab as any)}
-              className={`pb-1 text-xs font-medium capitalize ${
-                mobileActiveTab === tab 
-                  ? 'text-white border-b-2 border-[#f0b90b]' 
-                  : 'text-[#848e9c]'
-              }`}
+              className={`pb-1 text-xs font-medium capitalize ${mobileActiveTab === tab
+                ? 'text-white border-b-2 border-[#f0b90b]'
+                : 'text-[#848e9c]'
+                }`}
             >
               {tab}
             </button>
@@ -286,9 +285,9 @@ export default function BinanceSpotPage() {
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">
               <span className="text-[16px] font-bold text-white">{pairData.name}/USD</span>
-              <span className="text-[11px] text-[#848e9c]">Hyperliquid</span>
+              <span className="text-[11px] text-[#848e9c]">WorldStreet</span>
             </div>
-            
+
             <div className="flex items-center gap-4 text-[12px]">
               <div className="flex flex-col">
                 <span className="text-[11px] text-[#848e9c]">Price</span>
@@ -314,14 +313,14 @@ export default function BinanceSpotPage() {
           {/* Right: Account Status */}
           <div className="flex items-center gap-4">
             {isLoaded && user ? (
-              <HyperliquidBalanceDisplay 
+              <HyperliquidBalanceDisplay
                 userId={user.id}
                 className="text-[12px]"
               />
             ) : (
               <div className="flex items-center gap-3 text-[12px]">
                 <div className="flex flex-col items-end">
-                  <span className="text-[11px] text-[#848e9c]">Hyperliquid</span>
+                  <span className="text-[11px] text-[#848e9c]">WorldStreet</span>
                   <span className="text-white font-medium">
                     {isLoaded ? 'No Wallet' : 'Loading...'}
                   </span>
@@ -333,10 +332,10 @@ export default function BinanceSpotPage() {
 
         {/* Desktop Main Trading Area */}
         <div className="h-[calc(100%-60px-200px)] grid grid-cols-[19.5%_46.5%_14%_20%]">
-          
+
           {/* Market List */}
           <div className="h-full bg-[#0b0e11] border-r border-[#1f2329] overflow-hidden">
-            <BinanceMarketList 
+            <BinanceMarketList
               selectedPair={`${selectedPair}-USD`}
               onSelectPair={handlePairSelect}
               includeStats={true}
@@ -358,7 +357,7 @@ export default function BinanceSpotPage() {
           {/* Trading Panel */}
           <div className="h-full bg-[#0b0e11] overflow-y-auto scrollbar-thin scrollbar-thumb-[#1f2329]">
             <div className="p-2">
-              <BinanceOrderForm 
+              <BinanceOrderForm
                 selectedPair={`${pairData.name}-USD`}
                 pairData={pairData}
               />

@@ -75,20 +75,18 @@ export default function SimpleTrades({ symbol, className = '' }: SimpleTradesPro
         <div className="space-y-0.5 p-2">
           {trades.slice(0, 50).map((trade: any, index: number) => (
             <div key={`trade-${index}`} className="grid grid-cols-4 gap-2 text-xs py-0.5 hover:bg-muted/10">
-              <div className={`text-left font-mono ${
-                trade.side === 'B' ? 'text-success' : 'text-error'
-              }`}>
+              <div className={`text-left font-mono ${trade.side === 'B' ? 'text-success' : 'text-error'
+                }`}>
                 {formatPrice(trade.px)}
               </div>
               <div className="text-right text-dark dark:text-white font-mono">
                 {formatSize(trade.sz)}
               </div>
               <div className="text-center">
-                <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                  trade.side === 'B' 
-                    ? 'bg-success/10 text-success' 
+                <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${trade.side === 'B'
+                    ? 'bg-success/10 text-success'
                     : 'bg-error/10 text-error'
-                }`}>
+                  }`}>
                   {trade.side === 'B' ? 'BUY' : 'SELL'}
                 </span>
               </div>
@@ -103,7 +101,7 @@ export default function SimpleTrades({ symbol, className = '' }: SimpleTradesPro
       {/* Footer */}
       <div className="px-3 py-2 border-t border-border dark:border-darkborder bg-muted/5">
         <div className="text-xs text-muted text-center">
-          Hyperliquid • {trades.length} recent trades
+          WorldStreet • {trades.length} recent trades
         </div>
       </div>
     </div>

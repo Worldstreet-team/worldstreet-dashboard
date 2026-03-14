@@ -134,7 +134,7 @@ export default function PortfolioPage() {
         usdValue: arbUsdc.amount
       });
     } else if (activeTab === 'overview' && !selectedAsset.asset) {
-       setSelectedAsset(mainBalances[0] || { asset: 'ETH', chain: 'ethereum', balance: 0, usdValue: 0 });
+      setSelectedAsset(mainBalances[0] || { asset: 'ETH', chain: 'ethereum', balance: 0, usdValue: 0 });
     }
   }, [activeTab, arbUsdc, mainBalances]);
 
@@ -306,8 +306,8 @@ export default function PortfolioPage() {
                           <Icon icon="logos:hyperliquid-icon" width={24} />
                         </div>
                         <div>
-                          <h3 className="font-bold text-lg text-white">Hyperliquid Trading Account</h3>
-                          <p className="text-xs text-slate-400">Isolated margin trading on Hyperliquid L1</p>
+                          <h3 className="font-bold text-lg text-white">Trading Account</h3>
+                          <p className="text-xs text-slate-400">Isolated margin trading on WorldStreetGold</p>
                         </div>
                       </div>
                       <Link href="/spot" className="text-sm text-[#fcd535] hover:underline flex items-center gap-1">
@@ -408,7 +408,7 @@ export default function PortfolioPage() {
                       </div>
                       <div className="mt-4 flex items-center gap-2 p-3 bg-[#0ecb81]/5 rounded-lg border border-[#0ecb81]/20">
                         <Icon icon="ph:check-circle-fill" className="text-[#0ecb81]" />
-                        <p className="text-xs text-slate-300">This wallet is unified. You can use it for both general funding and zero-popup trading on Hyperliquid.</p>
+                        <p className="text-xs text-slate-300">This wallet is unified. You can use it for both general funding and zero-popup trading.</p>
                       </div>
                     </CardContent>
                   </Card>
@@ -555,8 +555,8 @@ export default function PortfolioPage() {
                       <Alert className="bg-[#0ecb81]/10 border-[#0ecb81]/20 text-[#0ecb81]">
                         <Icon icon="ph:check-circle-fill" className="h-4 w-4 text-[#0ecb81]" />
                         <AlertDescription>
-                          Transfer successful! Hash: {transferStatus.error ? 'Checking...' : 'Broadcast Successful'}. 
-                          Hyperliquid requires ~1 min for Arbitrum confirmation.
+                          Transfer successful! Hash: {transferStatus.error ? 'Checking...' : 'Broadcast Successful'}.
+                          Wallet requires ~1 min for Arbitrum confirmation.
                         </AlertDescription>
                       </Alert>
                     )}
@@ -607,7 +607,7 @@ export default function PortfolioPage() {
                         ) : 'Confirm Deposit'}
                       </Button>
                     )}
-                    <p className="text-center text-[10px] text-[#848e9c]">Deposits are processed via the Hyperliquid Bridge on Arbitrum.</p>
+                    <p className="text-center text-[10px] text-[#848e9c]">Deposits are processed via the Trading Bridge on Arbitrum.</p>
                   </div>
                 </CardContent>
               </Card>

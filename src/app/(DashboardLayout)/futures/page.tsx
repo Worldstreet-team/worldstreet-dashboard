@@ -28,8 +28,8 @@ const BottomPanel: React.FC = () => {
         <button
           onClick={() => setActiveTab('positions')}
           className={`text-[12px] font-medium pb-1 transition-colors ${activeTab === 'positions'
-              ? 'text-[#f0b90b] border-b-2 border-[#f0b90b]'
-              : 'text-[#848e9c] hover:text-white'
+            ? 'text-[#f0b90b] border-b-2 border-[#f0b90b]'
+            : 'text-[#848e9c] hover:text-white'
             }`}
         >
           Positions
@@ -37,8 +37,8 @@ const BottomPanel: React.FC = () => {
         <button
           onClick={() => setActiveTab('assets')}
           className={`text-[12px] font-medium pb-1 transition-colors ${activeTab === 'assets'
-              ? 'text-[#f0b90b] border-b-2 border-[#f0b90b]'
-              : 'text-[#848e9c] hover:text-white'
+            ? 'text-[#f0b90b] border-b-2 border-[#f0b90b]'
+            : 'text-[#848e9c] hover:text-white'
             }`}
         >
           Assets
@@ -53,7 +53,7 @@ const BottomPanel: React.FC = () => {
           <div className="p-4">
             <div className="text-center text-[#848e9c]">
               <Icon icon="ph:chart-line" width={48} className="mx-auto mb-2 opacity-50" />
-              <p className="text-sm">Hyperliquid Futures Trading</p>
+              <p className="text-sm">Futures Trading</p>
               <p className="text-xs mt-1">Connect your trading wallet to view assets</p>
             </div>
           </div>
@@ -114,7 +114,7 @@ export default function HyperliquidFuturesPage() {
       <div className="flex items-center justify-center min-h-screen bg-[#0a0a0a]">
         <div className="text-center">
           <Icon icon="svg-spinners:ring-resize" className="mx-auto mb-4 text-[#f0b90b]" height={48} />
-          <p className="text-white text-sm">Loading Hyperliquid markets...</p>
+          <p className="text-white text-sm">Loading Trading markets...</p>
         </div>
       </div>
     );
@@ -227,8 +227,8 @@ export default function HyperliquidFuturesPage() {
               key={tab}
               onClick={() => setMobileActiveTab(tab as any)}
               className={`pb-1 text-xs font-medium capitalize ${mobileActiveTab === tab
-                  ? 'text-white border-b-2 border-warning'
-                  : 'text-gray-400'
+                ? 'text-white border-b-2 border-warning'
+                : 'text-gray-400'
                 }`}
             >
               {tab}
@@ -354,8 +354,8 @@ export default function HyperliquidFuturesPage() {
                         key={market.symbol}
                         onClick={() => handleSelectMarket(market.symbol)}
                         className={`w-full text-left px-3 py-2 text-[12px] font-medium transition-colors ${selectedPair === market.symbol
-                            ? 'bg-[#1a1f26] text-[#f0b90b]'
-                            : 'text-white hover:bg-[#1a1f26]'
+                          ? 'bg-[#1a1f26] text-[#f0b90b]'
+                          : 'text-white hover:bg-[#1a1f26]'
                           }`}
                       >
                         <div className="flex justify-between items-center">
