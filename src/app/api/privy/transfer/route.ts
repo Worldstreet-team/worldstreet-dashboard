@@ -5,7 +5,7 @@ import { UserWallet } from "@/models/UserWallet";
 import { createAuthorizationContext } from "@/lib/privy/authorization";
 import { privyClient } from "@/lib/privy/client";
 import { createViemAccount } from "@privy-io/node/viem";
-import { createPublicClient, http, parseUnits, encodeFunctionData } from "viem";
+import { createPublicClient, http, parseUnits, encodeFunctionData, toHex } from "viem";
 import { mainnet, arbitrum, arbitrumSepolia } from "viem/chains";
 
 const ERC20_ABI = [
@@ -30,14 +30,39 @@ const ERC20_ABI = [
 
 // Config for USDC on Arbitrum (Hyperliquid uses Arbitrum)
 const CONFIG = {
-  chain: process.env.NODE_ENV === 'production' ? arbitrum : arbitrumSepolia,
-  usdcAddress: process.env.NODE_ENV === 'production'
-    ? '0xaf88d065e77c8cC2239327C5EDb3A432268e5831' // Arbitrum USDC
-    : '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d', // Sepolia USDC
-  ethChainId: 1,
-  rbChainId: 42161,
-  arbSepoliaChainId: 421614
+  chain: arbitrum,
+  arbChainId: 42161,
+  hlBridgeAddress: '0x2Df1c51E09aecf9cacb7bc98cb1742757f163df7', // Fixed Correct Bridge Address
+  usdcAddress: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831' // Arbitrum USDC
 };
+
+function sanitizeError(error: any): string {
+  const message = error.message || String(error);
+
+  // Handle Privy raw JSON-RPC error strings
+  if (message.includes('{"error":')) {
+    try {
+      const match = message.match(/\{.*\}/);
+      if (match) {
+        const errorDetail = JSON.parse(match[0]);
+        const innerError = errorDetail.error;
+
+        if (typeof innerError === 'string') {
+          if (innerError.includes('insufficient funds')) return "Insufficient funds for gas + transfer value.";
+          if (innerError.includes('exceeds the balance')) return "Insufficient funds for this transaction.";
+          return innerError;
+        }
+      }
+    } catch (e) {
+      // Fallback if parsing fails
+    }
+  }
+
+  if (message.includes('insufficient funds')) return "Insufficient funds for gas + transfer value.";
+  if (message.includes('missing_or_invalid_token')) return "Session expired. Please refresh.";
+
+  return message;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -53,21 +78,21 @@ export async function POST(request: NextRequest) {
     }
 
     await connectDB();
-    
+
     // First attempt: Find by clerkUserId
     let userWallet = await UserWallet.findOne({ clerkUserId: authUserId });
     console.log(`[Internal Transfer] Lookup by clerkUserId (${authUserId}): ${userWallet ? 'Found ✓' : 'Not Found ✗'}`);
-    
+
     // Fallback: If not found by Clerk ID, try to find by Email if possible
     if (!userWallet) {
       const { currentUser } = await import("@clerk/nextjs/server");
       const clerkUser = await currentUser();
       const email = clerkUser?.emailAddresses[0]?.emailAddress;
-      
+
       if (email) {
         userWallet = await UserWallet.findOne({ email });
         console.log(`[Internal Transfer] Lookup by email (${email}): ${userWallet ? 'Found ✓' : 'Not Found ✗'}`);
-        
+
         // If found by email, link the clerkUserId for future lookups
         if (userWallet && !userWallet.clerkUserId) {
           userWallet.clerkUserId = authUserId;
@@ -104,13 +129,15 @@ export async function POST(request: NextRequest) {
       }, { status: 404 });
     }
 
-    const mainWalletAddress = userWallet.wallets.ethereum.address;
-    const tradingWalletAddress = userWallet.tradingWallet.address;
-    const mainWalletId = userWallet.wallets.ethereum.walletId;
+    // Aggressive Unification: We ONLY use the trading wallet for the Ethereum identity here
+    const mainWalletAddress = userWallet.tradingWallet?.address || userWallet.wallets.ethereum.address;
+    const mainWalletId = userWallet.tradingWallet?.walletId || userWallet.wallets.ethereum.walletId;
+    const tradingWalletAddress = userWallet.tradingWallet?.address || mainWalletAddress;
 
-    console.log(`[Internal Transfer] Validated profiles. Main: ${mainWalletAddress}, Trading: ${tradingWalletAddress}`);
+    console.log(`[Hyperliquid Deposit] Using Wallet ID: ${mainWalletId} (Address: ${mainWalletAddress})`);
+    console.log(`[Hyperliquid Deposit] Unified Profile Check - Main: ${mainWalletAddress}, Trading: ${tradingWalletAddress}`);
 
-    // Get Auth Context for signing from Main Wallet
+    // Get Auth Context for signing
     const clerkJwt = await getToken();
     if (!clerkJwt) {
       return NextResponse.json({ success: false, error: "Failed to get auth token" }, { status: 401 });
@@ -118,54 +145,58 @@ export async function POST(request: NextRequest) {
 
     const authContext = await createAuthorizationContext(clerkJwt);
 
-    // Initialize Viem account for the Main Wallet
-    const viemAccount = createViemAccount(privyClient, {
-      walletId: mainWalletId,
-      address: mainWalletAddress as `0x${string}`,
-    });
+    const chainId = CONFIG.chain.id;
 
-    const publicClient = createPublicClient({
-      chain: CONFIG.chain,
-      transport: http()
-    });
 
-    let txHash: `0x${string}`;
+
+    const HL_BRIDGE = '0x2Df1c51E09aECF9cacB7bc98cB1742757f163dF7';
+    const ARBITRUM_USDC = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831';
+
+    let txParams: any = {};
 
     if (asset.toUpperCase() === "ETH") {
-      // Native transfer
-      txHash = await viemAccount.signTransaction({
-        to: tradingWalletAddress as `0x${string}`,
-        value: parseUnits(amount.toString(), 18),
-        chain: CONFIG.chain,
-        account: viemAccount,
-      });
+      // Native ETH deposit
+      txParams = {
+        to: HL_BRIDGE,
+        value: toHex(parseUnits(amount.toString(), 18)),
+      };
     } else {
-      // ERC20 transfer (USDC/USDT)
-      const tokenAddress = CONFIG.usdcAddress as `0x${string}`;
-      const decimals = 6; // USDC is 6 decimals on most chains
-
+      // USDC deposit (Transfer to Bridge)
       const data = encodeFunctionData({
         abi: ERC20_ABI,
         functionName: 'transfer',
-        args: [tradingWalletAddress as `0x${string}`, parseUnits(amount.toString(), decimals)]
+        args: [HL_BRIDGE as `0x${string}`, parseUnits(amount.toString(), 6)]
       });
 
-      txHash = await viemAccount.signTransaction({
-        to: tokenAddress,
+      txParams = {
+        to: ARBITRUM_USDC,
         data,
-        chain: CONFIG.chain,
-        account: viemAccount,
-      });
+        value: "0x0"
+      };
     }
 
-    console.log(`[Internal Transfer] Transaction sent: ${txHash}`);
+    console.log(`[Hyperliquid Deposit] Initiating sponsored transaction via Privy Server SDK...`);
+
+    // Use the exact method suggested by the user/guide
+    // privyClient.wallets().ethereum().sendTransaction is the correct way for server-side managed wallets
+    const result = await (privyClient.wallets() as any).ethereum().sendTransaction(mainWalletId, {
+      sponsor: true,
+      caip2: 'eip155:42161',
+      params: {
+        transaction: txParams
+      },
+      authorization_context: authContext
+    });
+
+    const txHash = result.hash;
+    console.log(`[Hyperliquid Deposit] Transaction successful! Hash: ${txHash}`);
 
     return NextResponse.json({
       success: true,
       data: {
         txHash,
         from: mainWalletAddress,
-        to: tradingWalletAddress,
+        to: HL_BRIDGE,
         amount,
         asset
       }
@@ -173,10 +204,12 @@ export async function POST(request: NextRequest) {
 
   } catch (error: any) {
     console.error("[Internal Transfer] Error:", error);
+    const userFriendlyError = sanitizeError(error);
+
     return NextResponse.json({
       success: false,
-      error: error.message || "Transfer failed",
-      details: error.stack
+      error: userFriendlyError,
+      details: error.message
     }, { status: 500 });
   }
 }

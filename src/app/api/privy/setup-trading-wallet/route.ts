@@ -221,27 +221,32 @@ export async function POST(request: NextRequest) {
 
     console.log('[Trading Wallet] Main wallet validated:', mainWalletInPrivy.address);
 
-    // Step 5: Use existing trading wallet or create new one
-    let tradingWallet;
+    // Step 5: Unified Wallet Selection
+    // We want the trading wallet and main wallet to be the same, 
+    // but we must pick the CORRECT one (the one the user likely already initialized)
     
-    // Look for a trading wallet (any Ethereum wallet that's not the main one)
-    const existingTradingWallet = existingWallets.find(w => w.id !== mainWalletId);
+    let targetWallet = mainWalletInPrivy;
     
-    if (existingTradingWallet) {
-      tradingWallet = existingTradingWallet;
-      console.log('[Trading Wallet] Using existing trading wallet:', tradingWallet.address);
+    // If there are multiple wallets, and one isn't the main one, it's likely the "Trading" one the user wants
+    const existingSecondaryWallet = existingWallets.find(w => w.id !== mainWalletId);
+    
+    if (existingSecondaryWallet) {
+      targetWallet = existingSecondaryWallet;
+      console.log('[Trading Wallet] Found existing secondary wallet, promoting to Unified Main:', targetWallet.address);
     } else {
-      // Create new trading wallet with proper owner specification
-      console.log('[Trading Wallet] Creating new trading wallet');
-      tradingWallet = await privyNode.wallets().create({
-        chain_type: 'ethereum',
-        owner: { user_id: privyUser.id }  // FIXED: Use proper owner specification
-      });
-      console.log('[Trading Wallet] Created new trading wallet:', tradingWallet.address);
+      console.log('[Trading Wallet] No secondary wallet found, using primary wallet for Unified Mode:', targetWallet.address);
     }
 
-    // Update UserWallet record with trading wallet info
+    const tradingWallet = targetWallet;
+
+    // Update UserWallet record: BOTH wallets.ethereum AND tradingWallet should point to this address
     if (userWallet) {
+      userWallet.wallets.ethereum = {
+        walletId: tradingWallet.id,
+        address: tradingWallet.address,
+        publicKey: (tradingWallet as any).public_key || (tradingWallet as any).publicKey || null
+      };
+      
       userWallet.tradingWallet = {
         walletId: tradingWallet.id,
         address: tradingWallet.address,
@@ -249,7 +254,7 @@ export async function POST(request: NextRequest) {
         initialized: false // Will be set to true if Hyperliquid init succeeds
       };
       await userWallet.save();
-      console.log('[Trading Wallet] Persisted trading wallet info to MongoDB');
+      console.log('[Trading Wallet] Unified Main Wallet and Trading Wallet in MongoDB to:', tradingWallet.address);
     }
 
     // Step 6: Create Viem account for trading with authorization context
@@ -275,7 +280,7 @@ export async function POST(request: NextRequest) {
     let hyperliquidSetup;
     try {
       const hyperliquidService = new HyperliquidService({
-        testnet: process.env.NODE_ENV !== 'production'
+        testnet: false
       });
 
       hyperliquidSetup = await hyperliquidService.initializeTradingWallet({
@@ -335,7 +340,7 @@ export async function POST(request: NextRequest) {
         debug: {
           totalEthereumWallets: existingWallets.length,
           mainWalletFoundInPrivy: !!mainWalletInPrivy,
-          tradingWalletCreated: !existingTradingWallet
+          isUnifiedWallet: true
         }
       }
     });
@@ -421,22 +426,24 @@ export async function GET(request: NextRequest) {
     
     const mainWalletId = userWallet.wallets?.ethereum?.walletId;
     const mainWallet = ethereumWallets.find(w => w.id === mainWalletId);
-    const tradingWallets = ethereumWallets.filter(w => w.id !== mainWalletId);
+    
+    // In Unified Mode, the trading wallet IS the main wallet
+    const tradingWallet = mainWallet;
     
     return NextResponse.json({
       success: true,
       data: {
         privyUserId: privyUser.id,
         hasMainWallet: !!mainWallet,
-        hasTradingWallet: tradingWallets.length > 0,
+        hasTradingWallet: !!mainWallet, // Always true if main exists in unified mode
         mainWallet: mainWallet || null,
-        tradingWallet: tradingWallets.length > 0 ? tradingWallets[0] : null,
+        tradingWallet: tradingWallet || null,
         ethereumWallets,
         totalEthereumWallets: ethereumWallets.length,
+        isUnified: true,
         debug: {
           mainWalletIdFromDB: mainWalletId,
           mainWalletFoundInPrivy: !!mainWallet,
-          tradingWalletsCount: tradingWallets.length
         }
       }
     });

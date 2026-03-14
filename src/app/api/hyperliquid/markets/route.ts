@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
         data: {
           markets: cachedMarkets,
           count: cachedMarkets.length,
-          testnet: process.env.NODE_ENV !== 'production',
+          testnet: false,
           cached: true,
           timestamp: new Date().toISOString()
         }
@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
       data: {
         markets,
         count: markets.length,
-        testnet: process.env.NODE_ENV !== 'production',
+        testnet: false,
         cached: false,
         timestamp: new Date().toISOString()
       }
@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
       {
         success: false,
         error: error.message || "Failed to fetch Hyperliquid markets",
-        testnet: process.env.NODE_ENV !== 'production',
+        testnet: false,
         timestamp: new Date().toISOString()
       },
       { status: 500 }

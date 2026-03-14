@@ -284,7 +284,13 @@ const AssetsPage = () => {
       });
     });
 
-    return list;
+    return list.sort((a, b) => {
+      // Non-zero balances first
+      if (a.balance > 0 && b.balance === 0) return -1;
+      if (a.balance === 0 && b.balance > 0) return 1;
+      // Then by USD value descending
+      return b.usdValue - a.usdValue;
+    });
   }, [addresses, solBalance, solTokens, ethBalance, ethTokens, arbBalance, arbTokens, suiBalance, tonBalance, trxBalance, trxTokens, prices]);
 
   // Total portfolio value

@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Authentication token not available" }, { status: 401 });
     }
 
-    const { to, value, data, chainId, gasLimit } = await request.json();
+    const { to, value, data, chainId, gasLimit, sponsor: requestSponsor } = await request.json();
 
     if (!to || !chainId) {
       return NextResponse.json({ error: "Missing required fields: to, chainId" }, { status: 400 });
@@ -29,30 +29,53 @@ export async function POST(request: NextRequest) {
 
     // Connect to database to get walletId
     await connectDB();
-    const { currentUser } = await import("@clerk/nextjs/server");
-    const clerkClient = await currentUser();
-    const email = clerkClient?.emailAddresses[0]?.emailAddress;
-
-    if (!email) {
-      return NextResponse.json({ error: "User email not found" }, { status: 400 });
+    
+    // Prioritize lookup by clerkUserId
+    let userWallet = await UserWallet.findOne({ clerkUserId: userId });
+    
+    // Fallback to email if needed
+    if (!userWallet) {
+      const { currentUser } = await import("@clerk/nextjs/server");
+      const clerkUser = await currentUser();
+      const email = clerkUser?.emailAddresses[0]?.emailAddress;
+      if (email) {
+        userWallet = await UserWallet.findOne({ email });
+        // Link them for next time
+        if (userWallet && !userWallet.clerkUserId) {
+          userWallet.clerkUserId = userId;
+          await userWallet.save();
+        }
+      }
     }
 
-    const userWallet = await UserWallet.findOne({ email });
-    if (!userWallet?.wallets?.ethereum?.walletId) {
-      return NextResponse.json({ error: "Ethereum wallet not found" }, { status: 404 });
+    if (!userWallet) {
+      return NextResponse.json({ error: "User wallet record not found" }, { status: 404 });
     }
 
-    const walletId = userWallet.wallets.ethereum.walletId;
+    // Unified Wallet: Prioritize tradingWallet ID
+    const walletId = userWallet.tradingWallet?.walletId || userWallet.wallets?.ethereum?.walletId;
 
-    // Send transaction via Privy
+    if (!walletId) {
+      return NextResponse.json({ error: "No Ethereum wallet initialized for this user" }, { status: 404 });
+    }
+
+    // Determine sponsorship (auto-enable for L2s if not specified)
+    const activeChainId = Number(chainId);
+    const isL2 = [42161, 8453, 10, 137].includes(activeChainId);
+    const shouldSponsor = requestSponsor !== undefined ? !!requestSponsor : isL2;
+
+    console.log(`[Execute Transaction] Routing from ${userWallet.tradingWallet?.address || 'main'} on chain ${activeChainId} (Sponsor: ${shouldSponsor})`);
+
+    // Send transaction via our modernized helper
     const result = await sendEthereumTransaction(
       walletId,
       {
         to,
-        value: value || "0x0",
-        data: data || "0x",
-        chain_id: Number(chainId),
+        value: value, 
+        data: data,
+        chain_id: activeChainId,
         gas: gasLimit,
+        sponsor: shouldSponsor
       },
       clerkJwt
     );

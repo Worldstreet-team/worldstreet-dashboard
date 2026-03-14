@@ -15,27 +15,27 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export default function PortfolioPage() {
   const { addresses, tradingWallet, privyUserId, walletsGenerated } = useWallet();
-  const { 
-    usdcBalance: hlUsdc, 
-    accountValue: hlValue, 
-    loading: hlLoading, 
+  const {
+    usdcBalance: hlUsdc,
+    accountValue: hlValue,
+    loading: hlLoading,
     error: hlError,
-    refetch: refetchHl 
+    refetch: refetchHl
   } = useHyperliquidBalance(privyUserId || '', !!privyUserId);
-  
-  const { 
+
+  const {
     balance: ethBalance,
     tokenBalances: evmTokenBalances,
     arbitrumBalance: arbBalance,
     arbitrumTokenBalances: arbTokenBalances,
     loading: evmLoading,
-    fetchBalance: refetchEvm 
+    fetchBalance: refetchEvm
   } = useEvm();
 
   // Combine ETH and tokens for display
   const mainBalances = React.useMemo(() => {
     const list = [];
-    
+
     // Add Ethereum ETH
     if (ethBalance > 0) {
       list.push({
@@ -45,7 +45,7 @@ export default function PortfolioPage() {
         usdValue: ethBalance * 2500, // Mock price for UI
       });
     }
-    
+
     // Add Ethereum tokens
     evmTokenBalances.forEach(token => {
       list.push({
@@ -75,13 +75,19 @@ export default function PortfolioPage() {
         usdValue: token.amount * (token.symbol === 'USDC' || token.symbol === 'USDT' ? 1 : 0), // Mock price
       });
     });
-    
-    return list;
+
+    return list.sort((a, b) => {
+      // Non-zero balances first
+      if (a.balance > 0 && b.balance === 0) return -1;
+      if (a.balance === 0 && b.balance > 0) return 1;
+      // Then by USD value descending
+      return b.usdValue - a.usdValue;
+    });
   }, [ethBalance, evmTokenBalances, arbBalance, arbTokenBalances]);
 
   const [activeTab, setActiveTab] = useState<'overview' | 'wallets' | 'fund'>('overview');
   const [transferAmount, setTransferAmount] = useState('');
-  
+
   // Find Arbitrum USDC specifically for funding
   const arbUsdc = React.useMemo(() => {
     return arbTokenBalances.find(t => t.symbol === 'USDC') || { symbol: 'USDC', amount: 0, decimals: 6 };
@@ -99,14 +105,14 @@ export default function PortfolioPage() {
       setQuote(null);
       return;
     }
-    
+
     setIsQuoting(true);
     try {
       // Mock quote logic - in real app, call /api/spot/quote
       const amountNum = parseFloat(amount);
       const fee = fromChain === 'ethereum' ? 5 : 1; // Arbitrary bridge fees
       const rate = 1.0; // Assume 1:1 for now
-      
+
       setQuote({
         toAmount: Math.max(0, (amountNum * rate) - fee),
         fee
@@ -117,6 +123,20 @@ export default function PortfolioPage() {
       setIsQuoting(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'fund') {
+      // Force selected asset to Arbitrum USDC for the funding tab
+      setSelectedAsset({
+        asset: 'USDC',
+        chain: 'arbitrum',
+        balance: arbUsdc.amount,
+        usdValue: arbUsdc.amount
+      });
+    } else if (activeTab === 'overview' && !selectedAsset.asset) {
+       setSelectedAsset(mainBalances[0] || { asset: 'ETH', chain: 'ethereum', balance: 0, usdValue: 0 });
+    }
+  }, [activeTab, arbUsdc, mainBalances]);
 
   useEffect(() => {
     if (activeTab === 'fund' && transferAmount && selectedAsset.asset !== 'USDC') {
@@ -131,14 +151,27 @@ export default function PortfolioPage() {
 
   // Bybit-style transfer logic
   const handleInternalTransfer = async () => {
-    if (!transferAmount || parseFloat(transferAmount) <= 0) return;
-    
+    const amountNum = parseFloat(transferAmount);
+    if (!transferAmount || amountNum <= 0) return;
+
+    // Hyperliquid requires at least 5 USDC for bridge/deposit to be reliable
+    if (selectedAsset.asset === 'USDC' && amountNum < 5) {
+      setTransferStatus({ error: 'Minimum deposit is 5 USDC.' });
+      return;
+    }
+
+    // Check balance
+    if (amountNum > selectedAsset.balance) {
+      setTransferStatus({ error: `Insufficient ${selectedAsset.asset} balance.` });
+      return;
+    }
+
     setIsTransferring(true);
     setTransferStatus(null);
-    
+
     try {
       const isBridge = selectedAsset.chain !== 'arbitrum' || selectedAsset.asset !== 'USDC';
-      
+
       const response = await fetch('/api/privy/transfer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -149,7 +182,7 @@ export default function PortfolioPage() {
           isBridge
         })
       });
-      
+
       const result = await response.json();
       if (result.success) {
         setTransferStatus({ success: true });
@@ -162,8 +195,8 @@ export default function PortfolioPage() {
       } else {
         // If 404, it might mean we need setup
         if (response.status === 404) {
-          setTransferStatus({ 
-            error: 'Account not initialized. Please click the button below to setup your trading account.' 
+          setTransferStatus({
+            error: 'Account not initialized. Please click the button below to setup your trading account.'
           });
         } else {
           setTransferStatus({ error: result.error || 'Transfer failed' });
@@ -223,9 +256,9 @@ export default function PortfolioPage() {
               <p className="text-3xl font-bold text-[#fcd535]">{formatUSD(hlValue + (mainBalances.reduce((acc, b) => acc + b.usdValue, 0)))}</p>
             </div>
             <div className="h-10 w-[1px] bg-[#2b3139] mx-2 hidden md:block"></div>
-            <Button 
-              onClick={() => { refetchHl(); refetchEvm(); }} 
-              variant="outline" 
+            <Button
+              onClick={() => { refetchHl(); refetchEvm(); }}
+              variant="outline"
               className="border-[#2b3139] hover:bg-[#2b3139] text-white"
             >
               <Icon icon="ph:arrow-clockwise" className={`mr-2 ${(hlLoading || evmLoading) ? 'animate-spin' : ''}`} />
@@ -242,9 +275,8 @@ export default function PortfolioPage() {
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`pb-4 text-sm font-medium transition-colors relative ${
-                activeTab === tab ? 'text-[#fcd535]' : 'text-slate-400 hover:text-white'
-              }`}
+              className={`pb-4 text-sm font-medium transition-colors relative ${activeTab === tab ? 'text-[#fcd535]' : 'text-slate-400 hover:text-white'
+                }`}
             >
               {tab === 'fund' ? 'Fund Trading Wallet' : tab.charAt(0).toUpperCase() + tab.slice(1)}
               {activeTab === tab && (
@@ -258,10 +290,10 @@ export default function PortfolioPage() {
       {/* Main Content Area */}
       <div className="max-w-7xl mx-auto px-6 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          
+
           {/* Left Column: Stats or Transfer */}
           <div className="lg:col-span-8 space-y-8">
-            
+
             {activeTab === 'overview' && (
               <>
                 {/* Hyperliquid Summary */}
@@ -357,70 +389,97 @@ export default function PortfolioPage() {
 
             {activeTab === 'wallets' && (
               <div className="space-y-6">
-                {/* Main Wallet Card */}
-                <Card className="bg-[#161a1e] border-[#2b3139]">
-                  <CardContent className="p-6">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="flex items-center gap-2">
-                        <Icon icon="ph:shield-check-bold" className="text-[#0ecb81]" width={20} />
-                        <h3 className="font-bold text-white">Main Ethereum Wallet</h3>
+                {/* Check if Unified or Isolated */}
+                {addresses?.ethereum === tradingWallet?.address ? (
+                  <Card className="bg-[#161a1e] border-[#fcd535] border-t-2">
+                    <CardContent className="p-6">
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="flex items-center gap-2">
+                          <Icon icon="ph:shield-check-bold" className="text-[#fcd535]" width={20} />
+                          <h3 className="font-bold text-white">Unified Trading Account</h3>
+                        </div>
+                        <span className="px-2 py-0.5 bg-[#fcd535]/10 text-[#fcd535] text-[10px] font-bold uppercase rounded">Primary Identity</span>
                       </div>
-                      <span className="px-2 py-0.5 bg-[#0ecb81]/10 text-[#0ecb81] text-[10px] font-bold uppercase rounded">Managed</span>
-                    </div>
-                    <div className="flex items-center justify-between p-4 bg-[#0b0e11] rounded-xl border border-[#2b3139]">
-                      <code className="text-[#fcd535] font-mono text-sm break-all">{addresses?.ethereum}</code>
-                      <Button variant="ghost" size="sm" onClick={() => copyToClipboard(addresses?.ethereum || '')} className="text-white hover:bg-white/10">
-                        <Icon icon="ph:copy" />
-                      </Button>
-                    </div>
-                    <p className="mt-4 text-xs text-slate-400">This is your primary custodian wallet for external deposits and withdrawals.</p>
-                  </CardContent>
-                </Card>
-
-                {/* Trading Wallet Card */}
-                <Card className="bg-[#161a1e] border-[#2b3139]">
-                  <CardContent className="p-6">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="flex items-center gap-2">
-                        <Icon icon="ph:lightning-bold" className="text-[#fcd535]" width={20} />
-                        <h3 className="font-bold text-white">Dedicated Trading Wallet</h3>
-                      </div>
-                      <span className="px-2 py-0.5 bg-[#fcd535]/10 text-[#fcd535] text-[10px] font-bold uppercase rounded">Isolation Mode</span>
-                    </div>
-                    {tradingWallet?.address ? (
                       <div className="flex items-center justify-between p-4 bg-[#0b0e11] rounded-xl border border-[#2b3139]">
-                        <code className="text-[#fcd535] font-mono text-sm break-all">{tradingWallet.address}</code>
-                        <Button variant="ghost" size="sm" onClick={() => copyToClipboard(tradingWallet.address)} className="text-white hover:bg-white/10">
+                        <code className="text-[#fcd535] font-mono text-sm break-all">{addresses?.ethereum}</code>
+                        <Button variant="ghost" size="sm" onClick={() => copyToClipboard(addresses?.ethereum || '')} className="text-white hover:bg-white/10">
                           <Icon icon="ph:copy" />
                         </Button>
                       </div>
-                    ) : (
-                      <div className="p-4 bg-[#1f2329]/50 rounded-xl border border-dashed border-[#2b3139] text-center">
-                        <p className="text-slate-400 text-sm mb-3">No trading wallet detected</p>
-                        <Button 
-                          onClick={handleSetup} 
-                          disabled={isSettingUp}
-                          className="bg-[#fcd535] hover:bg-[#fcd535]/90 text-[#0b0e11] font-bold"
-                        >
-                          {isSettingUp ? 'Initializing...' : 'Setup Trading Wallet'}
-                        </Button>
+                      <div className="mt-4 flex items-center gap-2 p-3 bg-[#0ecb81]/5 rounded-lg border border-[#0ecb81]/20">
+                        <Icon icon="ph:check-circle-fill" className="text-[#0ecb81]" />
+                        <p className="text-xs text-slate-300">This wallet is unified. You can use it for both general funding and zero-popup trading on Hyperliquid.</p>
                       </div>
-                    )}
-                    <p className="mt-4 text-xs text-slate-400">Used exclusively for high-speed DEX interactions. Keep funds here to enable zero-gas trading on Hyperliquid.</p>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <>
+                    {/* Main Wallet Card */}
+                    <Card className="bg-[#161a1e] border-[#2b3139]">
+                      <CardContent className="p-6">
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="flex items-center gap-2">
+                            <Icon icon="ph:shield-check-bold" className="text-[#0ecb81]" width={20} />
+                            <h3 className="font-bold text-white">Main Ethereum Wallet</h3>
+                          </div>
+                          <span className="px-2 py-0.5 bg-[#0ecb81]/10 text-[#0ecb81] text-[10px] font-bold uppercase rounded">Managed</span>
+                        </div>
+                        <div className="flex items-center justify-between p-4 bg-[#0b0e11] rounded-xl border border-[#2b3139]">
+                          <code className="text-[#fcd535] font-mono text-sm break-all">{addresses?.ethereum}</code>
+                          <Button variant="ghost" size="sm" onClick={() => copyToClipboard(addresses?.ethereum || '')} className="text-white hover:bg-white/10">
+                            <Icon icon="ph:copy" />
+                          </Button>
+                        </div>
+                        <p className="mt-4 text-xs text-slate-400">Your primary identity. Re-running setup will unify this with your trading account.</p>
+                      </CardContent>
+                    </Card>
+
+                    {/* Trading Wallet Card */}
+                    <Card className="bg-[#161a1e] border-[#2b3139]">
+                      <CardContent className="p-6">
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="flex items-center gap-2">
+                            <Icon icon="ph:lightning-bold" className="text-[#fcd535]" width={20} />
+                            <h3 className="font-bold text-white">Legacy Trading Session Wallet</h3>
+                          </div>
+                          <span className="px-2 py-0.5 bg-[#fcd535]/10 text-[#fcd535] text-[10px] font-bold uppercase rounded">Isolation Mode</span>
+                        </div>
+                        {tradingWallet?.address ? (
+                          <div className="flex items-center justify-between p-4 bg-[#0b0e11] rounded-xl border border-[#2b3139]">
+                            <code className="text-[#fcd535] font-mono text-sm break-all">{tradingWallet.address}</code>
+                            <Button variant="ghost" size="sm" onClick={() => copyToClipboard(tradingWallet.address)} className="text-white hover:bg-white/10">
+                              <Icon icon="ph:copy" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="p-4 bg-[#1f2329]/50 rounded-xl border border-dashed border-[#2b3139] text-center">
+                            <p className="text-slate-400 text-sm mb-3">No trading wallet detected</p>
+                            <Button
+                              onClick={handleSetup}
+                              disabled={isSettingUp}
+                              className="bg-[#fcd535] hover:bg-[#fcd535]/90 text-[#0b0e11] font-bold"
+                            >
+                              {isSettingUp ? 'Initializing...' : 'Setup Trading Wallet'}
+                            </Button>
+                          </div>
+                        )}
+                        <p className="mt-4 text-xs text-slate-400">Used for signing transactions. In Unified Mode, this will match your Main Wallet.</p>
+                      </CardContent>
+                    </Card>
+                  </>
+                )}
               </div>
             )}
 
             {activeTab === 'fund' && (
               <Card className="bg-[#161a1e] border-[#2b3139] border-t-4 border-t-[#fcd535]">
                 <CardContent className="p-8">
-                  <h3 className="text-xl font-bold mb-6 text-white">Fund Trading Wallet</h3>
-                  
+                  <h3 className="text-xl font-bold mb-6 text-white">Deposit to Trading Account</h3>
+
                   <div className="space-y-6">
                     {/* Fixed Source Asset for HL Funding */}
                     <div>
-                      <label className="text-sm text-slate-400 mb-2 block">Deposit Asset</label>
+                      <label className="text-sm text-slate-400 mb-2 block">Source Asset</label>
                       <div className="p-4 bg-[#fcd535]/5 border border-[#fcd535] rounded-xl flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-[#161a1e] flex items-center justify-center border border-[#fcd535]/20">
@@ -432,7 +491,7 @@ export default function PortfolioPage() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="text-sm font-bold text-[#0ecb81]">{arbUsdc.amount.toFixed(2)}</p>
+                          <p className="text-sm font-bold text-[#fcd535]">{arbUsdc.amount.toFixed(2)}</p>
                           <p className="text-[10px] text-slate-500">Available</p>
                         </div>
                       </div>
@@ -444,7 +503,7 @@ export default function PortfolioPage() {
                         <div className="p-4 bg-[#0b0e11] rounded-xl border border-[#2b3139]">
                           <p className="text-slate-500 text-xs uppercase mb-2">From</p>
                           <div className="flex justify-between items-center">
-                            <span className="font-bold text-white">Main Wallet</span>
+                            <span className="font-bold text-white">Personal Wallet</span>
                             <div className="flex items-center gap-1.5 text-slate-400 text-sm">
                               <Icon icon="logos:arbitrum" width={14} />
                               Arbitrum
@@ -461,41 +520,44 @@ export default function PortfolioPage() {
                           <div className="flex justify-between items-center">
                             <span className="font-bold text-white">Trading Account</span>
                             <div className="flex items-center gap-1.5 text-slate-400 text-sm">
-                              <Icon icon="logos:arbitrum" width={14} />
-                              Arbitrum
+                              <Icon icon="logos:hyperliquid-icon" width={14} />
+                              WSG L1
                             </div>
                           </div>
                         </div>
                       </div>
                     </div>
 
-                     {/* Amount Input */}
+                    {/* Amount Input */}
                     <div>
                       <div className="flex justify-between mb-2">
                         <label className="text-sm text-slate-400">Amount (USDC)</label>
                         <span className="text-xs text-slate-500">Available: {arbUsdc.amount.toFixed(2)} USDC</span>
                       </div>
                       <div className="relative">
-                        <input 
+                        <input
                           type="number"
                           placeholder="0.00"
                           value={transferAmount}
                           onChange={(e) => setTransferAmount(e.target.value)}
                           className="w-full bg-[#0b0e11] border border-[#2b3139] rounded-xl px-4 py-4 text-xl font-bold text-white focus:outline-none focus:border-[#fcd535] transition-colors"
                         />
-                        <button 
+                        <button
                           onClick={() => setTransferAmount(arbUsdc.amount.toString())}
                           className="absolute right-4 top-1/2 -translate-y-1/2 text-[#fcd535] font-bold text-sm"
                         >
                           MAX
                         </button>
                       </div>
+                    </div>
 
-                      </div>
                     {transferStatus?.success && (
                       <Alert className="bg-[#0ecb81]/10 border-[#0ecb81]/20 text-[#0ecb81]">
                         <Icon icon="ph:check-circle-fill" className="h-4 w-4 text-[#0ecb81]" />
-                        <AlertDescription>Transfer successful! Your trading account will be updated shortly.</AlertDescription>
+                        <AlertDescription>
+                          Transfer successful! Hash: {transferStatus.error ? 'Checking...' : 'Broadcast Successful'}. 
+                          Hyperliquid requires ~1 min for Arbitrum confirmation.
+                        </AlertDescription>
                       </Alert>
                     )}
 
@@ -506,9 +568,20 @@ export default function PortfolioPage() {
                       </Alert>
                     )}
 
+                    <div className="p-3 bg-blue-500/5 border border-blue-500/20 rounded-xl text-[11px] text-blue-400 space-y-1">
+                      <p className="flex items-center gap-2">
+                        <Icon icon="ph:info-bold" />
+                        Minimum deposit: 5 USDC.
+                      </p>
+                      <p className="flex items-center gap-2">
+                        <Icon icon="ph:gas-pump-bold" />
+                        Requires small amount of ETH on Arbitrum for bridge gas.
+                      </p>
+                    </div>
+
                     {/* Submit Button or Setup Button */}
                     {!tradingWallet?.address || (transferStatus?.error && transferStatus.error.includes('initialized')) ? (
-                      <Button 
+                      <Button
                         onClick={handleSetup}
                         disabled={isSettingUp}
                         className="w-full h-14 bg-[#fcd535] hover:bg-[#fcd535]/90 text-[#0b0e11] font-bold text-lg rounded-xl transition-all"
@@ -521,7 +594,7 @@ export default function PortfolioPage() {
                         ) : 'Setup Trading Account'}
                       </Button>
                     ) : (
-                      <Button 
+                      <Button
                         onClick={handleInternalTransfer}
                         disabled={isTransferring || !transferAmount || parseFloat(transferAmount) <= 0}
                         className="w-full h-14 bg-[#fcd535] hover:bg-[#fcd535]/90 text-[#0b0e11] font-bold text-lg rounded-xl transition-all"
@@ -531,10 +604,10 @@ export default function PortfolioPage() {
                             <Icon icon="ph:spinner" className="mr-2 animate-spin" />
                             Processing Transaction...
                           </>
-                        ) : 'Confirm Transfer'}
+                        ) : 'Confirm Deposit'}
                       </Button>
                     )}
-                    <p className="text-center text-[10px] text-[#848e9c]">Internal transfers are instant and secured by Privy.</p>
+                    <p className="text-center text-[10px] text-[#848e9c]">Deposits are processed via the Hyperliquid Bridge on Arbitrum.</p>
                   </div>
                 </CardContent>
               </Card>
@@ -545,18 +618,18 @@ export default function PortfolioPage() {
           <div className="lg:col-span-4 space-y-8">
             {/* Action Cards */}
             <div className="grid grid-cols-2 gap-4">
-               <button className="p-4 bg-[#161a1e] border border-[#2b3139] rounded-2xl hover:bg-[#2b3139]/50 transition-all flex flex-col items-center gap-2 group">
-                  <div className="p-3 bg-[#0ecb81]/10 rounded-full group-hover:scale-110 transition-transform">
-                    <Icon icon="ph:plus-bold" className="text-[#0ecb81]" width={20} />
-                  </div>
-                  <span className="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Deposit</span>
-               </button>
-               <button className="p-4 bg-[#161a1e] border border-[#2b3139] rounded-2xl hover:bg-[#2b3139]/50 transition-all flex flex-col items-center gap-2 group">
-                  <div className="p-3 bg-[#848e9c]/10 rounded-full group-hover:scale-110 transition-transform">
-                    <Icon icon="ph:minus-bold" className="text-slate-400 group-hover:text-white" width={20} />
-                  </div>
-                  <span className="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Withdraw</span>
-               </button>
+              <button className="p-4 bg-[#161a1e] border border-[#2b3139] rounded-2xl hover:bg-[#2b3139]/50 transition-all flex flex-col items-center gap-2 group">
+                <div className="p-3 bg-[#0ecb81]/10 rounded-full group-hover:scale-110 transition-transform">
+                  <Icon icon="ph:plus-bold" className="text-[#0ecb81]" width={20} />
+                </div>
+                <span className="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Deposit</span>
+              </button>
+              <button className="p-4 bg-[#161a1e] border border-[#2b3139] rounded-2xl hover:bg-[#2b3139]/50 transition-all flex flex-col items-center gap-2 group">
+                <div className="p-3 bg-[#848e9c]/10 rounded-full group-hover:scale-110 transition-transform">
+                  <Icon icon="ph:minus-bold" className="text-slate-400 group-hover:text-white" width={20} />
+                </div>
+                <span className="text-xs font-bold text-slate-400 group-hover:text-white transition-colors">Withdraw</span>
+              </button>
             </div>
 
             {/* Watchlist */}
@@ -567,4 +640,4 @@ export default function PortfolioPage() {
       </div>
     </div>
   );
-}
+}

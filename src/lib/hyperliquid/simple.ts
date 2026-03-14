@@ -2,7 +2,7 @@ import { HttpTransport, InfoClient } from "@nktkas/hyperliquid";
 
 class HyperliquidClient {
   private info = new InfoClient({
-    transport: new HttpTransport()
+    transport: new HttpTransport({ isTestnet: false })
   });
 
   async getMarkets() {

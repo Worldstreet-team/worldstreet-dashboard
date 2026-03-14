@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
   try {
     const { userId: authUserId, getToken } = await auth();
     const clerkToken = await getToken();
-    
+
     const { email } = await request.json();
 
     if (!email || !authUserId || !clerkToken) {
@@ -50,12 +50,12 @@ export async function POST(request: NextRequest) {
             'privy-user-jwt': clerkToken // Pass the Clerk JWT as the user context
           }
         });
-        
+
         if (!response.ok) {
           const errorText = await response.text();
           throw new Error(`Privy API fallback failed: ${response.status} - ${errorText}`);
         }
-        
+
         return await response.json();
       }
     };
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
         console.log('[Privy Pregenerate] Conflict detected, extracting DID');
         const conflictMatch = error.message?.match(/did:privy:[a-z0-9]+/i);
         const existingDid = conflictMatch ? conflictMatch[0] : (error.cause || null);
-        
+
         if (existingDid) {
           console.log('[Privy Pregenerate] Attempting get for DID:', existingDid);
           privyUser = await getExistingUser(existingDid as string);
@@ -119,40 +119,67 @@ export async function POST(request: NextRequest) {
     const chainTypes = ['ethereum', 'solana', 'sui', 'ton', 'tron'];
     const accounts = (privyUser as any).linkedAccounts || (privyUser as any).linked_accounts || [];
 
+    // Check if we already have a prioritized trading address in our DB
+    const prioritizedAddress = userWallet?.tradingWallet?.address?.toLowerCase();
+
+    // First pass for all ETH wallets
+    const allEthWallets = accounts.filter(
+      (acc: any) => acc.type === 'wallet' && (acc.chainType === 'ethereum' || acc.chain_type === 'ethereum')
+    );
+
     for (const chainType of chainTypes) {
-      const wallet = accounts.find(
-        (account: any) =>
-          account.type === 'wallet' &&
-          (account.chainType === chainType || account.chain_type === chainType)
-      );
-      if (wallet) {
+      if (chainType === 'ethereum' && allEthWallets.length > 0) {
+        // Use the prioritized address if it exists in the accounts, otherwise fallback to first
+        const wallet = allEthWallets.find((w: any) => w.address.toLowerCase() === prioritizedAddress) || allEthWallets[0];
         wallets[chainType] = {
           walletId: wallet.id,
           address: wallet.address,
           publicKey: wallet.publicKey || wallet.public_key || null
         };
+      } else {
+        const wallet = accounts.find(
+          (account: any) =>
+            account.type === 'wallet' &&
+            (account.chainType === chainType || account.chain_type === chainType)
+        );
+        if (wallet) {
+          wallets[chainType] = {
+            walletId: wallet.id,
+            address: wallet.address,
+            publicKey: wallet.publicKey || wallet.public_key || null
+          };
+        }
       }
     }
 
     // 4. Update/Create DB record
+    // Unified Wallet: Force tradingwallet to match main wallet
+    const updatedTradingWallet = {
+      walletId: wallets.ethereum?.walletId || "",
+      address: wallets.ethereum?.address || "",
+      chainType: 'ethereum',
+      initialized: true
+    };
+
     userWallet = await UserWallet.findOneAndUpdate(
       { email },
       {
         email,
         clerkUserId,
         privyUserId: privyUser.id,
-        wallets
+        wallets,
+        tradingWallet: updatedTradingWallet
       },
       { upsert: true, new: true }
     );
 
-    console.log('[Privy Pregenerate] Synced with database');
+    console.log('[Privy Pregenerate] Synced and Unified with database');
 
     return NextResponse.json({
       success: true,
       privyUserId: privyUser.id,
       wallets: userWallet.wallets,
-      tradingWallet: userWallet.tradingWallet || null
+      tradingWallet: updatedTradingWallet
     });
 
   } catch (error: any) {
@@ -162,4 +189,5 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+}
+

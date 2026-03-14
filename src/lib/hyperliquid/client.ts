@@ -10,7 +10,8 @@ export class HyperliquidService {
   private info: InfoClient;
 
   constructor(config: HyperliquidConfig = {}) {
-    const isTestnet = config.testnet ?? true;
+    // Force production/mainnet: NEVER TESTNET
+    const isTestnet = config.testnet ?? false;
 
     this.transport = new HttpTransport({
       isTestnet
@@ -20,7 +21,7 @@ export class HyperliquidService {
       transport: this.transport
     });
 
-    console.log(`[Hyperliquid] initialized (testnet=${isTestnet})`);
+    console.log(`[Hyperliquid] initialized (mainnet only)`);
   }
 
   createExchangeClient(wallet: any) {
@@ -28,6 +29,28 @@ export class HyperliquidService {
       transport: this.transport,
       wallet
     });
+  }
+
+  isTestnet(): boolean {
+    // We've locked this to false for strict mainnet use
+    return false;
+  }
+
+  async getAllMidPrices() {
+    return this.info.allMids();
+  }
+
+  async getMarketData(symbol: string) {
+    const mids = await this.info.allMids();
+    const meta = await this.info.meta();
+    const asset = meta.universe.find((a: any) => a.name === symbol);
+    
+    return {
+      asset: symbol,
+      midPrice: mids[symbol] || "0",
+      szDecimals: asset?.szDecimals,
+      orderBook: await this.getOrderBook(symbol)
+    };
   }
 
   /* -------------------------------- */

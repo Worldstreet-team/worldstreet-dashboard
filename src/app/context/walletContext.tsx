@@ -123,14 +123,14 @@ export function WalletProvider({ children }: WalletProviderProps) {
 
         // Extract addresses
         setAddresses({
-          ethereum: data.wallets.ethereum?.address || "",
+          ethereum: data.tradingWallet?.address || data.wallets.ethereum?.address || "",
           solana: data.wallets.solana?.address || "",
           sui: data.wallets.sui?.address || "",
           ton: data.wallets.ton?.address || "",
           tron: data.wallets.tron?.address || "",
         });
 
-        // If the API returns trading wallet info, update it
+        // Ensure we explicitly use the trading wallet for Ethereum if it exists
         if (data.tradingWallet) {
           setTradingWallet(data.tradingWallet);
         }
@@ -178,14 +178,14 @@ export function WalletProvider({ children }: WalletProviderProps) {
 
         // Extract addresses
         setAddresses({
-          ethereum: data.wallets.ethereum?.address || "",
+          ethereum: data.tradingWallet?.address || data.wallets.ethereum?.address || "",
           solana: data.wallets.solana?.address || "",
           sui: data.wallets.sui?.address || "",
           ton: data.wallets.ton?.address || "",
           tron: data.wallets.tron?.address || "",
         });
 
-        // If the API returns trading wallet info, update it
+        // Ensure we explicitly use the trading wallet for Ethereum if it exists
         if (data.tradingWallet) {
           setTradingWallet(data.tradingWallet);
         }
@@ -269,8 +269,25 @@ export function WalletProvider({ children }: WalletProviderProps) {
       const data = await response.json();
 
       if (data.success && data.data) {
-        // Check if user has multiple Ethereum wallets (indicating trading wallet exists)
-        if (data.data.totalEthereumWallets > 1) {
+        // Handle Unified Wallet Mode
+        if (data.data.isUnified || data.data.totalEthereumWallets === 1) {
+          const mainWallet = data.data.mainWallet;
+          if (mainWallet) {
+            const tw = {
+              walletId: mainWallet.id,
+              address: mainWallet.address,
+              chainType: mainWallet.chainType || 'ethereum',
+            };
+            setTradingWallet(tw);
+            setHyperliquidStatus({
+              initialized: true,
+              tradingWallet: tw,
+              testnet: false,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        } else if (data.data.totalEthereumWallets > 1) {
+          // Fallback legacy support for multiple wallets
           const mainWalletId = data.data.mainWallet?.id || data.data.mainWalletIdFromDB;
           const tradingWallets = data.data.ethereumWallets.filter(
             (w: any) => w.id !== mainWalletId
@@ -287,7 +304,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
             setHyperliquidStatus({
               initialized: true,
               tradingWallet: tw,
-              testnet: process.env.NODE_ENV !== 'production',
+              testnet: false,
               timestamp: new Date().toISOString(),
             });
           }

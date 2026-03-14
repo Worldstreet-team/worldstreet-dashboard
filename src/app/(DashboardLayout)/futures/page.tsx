@@ -25,23 +25,21 @@ const BottomPanel: React.FC = () => {
     <div className="h-full flex flex-col">
       {/* Tabs Row */}
       <div className="flex items-center gap-6 px-4 py-2 border-b border-[#1f2329]">
-        <button 
+        <button
           onClick={() => setActiveTab('positions')}
-          className={`text-[12px] font-medium pb-1 transition-colors ${
-            activeTab === 'positions' 
-              ? 'text-[#f0b90b] border-b-2 border-[#f0b90b]' 
+          className={`text-[12px] font-medium pb-1 transition-colors ${activeTab === 'positions'
+              ? 'text-[#f0b90b] border-b-2 border-[#f0b90b]'
               : 'text-[#848e9c] hover:text-white'
-          }`}
+            }`}
         >
           Positions
         </button>
-        <button 
+        <button
           onClick={() => setActiveTab('assets')}
-          className={`text-[12px] font-medium pb-1 transition-colors ${
-            activeTab === 'assets' 
-              ? 'text-[#f0b90b] border-b-2 border-[#f0b90b]' 
+          className={`text-[12px] font-medium pb-1 transition-colors ${activeTab === 'assets'
+              ? 'text-[#f0b90b] border-b-2 border-[#f0b90b]'
               : 'text-[#848e9c] hover:text-white'
-          }`}
+            }`}
         >
           Assets
         </button>
@@ -69,12 +67,12 @@ export default function HyperliquidFuturesPage() {
   const [selectedPair, setSelectedPair] = useState<string>('BTC-USD');
   const [tradingSide, setTradingSide] = useState<OrderSide>('long');
   const [showTradingModal, setShowTradingModal] = useState(false);
-  
+
   // Use Hyperliquid markets for futures trading
-  const { 
-    markets: hyperliquidMarkets, 
-    loading: marketsLoading, 
-    error: marketsError 
+  const {
+    markets: hyperliquidMarkets,
+    loading: marketsLoading,
+    error: marketsError
   } = useHyperliquidMarkets({
     includeStats: true,
     enabled: true
@@ -87,7 +85,7 @@ export default function HyperliquidFuturesPage() {
   useEffect(() => {
     if (hyperliquidMarkets.length > 0 && selectedPair === 'BTC-USD') {
       // Find BTC market or use first available
-      const btcMarket = hyperliquidMarkets.find(m => 
+      const btcMarket = hyperliquidMarkets.find(m =>
         m.symbol.includes('BTC') || m.baseAsset === 'BTC'
       );
       const defaultMarket = btcMarket || hyperliquidMarkets[0];
@@ -151,7 +149,7 @@ export default function HyperliquidFuturesPage() {
               />
               <span className="text-sm font-semibold text-white">WorldStreet</span>
             </div>
-            
+
             {/* Navigation Icons */}
             <div className="flex items-center gap-3">
               <Link href="/assets" className="p-2 hover:bg-[#1e2329] rounded-lg transition-colors">
@@ -162,7 +160,7 @@ export default function HyperliquidFuturesPage() {
               </Link>
             </div>
           </div>
-          
+
           {/* Status Bar */}
           <div className="px-4 pb-2">
             <div className="flex items-center justify-between">
@@ -174,12 +172,12 @@ export default function HyperliquidFuturesPage() {
             </div>
           </div>
         </div>
-        
+
         {/* Market Info Bar */}
         <div className="flex-shrink-0 px-3 py-2 bg-[#0b0e11] border-b border-[#2b3139]">
           <div className="flex items-center justify-between">
             <div className="relative z-50">
-              <button 
+              <button
                 onClick={() => setShowMarketDropdown(!showMarketDropdown)}
                 className="flex items-center gap-1 px-2 py-1 rounded active:bg-white/5"
               >
@@ -188,7 +186,7 @@ export default function HyperliquidFuturesPage() {
                 </span>
                 <Icon icon="ph:caret-down" width={12} className="text-gray-400" />
               </button>
-              
+
               {showMarketDropdown && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowMarketDropdown(false)} />
@@ -197,9 +195,8 @@ export default function HyperliquidFuturesPage() {
                       <button
                         key={market.symbol}
                         onClick={() => handleSelectMarket(market.symbol)}
-                        className={`w-full text-left px-3 py-2 text-xs ${
-                          selectedPair === market.symbol ? 'bg-[#f0b90b]/10 text-[#f0b90b] font-medium' : 'text-white hover:bg-[#2b3139]'
-                        }`}
+                        className={`w-full text-left px-3 py-2 text-xs ${selectedPair === market.symbol ? 'bg-[#f0b90b]/10 text-[#f0b90b] font-medium' : 'text-white hover:bg-[#2b3139]'
+                          }`}
                       >
                         <div className="flex justify-between items-center">
                           <span>{market.symbol}</span>
@@ -211,7 +208,7 @@ export default function HyperliquidFuturesPage() {
                 </>
               )}
             </div>
-            
+
             <div className="flex items-baseline gap-1.5">
               <span className={`text-sm font-bold ${isPositive ? 'text-success' : 'text-error'}`}>
                 ${currentPrice.toFixed(2)}
@@ -226,14 +223,13 @@ export default function HyperliquidFuturesPage() {
         {/* Tab Navigation */}
         <div className="flex-shrink-0 flex items-center gap-4 px-3 py-2 border-b border-[#2b3139] bg-[#181a20]">
           {['chart', 'positions', 'info'].map((tab) => (
-            <button 
+            <button
               key={tab}
               onClick={() => setMobileActiveTab(tab as any)}
-              className={`pb-1 text-xs font-medium capitalize ${
-                mobileActiveTab === tab 
-                  ? 'text-white border-b-2 border-warning' 
+              className={`pb-1 text-xs font-medium capitalize ${mobileActiveTab === tab
+                  ? 'text-white border-b-2 border-warning'
                   : 'text-gray-400'
-              }`}
+                }`}
             >
               {tab}
             </button>
@@ -258,7 +254,7 @@ export default function HyperliquidFuturesPage() {
             <div className="p-3 space-y-3 pb-24">
               {/* Hyperliquid Account Status */}
               <div className="bg-[#1e2329] rounded-xl border border-[#2b3139] p-3">
-                <h3 className="text-xs font-bold text-white mb-2 uppercase">Hyperliquid Account</h3>
+                <h3 className="text-xs font-bold text-white mb-2 uppercase">Trading Account</h3>
                 <div className="space-y-2">
                   <p className="text-xs text-gray-400">Connect your trading wallet to view account details</p>
                   <button className="w-full py-2 bg-warning hover:bg-warning/90 text-white rounded-lg text-xs font-bold">
@@ -269,10 +265,10 @@ export default function HyperliquidFuturesPage() {
 
               {/* Futures Wallet Balance */}
               <FuturesWalletBalance />
-              
+
               {/* Collateral Panel */}
               <CollateralPanel />
-              
+
               {/* Risk Panel */}
               <RiskPanel />
             </div>
@@ -306,7 +302,7 @@ export default function HyperliquidFuturesPage() {
 
       {/* DESKTOP LAYOUT - Bybit Style Trading Interface */}
       <div className="hidden md:block fixed inset-0 bg-[#0b0e11]">
-        
+
         {/* HEADER - 60px Bybit Style */}
         <div className="h-[60px] px-4 bg-[#0b0e11] border-b border-[#1f2329] flex items-center justify-between relative z-50">
           {/* Left: Logo + Nav */}
@@ -334,7 +330,7 @@ export default function HyperliquidFuturesPage() {
           <div className="flex items-center gap-6">
             {/* Market Selector */}
             <div className="relative z-50">
-              <button 
+              <button
                 onClick={() => setShowMarketDropdown(!showMarketDropdown)}
                 className="flex items-center gap-1 px-3 py-1.5 hover:bg-[#1a1f26] rounded transition-colors"
               >
@@ -342,13 +338,13 @@ export default function HyperliquidFuturesPage() {
                   {selectedPair}
                 </span>
                 <span className="text-[11px] text-[#848e9c]">Hyperliquid</span>
-                <Icon 
-                  icon="ph:caret-down" 
-                  width={14} 
-                  className="text-[#848e9c]" 
+                <Icon
+                  icon="ph:caret-down"
+                  width={14}
+                  className="text-[#848e9c]"
                 />
               </button>
-              
+
               {showMarketDropdown && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowMarketDropdown(false)} />
@@ -357,11 +353,10 @@ export default function HyperliquidFuturesPage() {
                       <button
                         key={market.symbol}
                         onClick={() => handleSelectMarket(market.symbol)}
-                        className={`w-full text-left px-3 py-2 text-[12px] font-medium transition-colors ${
-                          selectedPair === market.symbol 
-                            ? 'bg-[#1a1f26] text-[#f0b90b]' 
+                        className={`w-full text-left px-3 py-2 text-[12px] font-medium transition-colors ${selectedPair === market.symbol
+                            ? 'bg-[#1a1f26] text-[#f0b90b]'
                             : 'text-white hover:bg-[#1a1f26]'
-                        }`}
+                          }`}
                       >
                         <div className="flex justify-between items-center">
                           <span>{market.symbol}</span>
@@ -404,10 +399,10 @@ export default function HyperliquidFuturesPage() {
 
         {/* MAIN TRADING AREA - Grid Layout */}
         <div className="h-[calc(100%-60px-220px)] grid grid-cols-[15%_50%_15%_20%]">
-          
+
           {/* COLUMN 1: Market List (15%) */}
           <div className="h-full bg-[#0b0e11] border-r border-[#1f2329] overflow-hidden">
-            <BinanceMarketList 
+            <BinanceMarketList
               selectedPair={selectedPair}
               onSelectPair={(pair) => handleSelectMarket(pair)}
               includeStats={true}
@@ -429,7 +424,7 @@ export default function HyperliquidFuturesPage() {
           {/* COLUMN 4: Trading Panel (20%) */}
           <div className="h-full bg-[#0b0e11] overflow-y-auto scrollbar-thin scrollbar-thumb-[#1f2329]">
             <div className="p-2">
-              <FuturesOrderForm 
+              <FuturesOrderForm
                 marketIndex={0}
                 marketName={selectedPair}
               />

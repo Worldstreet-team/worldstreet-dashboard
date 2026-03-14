@@ -8,7 +8,7 @@ import { HyperliquidService } from "@/lib/hyperliquid/client";
 export async function GET() {
   try {
     const hyperliquidService = new HyperliquidService({
-      testnet: process.env.NODE_ENV !== 'production'
+      testnet: false
     });
 
     console.log('[Hyperliquid Test] Testing API connection...');
@@ -39,12 +39,12 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       data: {
-        testnet: hyperliquidService.isTestnet(),
+        testnet: false,
         connection: 'successful',
         markets: {
           count: markets.length,
-          sample: markets.slice(0, 3).map(m => ({
-            name: m.name,
+          sample: markets.slice(0, 3).map((m: any) => ({
+            name: m.symbol || m.name,
             szDecimals: m.szDecimals
           }))
         },
@@ -71,7 +71,7 @@ export async function GET() {
       {
         success: false,
         error: error instanceof Error ? error.message : "Failed to test Hyperliquid API",
-        testnet: process.env.NODE_ENV !== 'production',
+        testnet: false,
         timestamp: new Date().toISOString()
       },
       { status: 500 }

@@ -1,16 +1,16 @@
+import { toHex } from "viem";
 import { privyClient } from "./client";
-import { createViemAccount } from "@privy-io/node/viem";
-import { createWalletClient, http } from "viem";
 import { mainnet, arbitrum, polygon, optimism, bsc, base } from "viem/chains";
 
 export interface EthereumTransactionParams {
   to: string;
-  value?: string; // hex or string
+  value?: string | number | bigint;
   data?: string;
-  gas?: string;
-  gasPrice?: string;
+  gas?: string | number | bigint;
+  gasPrice?: string | number | bigint;
   nonce?: number;
   chain_id?: number;
+  sponsor?: boolean;
 }
 
 const getChain = (chainId: number) => {
@@ -24,6 +24,31 @@ const getChain = (chainId: number) => {
     default: return mainnet; // Default to mainnet
   }
 };
+
+function sanitizePrivyError(error: any): string {
+  const message = error.message || String(error);
+  
+  if (message.includes('{"error":')) {
+    try {
+      const match = message.match(/\{.*\}/);
+      if (match) {
+        const errorDetail = JSON.parse(match[0]);
+        const innerError = errorDetail.error;
+        
+        if (typeof innerError === 'string') {
+          if (innerError.includes('insufficient funds')) return "Insufficient funds for gas + value.";
+          if (innerError.includes('exceeds the balance')) return "Insufficient funds for this transaction.";
+          return innerError;
+        }
+      }
+    } catch (e) {}
+  }
+
+  if (message.includes('insufficient funds')) return "Insufficient funds for gas + value.";
+  if (message.includes('missing_or_invalid_token')) return "Session expired. Please refresh.";
+
+  return message;
+}
 
 /**
  * Send an Ethereum transaction using Privy's native Viem integration
@@ -45,52 +70,43 @@ export async function sendEthereumTransaction(
     const authorizationContext = clerkJwt ? { user_jwts: [clerkJwt] } : undefined;
     if (!authorizationContext) throw new Error("No authorization context available - JWT required");
 
-    // Helper to ensure values are properly hex-encoded as Privy expects
-    const toHex = (val?: string | number): string | undefined => {
-      if (!val) return undefined;
-      if (typeof val === 'string' && val.startsWith('0x')) return val;
-      try {
-        return `0x${BigInt(val).toString(16)}`;
-      } catch (e) {
-        return undefined; // fallback if invalid
-      }
-    };
-
     const chainId = params.chain_id || 1;
+    const sponsor = params.sponsor ?? false;
 
-    // Use native Privy server-side SDK which perfectly maps authorization_context headers natively.
-    // Explicitly targeting correct JSON-RPC / SDK parameter mappings.
-    const txParams = {
+    // Build transaction params with strict hex encoding
+    const txParams: any = {
       to: params.to,
-      value: toHex(params.value) || "0x0",
-      data: params.data,
-      chain_id: chainId,
-      gas_limit: toHex(params.gas),
-      gas_price: toHex(params.gasPrice), // Let legacy EIP155 overrides handle gas
-      nonce: params.nonce,
+      value: params.value ? toHex(BigInt(params.value)) : "0x0",
+      data: params.data || "0x",
     };
 
-    // Remove undefined fields to prevent SDK errors
-    Object.keys(txParams).forEach(key => (txParams as any)[key] === undefined && delete (txParams as any)[key]);
+    if (params.gas) txParams.gas_limit = toHex(BigInt(params.gas));
+    if (params.gasPrice) txParams.gasPrice = toHex(BigInt(params.gasPrice));
+    if (params.nonce !== undefined) txParams.nonce = params.nonce;
 
-    const result = await privyClient.wallets().rpc(walletId, {
-      method: "eth_sendTransaction",
+    console.log(`[Privy Ethereum] Execution on chain ${chainId} (Sponsor: ${sponsor}). Target: ${params.to}`);
+    console.log(`[Privy Ethereum] Transaction payload:`, JSON.stringify(txParams));
+
+    // Use the modern SDK method that supports direct sponsorship and correct parameter mapping
+    const result = await (privyClient.wallets() as any).ethereum().sendTransaction(walletId, {
       caip2: `eip155:${chainId}`,
+      sponsor: sponsor,
       params: {
-        transaction: txParams as any
+        transaction: txParams
       },
       authorization_context: authorizationContext
     });
 
-    console.log('[Privy Ethereum] Broadcast success:', (result as any).data.hash);
+    const hash = result.hash || (result as any).data?.hash;
+    console.log('[Privy Ethereum] Broadcast success:', hash);
 
     return {
-      transactionHash: (result as any).data.hash,
+      transactionHash: hash,
       status: "success"
     };
   } catch (error: any) {
     console.error('[Privy Ethereum Execution] Error:', error);
-    throw new Error(error.message || 'Failed to send ETH transaction');
+    throw new Error(sanitizePrivyError(error));
   }
 }
 
@@ -108,8 +124,9 @@ export async function sendEth(
     walletId,
     {
       to: toAddress,
-      value: valueInWei.toString(),
-      chain_id: 1
+      value: valueInWei,
+      chain_id: 1,
+      sponsor: false // Eth mainnet native transfers rarely sponsored
     },
     clerkJwt
   );
