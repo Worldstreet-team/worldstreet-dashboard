@@ -1,75 +1,28 @@
 import { NextResponse } from 'next/server';
-import {
-  ValidationError,
-  NotFoundError,
-  ResourceExhaustedError,
-  SystemError,
-  TransactionError
-} from './drift-errors';
 
 export function handleApiError(error: unknown): NextResponse {
   console.error('[API Error]', error);
   
-  if (error instanceof ValidationError) {
+  // Handle basic Error objects
+  if (error instanceof Error) {
+    const status = (error as any).status || (error as any).statusCode || 500;
     return NextResponse.json(
       {
         success: false,
         error: error.message,
-        details: error.details
+        details: (error as any).details || (error as any).cause || null,
+        code: (error as any).code || 'INTERNAL_SERVER_ERROR'
       },
-      { status: 400 }
+      { status: typeof status === 'number' ? status : 500 }
     );
   }
   
-  if (error instanceof NotFoundError) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message
-      },
-      { status: 404 }
-    );
-  }
-  
-  if (error instanceof ResourceExhaustedError) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message
-      },
-      { status: 409 }
-    );
-  }
-  
-  if (error instanceof TransactionError) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message,
-        signature: error.signature,
-        cause: error.cause?.message
-      },
-      { status: 500 }
-    );
-  }
-  
-  if (error instanceof SystemError) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message,
-        cause: error.cause?.message
-      },
-      { status: 500 }
-    );
-  }
-  
-  // Generic error
+  // Generic fallback error
   return NextResponse.json(
     {
       success: false,
-      error: 'Internal server error',
-      message: error instanceof Error ? error.message : 'Unknown error'
+      error: 'An unexpected error occurred',
+      message: typeof error === 'string' ? error : 'Internal server error'
     },
     { status: 500 }
   );
