@@ -6,8 +6,21 @@ import { useUser } from '@clerk/nextjs';
 import { useHyperliquidBalance } from '@/hooks/useHyperliquidBalance';
 
 export default function PositionsList() {
-  const { user } = useUser();
+  const { user, isLoaded } = useUser();
   const { balances, loading, error, refetch } = useHyperliquidBalance(user?.id, !!user?.id);
+
+  if (!isLoaded) return null;
+
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <div className="text-center">
+          <Icon icon="ph:wallet" className="mx-auto mb-2 text-[#848e9c]" width={32} />
+          <p className="text-sm text-[#848e9c]">Wallet not connected</p>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

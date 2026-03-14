@@ -66,8 +66,10 @@ export default function MarketTrades({ selectedPair }: MarketTradesProps) {
   const itemsPerPage = 10;
 
   useEffect(() => {
-    // Convert pair format: Replace USDC with USDT for KuCoin API
-    const apiSymbol = selectedPair.replace('-USDC', '-USDT').replace('USDC', 'USDT');
+    // Normalize symbol for Gate.io: replace hyphens/slashes with underscore
+    // and ensure it ends with USDT (standard for Gate.io spot)
+    const cleanBase = selectedPair.replace(/[-_/]/g, '').replace(/(USDT|USDC|USD)$/, '');
+    const gateSymbol = `${cleanBase}_USDT`;
     
     fetchTrades();
     const interval = setInterval(fetchTrades, 3000);
@@ -76,7 +78,7 @@ export default function MarketTrades({ selectedPair }: MarketTradesProps) {
     async function fetchTrades() {
       try {
         const response = await fetch(
-          `/api/kucoin/trades?symbol=${apiSymbol}`
+          `/api/gateio/trades?symbol=${gateSymbol}`
         );
 
         if (!response.ok) {
@@ -85,18 +87,18 @@ export default function MarketTrades({ selectedPair }: MarketTradesProps) {
 
         const result = await response.json();
 
-        if (result.code !== '200000' || !result.data) {
+        if (!result.success || !result.data || !Array.isArray(result.data)) {
           throw new Error('Invalid response');
         }
 
-        const kucoinTrades: KuCoinTrade[] = result.data;
+        const gateTrades: any[] = result.data;
 
-        const formattedTrades: Trade[] = kucoinTrades.map((trade) => ({
-          id: trade.tradeId,
+        const formattedTrades: Trade[] = gateTrades.map((trade) => ({
+          id: trade.id,
           price: parseFloat(trade.price),
-          amount: parseFloat(trade.size),
-          time: new Date(trade.time / 1000000), // Convert nanoseconds to milliseconds
-          side: trade.side
+          amount: parseFloat(trade.amount),
+          time: new Date(parseFloat(trade.create_time) * 1000), // Convert seconds to milliseconds
+          side: trade.side === 'buy' ? 'buy' : 'sell'
         }));
 
         setTrades(formattedTrades);
@@ -104,7 +106,7 @@ export default function MarketTrades({ selectedPair }: MarketTradesProps) {
         setLoading(false);
       } catch (err) {
         console.error('Error fetching trades:', err);
-        setError('Failed to fetch trades');
+        setError('Failed to fetch trades from Gate.io');
         setLoading(false);
       }
     }
@@ -147,11 +149,11 @@ export default function MarketTrades({ selectedPair }: MarketTradesProps) {
 
   const fetchTrades = async () => {
     try {
-      // Convert pair format: Replace USDC with USDT for KuCoin API
-      const apiSymbol = selectedPair.replace('-USDC', '-USDT').replace('USDC', 'USDT');
+      const cleanBase = selectedPair.replace(/[-_/]/g, '').replace(/(USDT|USDC|USD)$/, '');
+      const gateSymbol = `${cleanBase}_USDT`;
       
       const response = await fetch(
-        `/api/kucoin/trades?symbol=${apiSymbol}`
+        `/api/gateio/trades?symbol=${gateSymbol}`
       );
 
       if (!response.ok) {
@@ -160,18 +162,18 @@ export default function MarketTrades({ selectedPair }: MarketTradesProps) {
 
       const result = await response.json();
 
-      if (result.code !== '200000' || !result.data) {
+      if (!result.success || !result.data || !Array.isArray(result.data)) {
         throw new Error('Invalid response');
       }
 
-      const kucoinTrades: KuCoinTrade[] = result.data;
+      const gateTrades: any[] = result.data;
 
-      const formattedTrades: Trade[] = kucoinTrades.map((trade) => ({
-        id: trade.tradeId,
+      const formattedTrades: Trade[] = gateTrades.map((trade) => ({
+        id: trade.id,
         price: parseFloat(trade.price),
-        amount: parseFloat(trade.size),
-        time: new Date(trade.time / 1000000), // Convert nanoseconds to milliseconds
-        side: trade.side
+        amount: parseFloat(trade.amount),
+        time: new Date(parseFloat(trade.create_time) * 1000), // Convert seconds to milliseconds
+        side: trade.side === 'buy' ? 'buy' : 'sell'
       }));
 
       setTrades(formattedTrades);
@@ -179,7 +181,7 @@ export default function MarketTrades({ selectedPair }: MarketTradesProps) {
       setLoading(false);
     } catch (err) {
       console.error('Error fetching trades:', err);
-      setError('Failed to fetch trades');
+      setError('Failed to fetch trades from Gate.io');
       setLoading(false);
     }
   };

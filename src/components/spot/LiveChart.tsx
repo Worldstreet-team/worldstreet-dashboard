@@ -334,103 +334,93 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
   // Fetch and update chart data
   const fetchAndUpdateData = useCallback(async (pair: string) => {
     try {
-      // 1. Try KuCoin First (the primary source)
-      const kucoinSymbol = pair.replace('-USDC', '-USDT').replace('USDC', 'USDT');
-      const kucoinUrl = `/api/kucoin/candles?symbol=${encodeURIComponent(kucoinSymbol)}&type=1hour&limit=100`;
+      console.log(`[LiveChart] POLLING: ${pair} at ${new Date().toLocaleTimeString()}`);
       
-      let response = await fetch(kucoinUrl);
+      const cleanBase = pair.replace(/[-_/]/g, '').replace(/(USDT|USDC|USD)$/, '').toUpperCase();
+      const gateSymbol = `${cleanBase}_USDT`;
+      const gateUrl = `/api/gateio/candles?symbol=${encodeURIComponent(gateSymbol)}&interval=1h&limit=100`;
+      
+      let response = await fetch(gateUrl);
       let data = await response.json();
       
-      // 2. If KuCoin fails or returns no data, try Gate.io fallback
-      if (!response.ok || !data.data || !Array.isArray(data.data) || data.data.length === 0) {
-        console.warn(`[LiveChart] KuCoin fetch failed for ${pair}, trying Gate.io fallback...`);
-        const gateSymbol = pair.replace('-', '_').replace('USDC', 'USDT');
-        const gateUrl = `/api/gateio/candles?symbol=${encodeURIComponent(gateSymbol)}&interval=1h&limit=100`;
+      if (!response.ok || !data.success || !data.data || !Array.isArray(data.data) || data.data.length === 0) {
+        console.warn(`[LiveChart] Gate.io fetch failed, trying fallback for ${cleanBase}`);
+        const klinesUrl = `/api/market/${cleanBase}USDT/klines?type=1h`;
+        const innerRes = await fetch(klinesUrl);
+        const innerData = await innerRes.json();
         
-        response = await fetch(gateUrl);
-        data = await response.json();
-      }
-      
-      if (!data.data || !Array.isArray(data.data) || data.data.length === 0) {
-        console.error('[LiveChart] All data sources failed for', pair);
-        return;
+        if (innerData && innerData.data && Array.isArray(innerData.data)) {
+          data = { success: true, data: innerData.data };
+        } else {
+          console.error('[LiveChart] All sources failed for', cleanBase);
+          setIsLoading(false);
+          return;
+        }
       }
 
-      // Sort candles by time
       const candles: CandleData[] = data.data
         .map((candle: any) => ({
-          time: candle.time,
-          open: candle.open,
-          high: candle.high,
-          low: candle.low,
-          close: candle.close,
+          time: Number(candle.time),
+          open: Number(candle.open),
+          high: Number(candle.high),
+          low: Number(candle.low),
+          close: Number(candle.close),
         }))
         .sort((a: CandleData, b: CandleData) => a.time - b.time);
 
       if (chartRef.current && candles.length > 0) {
-        // Format data for ECharts: [open, close, low, high]
         const chartData = candles.map(c => [c.open, c.close, c.low, c.high]);
         const timeData = candles.map(c => c.time.toString());
-
-        // Get current price (last candle's close)
         const latestPrice = candles[candles.length - 1].close;
+        
+        // Update states
         setCurrentPrice(latestPrice);
+        setIsLoading(false);
 
-        // Build mark lines including current price
+        // Build mark lines
         const markLineData: any[] = [
           {
             yAxis: latestPrice,
-            lineStyle: {
-              color: '#3b82f6',
-              type: 'solid',
-              width: 2,
-            },
-            label: {
-              show: true,
-              position: 'insideEndTop',
-              formatter: '{c}',
-              color: '#fff',
-              fontSize: 10,
-              backgroundColor: '#3b82f6',
-              padding: [2, 6],
-              borderRadius: 3,
+            lineStyle: { color: '#3b82f6', type: 'solid', width: 2 },
+            label: { 
+              show: true, 
+              position: 'insideEndTop', 
+              formatter: '{c}', 
+              color: '#fff', 
+              backgroundColor: '#3b82f6', 
+              padding: [2, 6] 
             },
           },
         ];
 
-        // Add TP/SL lines if they exist
         if (stopLoss && parseFloat(stopLoss) > 0) {
           markLineData.push({
             yAxis: parseFloat(stopLoss),
             lineStyle: { color: '#f6465d', type: 'dashed', width: 2 },
-            label: {
-              formatter: 'SL: {c}',
-              position: 'insideEndTop',
-              color: '#f6465d',
-              fontSize: 10,
-            },
+            label: { formatter: 'SL: {c}', position: 'insideEndTop', color: '#f6465d' },
           });
         }
         if (takeProfit && parseFloat(takeProfit) > 0) {
           markLineData.push({
             yAxis: parseFloat(takeProfit),
             lineStyle: { color: '#0ecb81', type: 'dashed', width: 2 },
-            label: {
-              formatter: 'TP: {c}',
-              position: 'insideEndTop',
-              color: '#0ecb81',
-              fontSize: 10,
-            },
+            label: { formatter: 'TP: {c}', position: 'insideEndTop', color: '#0ecb81' },
           });
         }
 
         chartRef.current.setOption({
-          xAxis: {
-            data: timeData,
-          },
+          xAxis: { data: timeData },
+          yAxis: { scale: true },
           series: [
             {
+              type: 'candlestick',
               data: chartData,
+              itemStyle: {
+                color: '#0ecb81',
+                color0: '#f6465d',
+                borderColor: '#0ecb81',
+                borderColor0: '#f6465d',
+              },
               markLine: {
                 symbol: 'none',
                 animation: false,
@@ -438,16 +428,15 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
               },
             },
           ],
-        });
+        }, false); // notMerge: false (default)
 
-        setIsLoading(false);
-        console.log('Chart updated with', candles.length, 'candles');
+        console.log(`[LiveChart] SUCCESS: Updated ${pair} to ${latestPrice}`);
       }
     } catch (error) {
-      console.error('Error fetching chart data:', error);
+      console.error('[LiveChart] ERROR:', error);
       setIsLoading(false);
     }
-  }, []);
+  }, [stopLoss, takeProfit]);
 
   // Set up polling for data updates
   useEffect(() => {

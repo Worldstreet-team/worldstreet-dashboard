@@ -21,21 +21,21 @@ export default function MarketTicker({ selectedPair, onSelectPair }: MarketTicke
   const [error, setError] = useState<string | null>(null);
 
   const tradingPairs = [
-    'BTC-USDT',
-    'ETH-USDT',
-    'BNB-USDT',
-    'SOL-USDT',
-    'XRP-USDT',
-    'ADA-USDT'
+    'BTC_USDT',
+    'ETH_USDT',
+    'BNB_USDT',
+    'SOL_USDT',
+    'XRP_USDT',
+    'ADA_USDT'
   ];
 
   useEffect(() => {
     const fetchTickers = async () => {
       try {
-        // Fetch all tickers in parallel via our API route
+        // Fetch tickers from our Gate.io API
         const tickerPromises = tradingPairs.map(async (pair) => {
           const response = await fetch(
-            `/api/kucoin/ticker?symbol=${pair}`
+            `/api/gateio/ticker?symbol=${pair}`
           );
 
           if (!response.ok) {
@@ -44,28 +44,30 @@ export default function MarketTicker({ selectedPair, onSelectPair }: MarketTicke
 
           const result = await response.json();
           
-          if (result.code !== '200000' || !result.data) {
+          if (!result.success || !result.data || !Array.isArray(result.data)) {
             throw new Error(`Invalid response for ${pair}`);
           }
 
-          const data = result.data;
+          const data = result.data[0]; // Gate.io returns results for a pair in an array
+
+          if (!data) return null;
 
           return {
-            symbol: pair,
+            symbol: pair.replace('_', '-'), // Reformat back for UI
             price: parseFloat(data.last) || 0,
-            change24h: parseFloat(data.changeRate) * 100 || 0, // Convert to percentage
-            volume24h: parseFloat(data.volValue) || 0 // Volume in USDT
+            change24h: parseFloat(data.change_percentage) || 0,
+            volume24h: parseFloat(data.base_volume) * parseFloat(data.last) || 0 // Rough est in USDT
           };
         });
 
-        const updatedTickers = await Promise.all(tickerPromises);
+        const updatedTickers = (await Promise.all(tickerPromises)).filter(Boolean) as TickerData[];
         
         setTickers(updatedTickers);
         setError(null);
         setLoading(false);
       } catch (err) {
         console.error('Error fetching ticker data:', err);
-        setError('Failed to fetch prices');
+        setError('Failed to fetch prices from Gate.io');
         setLoading(false);
       }
     };
@@ -115,7 +117,7 @@ export default function MarketTicker({ selectedPair, onSelectPair }: MarketTicke
         </div>
         <div className="flex items-center gap-1 text-xs text-muted">
           <Icon icon="ph:arrow-clockwise" className="animate-spin-slow" width={14} />
-          <span>Live prices via KuCoin</span>
+          <span>Live prices via Gate.io</span>
         </div>
       </div>
       
