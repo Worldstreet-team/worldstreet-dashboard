@@ -30,7 +30,7 @@ export default function PositionsList() {
   }
 
   // Filter out assets with tiny balances (dust)
-  const tokenHoldings = balances.filter(b => parseFloat(b.total) > 0.0001);
+  const tokenHoldings = balances.filter(b => b.total > 0.0001);
 
   if (tokenHoldings.length === 0) {
     return (
@@ -68,17 +68,17 @@ export default function PositionsList() {
             
             <div className="text-right flex flex-col justify-center">
               <span className="text-sm font-mono text-white">
-                {parseFloat(position.total).toLocaleString(undefined, { maximumFractionDigits: 6 })}
+                {position.total.toLocaleString(undefined, { maximumFractionDigits: 6 })}
               </span>
             </div>
 
             <div className="text-right flex flex-col justify-center">
               <span className="text-sm font-mono text-[#0ecb81]">
-                {parseFloat(position.available).toLocaleString(undefined, { maximumFractionDigits: 6 })}
+                {position.available.toLocaleString(undefined, { maximumFractionDigits: 6 })}
               </span>
-              {parseFloat(position.hold) > 0 && (
+              {position.hold > 0 && (
                 <span className="text-[9px] text-[#848e9c]">
-                  {parseFloat(position.hold).toFixed(4)} in orders
+                  {position.hold.toFixed(4)} in orders
                 </span>
               )}
             </div>

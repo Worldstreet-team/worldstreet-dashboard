@@ -334,22 +334,25 @@ const LiveChart = ({ symbol, stopLoss, takeProfit, onUpdateLevels }: LiveChartPr
   // Fetch and update chart data
   const fetchAndUpdateData = useCallback(async (pair: string) => {
     try {
-      // Convert pair format: Replace USDC with USDT for KuCoin API
-      const apiSymbol = pair.replace('-USDC', '-USDT').replace('USDC', 'USDT');
+      // 1. Try KuCoin First (the primary source)
+      const kucoinSymbol = pair.replace('-USDC', '-USDT').replace('USDC', 'USDT');
+      const kucoinUrl = `/api/kucoin/candles?symbol=${encodeURIComponent(kucoinSymbol)}&type=1hour&limit=100`;
       
-      const url = `/api/kucoin/candles?symbol=${encodeURIComponent(apiSymbol)}&type=1hour&limit=100`;
+      let response = await fetch(kucoinUrl);
+      let data = await response.json();
       
-      const response = await fetch(url);
-      
-      if (!response.ok) {
-        console.error('API response not ok:', response.status, response.statusText);
-        return;
+      // 2. If KuCoin fails or returns no data, try Gate.io fallback
+      if (!response.ok || !data.data || !Array.isArray(data.data) || data.data.length === 0) {
+        console.warn(`[LiveChart] KuCoin fetch failed for ${pair}, trying Gate.io fallback...`);
+        const gateSymbol = pair.replace('-', '_').replace('USDC', 'USDT');
+        const gateUrl = `/api/gateio/candles?symbol=${encodeURIComponent(gateSymbol)}&interval=1h&limit=100`;
+        
+        response = await fetch(gateUrl);
+        data = await response.json();
       }
       
-      const data = await response.json();
-      
-      if (!data.data || !Array.isArray(data.data)) {
-        console.error('Invalid response format:', data);
+      if (!data.data || !Array.isArray(data.data) || data.data.length === 0) {
+        console.error('[LiveChart] All data sources failed for', pair);
         return;
       }
 
