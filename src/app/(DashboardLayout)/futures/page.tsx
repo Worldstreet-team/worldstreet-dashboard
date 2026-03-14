@@ -6,8 +6,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useHyperliquidMarkets } from '@/hooks/useHyperliquidMarkets';
 import { FuturesChart } from '@/components/futures/FuturesChart';
-import BinanceOrderBook from '@/components/spot/BinanceOrderBook';
-import BinanceMarketList from '@/components/spot/BinanceMarketList';
+import FuturesMarketList from '@/components/futures/FuturesMarketList';
+import FuturesOrderBook from '@/components/futures/FuturesOrderBook';
 import FuturesOrderForm from '@/components/futures/FuturesOrderForm';
 import { PositionPanel } from '@/components/futures/PositionPanel';
 import { CollateralPanel } from '@/components/futures/CollateralPanel';
@@ -402,10 +402,9 @@ export default function HyperliquidFuturesPage() {
 
           {/* COLUMN 1: Market List (15%) */}
           <div className="h-full bg-[#0b0e11] border-r border-[#1f2329] overflow-hidden">
-            <BinanceMarketList
-              selectedPair={selectedPair}
-              onSelectPair={(pair) => handleSelectMarket(pair)}
-              includeStats={true}
+            <FuturesMarketList
+              selectedMarketSymbol={selectedPair}
+              onSelectMarket={(symbol: string) => handleSelectMarket(symbol)}
             />
           </div>
 
@@ -418,7 +417,7 @@ export default function HyperliquidFuturesPage() {
 
           {/* COLUMN 3: Order Book (15%) */}
           <div className="h-full bg-[#0b0e11] border-r border-[#1f2329] overflow-hidden">
-            <BinanceOrderBook selectedPair={selectedPair} />
+            <FuturesOrderBook symbol={selectedPair} />
           </div>
 
           {/* COLUMN 4: Trading Panel (20%) */}

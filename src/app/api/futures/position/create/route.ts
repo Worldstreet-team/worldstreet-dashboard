@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { connectDB } from '@/lib/mongodb';
-import { getPositionManager, initializeDriftServices } from '@/services/drift';
 import { handleApiError } from '@/lib/errors/apiErrorHandler';
 
 export async function POST(req: NextRequest) {
@@ -16,18 +15,27 @@ export async function POST(req: NextRequest) {
     }
     
     const body = await req.json();
-    const params = body;
     
     await connectDB();
-    await initializeDriftServices();
     
-    const positionManager = getPositionManager();
-    const result = await positionManager.createPosition(userId, params);
-    
-    return NextResponse.json({
-      success: true,
-      data: result
+    // Proxy to the existing Hyperliquid order endpoint
+    // We fetch locally to avoid extra latency and simplify logic
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const response = await fetch(`${baseUrl}/api/hyperliquid/order`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        // Pass essential headers or authentication context if needed
+      },
+      body: JSON.stringify({
+        ...body,
+        userId // Ensure the userId is passed
+      })
     });
+    
+    const result = await response.json();
+    
+    return NextResponse.json(result);
   } catch (error) {
     return handleApiError(error);
   }

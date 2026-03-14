@@ -17,6 +17,7 @@ import { SuiProvider } from "@/app/context/suiContext";
 import { TonProvider } from "@/app/context/tonContext";
 import { TronProvider } from "@/app/context/tronContext";
 import { SwapProvider } from "@/app/context/swapContext";
+import { HyperliquidProvider } from "@/app/context/hyperliquidContext";
 import { WalletGenerationModal } from "@/components/privy/WalletGenerationModal";
 
 import DashboardVividProvider from "@/components/dashboard/DashboardVividProvider";
@@ -80,7 +81,8 @@ export default function Layout({
                     <SuiProvider>
                       <TonProvider>
                         <TronProvider>
-                          <SwapProvider>
+                          <HyperliquidProvider>
+                            <SwapProvider>
                               {/* Show modal while wallets are being checked/generated */}
                               <WalletGenerationModal />
 
@@ -131,6 +133,7 @@ export default function Layout({
                           </DashboardVividProvider>
 
                         </SwapProvider>
+                      </HyperliquidProvider>
                     </TronProvider>
                   </TonProvider>
                 </SuiProvider>

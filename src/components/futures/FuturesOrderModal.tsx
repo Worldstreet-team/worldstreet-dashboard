@@ -2,13 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
-import { useDebounce } from '@/hooks/useFuturesPolling';
+import { useHyperliquid } from '@/app/context/hyperliquidContext';
 
 interface FuturesOrderModalProps {
   isOpen: boolean;
   onClose: () => void;
   side: 'long' | 'short';
-  marketIndex: number;
+  marketIndex: number; // For compatibility with older props
+  marketName?: string;
 }
 
 export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
@@ -16,167 +17,180 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({
   onClose,
   side,
   marketIndex,
+  marketName = 'BTC-USD'
 }) => {
-  // Drift removal - placeholders
-  const openPosition = async (...args: any[]) => ({ success: false, error: 'Not implemented' });
-  const driftLoading = false;
-  const previewTrade = async (...args: any[]) => ({});
-  const getMarketName = (i: number) => 'Market';
-  const getMarketPrice = (i: number, type: string) => 0;
-  const perpMarkets = new Map();
-  const summary: any = null;
+  const { openPosition, refreshSummary, refreshPositions } = useHyperliquid();
 
-  const [previewData, setPreviewData] = useState<any>(null);
-  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [orderType, setOrderType] = useState<'market' | 'limit' | 'stop-limit'>('market');
   const [size, setSize] = useState('');
   const [leverage, setLeverage] = useState(1);
   const [limitPrice, setLimitPrice] = useState('');
   const [triggerPrice, setTriggerPrice] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState('');
-  const [showQuote, setShowQuote] = useState(false);
-  const [pin, setPin] = useState('');
-  const [pinError, setPinError] = useState('');
-  const [showPin, setShowPin] = useState(false);
+  const [success, setSuccess] = useState(false);
   const [executing, setExecuting] = useState(false);
 
-  const debouncedSize = useDebounce(size, 300);
-
-  // Get market info from Drift context
-  const marketInfo = perpMarkets.get(marketIndex);
-  const marketName = marketInfo?.symbol || getMarketName(marketIndex);
-  const currentMarketPrice = getMarketPrice(marketIndex, 'perp');
-
-  // Preview calculation with better error handling
   useEffect(() => {
-    if (!marketIndex || !debouncedSize || parseFloat(debouncedSize) <= 0) {
-      setPreviewData(null);
+    if (isOpen) {
+      setSuccess(false);
       setError(null);
-      setIsLoadingPreview(false);
-      return;
-    }
-
-    const fetchPreview = async () => {
-      setIsLoadingPreview(true);
-      try {
-        setPreviewData({
-            entryPrice: 0,
-            requiredMargin: 0,
-            estimatedFee: 0,
-            totalRequired: 0,
-            marginCheckPassed: false,
-            sizeTooSmall: false,
-            maxLeverageAllowed: 20,
-            estimatedLiquidationPrice: 0,
-            freeCollateral: 0
-        });
-        setError('Hyperliquid futures integration in progress');
-      } catch (error) {
-        setPreviewData(null);
-        setError('Failed to calculate preview');
-      } finally {
-        setIsLoadingPreview(false);
-      }
-    };
-
-    fetchPreview();
-  }, [marketIndex, marketName, debouncedSize, leverage, side]);
-
-  const handlePercentage = (percent: number) => {
-    setSize('0');
-  };
-
-  const handleGetQuote = () => {
-    setError('Hyperliquid futures integration in progress');
-  };
-
-  const handleConfirmOrder = async () => {
-    setExecuting(false);
-    setError('Hyperliquid futures integration in progress');
-  };
-
-  const handleBackToForm = () => {
-    setShowQuote(false);
-    setPin('');
-    setPinError('');
-  };
-
-  // Reset form when modal closes
-  useEffect(() => {
-    if (!isOpen) {
       setSize('');
-      setLimitPrice('');
-      setTriggerPrice('');
-      setLeverage(1);
-      setOrderType('market');
-      setError(null);
-      setSuccessMessage('');
-      setPreviewData(null);
-      setIsLoadingPreview(false);
-      setShowQuote(false);
-      setPin('');
-      setPinError('');
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  const handleSubmit = async () => {
+    if (!size || parseFloat(size) <= 0) {
+      setError('Please enter a valid size');
+      return;
+    }
 
-  const canContinue = false;
+    setExecuting(true);
+    setError(null);
+
+    try {
+      const result = await openPosition({
+        symbol: marketName,
+        side,
+        size: parseFloat(size),
+        type: orderType,
+        leverage,
+        limitPrice: orderType === 'limit' ? parseFloat(limitPrice) : undefined,
+        triggerPrice: orderType === 'stop-limit' ? parseFloat(triggerPrice) : undefined
+      });
+
+      if (result.success) {
+        setSuccess(true);
+        refreshSummary();
+        refreshPositions();
+        setTimeout(onClose, 2000);
+      } else {
+        setError(result.error || 'Order failed');
+      }
+    } catch (err) {
+      setError('Network error');
+    } finally {
+      setExecuting(false);
+    }
+  };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
 
-      {/* Modal - Compact Bybit Style */}
-      <div className="relative w-full max-w-[400px] md:max-w-[600px] bg-[#0b0e11] rounded-lg border border-[#1f2329] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
-        {/* Header - Compact */}
-        <div className="flex items-center justify-between px-3 md:px-4 py-2 md:py-3 border-b border-[#1f2329] flex-shrink-0">
+      <div className="relative w-full max-w-[400px] bg-[#0b0e11] rounded-lg border border-[#1f2329] shadow-2xl flex flex-col p-4">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <h3 className="text-[13px] md:text-[14px] font-bold text-white">
-              {side === 'long' ? 'Long' : 'Short'} {marketName}
-            </h3>
-            <span className={`px-1.5 py-0.5 rounded text-[10px] md:text-[11px] font-bold ${
-              side === 'long' ? 'bg-[#0ecb81]/10 text-[#0ecb81]' : 'bg-[#f6465d]/10 text-[#f6465d]'
+            <h3 className="text-white font-bold">{side === 'long' ? 'Long' : 'Short'} {marketName}</h3>
+            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+               side === 'long' ? 'bg-[#0ecb81]/10 text-[#0ecb81]' : 'bg-[#f6465d]/10 text-[#f6465d]'
             }`}>
               {side.toUpperCase()}
             </span>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1 hover:bg-[#1f2329] rounded transition-colors"
-          >
-            <Icon icon="ph:x" width={16} className="text-[#848e9c]" />
-          </button>
+          <button onClick={onClose} className="p-1 hover:bg-[#1f2329] rounded"><Icon icon="ph:x" width={18} className="text-[#848e9c]" /></button>
         </div>
 
-        {/* Content - Scrollable without visible scrollbar */}
-        <div 
-          className="flex-1 overflow-y-auto overflow-x-hidden px-3 md:px-4 py-2 md:py-3" 
-        >
-          <div className="text-center py-12">
-            <Icon icon="ph:lightning" className="mx-auto text-[#fcd535] mb-4" width={48} />
-            <h4 className="text-white font-bold mb-2">Hyperliquid Integration</h4>
-            <p className="text-[#848e9c] text-sm px-6">
-              Futures trading is being migrated to Hyperliquid for better performance and lower fees. 
-              Trading functionality will be available shortly.
-            </p>
+        {success ? (
+          <div className="text-center py-10">
+            <Icon icon="ph:check-circle" className="mx-auto text-[#0ecb81] mb-2" width={64} />
+            <h4 className="text-white font-bold text-lg">Order Placed</h4>
+            <p className="text-[#848e9c] text-sm mt-1">Your order has been submitted to Hyperliquid</p>
           </div>
-        </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-2 p-1 bg-[#1f2329] rounded">
+              {['market', 'limit', 'stop'].map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setOrderType(t === 'stop' ? 'stop-limit' : t as any)}
+                  className={`py-1.5 text-[10px] rounded font-bold transition-all ${
+                    (orderType === t || (t === 'stop' && orderType === 'stop-limit')) 
+                      ? 'bg-[#2b3139] text-white shadow-sm' 
+                      : 'text-[#848e9c] hover:text-white'
+                  }`}
+                >
+                  {t.toUpperCase()}
+                </button>
+              ))}
+            </div>
 
-        {/* Footer - Compact */}
-        <div className="p-2 md:p-3 border-t border-[#1f2329] flex-shrink-0">
+            <div>
+              <div className="flex justify-between mb-1">
+                <label className="text-[11px] font-medium text-[#848e9c] uppercase">Size</label>
+                <span className="text-[11px] text-[#848e9c]">{marketName.split('-')[0]}</span>
+              </div>
+              <input
+                type="number"
+                value={size}
+                onChange={(e) => setSize(e.target.value)}
+                className="w-full bg-[#1f2329] border border-[#2b3139] rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-[#f0b90b]"
+                placeholder="0.00"
+              />
+            </div>
+
+            {orderType !== 'market' && (
+              <div>
+                <label className="text-[11px] font-medium text-[#848e9c] uppercase mb-1 block">Price</label>
+                <input
+                  type="number"
+                  value={limitPrice}
+                  onChange={(e) => setLimitPrice(e.target.value)}
+                  className="w-full bg-[#1f2329] border border-[#2b3139] rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-[#f0b90b]"
+                  placeholder="Price"
+                />
+              </div>
+            )}
+
+            <div>
+              <div className="flex justify-between mb-1">
+                <label className="text-[11px] font-medium text-[#848e9c] uppercase">Leverage</label>
+                <span className="text-[11px] text-[#f0b90b] font-bold">{leverage}x</span>
+              </div>
+              <input
+                type="range"
+                min="1"
+                max="50"
+                step="1"
+                value={leverage}
+                onChange={(e) => setLeverage(parseInt(e.target.value))}
+                className="w-full h-1.5 bg-[#1f2329] rounded-lg appearance-none cursor-pointer accent-[#f0b90b]"
+              />
+              <div className="flex justify-between mt-1 px-1">
+                <span className="text-[9px] text-[#848e9c]">1x</span>
+                <span className="text-[9px] text-[#848e9c]">25x</span>
+                <span className="text-[9px] text-[#848e9c]">50x</span>
+              </div>
+            </div>
+
+            {error && (
+              <div className="p-2 bg-[#f6465d]/10 border border-[#f6465d]/20 rounded flex items-center gap-2">
+                <Icon icon="ph:warning-circle" className="text-[#f6465d]" width={14} />
+                <p className="text-[#f6465d] text-[10px]">{error}</p>
+              </div>
+            )}
+
             <button
-              onClick={onClose}
-              className="w-full py-2 md:py-2.5 rounded font-bold text-[12px] md:text-[13px] bg-[#1f2329] text-[#848e9c] hover:text-white transition-colors"
+              onClick={handleSubmit}
+              disabled={executing}
+              className={`w-full py-3 rounded-lg font-bold text-sm text-[#0b0e11] transition-all transform active:scale-95 ${
+                side === 'long' 
+                  ? 'bg-[#0ecb81] hover:bg-[#0ecb81]/90' 
+                  : 'bg-[#f6465d] hover:bg-[#f6465d]/90'
+              } disabled:opacity-50 disabled:cursor-not-allowed shadow-lg`}
             >
-              Close
+              {executing ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Icon icon="svg-spinners:ring-resize" width={16} />
+                  PROCESSING...
+                </span>
+              ) : (
+                `CONFIRM ${side.toUpperCase()}`
+              )}
             </button>
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,64 +1,18 @@
-'use client';
+"use client";
 
 import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
-import { useAuth } from '@/app/context/authContext';
+import { useUser } from '@clerk/nextjs';
+import { useHyperliquidBalance } from '@/hooks/useHyperliquidBalance';
 
-interface Position {
-  id: string;
-  userId: string;
-  symbol: string;
-  baseAsset: string;
-  quoteAsset: string;
-  quantity: string;
-  entryPrice: string;
-  currentPrice?: string;
-  investedQuote: string;
-  unrealizedPnl?: string;
-  pnlPercent?: string;
-  realizedPnl: string;
-  status: 'OPEN' | 'CLOSED';
-  createdAt: string;
-  updatedAt: string;
-  closedAt?: string;
-}
-
-interface PositionsListProps {
-  onPositionClick?: (position: Position) => void;
-}
-
-export default function PositionsList({ onPositionClick }: PositionsListProps) {
-  const { user } = useAuth();
-  const [positions, setPositions] = useState<Position[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (user?.userId) {
-      fetchPositions();
-    }
-  }, [user?.userId]);
-
-  const fetchPositions = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      // For now, return empty array since we're removing Drift
-      // In a real implementation, this would fetch from our API
-      setPositions([]);
-    } catch (err) {
-      console.error('Error fetching positions:', err);
-      setError('Failed to fetch positions');
-    } finally {
-      setLoading(false);
-    }
-  };
+export default function PositionsList() {
+  const { user } = useUser();
+  const { balances, loading, error, refetch } = useHyperliquidBalance(user?.id, !!user?.id);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <Icon icon="ph:spinner" className="animate-spin text-muted" width={24} />
+        <Icon icon="ph:spinner" className="animate-spin text-[#848e9c]" width={24} />
       </div>
     );
   }
@@ -67,75 +21,70 @@ export default function PositionsList({ onPositionClick }: PositionsListProps) {
     return (
       <div className="flex items-center justify-center py-8">
         <div className="text-center">
-          <Icon icon="ph:warning" className="mx-auto mb-2 text-error" width={32} />
-          <p className="text-sm text-error">{error}</p>
+          <Icon icon="ph:warning-circle" className="mx-auto mb-2 text-[#f6465d]" width={32} />
+          <p className="text-sm text-[#f6465d]">{error}</p>
+          <button onClick={() => refetch()} className="text-xs text-[#848e9c] underline mt-2 hover:text-white">Retry</button>
         </div>
       </div>
     );
   }
 
-  if (positions.length === 0) {
+  // Filter out assets with tiny balances (dust)
+  const tokenHoldings = balances.filter(b => parseFloat(b.total) > 0.0001);
+
+  if (tokenHoldings.length === 0) {
     return (
       <div className="flex items-center justify-center py-8">
         <div className="text-center">
-          <Icon icon="ph:chart-line" className="mx-auto mb-2 text-muted" width={32} />
-          <p className="text-sm text-muted">No positions found</p>
-          <p className="text-xs text-muted mt-1">Start trading to see your positions here</p>
+          <Icon icon="ph:coins" className="mx-auto mb-2 text-[#848e9c]" width={32} />
+          <p className="text-sm text-[#848e9c]">No tokens found in your wallet</p>
+          <p className="text-[10px] text-[#848e9c]/60 mt-1">Balances will appear after your first trade or deposit</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-2">
-      {positions.map((position) => (
-        <div
-          key={position.id}
-          onClick={() => onPositionClick?.(position)}
-          className="p-4 bg-white dark:bg-darkgray border border-border dark:border-darkborder rounded-lg cursor-pointer hover:bg-muted/20 dark:hover:bg-white/5 transition-colors"
-        >
-          <div className="flex items-center justify-between mb-2">
+    <div className="bg-[#0b0e11] text-white">
+      <div className="px-4 py-2 bg-[#161a1e] border-b border-[#1e2329] grid grid-cols-3 text-[10px] text-[#848e9c] font-medium uppercase tracking-wider">
+        <span>Asset</span>
+        <span className="text-right">Total Balance</span>
+        <span className="text-right">Available</span>
+      </div>
+      <div className="divide-y divide-[#1e2329]">
+        {tokenHoldings.map((position, i) => (
+          <div
+            key={i}
+            className="px-4 py-3 grid grid-cols-3 hover:bg-[#1e2329] transition-colors cursor-default group"
+          >
             <div className="flex items-center gap-2">
-              <span className="font-semibold text-dark dark:text-white">
-                {position.baseAsset}/{position.quoteAsset}
-              </span>
-              <span className={`px-2 py-1 text-xs rounded ${
-                position.status === 'OPEN' 
-                  ? 'bg-success/10 text-success' 
-                  : 'bg-muted/20 text-muted'
-              }`}>
-                {position.status}
+              <div className="w-6 h-6 rounded-full bg-[#2b3139] flex items-center justify-center text-[10px] font-bold text-white group-hover:bg-[#3b4149]">
+                {position.coin.charAt(0)}
+              </div>
+              <span className="text-sm font-semibold text-[#eaecef]">
+                {position.coin}
               </span>
             </div>
-            <div className="text-right">
-              <div className="text-sm font-semibold text-dark dark:text-white">
-                {parseFloat(position.quantity).toFixed(4)} {position.baseAsset}
-              </div>
-              <div className="text-xs text-muted">
-                @ ${parseFloat(position.entryPrice).toFixed(4)}
-              </div>
+            
+            <div className="text-right flex flex-col justify-center">
+              <span className="text-sm font-mono text-white">
+                {parseFloat(position.total).toLocaleString(undefined, { maximumFractionDigits: 6 })}
+              </span>
+            </div>
+
+            <div className="text-right flex flex-col justify-center">
+              <span className="text-sm font-mono text-[#0ecb81]">
+                {parseFloat(position.available).toLocaleString(undefined, { maximumFractionDigits: 6 })}
+              </span>
+              {parseFloat(position.hold) > 0 && (
+                <span className="text-[9px] text-[#848e9c]">
+                  {parseFloat(position.hold).toFixed(4)} in orders
+                </span>
+              )}
             </div>
           </div>
-          
-          {position.unrealizedPnl && (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted">Unrealized PnL</span>
-              <span className={`font-semibold ${
-                parseFloat(position.unrealizedPnl) >= 0 ? 'text-success' : 'text-error'
-              }`}>
-                {parseFloat(position.unrealizedPnl) >= 0 ? '+' : ''}
-                ${parseFloat(position.unrealizedPnl).toFixed(2)}
-                {position.pnlPercent && (
-                  <span className="ml-1">
-                    ({parseFloat(position.pnlPercent) >= 0 ? '+' : ''}
-                    {parseFloat(position.pnlPercent).toFixed(2)}%)
-                  </span>
-                )}
-              </span>
-            </div>
-          )}
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }

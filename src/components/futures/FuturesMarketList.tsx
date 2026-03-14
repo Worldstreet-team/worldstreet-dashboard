@@ -1,85 +1,27 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Icon } from '@iconify/react';
-import { useDrift } from '@/app/context/driftContext';
-
-interface MarketData {
-  marketIndex: number;
-  symbol: string;
-  baseAsset: string;
-  price: number;
-  change24h: number;
-  volume24h: number;
-  fundingRate: number;
-}
+import { useHyperliquidMarkets } from '@/hooks/useHyperliquidMarkets';
 
 interface FuturesMarketListProps {
-  selectedMarketIndex: number | null;
-  onSelectMarket: (marketIndex: number) => void;
+  selectedMarketSymbol: string | null;
+  onSelectMarket: (symbol: string) => void;
 }
 
-export default function FuturesMarketList({ selectedMarketIndex, onSelectMarket }: FuturesMarketListProps) {
+export default function FuturesMarketList({ selectedMarketSymbol, onSelectMarket }: FuturesMarketListProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [favorites, setFavorites] = useState<Set<number>>(new Set());
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [sortBy, setSortBy] = useState<'symbol' | 'price' | 'change'>('change');
-  const [markets, setMarkets] = useState<MarketData[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  const { perpMarkets, getMarketPrice, isClientReady } = useDrift();
-
-  // Build market list from Drift perp markets
-  useEffect(() => {
-    if (!isClientReady || perpMarkets.size === 0) {
-      setLoading(true);
-      return;
-    }
-
-    console.log('[FuturesMarketList] Building market list from', perpMarkets.size, 'Drift perp markets');
-
-    const marketList: MarketData[] = [];
-
-    // CRITICAL: Only take first 10 perp markets
-    Array.from(perpMarkets.entries())
-      .sort(([a], [b]) => a - b)
-      .slice(0, 10)
-      .forEach(([marketIndex, info]) => {
-        const price = getMarketPrice(marketIndex, 'perp') || 0;
-
-        marketList.push({
-          marketIndex,
-          symbol: info.symbol,
-          baseAsset: info.baseAssetSymbol,
-          price,
-          change24h: 0, // Drift doesn't provide 24h change
-          volume24h: 0, // Drift doesn't provide volume
-          fundingRate: 0, // Would need to fetch from market account
-        });
-      });
-
-    console.log('[FuturesMarketList] Built', marketList.length, 'markets');
-    setMarkets(marketList);
-    setLoading(false);
-  }, [isClientReady, perpMarkets, getMarketPrice]);
-
-  // Update prices periodically
-  useEffect(() => {
-    if (!isClientReady || perpMarkets.size === 0) return;
-
-    const interval = setInterval(() => {
-      setMarkets(prev => prev.map(market => ({
-        ...market,
-        price: getMarketPrice(market.marketIndex, 'perp') || market.price,
-      })));
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [isClientReady, perpMarkets, getMarketPrice]);
+  const { markets, loading, error } = useHyperliquidMarkets({
+    includeStats: true,
+    enabled: true
+  });
 
   const filteredMarkets = useMemo(() => {
     let filtered = markets.filter(market => {
       const matchesSearch = searchQuery === '' ||
-        market.baseAsset.toLowerCase().includes(searchQuery.toLowerCase()) ||
         market.symbol.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesSearch;
     });
@@ -88,19 +30,19 @@ export default function FuturesMarketList({ selectedMarketIndex, onSelectMarket 
     filtered.sort((a, b) => {
       if (sortBy === 'change') return Math.abs(b.change24h) - Math.abs(a.change24h);
       if (sortBy === 'price') return b.price - a.price;
-      return a.baseAsset.localeCompare(b.baseAsset);
+      return a.symbol.localeCompare(b.symbol);
     });
 
     return filtered;
   }, [markets, searchQuery, sortBy]);
 
-  const toggleFavorite = (marketIndex: number) => {
+  const toggleFavorite = (symbol: string) => {
     setFavorites(prev => {
       const newFavorites = new Set(prev);
-      if (newFavorites.has(marketIndex)) {
-        newFavorites.delete(marketIndex);
+      if (newFavorites.has(symbol)) {
+        newFavorites.delete(symbol);
       } else {
-        newFavorites.add(marketIndex);
+        newFavorites.add(symbol);
       }
       return newFavorites;
     });
@@ -140,8 +82,7 @@ export default function FuturesMarketList({ selectedMarketIndex, onSelectMarket 
 
       {/* Header */}
       <div className="px-3 py-2 border-b border-[#1e2329]">
-        <h3 className="text-xs font-bold text-white uppercase">Perpetual Futures</h3>
-        <p className="text-[10px] text-[#848e9c] mt-0.5">Top 10 markets</p>
+        <h3 className="text-xs font-bold text-white uppercase">Hyperliquid Futures</h3>
       </div>
 
       {/* Column Headers */}
@@ -167,6 +108,10 @@ export default function FuturesMarketList({ selectedMarketIndex, onSelectMarket 
             <Icon icon="ph:spinner" className="mx-auto mb-2 text-[#848e9c] animate-spin" width={32} />
             <p className="text-xs text-[#848e9c]">Loading markets...</p>
           </div>
+        ) : error ? (
+           <div className="p-6 text-center">
+            <p className="text-xs text-error">{error}</p>
+          </div>
         ) : filteredMarkets.length === 0 ? (
           <div className="p-6 text-center">
             <Icon icon="ph:magnifying-glass" className="mx-auto mb-2 text-[#848e9c]" width={32} />
@@ -174,25 +119,24 @@ export default function FuturesMarketList({ selectedMarketIndex, onSelectMarket 
           </div>
         ) : (
           filteredMarkets.map((market) => {
-            const isSelected = market.marketIndex === selectedMarketIndex;
+            const isSelected = market.symbol === selectedMarketSymbol;
             const isPositive = market.change24h >= 0;
-            const isFav = favorites.has(market.marketIndex);
+            const isFav = favorites.has(market.symbol);
 
             return (
               <div
-                key={market.marketIndex}
-                onClick={() => onSelectMarket(market.marketIndex)}
+                key={market.symbol}
+                onClick={() => onSelectMarket(market.symbol)}
                 className={`px-3 py-2 cursor-pointer transition-colors ${
                   isSelected ? 'bg-[#1e2329]' : 'hover:bg-[#1e2329]'
                 }`}
               >
                 <div className="grid grid-cols-[1fr_auto_auto] gap-2 items-center">
-                  {/* Market */}
                   <div className="flex items-center gap-2 min-w-0">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        toggleFavorite(market.marketIndex);
+                        toggleFavorite(market.symbol);
                       }}
                       className="flex-shrink-0"
                     >
@@ -204,7 +148,7 @@ export default function FuturesMarketList({ selectedMarketIndex, onSelectMarket 
                     </button>
                     <div className="min-w-0 flex-1">
                       <div className="text-xs font-medium text-white">
-                        {market.baseAsset}<span className="text-[#848e9c]">-PERP</span>
+                        {market.symbol}
                       </div>
                       <div className="text-[9px] text-[#848e9c]">
                         Vol {formatVolume(market.volume24h)}
@@ -212,14 +156,12 @@ export default function FuturesMarketList({ selectedMarketIndex, onSelectMarket 
                     </div>
                   </div>
 
-                  {/* Price */}
                   <div className="text-right">
                     <div className="text-xs font-mono text-white">
                       {formatPrice(market.price)}
                     </div>
                   </div>
 
-                  {/* Change */}
                   <div className="text-right min-w-[60px]">
                     <div className={`text-xs font-semibold px-2 py-0.5 rounded ${
                       isPositive 

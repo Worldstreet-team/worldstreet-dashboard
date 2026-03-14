@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { connectDB } from '@/lib/mongodb';
-import {
-  getMasterWalletManager,
-  getClientManager,
-  initializeDriftServices,
-  isDriftServicesInitialized
-} from '@/services/drift';
+import { hyperliquid } from '@/lib/hyperliquid/simple';
 import { handleApiError } from '@/lib/errors/apiErrorHandler';
 
 export async function GET(req: NextRequest) {
@@ -22,50 +17,38 @@ export async function GET(req: NextRequest) {
     
     const healthCheck: any = {
       healthy: true,
-      masterWallet: {
+      hyperliquid: {
         connected: false,
-        balance: 0,
+        masterBalance: 0,
         aboveThreshold: false
       },
       database: {
         connected: false,
         responseTimeMs: 0
       },
-      grpc: {
-        connected: false
-      },
-      activeClients: 0,
       timestamp: new Date()
     };
     
-    // Check if services are initialized
-    if (!isDriftServicesInitialized()) {
-      try {
-        await initializeDriftServices();
-      } catch (error) {
-        healthCheck.healthy = false;
-        return NextResponse.json(healthCheck, { status: 503 });
-      }
-    }
-    
-    // Check master wallet
+    // Check Hyperliquid connectivity and master wallet
     try {
-      const masterWalletManager = getMasterWalletManager();
-      const balance = await masterWalletManager.getBalance();
+      const masterAddress = process.env.HYPERLIQUID_MASTER_ADDRESS || "0x0000000000000000000000000000000000000000";
+      const accountState = await hyperliquid.getAccount(masterAddress);
+      
+      const balance = parseFloat(accountState?.crossMarginSummary?.accountValue || "0");
       const aboveThreshold = balance >= 0.05;
       
-      healthCheck.masterWallet = {
+      healthCheck.hyperliquid = {
         connected: true,
-        balance,
+        masterBalance: balance,
         aboveThreshold
       };
       
       if (!aboveThreshold) {
-        healthCheck.healthy = false;
+        // healthCheck.healthy = false; // Not necessarily unhealthy if master is low, but worth noting
       }
     } catch (error) {
       healthCheck.healthy = false;
-      healthCheck.masterWallet.connected = false;
+      healthCheck.hyperliquid.connected = false;
     }
     
     // Check database
@@ -81,18 +64,6 @@ export async function GET(req: NextRequest) {
     } catch (error) {
       healthCheck.healthy = false;
       healthCheck.database.connected = false;
-    }
-    
-    // Check gRPC (placeholder)
-    healthCheck.grpc.connected = true;
-    
-    // Get active clients count
-    try {
-      const clientManager = getClientManager();
-      const stats = clientManager.getStats();
-      healthCheck.activeClients = stats.activeClients;
-    } catch (error) {
-      // Non-critical
     }
     
     const statusCode = healthCheck.healthy ? 200 : 503;

@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useState } from 'react';
-import { useDrift } from '@/app/context/driftContext';
+import { useHyperliquid } from '@/app/context/hyperliquidContext';
 import { Icon } from '@iconify/react';
 
-export const DriftAccountStatus: React.FC = () => {
+export const HyperliquidAccountStatus: React.FC = () => {
   const { 
     isInitialized, 
     needsInitialization, 
@@ -13,22 +13,20 @@ export const DriftAccountStatus: React.FC = () => {
     isLoading,
     error,
     refreshSummary,
-    resetInitializationFailure,
-  } = useDrift();
+  } = useHyperliquid();
 
   const [refreshing, setRefreshing] = useState(false);
   const [initializing, setInitializing] = useState(false);
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    resetInitializationFailure();
     await refreshSummary();
     setRefreshing(false);
   };
 
   const handleInitialize = async () => {
     setInitializing(true);
-    resetInitializationFailure();
+    await fetch('/api/futures/subaccount/initialize', { method: 'POST' });
     await refreshSummary();
     setInitializing(false);
   };
@@ -44,7 +42,7 @@ export const DriftAccountStatus: React.FC = () => {
     );
   }
 
-  if (error) {
+  if (error && !summary) {
     return (
       <div className="bg-[#f6465d]/10 border border-[#f6465d]/20 rounded p-4">
         <div className="flex items-start gap-3">
@@ -70,9 +68,9 @@ export const DriftAccountStatus: React.FC = () => {
         <div className="flex items-start gap-3">
           <Icon icon="ph:info" className="text-[#fcd535] flex-shrink-0 mt-0.5" height={20} />
           <div className="flex-1">
-            <h4 className="text-sm font-bold text-[#fcd535] mb-1">Drift Account Not Initialized</h4>
+            <h4 className="text-sm font-bold text-[#fcd535] mb-1">Hyperliquid Account Not Initialized</h4>
             <p className="text-xs text-[#fcd535]/80 mb-4">
-              Your Drift account needs to be initialized. Click below to start the process.
+              Your trading wallet needs to be registered with Hyperliquid. Click below to start the process.
             </p>
             <button
               onClick={handleInitialize}
@@ -87,7 +85,7 @@ export const DriftAccountStatus: React.FC = () => {
               ) : (
                 <span className="flex items-center gap-2">
                   <Icon icon="ph:rocket-launch" height={14} />
-                  Initialize Drift Account
+                  Initialize Hyperliquid Account
                 </span>
               )}
             </button>
@@ -97,31 +95,15 @@ export const DriftAccountStatus: React.FC = () => {
     );
   }
 
-  if (initializing) {
+  if (!isInitialized && isLoading) {
     return (
       <div className="bg-[#fcd535]/10 border border-[#fcd535]/20 rounded p-4">
         <div className="flex items-start gap-3">
           <Icon icon="svg-spinners:ring-resize" className="text-[#fcd535] flex-shrink-0 mt-0.5" height={20} />
           <div className="flex-1">
-            <h4 className="text-sm font-bold text-[#fcd535] mb-1">Initializing Drift Account</h4>
+            <h4 className="text-sm font-bold text-[#fcd535] mb-1">Connecting to Hyperliquid</h4>
             <p className="text-xs text-[#fcd535]/80">
-              Please wait while we set up your account. This may take a few moments...
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isInitialized) {
-    return (
-      <div className="bg-[#fcd535]/10 border border-[#fcd535]/20 rounded p-4">
-        <div className="flex items-start gap-3">
-          <Icon icon="ph:clock" className="text-[#fcd535] flex-shrink-0 mt-0.5" height={20} />
-          <div className="flex-1">
-            <h4 className="text-sm font-bold text-[#fcd535] mb-1">Account Initializing</h4>
-            <p className="text-xs text-[#fcd535]/80">
-              Your Drift account is being set up. This may take a few moments...
+              Please wait while we fetch your account details...
             </p>
           </div>
         </div>
@@ -154,38 +136,29 @@ export const DriftAccountStatus: React.FC = () => {
       </div>
 
       {summary && (
-        <div className="flex-1 px-4 pb-2 overflow-y-auto overflow-x-hidden" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-          <style jsx>{`
-            div::-webkit-scrollbar {
-              display: none;
-            }
-          `}</style>
-          {/* Horizontal Stats Grid - Compact */}
+        <div className="flex-1 px-4 pb-2 overflow-y-auto overflow-x-hidden">
           <div className="grid grid-cols-4 gap-2">
-            {/* Total Collateral */}
             <div className="bg-[#1f2329] rounded p-1.5">
               <p className="text-[9px] font-medium text-[#848e9c] mb-0.5 uppercase">
-                Total Collateral
+                Collateral
               </p>
               <p className="text-[12px] font-bold text-white tabular-nums">
                 ${summary.totalCollateral.toFixed(2)}
               </p>
             </div>
             
-            {/* Free Collateral */}
             <div className="bg-[#0ecb81]/10 border border-[#0ecb81]/20 rounded p-1.5">
               <p className="text-[9px] font-medium text-[#0ecb81] mb-0.5 uppercase">
-                Free Collateral
+                Free
               </p>
               <p className="text-[12px] font-bold text-white tabular-nums">
                 ${summary.freeCollateral.toFixed(2)}
               </p>
             </div>
 
-            {/* Unrealized PnL */}
             <div className="bg-[#1f2329] rounded p-1.5">
               <p className="text-[9px] font-medium text-[#848e9c] mb-0.5 uppercase">
-                Unrealized PnL
+                UPnL
               </p>
               <p className={`text-[12px] font-bold tabular-nums ${
                 summary.unrealizedPnl >= 0 ? 'text-[#0ecb81]' : 'text-[#f6465d]'
@@ -194,10 +167,9 @@ export const DriftAccountStatus: React.FC = () => {
               </p>
             </div>
             
-            {/* Leverage */}
             <div className="bg-[#1f2329] rounded p-1.5">
               <p className="text-[9px] font-medium text-[#848e9c] mb-0.5 uppercase">
-                Leverage
+                Lev
               </p>
               <p className="text-[12px] font-bold text-white tabular-nums">
                 {summary.leverage.toFixed(2)}x
@@ -206,54 +178,28 @@ export const DriftAccountStatus: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-2 gap-2 mt-2">
-            {/* Margin Ratio */}
             <div className={`rounded p-1.5 ${
               summary.marginRatio > 0.5 
                 ? 'bg-[#0ecb81]/10 border border-[#0ecb81]/20' 
-                : summary.marginRatio > 0.2 
-                ? 'bg-[#fcd535]/10 border border-[#fcd535]/20'
                 : 'bg-[#f6465d]/10 border border-[#f6465d]/20'
             }`}>
-              <p className={`text-[9px] font-medium mb-0.5 uppercase ${
-                summary.marginRatio > 0.5 
-                  ? 'text-[#0ecb81]' 
-                  : summary.marginRatio > 0.2 
-                  ? 'text-[#fcd535]'
-                  : 'text-[#f6465d]'
-              }`}>
+              <p className="text-[9px] font-medium text-[#848e9c] mb-0.5 uppercase">
                 Margin Ratio
               </p>
-              <p className={`text-[12px] font-bold tabular-nums ${
-                summary.marginRatio > 0.5 ? 'text-[#0ecb81]' : 
-                summary.marginRatio > 0.2 ? 'text-[#fcd535]' : 'text-[#f6465d]'
-              }`}>
+              <p className="text-[12px] font-bold text-white tabular-nums">
                 {(summary.marginRatio * 100).toFixed(1)}%
               </p>
             </div>
             
-            {/* Open Positions */}
             <div className="bg-[#1f2329] rounded p-1.5">
               <p className="text-[9px] font-medium text-[#848e9c] mb-0.5 uppercase">
-                Open Positions
+                Positions
               </p>
               <p className="text-[12px] font-bold text-white tabular-nums">
                 {summary.openPositions}
               </p>
             </div>
           </div>
-
-          {/* Trading Disabled Warning */}
-          {!canTrade && (
-            <div className="mt-2 p-2 bg-[#fcd535]/10 border border-[#fcd535]/20 rounded flex items-start gap-1.5">
-              <Icon icon="ph:warning" className="text-[#fcd535] flex-shrink-0 mt-0.5" height={14} />
-              <div>
-                <p className="text-[10px] font-bold text-[#fcd535]">Trading Disabled</p>
-                <p className="text-[9px] text-[#fcd535]/80 mt-0.5">
-                  Please add collateral or close positions to continue trading.
-                </p>
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>

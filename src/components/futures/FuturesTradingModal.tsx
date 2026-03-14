@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
+import { useHyperliquid } from '@/app/context/hyperliquidContext';
 
 interface FuturesTradingModalProps {
   isOpen: boolean;
@@ -18,115 +19,132 @@ export default function FuturesTradingModal({
   marketIndex, 
   marketName 
 }: FuturesTradingModalProps) {
-  // Drift removal - placeholders
-  const openPosition = async (...args: any[]) => ({ success: false, error: 'Not implemented' });
-  const previewTrade = async (...args: any[]) => ({});
-  const summary: any = null;
-  const refreshPositions = async () => {};
-  const refreshSummary = async () => {};
-  const getMarketPrice = (i: number, type: string) => 0;
+  const { openPosition, refreshSummary, refreshPositions } = useHyperliquid();
 
   const [orderType, setOrderType] = useState<'market' | 'limit' | 'stop-limit'>('market');
   const [size, setSize] = useState('');
   const [leverage, setLeverage] = useState(1);
   const [limitPrice, setLimitPrice] = useState('');
   const [triggerPrice, setTriggerPrice] = useState('');
-  const [sliderValue, setSliderValue] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [previewData, setPreviewData] = useState<any>(null);
+  const [success, setSuccess] = useState<boolean>(false);
   const [executing, setExecuting] = useState(false);
 
-  const currentMarketPrice = getMarketPrice(marketIndex, 'perp');
-
-  // Preview calculation
   useEffect(() => {
-    if (!isOpen || !size || parseFloat(size) <= 0) {
-      setPreviewData(null);
+    if (isOpen) {
+      setSuccess(false);
+      setError(null);
+      setSize('');
+    }
+  }, [isOpen]);
+
+  const handleSubmit = async () => {
+    if (!size || parseFloat(size) <= 0) {
+      setError('Please enter a valid size');
       return;
     }
 
-    const fetchPreview = async () => {
-        setPreviewData({
-            entryPrice: 0,
-            requiredMargin: 0,
-            estimatedFee: 0,
-            totalRequired: 0,
-            marginCheckPassed: false,
-            sizeTooSmall: false,
-            maxLeverageAllowed: 20,
-            estimatedLiquidationPrice: 0
-        });
-        setError('Hyperliquid futures integration in progress');
-    };
+    setExecuting(true);
+    setError(null);
 
-    const debounce = setTimeout(fetchPreview, 300);
-    return () => clearTimeout(debounce);
-  }, [isOpen, marketIndex, size, leverage, side]);
+    try {
+      const result = await openPosition({
+        symbol: marketName,
+        side,
+        size: parseFloat(size),
+        type: orderType,
+        leverage,
+        limitPrice: orderType === 'limit' ? parseFloat(limitPrice) : undefined,
+        triggerPrice: orderType === 'stop-limit' ? parseFloat(triggerPrice) : undefined
+      });
 
-  const handlePercentage = (percent: number) => {
-    setSize('0');
-    setSliderValue(percent);
-  };
-
-  const handleSubmit = async () => {
-    setError('Hyperliquid futures integration in progress');
+      if (result.success) {
+        setSuccess(true);
+        refreshSummary();
+        refreshPositions();
+        setTimeout(onClose, 2000);
+      } else {
+        setError(result.error || 'Failed to place order');
+      }
+    } catch (err) {
+      setError('Connection error');
+    } finally {
+      setExecuting(false);
+    }
   };
 
   if (!isOpen) return null;
 
-  const isDisabled = true;
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
 
-      {/* Modal - Compact Bybit Style */}
-      <div className="relative w-full max-w-[500px] bg-[#0b0e11] rounded-lg border border-[#1f2329] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
-        {/* Header - Compact */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-[#1f2329] flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <h3 className="text-[13px] font-bold text-white">
-              {side === 'long' ? 'Long' : 'Short'} {marketName}
-            </h3>
-            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-              side === 'long' ? 'bg-[#0ecb81]/10 text-[#0ecb81]' : 'bg-[#f6465d]/10 text-[#f6465d]'
-            }`}>
-              {side.toUpperCase()}
-            </span>
+      <div className="relative w-full max-w-[400px] bg-[#0b0e11] rounded-lg border border-[#1f2329] shadow-2xl flex flex-col p-4">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-white font-bold">{side === 'long' ? 'Long' : 'Short'} {marketName}</h3>
+          <button onClick={onClose}><Icon icon="ph:x" className="text-[#848e9c]" /></button>
+        </div>
+
+        {success ? (
+          <div className="text-center py-8">
+            <Icon icon="ph:check-circle" className="mx-auto text-[#0ecb81] mb-2" width={48} />
+            <p className="text-white font-bold">Order Placed Successfully</p>
           </div>
-          <button onClick={onClose} className="p-1 hover:bg-[#1f2329] rounded transition-colors">
-            <Icon icon="ph:x" width={16} className="text-[#848e9c]" />
-          </button>
-        </div>
+        ) : (
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs text-[#848e9c] mb-1 block">Order Type</label>
+              <div className="grid grid-cols-3 gap-2">
+                {['market', 'limit', 'stop-limit'].map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setOrderType(t as any)}
+                    className={`py-1.5 text-[10px] rounded border ${
+                      orderType === t ? 'bg-[#f0b90b]/10 border-[#f0b90b] text-[#f0b90b]' : 'border-[#1f2329] text-[#848e9c]'
+                    }`}
+                  >
+                    {t.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-        {/* Content - Scrollable without visible scrollbar */}
-        <div 
-          className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-2" 
-        >
-          <div className="text-center py-12">
-            <Icon icon="ph:lightning" className="mx-auto text-[#fcd535] mb-4" width={48} />
-            <h4 className="text-white font-bold mb-2">Hyperliquid Integration</h4>
-            <p className="text-[#848e9c] text-sm px-6">
-              Futures trading is being migrated to Hyperliquid for better performance and lower fees. 
-              Trading functionality will be available shortly.
-            </p>
+            <div>
+              <label className="text-xs text-[#848e9c] mb-1 block">Size ({marketName.split('-')[0]})</label>
+              <input
+                type="number"
+                value={size}
+                onChange={(e) => setSize(e.target.value)}
+                className="w-full bg-[#1f2329] border border-[#1f2329] rounded p-2 text-white text-sm focus:outline-none focus:border-[#f0b90b]"
+                placeholder="0.00"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs text-[#848e9c] mb-1 block">Leverage: {leverage}x</label>
+              <input
+                type="range"
+                min="1"
+                max="50"
+                value={leverage}
+                onChange={(e) => setLeverage(parseInt(e.target.value))}
+                className="w-full h-1.5 bg-[#1f2329] rounded-lg appearance-none cursor-pointer accent-[#f0b90b]"
+              />
+            </div>
+
+            {error && <p className="text-[#f6465d] text-xs text-center">{error}</p>}
+
+            <button
+              onClick={handleSubmit}
+              disabled={executing}
+              className={`w-full py-3 rounded font-bold text-white transition-all ${
+                side === 'long' ? 'bg-[#0ecb81] hover:bg-[#0ecb81]/90' : 'bg-[#f6465d] hover:bg-[#f6465d]/90'
+              } disabled:opacity-50`}
+            >
+              {executing ? 'Executing...' : `Confirm ${side.toUpperCase()}`}
+            </button>
           </div>
-        </div>
-
-        {/* Footer - Compact */}
-        <div className="p-2 border-t border-[#1f2329] flex-shrink-0">
-          <button
-            onClick={onClose}
-            className="w-full py-2 rounded font-bold text-[12px] bg-[#1f2329] text-[#848e9c] hover:text-white transition-colors"
-          >
-            Close
-          </button>
-        </div>
+        )}
       </div>
     </div>
   );
