@@ -6,6 +6,28 @@ import { createViemAccount } from "@privy-io/node/viem";
 import { createAuthorizationContext } from "@/lib/privy/authorization";
 import { HttpTransport, InfoClient, ExchangeClient } from "@nktkas/hyperliquid";
 
+const MIN_ORDER_VALUE = 10; // Hyperliquid universal minimum in USD
+
+function formatOrderError(raw: string): string {
+  if (/minimum value of \$?(\d+)/i.test(raw)) {
+    const match = raw.match(/minimum value of \$?(\d+)/i);
+    return `Minimum order value is $${match?.[1] ?? 10}. Please increase your order amount.`;
+  }
+  if (/insufficient margin|not enough|insufficient balance/i.test(raw)) {
+    return 'Insufficient balance to place this order.';
+  }
+  if (/invalid price|price must be/i.test(raw)) {
+    return 'The order price is invalid. Please adjust and try again.';
+  }
+  if (/asset.*not found/i.test(raw)) {
+    return 'This trading pair is not available right now.';
+  }
+  if (/reduce only/i.test(raw)) {
+    return 'This order would exceed your current position. Please adjust the amount.';
+  }
+  return `Order failed: ${raw}`;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { userId: authUserId, getToken } = await auth();
@@ -164,6 +186,15 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Hyperliquid Order] Placing ${orderType} ${side} for ${amount} ${asset} at ${finalPrice}`);
 
+    // Server-side minimum order value check
+    const orderValue = Number(amount) * Number(finalPrice);
+    if (orderValue < MIN_ORDER_VALUE) {
+      return NextResponse.json({
+        success: false,
+        error: `Minimum order value is $${MIN_ORDER_VALUE}. Your order is worth $${orderValue.toFixed(2)}.`
+      }, { status: 400 });
+    }
+
     // 3. Submit Order with correct rounding
     const result = await exchange.order({
       orders: [
@@ -180,7 +211,8 @@ export async function POST(request: NextRequest) {
     });
 
     if (result.status === 'err') {
-       return NextResponse.json({ success: false, error: result.response.data }, { status: 400 });
+       const rawError = typeof result.response.data === 'string' ? result.response.data : JSON.stringify(result.response.data);
+       return NextResponse.json({ success: false, error: formatOrderError(rawError) }, { status: 400 });
     }
 
     return NextResponse.json({
@@ -193,9 +225,10 @@ export async function POST(request: NextRequest) {
 
   } catch (error: any) {
     console.error("[Hyperliquid Order API] Error:", error);
+    const rawMsg = error.message || "Failed to place order";
     return NextResponse.json({
       success: false,
-      error: error.message || "Failed to place order"
+      error: formatOrderError(rawMsg)
     }, { status: 500 });
   }
 }

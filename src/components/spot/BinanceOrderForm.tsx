@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Icon } from '@iconify/react';
 import { useAuth } from '@/app/context/authContext';
 import { useSpotBalances } from '@/hooks/useSpotBalances';
 import { useHyperliquidMarkets } from '@/hooks/useHyperliquidMarkets';
-import SpotOrderProcessingModal from './SpotOrderProcessingModal';
 
 interface BinanceOrderFormProps {
   selectedPair: string;
@@ -45,11 +45,9 @@ export default function BinanceOrderForm({
   const [amount, setAmount] = useState('');
   const [total, setTotal] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [currentMarketPrice, setCurrentMarketPrice] = useState(0);
-  const [showProcessingModal, setShowProcessingModal] = useState(false);
-  const [processingStatus, setProcessingStatus] = useState<'processing' | 'success' | 'error'>('processing');
-  const [processingError, setProcessingError] = useState('');
 
   // Extract base and quote assets from pair
   const [baseAsset, quoteAsset] = selectedPair.split('-');
@@ -134,12 +132,20 @@ export default function BinanceOrderForm({
       return;
     }
 
+    // Client-side minimum order value check ($10)
+    const priceForCalc = orderType === 'market' ? currentMarketPrice : parseFloat(price);
+    if (priceForCalc > 0) {
+      const orderValue = parseFloat(amount) * priceForCalc;
+      if (orderValue < 10) {
+        setError(`Minimum order value is $10. Your order is worth $${orderValue.toFixed(2)}.`);
+        return;
+      }
+    }
+
     try {
       setIsLoading(true);
       setError(null);
-      setShowProcessingModal(true);
-      setProcessingStatus('processing');
-      setProcessingError('');
+      setSuccess(null);
 
       const response = await fetch('/api/hyperliquid/order', {
         method: 'POST',
@@ -157,7 +163,8 @@ export default function BinanceOrderForm({
       const result = await response.json();
       
       if (result.success) {
-        setProcessingStatus('success');
+        setSuccess(`${activeTab === 'buy' ? 'Buy' : 'Sell'} order placed successfully!`);
+        setTimeout(() => setSuccess(null), 3000);
         
         // Reset form
         setAmount('');
@@ -177,8 +184,6 @@ export default function BinanceOrderForm({
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to submit order';
       setError(errorMessage);
-      setProcessingStatus('error');
-      setProcessingError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -337,6 +342,13 @@ export default function BinanceOrderForm({
           </div>
         )}
 
+        {/* Success Display */}
+        {success && (
+          <div className="p-3 bg-[#0ecb81]/10 border border-[#0ecb81]/20 rounded text-xs text-[#0ecb81]">
+            {success}
+          </div>
+        )}
+
         {/* Balance Info */}
         <div className="space-y-2 text-xs">
           <div className="flex justify-between">
@@ -361,19 +373,16 @@ export default function BinanceOrderForm({
               : 'bg-[#f6465d] hover:bg-[#f6465d]/90 text-white'
           }`}
         >
-          {isLoading ? 'Processing...' : `${activeTab.toUpperCase()} ${baseAsset}`}
+          {isLoading ? (
+            <span className="flex items-center justify-center gap-2">
+              <Icon icon="ph:circle-notch" className="animate-spin" width={16} />
+              Processing...
+            </span>
+          ) : (
+            `${activeTab.toUpperCase()} ${baseAsset}`
+          )}
         </button>
       </div>
-
-      <SpotOrderProcessingModal
-        isOpen={showProcessingModal}
-        onClose={() => setShowProcessingModal(false)}
-        status={processingStatus}
-        side={activeTab}
-        pair={selectedPair}
-        amount={amount}
-        error={processingError}
-      />
     </div>
   );
 }

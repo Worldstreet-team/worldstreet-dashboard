@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { useAuth } from '@/app/context/authContext';
 import { useSpotBalances } from '@/hooks/useSpotBalances';
-import SpotOrderProcessingModal from './SpotOrderProcessingModal';
 
 interface MobileTradingModalProps {
   isOpen: boolean;
@@ -32,10 +31,6 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [executing, setExecuting] = useState(false);
-  const [showProcessingModal, setShowProcessingModal] = useState(false);
-  const [processingStatus, setProcessingStatus] = useState<'processing' | 'success' | 'error'>('processing');
-  const [processingError, setProcessingError] = useState<string>('');
-  const [txSignature, setTxSignature] = useState<string>('');
 
   const [tokenIn, tokenOut] = selectedPair.split('-');
   const effectiveChain = chain;
@@ -134,6 +129,15 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
 
     // For buy orders, check total (amount × price) against quote balance
     // For sell orders, check amount against base balance
+    const priceForCalc = orderType === 'market' ? currentMarketPrice : parseFloat(price);
+    if (priceForCalc > 0) {
+      const orderValue = parseFloat(amount) * priceForCalc;
+      if (orderValue < 10) {
+        setError(`Minimum order value is $10. Your order is worth $${orderValue.toFixed(2)}.`);
+        return;
+      }
+    }
+
     if (side === 'buy') {
       const totalCost = orderType === 'market'
         ? parseFloat(amount) * currentMarketPrice
@@ -163,12 +167,10 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
 
     setExecuting(true);
     
-    // Show processing modal immediately
+    // Hide quote view while executing
     setShowQuote(false);
-    setShowProcessingModal(true);
-    setProcessingStatus('processing');
-    setProcessingError('');
-    setTxSignature('');
+    setError(null);
+    setSuccess(null);
     
     try {
       const response = await fetch('/api/hyperliquid/order', {
@@ -187,11 +189,7 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
       const result = await response.json();
 
       if (result.success) {
-        // Success! Transaction sent
-        setProcessingStatus('success');
-        // Extract hash or first order result
-        const hash = result.data?.response?.data?.any_perps_failed ? 'Failed' : 'Broadcast Succesful';
-        setTxSignature(hash);
+        setSuccess(`${side === 'buy' ? 'Buy' : 'Sell'} order placed successfully!`);
 
         // Clear form
         setAmount('');
@@ -203,9 +201,9 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
 
         // Close modal after showing success
         setTimeout(() => {
-          setShowProcessingModal(false);
+          setSuccess(null);
           onClose();
-        }, 3000);
+        }, 2000);
 
         // Refresh data in background
         refetchBalances();
@@ -215,8 +213,6 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
       
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to execute trade';
-      setProcessingStatus('error');
-      setProcessingError(errorMsg);
       setError(errorMsg);
       setPinError(errorMsg);
     } finally {
@@ -482,22 +478,6 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
           )}
         </div>
       </div>
-
-      <SpotOrderProcessingModal
-        isOpen={showProcessingModal}
-        onClose={() => {
-          setShowProcessingModal(false);
-          if (processingStatus === 'success') {
-            onClose();
-          }
-        }}
-        status={processingStatus}
-        side={side}
-        pair={selectedPair}
-        amount={amount}
-        error={processingError}
-        txSignature={txSignature}
-      />
     </div>
   );
 }
