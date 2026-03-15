@@ -49,7 +49,7 @@ function getStageIndex(status: string): number {
 export default function SpotDepositModal({ isOpen, onClose, onDepositComplete }: SpotDepositModalProps) {
   const { deposit, loading, error, initiate, resumePolling, reset, cancel } = useSpotDeposit();
   const { addresses, isLoading: walletsLoading } = useWallet();
-  const { getUsdtBalance: getSolUsdtBalance, loading: solLoading } = useSolana();
+  const { getUsdtBalance: getSolUsdtBalance, balance: solNativeBalance, loading: solLoading } = useSolana();
   const { tokenBalances: ethTokenBalances, loading: evmLoading } = useEvm();
 
   // Form state
@@ -76,6 +76,9 @@ export default function SpotDepositModal({ isOpen, onClose, onDepositComplete }:
   }, [chain, getSolUsdtBalance, ethTokenBalances]);
 
   const balanceLoading = chain === "solana" ? solLoading : evmLoading;
+
+  // Check if user has enough SOL for transaction fees
+  const needsSol = chain === "solana" && solNativeBalance < 0.01;
 
   // Resume polling on mount
   useEffect(() => {
@@ -267,10 +270,20 @@ export default function SpotDepositModal({ isOpen, onClose, onDepositComplete }:
                 <p className="text-xs text-[#f6465d]">{error}</p>
               )}
 
+              {/* SOL fee warning */}
+              {needsSol && !error && (
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-[#f0b90b]/10 border border-[#f0b90b]/20">
+                  <Icon icon="ph:warning-fill" width={16} className="text-[#f0b90b] mt-0.5 shrink-0" />
+                  <span className="text-xs text-[#f0b90b]">
+                    You need at least 0.01 SOL for Solana network fees. Your current balance is {solNativeBalance.toFixed(4)} SOL. Please send some SOL to your wallet before depositing.
+                  </span>
+                </div>
+              )}
+
               {/* Submit */}
               <button
                 onClick={isTerminal ? handleNewDeposit : handleInitiate}
-                disabled={loading || (!isTerminal && (!amount || parseFloat(amount) < 5 || !fromAddress))}
+                disabled={loading || (!isTerminal && (!amount || parseFloat(amount) < 5 || !fromAddress || needsSol))}
                 className="w-full py-3 bg-[#f0b90b] hover:bg-[#f0b90b]/90 disabled:bg-[#2b3139] disabled:text-[#4a5056] text-black font-semibold text-sm rounded-lg transition-colors"
               >
                 {loading ? (

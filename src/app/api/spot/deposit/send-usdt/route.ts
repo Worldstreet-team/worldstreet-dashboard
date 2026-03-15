@@ -88,6 +88,18 @@ async function sendUsdtSolana(
   );
 
   const fromPubkey = new PublicKey(fromAddress);
+
+  // Pre-check: user needs SOL for transaction fees
+  const solBalance = await connection.getBalance(fromPubkey);
+  const solInLamports = solBalance;
+  const MIN_SOL_LAMPORTS = 10_000_000; // 0.01 SOL
+  if (solInLamports < MIN_SOL_LAMPORTS) {
+    const solAmount = (solInLamports / 1e9).toFixed(6);
+    throw new Error(
+      `Insufficient SOL for transaction fees. You need at least 0.01 SOL to cover Solana network fees, but your wallet only has ${solAmount} SOL. Please send some SOL to your wallet first.`
+    );
+  }
+
   const toPubkey = new PublicKey(treasuryAddress);
   const mintPubkey = new PublicKey(SOL_USDT_MINT);
 
@@ -270,13 +282,27 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error("[Spot Deposit Send USDT] Error:", error);
 
+    // Format user-friendly error messages for known failures
+    let userMessage = error.message || "Failed to send USDT";
+    if (
+      userMessage.includes("no record of a prior credit") ||
+      userMessage.includes("insufficient lamports") ||
+      userMessage.includes("Attempt to debit")
+    ) {
+      userMessage =
+        "Insufficient SOL for transaction fees. You need at least 0.01 SOL in your Solana wallet to cover network fees. Please fund your wallet with SOL and try again.";
+    } else if (userMessage.includes("insufficient funds")) {
+      userMessage =
+        "Insufficient USDT balance to complete this deposit. Please check your wallet balance.";
+    }
+
     // Update deposit status to failed in DB so it doesn't stay stuck
     if (parsedDepositId) {
       try {
         await connectDB();
         await SpotDeposit.findByIdAndUpdate(parsedDepositId, {
           status: "failed",
-          errorMessage: `USDT send failed: ${error.message}`,
+          errorMessage: `USDT send failed: ${userMessage}`,
         });
       } catch {
         // Ignore cleanup errors
@@ -284,7 +310,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { error: error.message || "Failed to send USDT" },
+      { error: userMessage },
       { status: 500 }
     );
   }
