@@ -138,6 +138,45 @@ export default function FuturesWalletSetup({
         <p>• Arbitrum network for Hyperliquid trading</p>
         <p>• No private keys stored on our servers</p>
       </div>
+
+      {/* Debug buttons - only show in development */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="mt-4 pt-4 border-t border-[#2b3139] space-y-2">
+          <p className="text-xs text-[#848e9c] mb-2">Debug Tools:</p>
+          <div className="flex gap-2">
+            <button
+              onClick={async () => {
+                try {
+                  const response = await fetch('/api/debug/futures-wallet');
+                  const data = await response.json();
+                  console.log('Debug wallet data:', data);
+                  alert('Check console for wallet debug data');
+                } catch (err) {
+                  console.error('Debug error:', err);
+                }
+              }}
+              className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded"
+            >
+              Check DB
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  const response = await fetch('/api/debug/reset-futures-wallet', { method: 'POST' });
+                  const data = await response.json();
+                  console.log('Reset result:', data);
+                  alert('Wallet data reset - try setup again');
+                } catch (err) {
+                  console.error('Reset error:', err);
+                }
+              }}
+              className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded"
+            >
+              Reset
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
