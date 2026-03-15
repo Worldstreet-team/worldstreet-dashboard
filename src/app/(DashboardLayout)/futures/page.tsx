@@ -4,7 +4,9 @@ import React, { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useHyperliquidMarkets } from '@/hooks/useHyperliquidMarkets';
+import { useUser } from '@clerk/nextjs';
+import { useHyperliquidFuturesMarkets } from '@/hooks/useHyperliquidFuturesMarkets';
+import { useHyperliquidFuturesBalance } from '@/hooks/useHyperliquidFuturesBalance';
 import { FuturesChart } from '@/components/futures/FuturesChart';
 import FuturesMarketList from '@/components/futures/FuturesMarketList';
 import FuturesOrderBook from '@/components/futures/FuturesOrderBook';
@@ -14,6 +16,7 @@ import { CollateralPanel } from '@/components/futures/CollateralPanel';
 import { FuturesWalletBalance } from '@/components/futures/FuturesWalletBalance';
 import { RiskPanel } from '@/components/futures/RiskPanel';
 import FuturesTradingModal from '@/components/futures/FuturesTradingModal';
+import HyperliquidFuturesBalanceDisplay from '@/components/futures/HyperliquidFuturesBalanceDisplay';
 
 type OrderSide = 'long' | 'short';
 
@@ -64,34 +67,46 @@ const BottomPanel: React.FC = () => {
 };
 
 export default function HyperliquidFuturesPage() {
-  const [selectedPair, setSelectedPair] = useState<string>('BTC-USD');
+  const [selectedPair, setSelectedPair] = useState<string>('BTC-PERP');
   const [tradingSide, setTradingSide] = useState<OrderSide>('long');
   const [showTradingModal, setShowTradingModal] = useState(false);
 
-  // Use Hyperliquid markets for futures trading
+  // Clerk authentication
+  const { user, isLoaded } = useUser();
+
+  // Use Hyperliquid futures markets
   const {
-    markets: hyperliquidMarkets,
+    markets: futuresMarkets,
     loading: marketsLoading,
     error: marketsError
-  } = useHyperliquidMarkets({
-    includeStats: true,
-    enabled: true
+  } = useHyperliquidFuturesMarkets({
+    enabled: true,
+    refreshInterval: 180000 // 3 minutes
   });
+
+  // Use Hyperliquid futures balance
+  const {
+    accountValue,
+    totalMarginUsed,
+    availableMargin,
+    positions,
+    loading: balanceLoading
+  } = useHyperliquidFuturesBalance(user?.id, isLoaded && !!user);
 
   const [mobileActiveTab, setMobileActiveTab] = useState<'chart' | 'positions' | 'info'>('chart');
   const [showMarketDropdown, setShowMarketDropdown] = useState(false);
 
-  // Set default market when Hyperliquid markets are loaded
+  // Set default market when futures markets are loaded
   useEffect(() => {
-    if (hyperliquidMarkets.length > 0 && selectedPair === 'BTC-USD') {
-      // Find BTC market or use first available
-      const btcMarket = hyperliquidMarkets.find(m =>
-        m.symbol.includes('BTC') || m.baseAsset === 'BTC'
+    if (futuresMarkets.length > 0 && selectedPair === 'BTC-PERP') {
+      // Find BTC-PERP market or use first available
+      const btcMarket = futuresMarkets.find(m =>
+        m.symbol.includes('BTC-PERP') || m.base === 'BTC'
       );
-      const defaultMarket = btcMarket || hyperliquidMarkets[0];
+      const defaultMarket = btcMarket || futuresMarkets[0];
       setSelectedPair(defaultMarket.symbol);
     }
-  }, [hyperliquidMarkets, selectedPair]);
+  }, [futuresMarkets, selectedPair]);
 
   const handleSelectMarket = (pair: string) => {
     setSelectedPair(pair);
@@ -99,14 +114,14 @@ export default function HyperliquidFuturesPage() {
   };
 
   // Get current market data
-  const currentMarket = hyperliquidMarkets.find(m => m.symbol === selectedPair);
+  const currentMarket = futuresMarkets.find(m => m.symbol === selectedPair);
   const currentPrice = currentMarket?.price || 0;
-  const priceChange = currentMarket?.change24h || 0;
+  const priceChange = 0; // TODO: Add 24h change calculation
   const isPositive = priceChange >= 0;
 
   // Get top 10 markets for dropdown
-  const topMarkets = hyperliquidMarkets
-    .sort((a, b) => b.volume24h - a.volume24h)
+  const topMarkets = futuresMarkets
+    .sort((a, b) => (b.price * 1000000) - (a.price * 1000000)) // Sort by price as proxy for volume
     .slice(0, 10);
 
   if (marketsLoading) {
@@ -388,12 +403,21 @@ export default function HyperliquidFuturesPage() {
 
           {/* Right: Account Status */}
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-3 text-[12px]">
-              <div className="flex flex-col items-end">
-                <span className="text-[11px] text-[#848e9c]">Hyperliquid</span>
-                <span className="text-white font-medium">Connect Wallet</span>
+            {isLoaded && user ? (
+              <HyperliquidFuturesBalanceDisplay 
+                userId={user.id}
+                className="text-[12px]"
+              />
+            ) : (
+              <div className="flex items-center gap-3 text-[12px]">
+                <div className="flex flex-col items-end">
+                  <span className="text-[11px] text-[#848e9c]">Hyperliquid</span>
+                  <span className="text-white font-medium">
+                    {isLoaded ? 'Connect Wallet' : 'Loading...'}
+                  </span>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
 

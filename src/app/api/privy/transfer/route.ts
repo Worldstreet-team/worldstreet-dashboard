@@ -2,67 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { connectDB } from "@/lib/mongodb";
 import { UserWallet } from "@/models/UserWallet";
-import { createAuthorizationContext } from "@/lib/privy/authorization";
-import { privyClient } from "@/lib/privy/client";
-import { createViemAccount } from "@privy-io/node/viem";
-import { createPublicClient, http, parseUnits, encodeFunctionData, toHex } from "viem";
-import { mainnet, arbitrum, arbitrumSepolia } from "viem/chains";
-
-const ERC20_ABI = [
-  {
-    constant: false,
-    inputs: [
-      { name: "_to", type: "address" },
-      { name: "_value", type: "uint256" },
-    ],
-    name: "transfer",
-    outputs: [{ name: "", type: "boolean" }],
-    type: "function",
-  },
-  {
-    constant: true,
-    inputs: [{ name: "_owner", type: "address" }],
-    name: "balanceOf",
-    outputs: [{ name: "balance", type: "uint256" }],
-    type: "function",
-  },
-] as const;
-
-// Config for USDC on Arbitrum (Hyperliquid uses Arbitrum)
-const CONFIG = {
-  chain: arbitrum,
-  arbChainId: 42161,
-  hlBridgeAddress: '0x2Df1c51E09aecf9cacb7bc98cb1742757f163df7', // Fixed Correct Bridge Address
-  usdcAddress: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831' // Arbitrum USDC
-};
-
-function sanitizeError(error: any): string {
-  const message = error.message || String(error);
-
-  // Handle Privy raw JSON-RPC error strings
-  if (message.includes('{"error":')) {
-    try {
-      const match = message.match(/\{.*\}/);
-      if (match) {
-        const errorDetail = JSON.parse(match[0]);
-        const innerError = errorDetail.error;
-
-        if (typeof innerError === 'string') {
-          if (innerError.includes('insufficient funds')) return "Insufficient funds for gas + transfer value.";
-          if (innerError.includes('exceeds the balance')) return "Insufficient funds for this transaction.";
-          return innerError;
-        }
-      }
-    } catch (e) {
-      // Fallback if parsing fails
-    }
-  }
-
-  if (message.includes('insufficient funds')) return "Insufficient funds for gas + transfer value.";
-  if (message.includes('missing_or_invalid_token')) return "Session expired. Please refresh.";
-
-  return message;
-}
+import { bridgeToHyperliquid, validateBridgeAmount } from "@/lib/hyperliquid/bridge";
 
 export async function POST(request: NextRequest) {
   try {
@@ -73,8 +13,10 @@ export async function POST(request: NextRequest) {
 
     const { amount, asset = "USDC" } = await request.json();
 
-    if (!amount || amount <= 0) {
-      return NextResponse.json({ success: false, error: "Invalid amount" }, { status: 400 });
+    // Validate amount
+    const validation = validateBridgeAmount(amount, asset);
+    if (!validation.valid) {
+      return NextResponse.json({ success: false, error: validation.error }, { status: 400 });
     }
 
     await connectDB();
@@ -129,13 +71,11 @@ export async function POST(request: NextRequest) {
       }, { status: 404 });
     }
 
-    // Aggressive Unification: We ONLY use the trading wallet for the Ethereum identity here
+    // Use trading wallet for the bridge transfer
     const mainWalletAddress = userWallet.tradingWallet?.address || userWallet.wallets.ethereum.address;
     const mainWalletId = userWallet.tradingWallet?.walletId || userWallet.wallets.ethereum.walletId;
-    const tradingWalletAddress = userWallet.tradingWallet?.address || mainWalletAddress;
 
     console.log(`[Hyperliquid Deposit] Using Wallet ID: ${mainWalletId} (Address: ${mainWalletAddress})`);
-    console.log(`[Hyperliquid Deposit] Unified Profile Check - Main: ${mainWalletAddress}, Trading: ${tradingWalletAddress}`);
 
     // Get Auth Context for signing
     const clerkJwt = await getToken();
@@ -143,60 +83,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Failed to get auth token" }, { status: 401 });
     }
 
-    const authContext = await createAuthorizationContext(clerkJwt);
-
-    const chainId = CONFIG.chain.id;
-
-
-
-    const HL_BRIDGE = '0x2Df1c51E09aECF9cacB7bc98cB1742757f163dF7';
-    const ARBITRUM_USDC = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831';
-
-    let txParams: any = {};
-
-    if (asset.toUpperCase() === "ETH") {
-      // Native ETH deposit
-      txParams = {
-        to: HL_BRIDGE,
-        value: toHex(parseUnits(amount.toString(), 18)),
-      };
-    } else {
-      // USDC deposit (Transfer to Bridge)
-      const data = encodeFunctionData({
-        abi: ERC20_ABI,
-        functionName: 'transfer',
-        args: [HL_BRIDGE as `0x${string}`, parseUnits(amount.toString(), 6)]
-      });
-
-      txParams = {
-        to: ARBITRUM_USDC,
-        data,
-        value: "0x0"
-      };
-    }
-
-    console.log(`[Hyperliquid Deposit] Initiating sponsored transaction via Privy Server SDK...`);
-
-    // Use the exact method suggested by the user/guide
-    // privyClient.wallets().ethereum().sendTransaction is the correct way for server-side managed wallets
-    const result = await (privyClient.wallets() as any).ethereum().sendTransaction(mainWalletId, {
-      sponsor: true,
-      caip2: 'eip155:42161',
-      params: {
-        transaction: txParams
-      },
-      authorization_context: authContext
+    // Use the shared bridge utility
+    const result = await bridgeToHyperliquid({
+      walletId: mainWalletId,
+      amount,
+      asset: asset as 'USDC' | 'ETH',
+      clerkJwt
     });
 
-    const txHash = result.hash;
-    console.log(`[Hyperliquid Deposit] Transaction successful! Hash: ${txHash}`);
+    if (!result.success) {
+      return NextResponse.json({
+        success: false,
+        error: result.error,
+        details: result.details
+      }, { status: 500 });
+    }
 
     return NextResponse.json({
       success: true,
       data: {
-        txHash,
+        txHash: result.txHash,
         from: mainWalletAddress,
-        to: HL_BRIDGE,
+        to: '0x2Df1c51E09aECF9cacB7bc98cB1742757f163dF7', // HL Bridge
         amount,
         asset
       }
@@ -204,11 +112,10 @@ export async function POST(request: NextRequest) {
 
   } catch (error: any) {
     console.error("[Internal Transfer] Error:", error);
-    const userFriendlyError = sanitizeError(error);
 
     return NextResponse.json({
       success: false,
-      error: userFriendlyError,
+      error: error.message || "Failed to process transfer",
       details: error.message
     }, { status: 500 });
   }

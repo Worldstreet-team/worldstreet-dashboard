@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { Icon } from '@iconify/react';
-import { useHyperliquidMarkets } from '@/hooks/useHyperliquidMarkets';
+import { useHyperliquidFuturesMarkets } from '@/hooks/useHyperliquidFuturesMarkets';
 
 interface FuturesMarketListProps {
   selectedMarketSymbol: string | null;
@@ -14,9 +14,9 @@ export default function FuturesMarketList({ selectedMarketSymbol, onSelectMarket
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [sortBy, setSortBy] = useState<'symbol' | 'price' | 'change'>('change');
 
-  const { markets, loading, error } = useHyperliquidMarkets({
-    includeStats: true,
-    enabled: true
+  const { markets, loading, error } = useHyperliquidFuturesMarkets({
+    enabled: true,
+    refreshInterval: 180000 // 3 minutes
   });
 
   const filteredMarkets = useMemo(() => {
@@ -28,7 +28,7 @@ export default function FuturesMarketList({ selectedMarketSymbol, onSelectMarket
 
     // Sort markets
     filtered.sort((a, b) => {
-      if (sortBy === 'change') return Math.abs(b.change24h) - Math.abs(a.change24h);
+      if (sortBy === 'change') return b.price - a.price; // Sort by price since no change24h
       if (sortBy === 'price') return b.price - a.price;
       return a.symbol.localeCompare(b.symbol);
     });
@@ -96,7 +96,7 @@ export default function FuturesMarketList({ selectedMarketSymbol, onSelectMarket
           {sortBy === 'price' && <Icon icon="ph:caret-down" width={10} />}
         </button>
         <button onClick={() => setSortBy('change')} className="text-right hover:text-white flex items-center justify-end gap-1">
-          24h Change
+          Leverage
           {sortBy === 'change' && <Icon icon="ph:caret-down" width={10} />}
         </button>
       </div>
@@ -120,7 +120,6 @@ export default function FuturesMarketList({ selectedMarketSymbol, onSelectMarket
         ) : (
           filteredMarkets.map((market) => {
             const isSelected = market.symbol === selectedMarketSymbol;
-            const isPositive = market.change24h >= 0;
             const isFav = favorites.has(market.symbol);
 
             return (
@@ -150,7 +149,7 @@ export default function FuturesMarketList({ selectedMarketSymbol, onSelectMarket
                         {market.symbol}
                       </div>
                       <div className="text-[9px] text-[#848e9c]">
-                        Vol {formatVolume(market.volume24h)}
+                        {market.base}/{market.quote}
                       </div>
                     </div>
                   </div>
@@ -162,11 +161,8 @@ export default function FuturesMarketList({ selectedMarketSymbol, onSelectMarket
                   </div>
 
                   <div className="text-right min-w-[60px]">
-                    <div className={`text-xs font-semibold px-2 py-0.5 rounded ${isPositive
-                        ? 'bg-[rgba(14,203,129,0.12)] text-[#0ecb81]'
-                        : 'bg-[rgba(246,70,93,0.12)] text-[#f6465d]'
-                      }`}>
-                      {isPositive ? '+' : ''}{market.change24h.toFixed(2)}%
+                    <div className="text-xs font-semibold text-[#848e9c]">
+                      {market.maxLeverage ? `${market.maxLeverage}x` : 'N/A'}
                     </div>
                   </div>
                 </div>
