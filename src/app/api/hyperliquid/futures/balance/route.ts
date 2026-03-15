@@ -26,6 +26,13 @@ export async function GET(request: NextRequest) {
     await connectDB();
     const userWallet = await UserWallet.findOne({ clerkUserId: userId });
 
+    console.log('[Hyperliquid Futures Balance] User wallet found:', {
+      exists: !!userWallet,
+      hasChains: !!userWallet?.chains,
+      hasArbitrum: !!userWallet?.chains?.arbitrum,
+      arbitrumAddress: userWallet?.chains?.arbitrum?.address
+    });
+
     if (!userWallet || !userWallet.chains?.arbitrum?.address) {
       return NextResponse.json(
         { error: 'No Arbitrum wallet found for user. Please set up futures wallet first.' },

@@ -41,6 +41,8 @@ export default function FuturesWalletSetup({
 
       const data = await response.json();
 
+      console.log('[FuturesWalletSetup] API response:', data);
+
       if (!data.success) {
         throw new Error(data.error || 'Failed to setup futures wallet');
       }
@@ -53,6 +55,7 @@ export default function FuturesWalletSetup({
 
       // Refresh the page after a short delay to update the balance
       setTimeout(() => {
+        console.log('[FuturesWalletSetup] Refreshing page to update balance...');
         window.location.reload();
       }, 2000);
 

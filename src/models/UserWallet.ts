@@ -44,6 +44,13 @@ const UserWalletSchema = new mongoose.Schema({
       publicKey: String
     }
   },
+  chains: {
+    arbitrum: {
+      walletId: String,
+      address: String,
+      publicKey: String
+    }
+  },
   tradingWallet: {
     walletId: String,
     address: String,
