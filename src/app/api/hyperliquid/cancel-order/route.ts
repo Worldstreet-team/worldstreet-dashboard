@@ -45,16 +45,32 @@ export async function POST(request: NextRequest) {
     const transport = new HttpTransport({ isTestnet: false });
     const info = new InfoClient({ transport });
 
-    // Resolve coin name to asset index
+    // Resolve coin name to asset index (must use universeEntry.index, NOT array position)
     const [meta, spotMeta] = await Promise.all([info.meta(), info.spotMeta()]);
 
     let assetIndex = -1;
-    const spotIdx = spotMeta.universe.findIndex(
-      (m: any) => m.name === coin || m.name === `${coin}/USDC`
-    );
-    if (spotIdx !== -1) {
-      assetIndex = spotIdx + 10000;
-    } else {
+
+    // Try matching by base token name first (e.g. coin="HYPE")
+    const baseToken = spotMeta.tokens.find((t: any) => t.name === coin);
+    if (baseToken) {
+      const universeEntry = spotMeta.universe.find((u: any) => u.tokens[0] === baseToken.index);
+      if (universeEntry) {
+        assetIndex = 10000 + universeEntry.index;
+      }
+    }
+
+    // Fallback: match by universe entry name (e.g. coin="HYPE/USDC" or "@107")
+    if (assetIndex === -1) {
+      const universeEntry = spotMeta.universe.find(
+        (u: any) => u.name === coin || u.name === `${coin}/USDC`
+      );
+      if (universeEntry) {
+        assetIndex = 10000 + universeEntry.index;
+      }
+    }
+
+    // Fallback: check perps
+    if (assetIndex === -1) {
       const perpIdx = meta.universe.findIndex((m: any) => m.name === coin);
       if (perpIdx !== -1) {
         assetIndex = perpIdx;

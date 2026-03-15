@@ -164,8 +164,20 @@ export default function BinanceOrderForm({
       const result = await response.json();
       
       if (result.success) {
-        setSuccess(`${activeTab === 'buy' ? 'Buy' : 'Sell'} order placed successfully!`);
-        setTimeout(() => setSuccess(null), 3000);
+        // Parse HL response to show fill details
+        const statuses = result.data?.response?.data?.statuses;
+        const firstStatus = statuses?.[0];
+        let msg = `${activeTab === 'buy' ? 'Buy' : 'Sell'} order placed successfully!`;
+
+        if (firstStatus?.filled) {
+          const f = firstStatus.filled;
+          msg = `Filled ${f.totalSz} ${baseAsset} @ $${parseFloat(f.avgPx).toFixed(4)} avg`;
+        } else if (firstStatus?.resting) {
+          msg = `Limit order placed (ID: ${firstStatus.resting.oid})`;
+        }
+
+        setSuccess(msg);
+        setTimeout(() => setSuccess(null), 5000);
         
         // Reset form
         setAmount('');

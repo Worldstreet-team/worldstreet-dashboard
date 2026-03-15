@@ -190,7 +190,19 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
       const result = await response.json();
 
       if (result.success) {
-        setSuccess(`${side === 'buy' ? 'Buy' : 'Sell'} order placed successfully!`);
+        // Parse HL response to show fill details
+        const statuses = result.data?.response?.data?.statuses;
+        const firstStatus = statuses?.[0];
+        let msg = `${side === 'buy' ? 'Buy' : 'Sell'} order placed successfully!`;
+
+        if (firstStatus?.filled) {
+          const f = firstStatus.filled;
+          msg = `Filled ${f.totalSz} ${tokenIn} @ $${parseFloat(f.avgPx).toFixed(4)} avg`;
+        } else if (firstStatus?.resting) {
+          msg = `Limit order placed (ID: ${firstStatus.resting.oid})`;
+        }
+
+        setSuccess(msg);
 
         // Clear form
         setAmount('');
