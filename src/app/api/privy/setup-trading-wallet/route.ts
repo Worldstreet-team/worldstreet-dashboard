@@ -264,14 +264,13 @@ export async function POST(request: NextRequest) {
     // Step 6: Create Viem account for trading with authorization context
     let viemAccount;
     try {
-      // Create Viem account - the authorization context is handled internally by Privy
       viemAccount = createViemAccount(privyNode, {
         walletId: tradingWallet.id,
         address: tradingWallet.address as `0x${string}`,
+        authorizationContext: authorizationContext,
       });
 
       console.log('[Trading Wallet] Created Viem account:', viemAccount.address);
-      console.log('[Trading Wallet] Authorization context will be used for transaction signing');
     } catch (viemError) {
       console.error('[Trading Wallet] Failed to create Viem account:', viemError);
       return NextResponse.json(
