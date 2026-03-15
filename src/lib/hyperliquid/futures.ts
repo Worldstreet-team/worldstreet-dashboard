@@ -25,15 +25,9 @@ export class HyperliquidFuturesService {
   }
 
   createExchangeClient(privateKey: string) {
-    const walletClient = createWalletClient({
-      chain: arbitrum,
-      transport: http()
-    });
-
-    return new ExchangeClient({
-      transport: this.transport,
-      wallet: walletClient
-    });
+    // For now, return a placeholder since we need proper wallet integration
+    // This will be implemented when we add order placement functionality
+    throw new Error('Exchange client creation not yet implemented - requires proper Privy wallet integration');
   }
 
   /* -------------------------------- */
@@ -47,13 +41,13 @@ export class HyperliquidFuturesService {
     ]);
 
     return meta.universe
-      .filter((asset: any) => asset.name.includes('-PERP'))
-      .map((asset: any) => ({
-        symbol: asset.name,
-        base: asset.name.split('/')[0] || asset.name.replace('-PERP', ''),
-        quote: asset.name.split('/')[1] || 'USD',
+      .filter((asset: any) => !asset.isDelisted) // Filter out delisted assets
+      .map((asset: any, index: number) => ({
+        symbol: `${asset.name}-PERP`, // Add -PERP suffix for display
+        base: asset.name,
+        quote: 'USD',
         price: Number(mids[asset.name] || 0),
-        assetIndex: asset.index,
+        assetIndex: index, // Use array index as asset index
         szDecimals: asset.szDecimals,
         maxLeverage: asset.maxLeverage ?? null,
         isolatedOnly: asset.onlyIsolated ?? false
@@ -100,21 +94,19 @@ export class HyperliquidFuturesService {
   /* -------------------------------- */
 
   async placeOrder(privateKey: string, orderParams: any) {
-    const exchange = this.createExchangeClient(privateKey);
-    return exchange.order(orderParams);
+    // This will be implemented when exchange client is properly set up
+    throw new Error('Order placement not yet implemented - requires proper Privy wallet integration');
   }
 
   async cancelOrder(privateKey: string, cancelParams: any) {
-    const exchange = this.createExchangeClient(privateKey);
-    return exchange.cancel(cancelParams);
+    // This will be implemented when exchange client is properly set up  
+    throw new Error('Order cancellation not yet implemented - requires proper Privy wallet integration');
   }
 
   async cancelAllOrders(privateKey: string, coin?: string) {
     const exchange = this.createExchangeClient(privateKey);
-    return exchange.cancelByCloid({
-      asset: coin || null,
-      cloid: null
-    });
+    // This will be implemented when exchange client is properly set up
+    throw new Error('Cancel all orders not yet implemented');
   }
 }
 
