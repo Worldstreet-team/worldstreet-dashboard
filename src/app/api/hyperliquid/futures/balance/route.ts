@@ -1,40 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { hyperliquidFutures } from "@/lib/hyperliquid/futures";
-import { privyClient } from "@/lib/privy/client";
+import { verifyClerkJWT } from "@/lib/auth/clerk";
+import { connectDB } from "@/lib/mongodb";
+import { UserWallet } from "@/models/UserWallet";
 
 /**
- * GET /api/hyperliquid/futures/balance?userId={clerkUserId}
+ * GET /api/hyperliquid/futures/balance
  * Get Hyperliquid futures account balance and positions
  */
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
-
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'User ID parameter is required' },
-        { status: 400 }
-      );
-    }
-
+    // Verify Clerk authentication
+    const { userId } = await verifyClerkJWT(request);
     console.log('[Hyperliquid Futures Balance] Fetching balance for user:', userId);
 
-    // Get user's Ethereum wallet from Privy
-    const user = await (privyClient as any).users().get(userId);
-    const accounts = (user as any).linked_accounts || [];
-    const ethereumWallet = accounts.find(
-      (account: any) => account.type === 'wallet' && account.chain_type === 'ethereum'
-    );
+    // Connect to database and get user's wallet
+    await connectDB();
+    const userWallet = await UserWallet.findOne({ clerkUserId: userId });
 
-    if (!ethereumWallet) {
+    if (!userWallet || !userWallet.chains?.arbitrum?.address) {
       return NextResponse.json(
-        { error: 'No Ethereum wallet found for user' },
+        { error: 'No Arbitrum wallet found for user. Please set up futures wallet first.' },
         { status: 404 }
       );
     }
 
-    const address = (ethereumWallet as any).address;
+    const address = userWallet.chains.arbitrum.address;
     console.log('[Hyperliquid Futures Balance] Using wallet address:', address);
 
     // Get account state from Hyperliquid

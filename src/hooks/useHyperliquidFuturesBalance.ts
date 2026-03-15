@@ -25,7 +25,6 @@ interface UseHyperliquidFuturesBalanceResult {
 }
 
 export function useHyperliquidFuturesBalance(
-  userId?: string, 
   enabled = true
 ): UseHyperliquidFuturesBalanceResult {
   const [accountValue, setAccountValue] = useState(0);
@@ -40,13 +39,13 @@ export function useHyperliquidFuturesBalance(
   const [error, setError] = useState<string | null>(null);
 
   const fetchBalance = useCallback(async () => {
-    if (!enabled || !userId) return;
+    if (!enabled) return;
 
     try {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`/api/hyperliquid/futures/balance?userId=${userId}`);
+      const response = await fetch('/api/hyperliquid/futures/balance');
       const data = await response.json();
 
       if (!data.success) {
@@ -68,7 +67,7 @@ export function useHyperliquidFuturesBalance(
     } finally {
       setLoading(false);
     }
-  }, [userId, enabled]);
+  }, [enabled]);
 
   useEffect(() => {
     fetchBalance();

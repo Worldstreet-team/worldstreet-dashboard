@@ -28,22 +28,25 @@ export default function FuturesOrderBook({ symbol }: FuturesOrderBookProps) {
       try {
         setLoading(true);
         
-        // Convert futures symbol to Gate.io format
-        // BTC-PERP -> BTC_USDT, ANIME-PERP -> ANIME_USDT
-        const cleanBase = symbol.replace('-PERP', '').replace(/[-_/]/g, '').replace(/(USDT|USDC|USD)$/, '').toUpperCase();
-        const normalizedSymbol = `${cleanBase}_USDT`;
+        // Convert futures symbol to Hyperliquid format
+        // BTC-PERP -> BTC, ANIME-PERP -> ANIME
+        const cleanBase = symbol.replace('-PERP', '');
         
-        const response = await fetch(`/api/orderbook?symbol=${normalizedSymbol}`);
+        const response = await fetch(`/api/hyperliquid/futures/orderbook?coin=${cleanBase}`);
         const data = await response.json();
 
-        if (data.success && data.data) {
-          const { bids: rawBids, asks: rawAsks } = data.data;
+        if (data.success && data.data && data.data.orderbook) {
+          const { levels } = data.data.orderbook;
+          
+          // Hyperliquid format: levels[0] = bids, levels[1] = asks
+          const rawBids = levels[0] || [];
+          const rawAsks = levels[1] || [];
 
           const processEntries = (entries: any[], isAsk: boolean) => {
             let cumulativeTotal = 0;
             const processed = entries.slice(0, 20).map((entry: any) => {
-              const price = parseFloat(entry[0]);
-              const amount = parseFloat(entry[1]);
+              const price = parseFloat(entry.px);
+              const amount = parseFloat(entry.sz);
               const total = price * amount;
               cumulativeTotal += total;
               return { price, amount, total, depthPercent: 0 };

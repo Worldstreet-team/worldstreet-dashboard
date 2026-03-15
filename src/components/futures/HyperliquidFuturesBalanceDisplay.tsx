@@ -2,16 +2,16 @@
 
 import { Icon } from '@iconify/react';
 import { useHyperliquidFuturesBalance } from '@/hooks/useHyperliquidFuturesBalance';
+import { useUser } from '@clerk/nextjs';
 
 interface HyperliquidFuturesBalanceDisplayProps {
-  userId?: string;
   className?: string;
 }
 
 export default function HyperliquidFuturesBalanceDisplay({ 
-  userId, 
   className = '' 
 }: HyperliquidFuturesBalanceDisplayProps) {
+  const { user, isLoaded } = useUser();
   const { 
     accountValue,
     totalMarginUsed,
@@ -21,9 +21,9 @@ export default function HyperliquidFuturesBalanceDisplay({
     loading, 
     error, 
     refetch 
-  } = useHyperliquidFuturesBalance(userId, !!userId);
+  } = useHyperliquidFuturesBalance(isLoaded && !!user);
 
-  if (!userId) {
+  if (!isLoaded || !user) {
     return (
       <div className={`flex items-center gap-2 text-[#848e9c] ${className}`}>
         <Icon icon="ph:wallet" width={16} />

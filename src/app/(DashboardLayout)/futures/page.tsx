@@ -405,7 +405,6 @@ export default function HyperliquidFuturesPage() {
           <div className="flex items-center gap-4">
             {isLoaded && user ? (
               <HyperliquidFuturesBalanceDisplay 
-                userId={user.id}
                 className="text-[12px]"
               />
             ) : (
