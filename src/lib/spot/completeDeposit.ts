@@ -14,7 +14,6 @@ import { bridgeToHyperliquid } from "@/lib/hyperliquid/bridge";
 import { usdClassTransfer } from "@/lib/hyperliquid/usdTransfer";
 import { privyClient } from "@/lib/privy/client";
 import { createAuthorizationContext } from "@/lib/privy/authorization";
-import { ensureWalletHasSigner } from "@/lib/privy/ensureWalletSigner";
 import { HttpTransport, InfoClient } from "@nktkas/hyperliquid";
 
 const HL_BALANCE_POLL_INTERVAL_MS = 5_000;
@@ -130,9 +129,6 @@ export async function completeDeposit({
   const authContext = await createAuthorizationContext(clerkJwt);
   const { walletId, address: walletAddress } = userWallet.tradingWallet;
   const amount = deposit.disbursedAmount || deposit.depositAmount;
-
-  // Ensure the trading wallet has the server auth signer
-  await ensureWalletHasSigner(walletId);
 
   // Stage 1: Bridge to Hyperliquid (trading wallet → HL Bridge2)
   if (deposit.status === "disbursed") {

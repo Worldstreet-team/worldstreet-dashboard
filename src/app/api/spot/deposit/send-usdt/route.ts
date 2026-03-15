@@ -5,7 +5,6 @@ import { UserWallet } from "@/models/UserWallet";
 import SpotDeposit from "@/models/SpotDeposit";
 import { privyClient } from "@/lib/privy/client";
 import { createAuthorizationContext, type AuthorizationContext } from "@/lib/privy/authorization";
-import { ensureWalletHasSigner } from "@/lib/privy/ensureWalletSigner";
 import { encodeFunctionData, parseUnits } from "viem";
 import {
   Connection,
@@ -220,10 +219,6 @@ export async function POST(request: NextRequest) {
     // Update status to sending
     deposit.status = "sending_usdt";
     await deposit.save();
-
-    // Ensure the wallet has our server auth key as an additional signer
-    // (required for server-side transactions via authorization_private_keys)
-    await ensureWalletHasSigner(sourceWallet.walletId);
 
     // Get Privy authorization context from Clerk JWT
     const authContext = await createAuthorizationContext(clerkJwt);

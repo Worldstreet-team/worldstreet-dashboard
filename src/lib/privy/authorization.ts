@@ -1,48 +1,65 @@
 /**
  * Privy Authorization Context Utilities
  *
- * Uses the PRIVY_AUTH_PRIVATE_KEY registered in the Privy Dashboard
- * to authorize wallet operations. The SDK expects the key in DER format
- * (base64 string, no PEM headers/footers). If the .env stores PEM format,
- * we strip the headers and whitespace to produce raw DER base64.
+ * Authenticates with Privy using the user's Clerk JWT to obtain
+ * a per-session authorization key for wallet operations.
  */
 
 export interface AuthorizationContext {
-  authorization_private_keys: string[];
+  authorization_private_keys?: string[];
+  user_jwts?: string[];
 }
 
 /**
- * Read the authorization private key from env and ensure it's in DER base64 format.
- * The Privy SDK's `authorization_private_keys` expects raw base64-encoded DER
- * (same format as `generateP256KeyPair()` returns — no PEM headers/footers).
+ * Call Privy's authenticate endpoint with a Clerk JWT to get
+ * a per-session authorization key for wallet operations.
  */
-function getPrivyAuthKey(): string {
-  const raw = process.env.PRIVY_AUTH_PRIVATE_KEY;
-  if (!raw) {
-    throw new Error("PRIVY_AUTH_PRIVATE_KEY is not set");
-  }
-  // .env may store literal \n — convert to real newlines first
-  const normalized = raw.replace(/\\n/g, "\n");
+async function getUserAuthKey(clerkJwt: string): Promise<string> {
+  const appId = process.env.PRIVY_APP_ID;
+  const appSecret = process.env.PRIVY_APP_SECRET;
 
-  // If key is in PEM format, strip headers/footers/whitespace → raw DER base64
-  if (normalized.includes("-----BEGIN")) {
-    return normalized
-      .replace(/-----BEGIN[^-]+-----/g, "")
-      .replace(/-----END[^-]+-----/g, "")
-      .replace(/\s+/g, "");
+  if (!appId || !appSecret) {
+    throw new Error("PRIVY_APP_ID or PRIVY_APP_SECRET is not set");
   }
 
-  // Already in DER base64 format
-  return normalized.trim();
+  const authResponse = await fetch('https://api.privy.io/v1/wallets/authenticate', {
+    method: 'POST',
+    headers: {
+      Authorization: `Basic ${Buffer.from(
+        `${appId}:${appSecret}`
+      ).toString('base64')}`,
+      'Content-Type': 'application/json',
+      'privy-app-id': appId,
+    },
+    body: JSON.stringify({
+      user_jwt: clerkJwt,
+    }),
+  });
+
+  if (!authResponse.ok) {
+    const authError = await authResponse.text();
+    console.error('[Privy Auth] Authentication failed:', authError);
+    throw new Error(`Failed to authenticate with Privy: ${authResponse.status}`);
+  }
+
+  const authData = await authResponse.json();
+  const userKey = authData.authorization_key;
+
+  if (!userKey) {
+    throw new Error('No authorization key returned from Privy authentication');
+  }
+
+  return userKey;
 }
 
 /**
  * Create authorization context for Privy wallet operations.
- * Uses the app-level authorization private key (DER format).
+ * Uses the Clerk JWT to authenticate with Privy and obtain an authorization key.
  */
-export function createAuthorizationContext(_clerkJwt?: string): AuthorizationContext {
+export async function createAuthorizationContext(clerkJwt: string): Promise<AuthorizationContext> {
+  const userKey = await getUserAuthKey(clerkJwt);
   return {
-    authorization_private_keys: [getPrivyAuthKey()],
+    authorization_private_keys: [userKey],
   };
 }
 
@@ -52,9 +69,11 @@ export function createAuthorizationContext(_clerkJwt?: string): AuthorizationCon
 export function validateAuthorizationContext(context: AuthorizationContext): boolean {
   return !!(
     context &&
-    context.authorization_private_keys &&
-    Array.isArray(context.authorization_private_keys) &&
-    context.authorization_private_keys.length > 0 &&
-    context.authorization_private_keys[0]
+    ((context.authorization_private_keys &&
+      context.authorization_private_keys.length > 0 &&
+      context.authorization_private_keys[0]) ||
+     (context.user_jwts &&
+      context.user_jwts.length > 0 &&
+      context.user_jwts[0]))
   );
 }
