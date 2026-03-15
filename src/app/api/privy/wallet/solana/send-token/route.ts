@@ -4,6 +4,7 @@ import { connectDB } from "@/lib/mongodb";
 import { UserWallet } from "@/models/UserWallet";
 import { privyClient } from "@/lib/privy/client";
 import { createAuthorizationContext } from "@/lib/privy/authorization";
+import { ensureWalletHasSigner } from "@/lib/privy/ensureWalletSigner";
 import {
   Connection,
   PublicKey,
@@ -101,6 +102,7 @@ export async function POST(request: NextRequest) {
       .toString("base64");
 
     // Sign and send via Privy
+    await ensureWalletHasSigner(walletId);
     const authContext = await createAuthorizationContext(clerkJwt);
 
     const result = await (privyClient.wallets() as any)

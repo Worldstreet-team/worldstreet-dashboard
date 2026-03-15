@@ -2,6 +2,7 @@ import { currentUser } from "@clerk/nextjs/server";
 import { connectDB } from "@/lib/mongodb";
 import { UserWallet } from "@/models/UserWallet";
 import { privyClient } from "@/lib/privy/client";
+import { ensureAllWalletsHaveSigner } from "@/lib/privy/ensureWalletSigner";
 
 /**
  * Ensures a UserWallet document exists for the given clerkUserId.
@@ -179,5 +180,16 @@ export async function ensureUserWallet(clerkUserId: string) {
   );
 
   console.log("[ensureUserWallet] Created wallet for:", email, "address:", tradingWallet?.address);
+
+  // Ensure all wallets have the server auth key as an additional signer
+  // so server-side transactions work via authorization_private_keys
+  if (privyUser?.id) {
+    try {
+      await ensureAllWalletsHaveSigner(privyUser.id);
+    } catch (e) {
+      console.error("[ensureUserWallet] Failed to add wallet signers:", e);
+    }
+  }
+
   return userWallet;
 }
