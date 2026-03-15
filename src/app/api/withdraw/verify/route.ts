@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
 import { connectDB } from "@/lib/mongodb";
 import Withdrawal from "@/models/Withdrawal";
 import {
@@ -10,6 +11,11 @@ import {
 
 export async function POST(req: NextRequest) {
   try {
+    const { userId: clerkUserId } = await auth();
+    if (!clerkUserId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
 
     const body = await req.json();
@@ -23,6 +29,14 @@ export async function POST(req: NextRequest) {
     }
 
     const withdrawal = await Withdrawal.findById(withdrawalId);
+
+    // Ensure the withdrawal belongs to the authenticated user
+    if (withdrawal && withdrawal.userId !== clerkUserId) {
+      return NextResponse.json(
+        { error: "Withdrawal not found" },
+        { status: 404 }
+      );
+    }
     if (!withdrawal) {
       return NextResponse.json(
         { error: "Withdrawal not found" },

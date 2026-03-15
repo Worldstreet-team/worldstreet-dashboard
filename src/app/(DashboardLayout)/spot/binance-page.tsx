@@ -16,6 +16,8 @@ import MobileTradingModal from '@/components/spot/MobileTradingModal';
 import PositionsPanel from '@/components/spot/PositionsPanel';
 import MobileTokenSearchModal from '@/components/spot/MobileTokenSearchModal';
 import HyperliquidBalanceDisplay from '@/components/spot/HyperliquidBalanceDisplay';
+import SpotDepositModal from '@/components/spot/SpotDepositModal';
+import SpotWithdrawModal from '@/components/spot/SpotWithdrawModal';
 import { useHyperliquidMarkets } from '@/hooks/useHyperliquidMarkets';
 
 interface PairData {
@@ -73,6 +75,9 @@ export default function BinanceSpotPage() {
   const [mobileOrderSide, setMobileOrderSide] = useState<'buy' | 'sell'>('buy');
   const [showTokenSearchModal, setShowTokenSearchModal] = useState(false);
   const [mobileActiveTab, setMobileActiveTab] = useState<'chart' | 'orderbook' | 'trades' | 'positions'>('chart');
+  const [showDepositModal, setShowDepositModal] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [balanceRefreshKey, setBalanceRefreshKey] = useState(0);
 
   // Update pair data when Hyperliquid markets change
   useEffect(() => {
@@ -101,6 +106,10 @@ export default function BinanceSpotPage() {
       setSelectedPair(pair);
     }
   }, [searchParams, AVAILABLE_PAIRS]);
+
+  const refreshBalances = useCallback(() => {
+    setBalanceRefreshKey((k) => k + 1);
+  }, []);
 
   const handlePairSelect = useCallback((pair: string) => {
     // Extract base asset from pair (e.g., "BTC-USD" -> "BTC")
@@ -239,6 +248,20 @@ export default function BinanceSpotPage() {
 
         {/* Mobile Trading Buttons */}
         <div className="flex-shrink-0 p-4 bg-[#181a20] border-t border-[#2b3139]">
+          <div className="grid grid-cols-2 gap-2 mb-2">
+            <button
+              onClick={() => setShowDepositModal(true)}
+              className="py-2 bg-[#f0b90b] hover:bg-[#f0b90b]/90 text-black font-semibold text-sm rounded-lg transition-colors"
+            >
+              Deposit
+            </button>
+            <button
+              onClick={() => setShowWithdrawModal(true)}
+              className="py-2 bg-[#2b3139] hover:bg-[#3b4149] text-white font-semibold text-sm rounded-lg transition-colors border border-[#3b4149]"
+            >
+              Withdraw
+            </button>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={() => handleMobileTrade('buy')}
@@ -310,10 +333,25 @@ export default function BinanceSpotPage() {
             </div>
           </div>
 
-          {/* Right: Account Status */}
+          {/* Right: Account Status + Deposit/Withdraw */}
           <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowDepositModal(true)}
+                className="px-3 py-1.5 bg-[#f0b90b] hover:bg-[#f0b90b]/90 text-black text-xs font-semibold rounded transition-colors"
+              >
+                Deposit
+              </button>
+              <button
+                onClick={() => setShowWithdrawModal(true)}
+                className="px-3 py-1.5 bg-[#2b3139] hover:bg-[#3b4149] text-white text-xs font-semibold rounded transition-colors border border-[#3b4149]"
+              >
+                Withdraw
+              </button>
+            </div>
             {isLoaded && user ? (
               <HyperliquidBalanceDisplay
+                key={balanceRefreshKey}
                 userId={user.id}
                 className="text-[12px]"
               />
@@ -378,6 +416,18 @@ export default function BinanceSpotPage() {
         side={mobileOrderSide}
         selectedPair={`${pairData.name}-USD`}
         chain="ethereum"
+      />
+
+      <SpotDepositModal
+        isOpen={showDepositModal}
+        onClose={() => setShowDepositModal(false)}
+        onDepositComplete={refreshBalances}
+      />
+
+      <SpotWithdrawModal
+        isOpen={showWithdrawModal}
+        onClose={() => setShowWithdrawModal(false)}
+        onWithdrawComplete={refreshBalances}
       />
 
       <MobileTokenSearchModal

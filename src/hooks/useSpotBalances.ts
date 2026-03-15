@@ -37,26 +37,22 @@ export function useSpotBalances(
       const data = await response.json();
 
       if (data.success) {
-        // Use accountValue (Total Equity) for the quote balance if available
-        if (data.data.accountValue !== undefined) {
-          setQuoteBalance(data.data.accountValue);
-        }
-
         if (data.data.balances) {
           const balances = data.data.balances;
           
-          // Find base asset balance
+          // Find base asset balance from spot balances
           const base = balances.find((b: any) => b.coin === baseAsset);
           setBaseBalance(base ? base.available : 0);
           
-          // Fallback if accountValue wasn't found (for quoteBalance)
-          if (data.data.accountValue === undefined) {
-             const quote = balances.find((b: any) => b.coin === quoteAsset || (quoteAsset === 'USD' && b.coin === 'USDC'));
-             setQuoteBalance(quote ? quote.total : 0);
-          }
+          // Quote balance = Spot USDC (from spotClearinghouseState), NOT Perps accountValue.
+          // HL spot orders deduct from Spot USDC, not Perps equity.
+          const quoteSpot = balances.find((b: any) => b.coin === 'USDC' || (quoteAsset !== 'USD' && b.coin === quoteAsset));
+          setQuoteBalance(quoteSpot ? quoteSpot.available : 0);
+        } else {
+          setBaseBalance(0);
+          setQuoteBalance(0);
         }
       } else {
-        // Fallback or error
         setBaseBalance(0);
         setQuoteBalance(0);
       }
@@ -70,6 +66,8 @@ export function useSpotBalances(
 
   useEffect(() => {
     fetchBalances();
+    const interval = setInterval(fetchBalances, 10_000);
+    return () => clearInterval(interval);
   }, [fetchBalances]);
 
   return {

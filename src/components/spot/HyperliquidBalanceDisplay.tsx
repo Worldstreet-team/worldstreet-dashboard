@@ -75,25 +75,29 @@ export default function HyperliquidBalanceDisplay({
     );
   }
 
+  // Spot USDC available + Perps equity = total value
+  const spotAvailable = usdcBalance.available;
+  const totalValue = spotAvailable + accountValue;
+
   return (
     <div className={`flex items-center gap-3 ${className}`}>
-      {/* USDC Balance */}
+      {/* Spot USDC Balance */}
       <div className="flex items-center gap-2">
         <Icon icon="cryptocurrency:usdc" width={16} className="text-[#2775ca]" />
         <div className="flex flex-col">
           <span className="text-xs font-medium text-white">
-            ${accountValue.toFixed(2)}
+            ${spotAvailable.toFixed(2)}
           </span>
           <span className="text-[9px] text-[#848e9c]">
-            Total Balance
+            Spot Balance
           </span>
         </div>
       </div>
 
-      {/* Account Value */}
+      {/* Total Value (Spot + Perps) */}
       <div className="flex flex-col">
         <span className="text-xs font-medium text-white">
-          ${accountValue.toFixed(2)}
+          ${totalValue.toFixed(2)}
         </span>
         <span className="text-[9px] text-[#848e9c]">
           Total Value

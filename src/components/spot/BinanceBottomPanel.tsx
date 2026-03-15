@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Icon } from '@iconify/react';
 import OrderHistory from './OrderHistory';
 import PositionsList from './PositionsList';
+import { useOpenOrders } from '@/hooks/useOpenOrders';
 
 type TabType = 'open-orders' | 'order-history' | 'trade-history' | 'holdings';
 
@@ -19,9 +20,10 @@ export default function BinanceBottomPanel({
   onPositionTPSLUpdate
 }: BinanceBottomPanelProps) {
   const [activeTab, setActiveTab] = useState<TabType>('open-orders');
+  const { orders, loading, cancellingId, cancelOrder, cancelAll } = useOpenOrders();
 
   const tabs = [
-    { id: 'open-orders' as TabType, label: 'Open Orders', count: 0 },
+    { id: 'open-orders' as TabType, label: 'Open Orders', count: orders.length },
     { id: 'order-history' as TabType, label: 'Order History' },
     { id: 'trade-history' as TabType, label: 'Trade History' },
     { id: 'holdings' as TabType, label: 'Holdings' },
@@ -57,21 +59,75 @@ export default function BinanceBottomPanel({
             />
             <span>Hide Other Pairs</span>
           </label>
-          <button className="text-xs text-[#848e9c] hover:text-white transition-colors">
-            Cancel All
-          </button>
+          {orders.length > 0 && (
+            <button
+              onClick={cancelAll}
+              className="text-xs text-red-400 hover:text-red-300 transition-colors"
+            >
+              Cancel All
+            </button>
+          )}
         </div>
       </div>
 
       {/* Tab Content */}
       <div className="max-h-[20vh] overflow-auto scrollbar-hide">
-        {activeTab === 'open-orders' && (
+        {activeTab === 'open-orders' && orders.length === 0 && (
           <div className="p-8 text-center">
             <div className="w-16 h-16 rounded-full bg-[#1e2329] flex items-center justify-center mx-auto mb-4">
               <Icon icon="ph:file-text" className="text-[#848e9c]" width={32} />
             </div>
-            <p className="text-sm text-[#848e9c]">You have no open orders</p>
+            <p className="text-sm text-[#848e9c]">
+              {loading ? 'Loading orders...' : 'You have no open orders'}
+            </p>
           </div>
+        )}
+
+        {activeTab === 'open-orders' && orders.length > 0 && (
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-[#848e9c] border-b border-[#1e2329]">
+                <th className="text-left px-4 py-2 font-medium">Pair</th>
+                <th className="text-left px-2 py-2 font-medium">Side</th>
+                <th className="text-left px-2 py-2 font-medium">Type</th>
+                <th className="text-right px-2 py-2 font-medium">Price</th>
+                <th className="text-right px-2 py-2 font-medium">Amount</th>
+                <th className="text-right px-2 py-2 font-medium">Filled</th>
+                <th className="text-right px-2 py-2 font-medium">Time</th>
+                <th className="text-right px-4 py-2 font-medium">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {orders.map((order) => (
+                <tr key={order.oid} className="border-b border-[#1e2329]/50 hover:bg-[#1e2329]/30">
+                  <td className="px-4 py-2 font-medium text-white">{order.coin}</td>
+                  <td className={`px-2 py-2 font-medium ${
+                    order.side === 'B' ? 'text-[#0ecb81]' : 'text-[#f6465d]'
+                  }`}>
+                    {order.side === 'B' ? 'Buy' : 'Sell'}
+                  </td>
+                  <td className="px-2 py-2 text-[#848e9c]">{order.orderType}</td>
+                  <td className="px-2 py-2 text-right text-white">{order.limitPx}</td>
+                  <td className="px-2 py-2 text-right text-white">{order.origSz}</td>
+                  <td className="px-2 py-2 text-right text-[#848e9c]">
+                    {(parseFloat(order.origSz) - parseFloat(order.sz)).toFixed(6)}
+                  </td>
+                  <td className="px-2 py-2 text-right text-[#848e9c]">
+                    {new Date(order.timestamp).toLocaleTimeString()}
+                  </td>
+                  <td className="px-4 py-2 text-right">
+                    <button
+                      onClick={() => cancelOrder(order.coin, order.oid)}
+                      disabled={cancellingId === order.oid}
+                      className="text-red-400 hover:text-red-300 disabled:opacity-50"
+                    >
+                      {cancellingId === order.oid ? '...' : 'Cancel'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
 
         {activeTab === 'order-history' && (

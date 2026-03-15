@@ -15,7 +15,7 @@ Provide project context and coding guidelines that AI should follow when generat
 When the user requests a new feature or change, **always ask detailed clarifying questions before writing code**. Do not assume intent. Specifically:
 
 1. **Functional Requirements**: Ask what exact behavior is expected. What should happen on user interaction? What edge cases should be handled?
-2. **Data Sources**: Ask where the data comes from. Is it from an API, local state, mock data, or `crypto-test-1`'s existing data layer?
+2. **Data Sources**: Ask where the data comes from. Is it from an API, local state, mock data, 
 3. **UI/UX Details**: Ask about layout preferences, responsive behavior, animations, loading states, empty states, and error states.
 4. **Integration Points**: Ask how this feature connects to existing components, pages, or services in the dashboard.
 5. **Authentication/Authorization**: Ask if the feature requires user authentication or role-based access.

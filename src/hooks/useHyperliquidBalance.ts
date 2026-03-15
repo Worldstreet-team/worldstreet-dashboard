@@ -45,7 +45,7 @@ export function useHyperliquidBalance(userId?: string, enabled = true): UseHyper
       setError(null);
 
       console.log('[useHyperliquidBalance] Fetching balance for user:', userId, 'with address:', addresses.ethereum);
-      const response = await fetch(`/api/hyperliquid/balance?userId=${userId}`);
+      const response = await fetch(`/api/hyperliquid/balance`);
       
       // Handle the case where the API might still return 404 despite our checks
       if (response.status === 404) {
@@ -75,6 +75,10 @@ export function useHyperliquidBalance(userId?: string, enabled = true): UseHyper
 
   useEffect(() => {
     fetchBalance();
+
+    // Auto-poll every 15 seconds to keep header balance fresh
+    const interval = setInterval(fetchBalance, 15_000);
+    return () => clearInterval(interval);
   }, [fetchBalance]);
 
   return {

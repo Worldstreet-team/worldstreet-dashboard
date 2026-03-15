@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/app/context/authContext';
 import { useSpotBalances } from '@/hooks/useSpotBalances';
 import { useHyperliquidMarkets } from '@/hooks/useHyperliquidMarkets';
+import SpotOrderProcessingModal from './SpotOrderProcessingModal';
 
 interface BinanceOrderFormProps {
   selectedPair: string;
@@ -46,6 +47,9 @@ export default function BinanceOrderForm({
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [currentMarketPrice, setCurrentMarketPrice] = useState(0);
+  const [showProcessingModal, setShowProcessingModal] = useState(false);
+  const [processingStatus, setProcessingStatus] = useState<'processing' | 'success' | 'error'>('processing');
+  const [processingError, setProcessingError] = useState('');
 
   // Extract base and quote assets from pair
   const [baseAsset, quoteAsset] = selectedPair.split('-');
@@ -133,6 +137,9 @@ export default function BinanceOrderForm({
     try {
       setIsLoading(true);
       setError(null);
+      setShowProcessingModal(true);
+      setProcessingStatus('processing');
+      setProcessingError('');
 
       const response = await fetch('/api/hyperliquid/order', {
         method: 'POST',
@@ -150,8 +157,7 @@ export default function BinanceOrderForm({
       const result = await response.json();
       
       if (result.success) {
-        // Show success message
-        alert(`${activeTab.toUpperCase()} order for ${amount} ${baseAsset} submitted successfully!`);
+        setProcessingStatus('success');
         
         // Reset form
         setAmount('');
@@ -171,6 +177,8 @@ export default function BinanceOrderForm({
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to submit order';
       setError(errorMessage);
+      setProcessingStatus('error');
+      setProcessingError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -356,6 +364,16 @@ export default function BinanceOrderForm({
           {isLoading ? 'Processing...' : `${activeTab.toUpperCase()} ${baseAsset}`}
         </button>
       </div>
+
+      <SpotOrderProcessingModal
+        isOpen={showProcessingModal}
+        onClose={() => setShowProcessingModal(false)}
+        status={processingStatus}
+        side={activeTab}
+        pair={selectedPair}
+        amount={amount}
+        error={processingError}
+      />
     </div>
   );
 }

@@ -132,9 +132,21 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
       }
     }
 
-    if (parseFloat(amount) > currentBalance) {
-      setError(`Insufficient ${currentToken} balance`);
-      return;
+    // For buy orders, check total (amount × price) against quote balance
+    // For sell orders, check amount against base balance
+    if (side === 'buy') {
+      const totalCost = orderType === 'market'
+        ? parseFloat(amount) * currentMarketPrice
+        : parseFloat(amount) * parseFloat(price);
+      if (totalCost > currentBalance) {
+        setError(`Insufficient ${currentToken} balance (need ~${totalCost.toFixed(2)})`);
+        return;
+      }
+    } else {
+      if (parseFloat(amount) > currentBalance) {
+        setError(`Insufficient ${currentToken} balance`);
+        return;
+      }
     }
 
     // For Hyperliquid, we skip the "quote" step as it's a direct order

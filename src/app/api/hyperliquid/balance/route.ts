@@ -7,21 +7,17 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 /**
  * GET /api/hyperliquid/balance
  * Get Hyperliquid account balance (USDC and other assets)
- * Accepts userId parameter (Clerk user ID) or uses auth session
+ * Uses the authenticated Clerk session — no userId param accepted.
  */
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    let clerkUserIdQuery = searchParams.get('userId');
-
-    // Get auth session for fallback or verification
-    const { userId: authUserId } = await auth();
-    const clerkUserId = clerkUserIdQuery || authUserId;
+    // Always use the authenticated user's ID — ignore query params to prevent IDOR
+    const { userId: clerkUserId } = await auth();
 
     if (!clerkUserId) {
       return NextResponse.json(
-        { error: 'User ID is required (via parameter or session)' },
-        { status: 400 }
+        { error: 'Unauthorized' },
+        { status: 401 }
       );
     }
 

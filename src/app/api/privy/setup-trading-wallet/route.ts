@@ -112,15 +112,19 @@ export async function POST(request: NextRequest) {
         { type: 'email', address: email }
       ];
       
+      // Add server auth key as additional signer so server can transact on behalf of user
+      const walletAuthId = process.env.PRIVY_WALLET_AUTH_ID;
+      const signerConfig = walletAuthId ? [{ signer_id: walletAuthId }] : undefined;
+
       try {
         privyUser = await privyNode.users().create({
           linked_accounts: linkedAccounts,
           wallets: [
-            { chain_type: 'ethereum' },
-            { chain_type: 'solana' },
-            { chain_type: 'sui' },
-            { chain_type: 'ton' },
-            { chain_type: 'tron' }
+            { chain_type: 'ethereum', additional_signers: signerConfig } as any,
+            { chain_type: 'solana', additional_signers: signerConfig } as any,
+            { chain_type: 'sui' } as any,
+            { chain_type: 'ton' } as any,
+            { chain_type: 'tron' } as any,
           ]
         });
         console.log('[Trading Wallet] Created Privy user:', privyUser.id);

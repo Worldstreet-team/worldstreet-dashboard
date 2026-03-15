@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Icon } from '@iconify/react';
-import { useAuth } from '@/app/context/authContext';
+import { useOpenOrders } from '@/hooks/useOpenOrders';
 
 interface PositionsPanelProps {
   selectedPair?: string;
@@ -10,18 +10,12 @@ interface PositionsPanelProps {
 }
 
 export default function PositionsPanel({ selectedPair, onRefresh }: PositionsPanelProps) {
-  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'open' | 'history'>('open');
-  const [loading, setLoading] = useState(false);
-  const [positions, setPositions] = useState<any[]>([]);
+  const { orders, loading, cancellingId, cancelOrder, refetch } = useOpenOrders();
 
   const handleRefresh = () => {
-    setLoading(true);
-    // Placeholder for refresh logic
-    setTimeout(() => {
-      setLoading(false);
-      onRefresh?.();
-    }, 1000);
+    refetch();
+    onRefresh?.();
   };
 
   return (
@@ -39,7 +33,7 @@ export default function PositionsPanel({ selectedPair, onRefresh }: PositionsPan
                   : 'text-muted hover:text-dark dark:hover:text-white'
               }`}
             >
-              Open
+              Open ({orders.length})
             </button>
             <button
               onClick={() => setActiveTab('history')}
@@ -68,39 +62,77 @@ export default function PositionsPanel({ selectedPair, onRefresh }: PositionsPan
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
-        {positions.length === 0 ? (
+        {activeTab === 'open' && orders.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full p-6 text-center">
             <Icon icon="ph:chart-line" className="text-muted mb-3" width={48} />
             <h4 className="text-sm font-medium text-dark dark:text-white mb-1">
-              No {activeTab} positions
+              No open orders
             </h4>
             <p className="text-xs text-muted">
-              {activeTab === 'open' 
-                ? 'Start trading to see your open positions here'
-                : 'Your closed positions will appear here'
-              }
+              Start trading to see your open orders here
             </p>
           </div>
-        ) : (
+        )}
+
+        {activeTab === 'open' && orders.length > 0 && (
           <div className="p-3 space-y-2">
-            {positions.map((position, index) => (
+            {orders.map((order) => (
               <div
-                key={index}
+                key={order.oid}
                 className="p-3 bg-muted/10 dark:bg-white/5 rounded-lg border border-border dark:border-darkborder"
               >
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-semibold text-dark dark:text-white">
-                    {position.symbol || 'Unknown'}
-                  </span>
-                  <span className="text-xs text-muted">
-                    {position.status || 'Open'}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-dark dark:text-white">
+                      {order.coin}
+                    </span>
+                    <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+                      order.side === 'B'
+                        ? 'bg-green-500/10 text-green-500'
+                        : 'bg-red-500/10 text-red-500'
+                    }`}>
+                      {order.side === 'B' ? 'BUY' : 'SELL'}
+                    </span>
+                    <span className="text-[10px] text-muted">{order.orderType}</span>
+                  </div>
+                  <button
+                    onClick={() => cancelOrder(order.coin, order.oid)}
+                    disabled={cancellingId === order.oid}
+                    className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50"
+                  >
+                    {cancellingId === order.oid ? 'Cancelling...' : 'Cancel'}
+                  </button>
                 </div>
-                <div className="text-xs text-muted">
-                  No position data available
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div>
+                    <span className="text-muted">Price</span>
+                    <p className="text-dark dark:text-white font-medium">${order.limitPx}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted">Size</span>
+                    <p className="text-dark dark:text-white font-medium">{order.sz}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted">Time</span>
+                    <p className="text-dark dark:text-white font-medium">
+                      {new Date(order.timestamp).toLocaleTimeString()}
+                    </p>
+                  </div>
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {activeTab === 'history' && (
+          <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+            <Icon icon="ph:clock-clockwise" className="text-muted mb-3" width={48} />
+            <h4 className="text-sm font-medium text-dark dark:text-white mb-1">
+              No history yet
+            </h4>
+            <p className="text-xs text-muted">
+              Your closed positions will appear here
+            </p>
           </div>
         )}
       </div>
