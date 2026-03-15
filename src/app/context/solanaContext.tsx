@@ -318,17 +318,28 @@ export function SolanaProvider({ children }: { children: ReactNode}) {
     ): Promise<string> => {
       setLoading(true);
       try {
-        // TODO: Implement SPL token transfer via Privy API
-        // For now, this would need a custom endpoint that handles SPL tokens
-        throw new Error('SPL token transfers via Privy not yet implemented. Use native SOL transfers for now.');
-        
-        // Future implementation would call something like:
-        // const response = await fetch('/api/privy/wallet/solana/send-token', {
-        //   method: 'POST',
-        //   credentials: 'include',
-        //   headers: { 'Content-Type': 'application/json' },
-        //   body: JSON.stringify({ to: recipient, amount: amount.toString(), mint, decimals })
-        // });
+        const response = await fetch('/api/privy/wallet/solana/send-token', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: recipient, amount, mint, decimals }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || 'SPL token transfer failed');
+        }
+
+        const signature = data.signature;
+        setLastTx(signature);
+
+        // Refresh balance after transaction
+        if (address) {
+          await fetchBalance(address);
+        }
+
+        return signature;
       } catch (error) {
         console.error('Solana token send error:', error);
         throw error;
