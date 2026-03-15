@@ -45,9 +45,29 @@ export async function POST(request: NextRequest) {
 
     // Look up user's trading wallet
     const userWallet = await UserWallet.findOne({ clerkUserId });
-    if (!userWallet?.tradingWallet?.walletId || !userWallet?.tradingWallet?.address) {
+    if (!userWallet) {
       return NextResponse.json(
-        { error: "Trading wallet not initialized. Visit Portfolio first." },
+        { error: "Wallet not found. Please set up your account first." },
+        { status: 404 }
+      );
+    }
+
+    // Auto-populate tradingWallet from main ethereum wallet if missing
+    if ((!userWallet.tradingWallet?.walletId || !userWallet.tradingWallet?.address) &&
+        userWallet.wallets?.ethereum?.walletId && userWallet.wallets?.ethereum?.address) {
+      userWallet.tradingWallet = {
+        walletId: userWallet.wallets.ethereum.walletId,
+        address: userWallet.wallets.ethereum.address,
+        chainType: 'ethereum',
+        initialized: false,
+      };
+      await userWallet.save();
+      console.log('[Spot Deposit] Auto-populated tradingWallet from ethereum wallet:', userWallet.tradingWallet.address);
+    }
+
+    if (!userWallet.tradingWallet?.walletId || !userWallet.tradingWallet?.address) {
+      return NextResponse.json(
+        { error: "No Ethereum wallet found. Please visit Portfolio to set up your wallets." },
         { status: 404 }
       );
     }

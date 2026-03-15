@@ -141,31 +141,30 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
 
       if (asset.chain === "solana") {
         if (asset.address) {
-          // SPL token - not yet supported via Privy
-          throw new Error("SPL token transfers not yet supported. Use native SOL for now.");
+          // SPL token transfer
+          hash = await sendSolToken(recipient, amountNum, asset.address, asset.decimals);
         } else {
           // Native SOL
           hash = await sendSol(recipient, amountNum);
         }
       } else if (asset.chain === "ethereum" || asset.chain === "arbitrum") {
         if (asset.address) {
-          // ERC20 token - not yet supported via Privy
-          throw new Error("ERC20 token transfers not yet supported. Use native ETH for now.");
+          // ERC20 token transfer
+          hash = await sendEthToken(recipient, amountNum, asset.address, asset.decimals);
         } else {
           // Native ETH
           hash = await sendEth(recipient, amountNum);
         }
       } else if (asset.chain === "tron") {
         if (asset.address) {
-          // TRC20 token - not yet supported via Privy
-          throw new Error("TRC20 token transfers not yet supported. Use native TRX for now.");
+          // TRC20 token transfer
+          hash = await sendTrxToken(recipient, amountNum, asset.address, asset.decimals);
         } else {
           // Native TRX
           hash = await sendTrx(recipient, amountNum);
         }
       } else if (asset.chain === "sui") {
         if (asset.address) {
-          // SUI token - not yet supported via Privy
           throw new Error("SUI token transfers not yet supported. Use native SUI for now.");
         } else {
           // Native SUI

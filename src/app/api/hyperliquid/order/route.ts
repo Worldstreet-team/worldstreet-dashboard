@@ -30,8 +30,25 @@ export async function POST(request: NextRequest) {
     await connectDB();
     const userWallet = await UserWallet.findOne({ clerkUserId: authUserId });
     
-    if (!userWallet?.tradingWallet?.walletId) {
-      return NextResponse.json({ success: false, error: "Trading wallet not setup. Please visit Portfolio to initialize." }, { status: 404 });
+    if (!userWallet) {
+      return NextResponse.json({ success: false, error: "Wallet not found. Please set up your account first." }, { status: 404 });
+    }
+
+    // Auto-populate tradingWallet from main ethereum wallet if missing
+    if (!userWallet.tradingWallet?.walletId &&
+        userWallet.wallets?.ethereum?.walletId && userWallet.wallets?.ethereum?.address) {
+      userWallet.tradingWallet = {
+        walletId: userWallet.wallets.ethereum.walletId,
+        address: userWallet.wallets.ethereum.address,
+        chainType: 'ethereum',
+        initialized: false,
+      };
+      await userWallet.save();
+      console.log('[HL Order] Auto-populated tradingWallet from ethereum wallet:', userWallet.tradingWallet.address);
+    }
+
+    if (!userWallet.tradingWallet?.walletId) {
+      return NextResponse.json({ success: false, error: "No Ethereum wallet found. Please visit Portfolio to set up your wallets." }, { status: 404 });
     }
 
     // Initialize Hyperliquid Clients via Privy Viem Account
