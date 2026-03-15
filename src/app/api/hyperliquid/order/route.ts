@@ -203,10 +203,14 @@ export async function POST(request: NextRequest) {
       };
     }
 
-    console.log(`[Hyperliquid Order] Placing ${orderType} ${side} for ${amount} ${asset} at ${finalPrice}`);
+    // Use the ROUNDED values (what actually gets sent to HL) for the min check
+    const roundedPrice = toHlPrice(Number(finalPrice));
+    const roundedSize = toHlSize(Number(amount), szDecimals);
 
-    // Server-side minimum order value check
-    const orderValue = Number(amount) * Number(finalPrice);
+    console.log(`[Hyperliquid Order] Placing ${orderType} ${side} for ${roundedSize} ${asset} at ${roundedPrice} (raw: ${amount} @ ${finalPrice})`);
+
+    // Server-side minimum order value check using rounded values
+    const orderValue = Number(roundedSize) * Number(roundedPrice);
     if (orderValue < MIN_ORDER_VALUE) {
       return NextResponse.json({
         success: false,
@@ -214,14 +218,14 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // 3. Submit Order with correct rounding
+    // 3. Submit Order with pre-computed rounded values
     const result = await exchange.order({
       orders: [
         {
           a: assetIndex,
           b: side === 'buy',
-          p: toHlPrice(Number(finalPrice)),
-          s: toHlSize(Number(amount), szDecimals),
+          p: roundedPrice,
+          s: roundedSize,
           r: false,
           t: finalTif
         }
