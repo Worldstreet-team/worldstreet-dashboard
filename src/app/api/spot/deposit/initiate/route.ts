@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
         userWalletAddress: userWallet.tradingWallet.address,
         depositFromAddress,
         walletType: "spot",
-        chain: depositChain === "ethereum" ? "arbitrum" : depositChain,
+        chain: "arbitrum",
         requestedToken: "USDC",
         requestedAmount: depositAmount,
         depositChain,
