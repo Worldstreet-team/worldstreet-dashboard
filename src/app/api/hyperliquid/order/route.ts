@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { connectDB } from "@/lib/mongodb";
-import { UserWallet } from "@/models/UserWallet";
+import { ensureUserWallet } from "@/lib/ensureUserWallet";
 import { privyClient } from "@/lib/privy/client";
 import { createViemAccount } from "@privy-io/node/viem";
 import { createAuthorizationContext } from "@/lib/privy/authorization";
@@ -27,28 +26,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Missing required fields" }, { status: 400 });
     }
 
-    await connectDB();
-    const userWallet = await UserWallet.findOne({ clerkUserId: authUserId });
-    
-    if (!userWallet) {
-      return NextResponse.json({ success: false, error: "Wallet not found. Please set up your account first." }, { status: 404 });
-    }
-
-    // Auto-populate tradingWallet from main ethereum wallet if missing
-    if (!userWallet.tradingWallet?.walletId &&
-        userWallet.wallets?.ethereum?.walletId && userWallet.wallets?.ethereum?.address) {
-      userWallet.tradingWallet = {
-        walletId: userWallet.wallets.ethereum.walletId,
-        address: userWallet.wallets.ethereum.address,
-        chainType: 'ethereum',
-        initialized: false,
-      };
-      await userWallet.save();
-      console.log('[HL Order] Auto-populated tradingWallet from ethereum wallet:', userWallet.tradingWallet.address);
-    }
-
-    if (!userWallet.tradingWallet?.walletId) {
-      return NextResponse.json({ success: false, error: "No Ethereum wallet found. Please visit Portfolio to set up your wallets." }, { status: 404 });
+    // Ensure user wallet exists (auto-creates via Privy if needed)
+    const userWallet = await ensureUserWallet(authUserId);
+    if (!userWallet?.tradingWallet?.walletId) {
+      return NextResponse.json({ success: false, error: "Wallet setup failed. Please refresh the page and try again." }, { status: 404 });
     }
 
     // Initialize Hyperliquid Clients via Privy Viem Account

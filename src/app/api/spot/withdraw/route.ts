@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { connectDB } from "@/lib/mongodb";
-import { UserWallet } from "@/models/UserWallet";
+import { ensureUserWallet } from "@/lib/ensureUserWallet";
 import { privyClient } from "@/lib/privy/client";
 import { createAuthorizationContext } from "@/lib/privy/authorization";
 import { usdClassTransfer } from "@/lib/hyperliquid/usdTransfer";
@@ -39,32 +38,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await connectDB();
-
-    const userWallet = await UserWallet.findOne({ clerkUserId });
-    if (!userWallet) {
+    // Ensure user wallet exists (auto-creates via Privy if needed)
+    const userWallet = await ensureUserWallet(clerkUserId);
+    if (!userWallet?.tradingWallet?.walletId || !userWallet?.tradingWallet?.address) {
       return NextResponse.json(
-        { error: "Wallet not found. Please set up your account first." },
-        { status: 404 }
-      );
-    }
-
-    // Auto-populate tradingWallet from main ethereum wallet if missing
-    if ((!userWallet.tradingWallet?.walletId || !userWallet.tradingWallet?.address) &&
-        userWallet.wallets?.ethereum?.walletId && userWallet.wallets?.ethereum?.address) {
-      userWallet.tradingWallet = {
-        walletId: userWallet.wallets.ethereum.walletId,
-        address: userWallet.wallets.ethereum.address,
-        chainType: 'ethereum',
-        initialized: false,
-      };
-      await userWallet.save();
-      console.log('[Spot Withdraw] Auto-populated tradingWallet from ethereum wallet:', userWallet.tradingWallet.address);
-    }
-
-    if (!userWallet.tradingWallet?.walletId || !userWallet.tradingWallet?.address) {
-      return NextResponse.json(
-        { error: "No Ethereum wallet found. Please visit Portfolio to set up your wallets." },
+        { error: "Wallet setup failed. Please refresh the page and try again." },
         { status: 404 }
       );
     }
