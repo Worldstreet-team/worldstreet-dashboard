@@ -255,7 +255,7 @@ export default function HyperliquidFuturesPage() {
         <div className="flex-1 overflow-y-auto">
           {mobileActiveTab === 'chart' && (
             <div className="h-[400px] bg-[#0b0e11]">
-              <FuturesChart symbol={selectedPair} isDarkMode={true} />
+              <FuturesChart symbol={selectedPair} />
             </div>
           )}
 
@@ -435,7 +435,7 @@ export default function HyperliquidFuturesPage() {
           {/* COLUMN 2: Chart (50%) */}
           <div className="h-full bg-[#0b0e11] border-r border-[#1f2329] p-2">
             <div className="h-full">
-              <FuturesChart symbol={selectedPair} isDarkMode={true} />
+              <FuturesChart symbol={selectedPair} />
             </div>
           </div>
 
