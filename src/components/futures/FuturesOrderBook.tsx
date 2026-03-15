@@ -27,7 +27,13 @@ export default function FuturesOrderBook({ symbol }: FuturesOrderBookProps) {
     const fetchOrderBook = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`/api/orderbook?symbol=${symbol}`);
+        
+        // Convert futures symbol to Gate.io format
+        // BTC-PERP -> BTC_USDT, ANIME-PERP -> ANIME_USDT
+        const cleanBase = symbol.replace('-PERP', '').replace(/[-_/]/g, '').replace(/(USDT|USDC|USD)$/, '').toUpperCase();
+        const normalizedSymbol = `${cleanBase}_USDT`;
+        
+        const response = await fetch(`/api/orderbook?symbol=${normalizedSymbol}`);
         const data = await response.json();
 
         if (data.success && data.data) {

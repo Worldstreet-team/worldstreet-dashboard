@@ -35,12 +35,10 @@ interface CandleData {
 
 interface FuturesChartProps {
   symbol?: string;
-  isDarkMode?: boolean;
 }
 
 export const FuturesChart: React.FC<FuturesChartProps> = ({
   symbol: propSymbol,
-  isDarkMode = true,
 }) => {
   const { selectedMarket, markets, setSelectedMarket } = useFuturesStore();
   const symbol = propSymbol || selectedMarket?.symbol || 'BTC-PERP';
@@ -245,32 +243,40 @@ export const FuturesChart: React.FC<FuturesChartProps> = ({
   // Fetch and update chart data
   const fetchAndUpdateData = useCallback(async (pair: string) => {
     try {
-      const response = await fetch(
-        `/api/futures/klines?symbol=${pair}&interval=${timeInterval}`
-      );
-
-      if (!response.ok) {
-        console.error('API response not ok:', response.status, response.statusText);
-        setPollingStatus('error');
-        return;
-      }
-
-      const data = await response.json();
-
-      if (!data || !Array.isArray(data)) {
-        console.error('Invalid response format:', data);
-        setPollingStatus('error');
-        return;
+      console.log(`[FuturesChart] POLLING: ${pair} at ${new Date().toLocaleTimeString()}`);
+      
+      // Convert futures symbol to Gate.io format
+      // BTC-PERP -> BTC_USDT, ANIME-PERP -> ANIME_USDT
+      const cleanBase = pair.replace('-PERP', '').replace(/[-_/]/g, '').replace(/(USDT|USDC|USD)$/, '').toUpperCase();
+      const gateSymbol = `${cleanBase}_USDT`;
+      const gateUrl = `/api/gateio/candles?symbol=${encodeURIComponent(gateSymbol)}&interval=1h&limit=100`;
+      
+      let response = await fetch(gateUrl);
+      let data = await response.json();
+      
+      if (!response.ok || !data.success || !data.data || !Array.isArray(data.data) || data.data.length === 0) {
+        console.warn(`[FuturesChart] Gate.io fetch failed, trying fallback for ${cleanBase}`);
+        const klinesUrl = `/api/market/${cleanBase}USDT/klines?type=1h`;
+        const innerRes = await fetch(klinesUrl);
+        const innerData = await innerRes.json();
+        
+        if (innerData && innerData.data && Array.isArray(innerData.data)) {
+          data = { success: true, data: innerData.data };
+        } else {
+          console.error('[FuturesChart] All sources failed for', cleanBase);
+          setPollingStatus('error');
+          return;
+        }
       }
 
       // Convert to ECharts candlestick format
-      const candles: CandleData[] = data
-        .map((k: any) => ({
-          time: k.time,
-          open: parseFloat(k.open),
-          high: parseFloat(k.high),
-          low: parseFloat(k.low),
-          close: parseFloat(k.close),
+      const candles: CandleData[] = data.data
+        .map((candle: any) => ({
+          time: Number(candle.time),
+          open: Number(candle.open),
+          high: Number(candle.high),
+          low: Number(candle.low),
+          close: Number(candle.close),
         }))
         .sort((a: CandleData, b: CandleData) => a.time - b.time);
 
