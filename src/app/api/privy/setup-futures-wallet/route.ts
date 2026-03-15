@@ -26,13 +26,13 @@ export async function POST(request: NextRequest) {
     // Check if user already has a wallet
     let userWallet = await UserWallet.findOne({ clerkUserId });
 
-    if (userWallet?.wallets?.arbitrum) {
+    if (userWallet?.chains?.arbitrum) {
       console.log('[Futures Wallet] User already has Arbitrum wallet');
       return NextResponse.json({
         success: true,
         wallet: {
-          address: userWallet.wallets.arbitrum.address,
-          walletId: userWallet.wallets.arbitrum.walletId
+          address: userWallet.chains.arbitrum.address,
+          walletId: userWallet.chains.arbitrum.walletId
         },
         source: 'existing'
       });
@@ -80,8 +80,8 @@ export async function POST(request: NextRequest) {
     const walletData = {
       clerkUserId,
       privyUserId: privyUser.id,
-      wallets: {
-        ...userWallet?.wallets,
+      chains: {
+        ...userWallet?.chains,
         arbitrum: {
           walletId: arbitrumWallet.id,
           address: arbitrumWallet.address,

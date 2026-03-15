@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { hyperliquidFutures } from "@/lib/hyperliquid/futures";
-import { verifyClerkJWT } from "@/lib/auth/clerk";
+import { auth } from "@clerk/nextjs/server";
 import { connectDB } from "@/lib/mongodb";
 import { UserWallet } from "@/models/UserWallet";
 
@@ -10,8 +10,16 @@ import { UserWallet } from "@/models/UserWallet";
  */
 export async function GET(request: NextRequest) {
   try {
-    // Verify Clerk authentication
-    const { userId } = await verifyClerkJWT(request);
+    // Verify Clerk authentication using server-side auth
+    const { userId } = await auth();
+    
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Unauthorized - Please sign in' },
+        { status: 401 }
+      );
+    }
+    
     console.log('[Hyperliquid Futures Balance] Fetching balance for user:', userId);
 
     // Connect to database and get user's wallet

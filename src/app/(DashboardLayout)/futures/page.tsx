@@ -17,6 +17,7 @@ import { FuturesWalletBalance } from '@/components/futures/FuturesWalletBalance'
 import { RiskPanel } from '@/components/futures/RiskPanel';
 import FuturesTradingModal from '@/components/futures/FuturesTradingModal';
 import HyperliquidFuturesBalanceDisplay from '@/components/futures/HyperliquidFuturesBalanceDisplay';
+import FuturesWalletSetup from '@/components/futures/FuturesWalletSetup';
 
 type OrderSide = 'long' | 'short';
 
@@ -70,6 +71,7 @@ export default function HyperliquidFuturesPage() {
   const [selectedPair, setSelectedPair] = useState<string>('BTC-PERP');
   const [tradingSide, setTradingSide] = useState<OrderSide>('long');
   const [showTradingModal, setShowTradingModal] = useState(false);
+  const [showWalletSetupModal, setShowWalletSetupModal] = useState(false);
 
   // Clerk authentication
   const { user, isLoaded } = useUser();
@@ -90,8 +92,9 @@ export default function HyperliquidFuturesPage() {
     totalMarginUsed,
     availableMargin,
     positions,
-    loading: balanceLoading
-  } = useHyperliquidFuturesBalance(user?.id, isLoaded && !!user);
+    loading: balanceLoading,
+    error: balanceError
+  } = useHyperliquidFuturesBalance(isLoaded && !!user);
 
   const [mobileActiveTab, setMobileActiveTab] = useState<'chart' | 'positions' | 'info'>('chart');
   const [showMarketDropdown, setShowMarketDropdown] = useState(false);
@@ -267,25 +270,55 @@ export default function HyperliquidFuturesPage() {
 
           {mobileActiveTab === 'info' && (
             <div className="p-3 space-y-3 pb-24">
-              {/* Hyperliquid Account Status */}
-              <div className="bg-[#1e2329] rounded-xl border border-[#2b3139] p-3">
-                <h3 className="text-xs font-bold text-white mb-2 uppercase">Trading Account</h3>
-                <div className="space-y-2">
-                  <p className="text-xs text-gray-400">Connect your trading wallet to view account details</p>
-                  <button className="w-full py-2 bg-warning hover:bg-warning/90 text-white rounded-lg text-xs font-bold">
-                    Connect Wallet
-                  </button>
+              {/* Futures Wallet Setup */}
+              {balanceError && balanceError.includes('No Arbitrum wallet found') ? (
+                <div className="bg-[#1e2329] rounded-xl border border-[#2b3139]">
+                  <FuturesWalletSetup />
                 </div>
-              </div>
+              ) : (
+                <>
+                  {/* Hyperliquid Account Status */}
+                  <div className="bg-[#1e2329] rounded-xl border border-[#2b3139] p-3">
+                    <h3 className="text-xs font-bold text-white mb-2 uppercase">Trading Account</h3>
+                    <div className="space-y-2">
+                      {balanceLoading ? (
+                        <div className="flex items-center gap-2">
+                          <Icon icon="ph:spinner" width={16} className="animate-spin text-[#848e9c]" />
+                          <span className="text-xs text-[#848e9c]">Loading account...</span>
+                        </div>
+                      ) : balanceError ? (
+                        <p className="text-xs text-[#f6465d]">{balanceError}</p>
+                      ) : (
+                        <div className="space-y-1">
+                          <div className="flex justify-between">
+                            <span className="text-xs text-[#848e9c]">Account Value</span>
+                            <span className="text-xs text-white font-medium">${accountValue.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-xs text-[#848e9c]">Available Margin</span>
+                            <span className="text-xs text-[#0ecb81] font-medium">${availableMargin.toFixed(2)}</span>
+                          </div>
+                          {totalMarginUsed > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-xs text-[#848e9c]">Used Margin</span>
+                              <span className="text-xs text-[#f0b90b] font-medium">${totalMarginUsed.toFixed(2)}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
 
-              {/* Futures Wallet Balance */}
-              <FuturesWalletBalance />
+                  {/* Futures Wallet Balance */}
+                  <FuturesWalletBalance />
 
-              {/* Collateral Panel */}
-              <CollateralPanel />
+                  {/* Collateral Panel */}
+                  <CollateralPanel />
 
-              {/* Risk Panel */}
-              <RiskPanel />
+                  {/* Risk Panel */}
+                  <RiskPanel />
+                </>
+              )}
             </div>
           )}
         </div>
@@ -404,9 +437,20 @@ export default function HyperliquidFuturesPage() {
           {/* Right: Account Status */}
           <div className="flex items-center gap-4">
             {isLoaded && user ? (
-              <HyperliquidFuturesBalanceDisplay 
-                className="text-[12px]"
-              />
+              <>
+                {balanceError && balanceError.includes('No Arbitrum wallet found') ? (
+                  <button
+                    onClick={() => setShowWalletSetupModal(true)}
+                    className="px-3 py-1.5 bg-[#f0b90b] hover:bg-[#f0b90b]/90 text-black font-medium text-xs rounded transition-colors"
+                  >
+                    Setup Futures Wallet
+                  </button>
+                ) : (
+                  <HyperliquidFuturesBalanceDisplay 
+                    className="text-[12px]"
+                  />
+                )}
+              </>
             ) : (
               <div className="flex items-center gap-3 text-[12px]">
                 <div className="flex flex-col items-end">
@@ -467,6 +511,26 @@ export default function HyperliquidFuturesPage() {
         marketIndex={0}
         marketName={selectedPair}
       />
+
+      {/* Futures Wallet Setup Modal */}
+      {showWalletSetupModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-[#1e2329] rounded-xl border border-[#2b3139] max-w-md w-full mx-4">
+            <div className="flex items-center justify-between p-4 border-b border-[#2b3139]">
+              <h2 className="text-lg font-semibold text-white">Setup Futures Wallet</h2>
+              <button
+                onClick={() => setShowWalletSetupModal(false)}
+                className="p-1 hover:bg-[#2b3139] rounded transition-colors"
+              >
+                <Icon icon="ph:x" width={20} className="text-[#848e9c]" />
+              </button>
+            </div>
+            <FuturesWalletSetup 
+              onWalletSetup={() => setShowWalletSetupModal(false)}
+            />
+          </div>
+        </div>
+      )}
     </>
   );
 }

@@ -12,6 +12,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import FuturesWalletSetup from '@/components/futures/FuturesWalletSetup';
 
 export default function PortfolioPage() {
   const { addresses, tradingWallet, privyUserId, walletsGenerated } = useWallet();
@@ -468,6 +469,21 @@ export default function PortfolioPage() {
                     </Card>
                   </>
                 )}
+
+                {/* Futures Wallet Card */}
+                <Card className="bg-[#161a1e] border-[#2b3139]">
+                  <CardContent className="p-6">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="flex items-center gap-2">
+                        <Icon icon="ph:rocket-launch" className="text-[#f0b90b]" width={20} />
+                        <h3 className="font-bold text-white">Futures Trading Wallet</h3>
+                      </div>
+                      <span className="px-2 py-0.5 bg-[#f0b90b]/10 text-[#f0b90b] text-[10px] font-bold uppercase rounded">Arbitrum</span>
+                    </div>
+                    <FuturesWalletSetup className="!p-0" />
+                    <p className="mt-4 text-xs text-slate-400">Dedicated Arbitrum wallet for Hyperliquid futures trading with isolated margin.</p>
+                  </CardContent>
+                </Card>
               </div>
             )}
 

@@ -3,6 +3,7 @@
 import { Icon } from '@iconify/react';
 import { useHyperliquidFuturesBalance } from '@/hooks/useHyperliquidFuturesBalance';
 import { useUser } from '@clerk/nextjs';
+import FuturesWalletSetup from './FuturesWalletSetup';
 
 interface HyperliquidFuturesBalanceDisplayProps {
   className?: string;
@@ -37,6 +38,15 @@ export default function HyperliquidFuturesBalanceDisplay({
       <div className={`flex items-center gap-2 text-[#848e9c] ${className}`}>
         <Icon icon="ph:spinner" width={16} className="animate-spin" />
         <span className="text-xs">Loading...</span>
+      </div>
+    );
+  }
+
+  if (error && error.includes('No Arbitrum wallet found')) {
+    return (
+      <div className={`flex items-center gap-2 text-[#f0b90b] ${className}`}>
+        <Icon icon="ph:wallet" width={16} />
+        <span className="text-xs">Setup Required</span>
       </div>
     );
   }
