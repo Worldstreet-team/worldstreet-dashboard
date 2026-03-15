@@ -182,6 +182,7 @@ export default function MobileTradingModal({ isOpen, onClose, side, selectedPair
           amount: parseFloat(amount),
           price: orderType === 'market' ? 0 : parseFloat(price),
           orderType,
+          isSpot: true,
           stopPrice: orderType === 'stop-limit' ? parseFloat(stopPrice) : undefined
         })
       });

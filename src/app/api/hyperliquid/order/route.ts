@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
 
     const authContext = await createAuthorizationContext(clerkJwt);
 
-    const { asset, side, amount, price, orderType, stopPrice } = await request.json();
+    const { asset, side, amount, price, orderType, stopPrice, isSpot: requestIsSpot } = await request.json();
 
     if (!asset || !side || !amount || !orderType) {
       return NextResponse.json({ success: false, error: "Missing required fields" }, { status: 400 });
@@ -90,24 +90,38 @@ export async function POST(request: NextRequest) {
 
     let assetIndex = -1;
     let isSpot = false;
-
-    // Check if it's a Spot asset (e.g. PURR/USDC) or Perp asset (e.g. BTC)
-    // Note: User might pass "BTC" expecting "BTC-PERP" or "BTC/USDC"
-    const targetAsset = asset.includes('/') || asset.includes('-') ? asset : asset;
     let szDecimals = 8; // Default
+    let spotCoinName = ''; // HL internal coin name for spot (e.g. "PURR/USDC" or "@107")
 
-    // Search in Spot Universe
-    const spotIdx = spotMeta.universe.findIndex(m => m.name === targetAsset || m.name === `${asset}/USDC`);
-    if (spotIdx !== -1) {
-      assetIndex = spotIdx + 10000; // Spot indices in HL start at 10000
-      isSpot = true;
-      // Get szDecimals for Spot
-      const universeEntry = spotMeta.universe[spotIdx];
-      const tokenIdx = universeEntry.tokens[0];
-      szDecimals = spotMeta.tokens[tokenIdx].szDecimals;
-    } else {
-      // Search in Perp Universe
-      const perpIdx = meta.universe.findIndex(m => m.name === targetAsset || m.name === asset);
+    // Per HL docs: find the base token by name, then locate its spot pair
+    // Asset ID = 10000 + universeEntry.index (NOT array position)
+    // Coin name for L2 book / allMids = universeEntry.name
+    const baseToken = spotMeta.tokens.find((t: any) => t.name === asset);
+    if (baseToken) {
+      const universeEntry = spotMeta.universe.find((u: any) => u.tokens[0] === baseToken.index);
+      if (universeEntry) {
+        assetIndex = 10000 + universeEntry.index;
+        isSpot = true;
+        szDecimals = baseToken.szDecimals;
+        spotCoinName = universeEntry.name;
+      }
+    }
+
+    // Fallback: match by universe entry name directly (e.g. if asset is "SOL/USDC")
+    if (assetIndex === -1) {
+      const universeEntry = spotMeta.universe.find((u: any) => u.name === asset || u.name === `${asset}/USDC`);
+      if (universeEntry) {
+        assetIndex = 10000 + universeEntry.index;
+        isSpot = true;
+        const baseTokenIdx = universeEntry.tokens[0];
+        szDecimals = spotMeta.tokens[baseTokenIdx]?.szDecimals ?? 8;
+        spotCoinName = universeEntry.name;
+      }
+    }
+
+    // Only fall through to Perp if the request is NOT explicitly spot
+    if (assetIndex === -1 && !requestIsSpot) {
+      const perpIdx = meta.universe.findIndex((m: any) => m.name === asset);
       if (perpIdx !== -1) {
         assetIndex = perpIdx;
         szDecimals = meta.universe[perpIdx].szDecimals;
@@ -115,10 +129,13 @@ export async function POST(request: NextRequest) {
     }
 
     if (assetIndex === -1) {
-      return NextResponse.json({ success: false, error: `Asset ${asset} not found on Hyperliquid` }, { status: 400 });
+      const msg = requestIsSpot
+        ? `${asset} is not available for spot trading on Hyperliquid.`
+        : `Asset ${asset} not found on Hyperliquid`;
+      return NextResponse.json({ success: false, error: msg }, { status: 400 });
     }
 
-    console.log(`[Hyperliquid Order] Asset: ${asset}, Index: ${assetIndex}, Type: ${isSpot ? 'Spot' : 'Perp'}, szDecimals: ${szDecimals}`);
+    console.log(`[Hyperliquid Order] Asset: ${asset}, Index: ${assetIndex}, Type: ${isSpot ? 'Spot' : 'Perp'}, szDecimals: ${szDecimals}, CoinName: ${spotCoinName || asset}`);
 
     // 2. Implementation of Market Orders via IOC Limit orders (as per instructions)
     let finalPrice = price;
@@ -127,8 +144,8 @@ export async function POST(request: NextRequest) {
     if (orderType === 'market') {
       try {
         // Fetch L2 order book for real execution prices (Best Bid/Ask)
-        // Note: For spot, coin name should include /USDC or use the internal symbol
-        const bookName = isSpot ? (asset.includes('/') ? asset : `${asset}/USDC`) : asset;
+        // Per HL docs: spot coin = universeEntry.name (e.g. "PURR/USDC" or "@107")
+        const bookName = isSpot ? spotCoinName : asset;
         const l2 = await info.l2Book({ coin: bookName });
         
         if (!l2 || !l2.levels || !l2.levels[0] || !l2.levels[1]) {
@@ -157,7 +174,8 @@ export async function POST(request: NextRequest) {
         }
       } catch (e) {
         console.warn(`[Hyperliquid Order] Failed to get book snapshot, falling back to mid-prices:`, e);
-        const midLookup = mids[asset] || mids[`${asset}/USDC`] || mids[`${asset}/HYPE`];
+        const midKey = isSpot ? spotCoinName : asset;
+        const midLookup = mids[midKey] || mids[`${asset}/USDC`];
         const currentPrice = parseFloat(midLookup || "0");
         if (currentPrice === 0) {
           return NextResponse.json({ success: false, error: "Could not fetch market price" }, { status: 500 });
@@ -172,7 +190,8 @@ export async function POST(request: NextRequest) {
 
       // Logic for trigger direction
       // If stopPrice > currentPrice and we are buying, it's a breakout buy
-      const currentPrice = parseFloat(mids[asset] || mids[`${asset}/USDC`] || "0");
+      const midKey = isSpot ? spotCoinName : asset;
+      const currentPrice = parseFloat(mids[midKey] || mids[`${asset}/USDC`] || "0");
       const isAbove = parseFloat(stopPrice) > currentPrice;
 
       finalTif = {

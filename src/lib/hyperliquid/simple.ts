@@ -6,27 +6,39 @@ class HyperliquidClient {
   });
 
   async getMarkets() {
-    const [meta, mids] = await Promise.all([
-      this.info.meta(),
+    const [spotMeta, mids] = await Promise.all([
+      this.info.spotMeta(),
       this.info.allMids()
     ]);
 
-    return meta.universe
-      .filter((a: any) => !a.name.includes('-PERP')) // Only spot markets
-      .map((a: any) => ({
-        symbol: a.name,
-        baseAsset: a.name.split('/')[0] || a.name,
-        quoteAsset: a.name.split('/')[1] || 'USD',
-        price: Number(mids[a.name] ?? 0),
-        change24h: 0, // No stats - just basic data
-        volume24h: 0,
-        high24h: 0,
-        low24h: 0,
-        chain: 'ethereum' as const,
-        szDecimals: a.szDecimals,
-        maxLeverage: a.maxLeverage,
-        onlyIsolated: a.onlyIsolated
-      }));
+    return spotMeta.universe
+      .map((u: any) => {
+        const baseTokenIdx = u.tokens[0];
+        const quoteTokenIdx = u.tokens[1];
+        const baseToken = spotMeta.tokens[baseTokenIdx];
+        const quoteToken = spotMeta.tokens[quoteTokenIdx];
+        const coinName = u.name; // HL internal name: "PURR/USDC" or "@107"
+        const price = Number(mids[coinName] ?? 0);
+
+        const baseName = baseToken?.name ?? 'UNKNOWN';
+        const quoteName = quoteToken?.name ?? 'USDC';
+
+        return {
+          symbol: `${baseName}/${quoteName}`,
+          baseAsset: baseName,
+          quoteAsset: quoteName,
+          price,
+          change24h: 0,
+          volume24h: 0,
+          high24h: 0,
+          low24h: 0,
+          chain: 'ethereum' as const,
+          szDecimals: baseToken?.szDecimals ?? 8,
+          maxLeverage: 1,
+          onlyIsolated: false,
+        };
+      })
+      .filter((m: any) => m.price > 0); // Only show markets with active pricing
   }
 
   async getAccount(address: string) {
