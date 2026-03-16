@@ -78,7 +78,7 @@ export default function BinanceSpotPage() {
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [balanceRefreshKey, setBalanceRefreshKey] = useState(0);
-  const [tradingPanelOpen, setTradingPanelOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Update pair data when Hyperliquid markets change
   useEffect(() => {
@@ -116,6 +116,7 @@ export default function BinanceSpotPage() {
     // Extract base asset from pair (e.g., "BTC-USD" -> "BTC")
     const baseAsset = pair.split('-')[0] || pair;
     setSelectedPair(baseAsset);
+    setSidebarOpen(false); // auto-close on selection
 
     // Update URL without navigation
     const url = new URL(window.location.href);
@@ -370,15 +371,51 @@ export default function BinanceSpotPage() {
         </div>
 
         {/* Desktop Main Trading Area */}
-        <div className={`h-[calc(100%-60px-200px)] grid ${tradingPanelOpen ? 'grid-cols-[19.5%_46.5%_14%_20%]' : 'grid-cols-[19.5%_60.5%_14%_6%]'} transition-[grid-template-columns] duration-200`}>
+        <div className={`h-[calc(100%-60px-200px)] grid transition-all duration-300 ${sidebarOpen ? 'grid-cols-[260px_1fr_14%_20%]' : 'grid-cols-[36px_1fr_14%_20%]'}`}>
 
-          {/* Market List */}
-          <div className="h-full bg-[#0b0e11] border-r border-[#1f2329] overflow-hidden">
-            <BinanceMarketList
-              selectedPair={`${selectedPair}-USD`}
-              onSelectPair={handlePairSelect}
-              includeStats={true}
-            />
+          {/* Market List — collapsible */}
+          <div className="h-full bg-[#0b0e11] border-r border-[#1f2329] overflow-hidden flex flex-col relative">
+            {sidebarOpen ? (
+              <>
+                {/* Header row with close button */}
+                <div className="flex items-center justify-between px-3 py-2 border-b border-[#1f2329] flex-shrink-0">
+                  <span className="text-[11px] font-semibold text-[#848e9c] uppercase tracking-wider">Markets</span>
+                  <button
+                    onClick={() => setSidebarOpen(false)}
+                    className="text-[#848e9c] hover:text-white transition-colors p-0.5 rounded"
+                    title="Collapse sidebar"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M15 18l-6-6 6-6" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="flex-1 overflow-hidden">
+                  <BinanceMarketList
+                    selectedPair={`${selectedPair}-USD`}
+                    onSelectPair={handlePairSelect}
+                    includeStats={true}
+                  />
+                </div>
+              </>
+            ) : (
+              /* Collapsed strip */
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="h-full w-full flex flex-col items-center justify-center gap-2 text-[#848e9c] hover:text-white hover:bg-[#1a1d24] transition-colors"
+                title="Open pair selector"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M9 18l6-6-6-6" />
+                </svg>
+                <span
+                  className="text-[10px] font-semibold tracking-widest uppercase"
+                  style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
+                >
+                  {pairData.name}/USD
+                </span>
+              </button>
+            )}
           </div>
 
           {/* Chart */}
@@ -394,45 +431,13 @@ export default function BinanceSpotPage() {
           </div>
 
           {/* Trading Panel */}
-          <div className="h-full bg-[#0b0e11] overflow-hidden relative">
-            {/* Toggle button */}
-            <button
-              onClick={() => setTradingPanelOpen(prev => !prev)}
-              className="absolute top-2 left-0 z-10 w-5 h-10 flex items-center justify-center bg-[#1e2329] hover:bg-[#2b3139] border border-[#2b3139] rounded-r-md transition-colors"
-              title={tradingPanelOpen ? 'Collapse panel' : 'Expand panel'}
-            >
-              <Icon
-                icon={tradingPanelOpen ? 'ph:caret-right-bold' : 'ph:caret-left-bold'}
-                width={12}
-                className="text-[#848e9c]"
+          <div className="h-full bg-[#0b0e11] overflow-y-auto scrollbar-thin scrollbar-thumb-[#1f2329]">
+            <div className="p-2">
+              <BinanceOrderForm
+                selectedPair={`${pairData.name}-USD`}
+                pairData={pairData}
               />
-            </button>
-
-            {tradingPanelOpen ? (
-              <div className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-[#1f2329] p-2">
-                <BinanceOrderForm
-                  selectedPair={`${pairData.name}-USD`}
-                  pairData={pairData}
-                />
-              </div>
-            ) : (
-              <div className="h-full flex flex-col items-center pt-14 gap-3">
-                <button
-                  onClick={() => setTradingPanelOpen(true)}
-                  className="px-1.5 py-2 bg-[#0ecb81] hover:bg-[#0ecb81]/80 rounded text-[10px] font-semibold text-white transition-colors"
-                  style={{ writingMode: 'vertical-rl' }}
-                >
-                  Buy
-                </button>
-                <button
-                  onClick={() => setTradingPanelOpen(true)}
-                  className="px-1.5 py-2 bg-[#f6465d] hover:bg-[#f6465d]/80 rounded text-[10px] font-semibold text-white transition-colors"
-                  style={{ writingMode: 'vertical-rl' }}
-                >
-                  Sell
-                </button>
-              </div>
-            )}
+            </div>
           </div>
         </div>
 
