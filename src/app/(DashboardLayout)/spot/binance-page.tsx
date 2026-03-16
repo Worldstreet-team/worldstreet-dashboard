@@ -10,7 +10,7 @@ import BinanceOrderBook from '@/components/spot/BinanceOrderBook';
 import BinanceMarketList from '@/components/spot/BinanceMarketList';
 import BinanceOrderForm from '@/components/spot/BinanceOrderForm';
 import BinanceBottomPanel from '@/components/spot/BinanceBottomPanel';
-import TradingViewChart from '@/components/trading/TradingViewChart';
+import HyperliquidChart from '@/components/spot/HyperliquidChart';
 import MarketTrades from '@/components/spot/MarketTrades';
 import MobileTradingModal from '@/components/spot/MobileTradingModal';
 import PositionsPanel from '@/components/spot/PositionsPanel';
@@ -223,7 +223,7 @@ export default function BinanceSpotPage() {
         <div className="flex-1 overflow-hidden">
           {mobileActiveTab === 'chart' && (
             <div className="h-full">
-              <TradingViewChart symbol={`${pairData.name}USD`} />
+              <HyperliquidChart symbol={`${pairData.name}USD`} />
             </div>
           )}
 
@@ -381,9 +381,9 @@ export default function BinanceSpotPage() {
           </div>
 
           {/* Chart */}
-          <div className="h-full bg-[#0b0e11] border-r border-[#1f2329] p-2">
+          <div className="h-full bg-[#0b0e11] border-r border-[#1f2329]">
             <div className="h-full">
-              <TradingViewChart symbol={`${pairData.name}USD`} />
+              <HyperliquidChart symbol={`${pairData.name}USD`} />
             </div>
           </div>
 
