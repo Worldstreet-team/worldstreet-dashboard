@@ -29,7 +29,7 @@ export default function BinanceBottomPanel({
     { id: 'open-orders' as TabType, label: 'Open Orders', count: orders.length },
     { id: 'order-history' as TabType, label: 'Order History', count: historicalOrders.length || undefined },
     { id: 'trade-history' as TabType, label: 'Trade History', count: fills.length || undefined },
-    { id: 'holdings' as TabType, label: 'Holdings' },
+    { id: 'holdings' as TabType, label: 'Positions' },
   ];
 
   return (

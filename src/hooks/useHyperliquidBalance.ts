@@ -6,6 +6,12 @@ interface HyperliquidBalance {
   total: number;
   available: number;
   hold: number;
+  entryNtl: number;
+  entryPrice: number;
+  currentPrice: number;
+  currentValue: number;
+  unrealizedPnl: number;
+  unrealizedPnlPercent: number;
 }
 
 interface UseHyperliquidBalanceResult {

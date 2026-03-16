@@ -81,25 +81,75 @@ export async function GET(request: NextRequest) {
 
     console.log(`[Hyperliquid Balance] Using ${addressSource}:`, address);
 
-    // Fetch both clearinghouse (perp) and spot states in parallel
-    const [accountState, spotAccountState] = await Promise.all([
-      hyperliquid.getAccount(address),
-      hyperliquid.getSpotAccount(address)
-    ]) as [any, any];
+    // Fetch clearinghouse, spot state, spotMeta, and allMids in parallel
+    const info = new (await import("@nktkas/hyperliquid")).InfoClient({
+      transport: new (await import("@nktkas/hyperliquid")).HttpTransport({ isTestnet: false })
+    });
 
-    // Extract spot balances from spotAccountState (no longer nested in accountState)
+    const [accountState, spotAccountState, spotMeta, allMids] = await Promise.all([
+      hyperliquid.getAccount(address),
+      hyperliquid.getSpotAccount(address),
+      info.spotMeta(),
+      info.allMids(),
+    ]) as [any, any, any, Record<string, string>];
+
+    // Build coin → universe name mapping for allMids price lookup
+    const coinToMidKey: Record<string, string> = {};
+    for (const entry of (spotMeta?.universe ?? [])) {
+      const baseTokenIdx = entry.tokens[0];
+      const baseToken = spotMeta.tokens[baseTokenIdx];
+      if (baseToken?.name) {
+        coinToMidKey[baseToken.name] = entry.name; // e.g. "HYPE" → "HYPE/USDC" or "@107"
+      }
+    }
+
+    // Extract spot balances from spotAccountState
     const spotBalances = spotAccountState?.balances || [];
     
     // Find USDC balance in spot
     const usdcSpotBalance = spotBalances.find((balance: any) => balance.coin === "USDC");
     
-    // Parse balances into a more usable format
-    const balances = spotBalances.map((balance: any) => ({
-      coin: balance.coin,
-      total: parseFloat(balance.total || "0"),
-      available: parseFloat(balance.total || "0") - parseFloat(balance.hold || "0"),
-      hold: parseFloat(balance.hold || "0")
-    }));
+    // Parse balances with P&L data
+    const balances = spotBalances.map((balance: any) => {
+      const coin = balance.coin;
+      const total = parseFloat(balance.total || "0");
+      const hold = parseFloat(balance.hold || "0");
+      const available = total - hold;
+      const entryNtl = parseFloat(balance.entryNtl || "0");
+
+      // Get current price from allMids
+      let currentPrice = 0;
+      if (coin === "USDC") {
+        currentPrice = 1;
+      } else {
+        const midKey = coinToMidKey[coin];
+        if (midKey && allMids[midKey]) {
+          currentPrice = parseFloat(allMids[midKey]);
+        }
+      }
+
+      // Calculate P&L for non-USDC tokens with holdings
+      const entryPrice = total > 0 && entryNtl > 0 ? entryNtl / total : 0;
+      const currentValue = total * currentPrice;
+      const unrealizedPnl = coin !== "USDC" && total > 0 ? currentValue - entryNtl : 0;
+      const unrealizedPnlPercent =
+        coin !== "USDC" && entryNtl > 0
+          ? ((currentValue - entryNtl) / entryNtl) * 100
+          : 0;
+
+      return {
+        coin,
+        total,
+        available,
+        hold,
+        entryNtl,
+        entryPrice,
+        currentPrice,
+        currentValue,
+        unrealizedPnl,
+        unrealizedPnlPercent,
+      };
+    });
 
     // Get account equity from clearinghouseState cross margin summary
     const accountValue = accountState?.crossMarginSummary?.accountValue || "0";
