@@ -75,9 +75,10 @@ export default function HyperliquidBalanceDisplay({
     );
   }
 
-  // Spot USDC available + Perps equity = total value
+  // Spot USDC available for display
   const spotAvailable = usdcBalance.available;
-  const totalValue = spotAvailable + accountValue;
+  // Total value = sum of all spot holdings (USDC + tokens at current prices)
+  const totalValue = balances.reduce((sum, b) => sum + (b.currentValue || 0), 0);
 
   return (
     <div className={`flex items-center gap-3 ${className}`}>
