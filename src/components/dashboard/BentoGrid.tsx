@@ -1,0 +1,489 @@
+"use client"
+
+import * as React from "react"
+import { Icon } from "@iconify/react"
+import { useProfile } from "@/app/context/profileContext"
+import { ErrorState } from "@/components/dashboard/ErrorState"
+import { SwapInterface } from "@/components/swap/SwapInterface"
+import type { CoinData, TradeResult } from "@/lib/market-actions"
+
+const USDT_IMAGE = "https://coin-images.coingecko.com/coins/images/325/small/Tether.png"
+
+/* ========== Markets Table ========== */
+const MARKET_TABS = ["Favorites", "Hot", "New", "Gainers", "Losers", "Turnover", "Spot"] as const
+type MarketTab = (typeof MARKET_TABS)[number]
+
+function MarketsTable({ coins, error }: { coins: CoinData[]; error?: string }) {
+  const [tab, setTab] = React.useState<MarketTab>("Hot")
+  const [search, setSearch] = React.useState("")
+  const [visibleCount, setVisibleCount] = React.useState(8)
+
+  const filtered = React.useMemo(() => {
+    let list = [...coins]
+    if (search) {
+      const q = search.toLowerCase()
+      list = list.filter((c) => c.symbol.toLowerCase().includes(q) || c.name.toLowerCase().includes(q))
+    }
+    switch (tab) {
+      case "Gainers":
+        list.sort((a, b) => b.change24h - a.change24h)
+        break
+      case "Losers":
+        list.sort((a, b) => a.change24h - b.change24h)
+        break
+      case "Turnover":
+        list.sort((a, b) => b.volume24h - a.volume24h)
+        break
+      case "Hot":
+      case "Spot":
+      default:
+        list.sort((a, b) => b.marketCap - a.marketCap)
+        break
+    }
+    return list
+  }, [coins, tab, search])
+
+  React.useEffect(() => {
+    setVisibleCount(8)
+  }, [tab, search])
+
+  const displayed = filtered.slice(0, visibleCount)
+  const hasMore = visibleCount < filtered.length
+
+  return (
+    <div data-onboarding="dash-markets" className="flex h-full flex-col rounded-2xl bg-card">
+      {/* Header */}
+      <div className="flex flex-col gap-3 p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Icon icon="solar:chart-bold" className="h-4 w-4 text-primary" />
+            <h3 className="text-sm font-semibold">Markets</h3>
+          </div>
+          <div className="relative">
+            <Icon icon="solar:magnifer-bold" className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search..."
+              className="w-36 rounded-lg bg-accent/50 pl-7 pr-2 py-1.5 text-xs outline-none focus:bg-accent"
+            />
+          </div>
+        </div>
+        {/* Tabs */}
+        <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
+          {MARKET_TABS.map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`whitespace-nowrap rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                tab === t
+                  ? "bg-primary text-white"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Table */}
+      {error && filtered.length === 0 ? (
+        <ErrorState message={error} />
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          icon="solar:magnifer-bold"
+          title="No results found"
+          description="Try a different search term or tab"
+        />
+      ) : (
+        <div className="flex-1 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-t border-border/30 text-xs text-muted-foreground">
+                <th className="px-3 sm:px-4 py-2 text-left font-medium">Pair</th>
+                <th className="px-3 sm:px-4 py-2 text-right font-medium">Price</th>
+                <th className="px-3 sm:px-4 py-2 text-right font-medium">24h</th>
+                <th className="hidden sm:table-cell px-4 py-2 text-right font-medium">Trade</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/20">
+              {displayed.map((coin) => (
+                <tr key={coin.symbol} className="transition-colors hover:bg-accent/30">
+                  <td className="px-3 sm:px-4 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center shrink-0">
+                        {coin.image ? (
+                          <img src={coin.image} alt="" className="h-5 w-5 rounded-full ring-1 ring-card" />
+                        ) : (
+                          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[9px] font-bold text-primary ring-1 ring-card">
+                            {coin.symbol.slice(0, 2)}
+                          </span>
+                        )}
+                        <img
+                          src={USDT_IMAGE}
+                          alt=""
+                          className="h-4 w-4 rounded-full ring-1 ring-card -ml-1.5"
+                        />
+                      </div>
+                      <span className="font-medium">{coin.symbol}/USDT</span>
+                    </div>
+                  </td>
+                  <td className="px-3 sm:px-4 py-2.5 text-right font-semibold tabular-nums">
+                    {coin.price.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: coin.price < 1 ? 4 : 2,
+                    })}
+                  </td>
+                  <td className="px-3 sm:px-4 py-2.5 text-right">
+                    <span
+                      className={`inline-flex items-center gap-0.5 font-medium tabular-nums ${
+                        coin.change24h >= 0 ? "text-emerald-500" : "text-red-500"
+                      }`}
+                    >
+                      {coin.change24h >= 0 ? "+" : ""}
+                      {coin.change24h.toFixed(2)}%
+                    </span>
+                  </td>
+                  <td className="hidden sm:table-cell px-4 py-2.5 text-right">
+                    <a
+                      href={`/spot?pair=${coin.symbol}USDT`}
+                      className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    >
+                      Trade
+                      <Icon icon="solar:arrow-right-up-bold" className="h-3 w-3" />
+                    </a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* Load More */}
+          {hasMore && (
+            <div className="flex justify-center p-3">
+              <button
+                onClick={() => setVisibleCount((c) => c + 8)}
+                className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                Load More
+                <Icon icon="solar:arrow-down-bold" className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ========== Recent Trades ========== */
+const TRADE_PAIRS = ["BTC", "ETH", "SOL"] as const
+type TradePair = (typeof TRADE_PAIRS)[number]
+
+function RecentTrades({
+  coins,
+  tradesByPair,
+  error,
+}: {
+  coins: CoinData[]
+  tradesByPair: Record<string, TradeResult[]>
+  error?: string
+}) {
+  const [activePair, setActivePair] = React.useState<TradePair>("BTC")
+  const trades = (tradesByPair[activePair] ?? []).slice(0, 8)
+  const hasAnyTrades = Object.values(tradesByPair).some((t) => t.length > 0)
+  const pairCoin = React.useMemo(
+    () => coins.find((c) => c.symbol === activePair),
+    [coins, activePair],
+  )
+
+  function formatTime(ts: number) {
+    const diff = Date.now() - ts
+    if (diff < 60_000) return "Just now"
+    if (diff < 3600_000) return `${Math.floor(diff / 60_000)}m ago`
+    if (diff < 86400_000) return `${Math.floor(diff / 3600_000)}h ago`
+    return `${Math.floor(diff / 86400_000)}d ago`
+  }
+
+  return (
+    <div data-onboarding="dash-trades" className="flex h-full flex-col rounded-2xl bg-card">
+      <div className="flex items-center justify-between p-4">
+        <div className="flex items-center gap-2">
+          <Icon icon="solar:pulse-2-bold" className="h-4 w-4 text-primary" />
+          <h3 className="text-sm font-semibold">Recent Trades</h3>
+        </div>
+        <div className="flex items-center gap-0.5">
+          {TRADE_PAIRS.map((pair) => (
+            <button
+              key={pair}
+              onClick={() => setActivePair(pair)}
+              className={`rounded-lg px-2 py-1 text-[11px] font-medium transition-colors ${
+                activePair === pair
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
+              }`}
+            >
+              {pair}
+            </button>
+          ))}
+        </div>
+      </div>
+      {error && !hasAnyTrades ? (
+        <ErrorState message={error} />
+      ) : trades.length === 0 ? (
+        <EmptyState
+          icon="solar:transfer-horizontal-bold"
+          title="No recent trades"
+          description="Market trades for this pair will appear here"
+          cta={{ label: "Start trading", href: "/spot" }}
+        />
+      ) : (
+        <div className="flex flex-1 flex-col divide-y divide-border/30">
+          {trades.map((trade) => (
+            <div key={trade.id} className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-accent/30">
+              <span
+                className={`text-xs font-bold ${
+                  trade.side === "buy" ? "text-emerald-500" : "text-red-500"
+                }`}
+              >
+                {trade.side === "buy" ? "B" : "S"}
+              </span>
+              <div className="flex flex-1 flex-col">
+                <span className="flex items-center gap-2 text-sm font-medium">
+                  <span className="flex items-center shrink-0">
+                    {pairCoin?.image ? (
+                      <img src={pairCoin.image} alt="" className="h-4.5 w-4.5 rounded-full ring-1 ring-card" />
+                    ) : (
+                      <span className="inline-flex h-4.5 w-4.5 items-center justify-center rounded-full bg-primary/10 text-[8px] font-bold text-primary ring-1 ring-card">
+                        {activePair.slice(0, 2)}
+                      </span>
+                    )}
+                    <img
+                      src={USDT_IMAGE}
+                      alt=""
+                      className="h-3.5 w-3.5 rounded-full ring-1 ring-card -ml-1.5"
+                    />
+                  </span>
+                  {activePair}/USDT
+                </span>
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {parseFloat(trade.amount).toFixed(activePair === "BTC" ? 5 : 4)} {activePair}
+                </span>
+              </div>
+              <div className="flex flex-col items-end">
+                <span className="text-sm font-semibold tabular-nums">
+                  ${parseFloat(trade.price).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                </span>
+                <span className="inline-flex items-center gap-0.5 text-xs text-muted-foreground">
+                  <Icon icon="solar:clock-circle-bold" className="h-3 w-3" />
+                  {formatTime(trade.time)}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ========== Watchlist (uses profileContext) ========== */
+function WatchlistPanel({ coins, error }: { coins: CoinData[]; error?: string }) {
+  const { profile, profileLoading } = useProfile()
+  const watchlistSymbols = profile?.watchlist ?? []
+
+  const items = React.useMemo(() => {
+    if (profileLoading) return null
+    if (watchlistSymbols.length === 0) return []
+    return coins.filter((c) => watchlistSymbols.includes(c.symbol)).slice(0, 10)
+  }, [coins, watchlistSymbols, profileLoading])
+
+  return (
+    <div data-onboarding="dash-watchlist" className="flex h-full flex-col rounded-2xl bg-card">
+      <div className="flex items-center justify-between px-3 py-2.5">
+        <div className="flex items-center gap-2">
+          <Icon icon="solar:star-bold" className="h-4 w-4 text-primary" />
+          <h3 className="text-sm font-semibold">Watchlist</h3>
+        </div>
+        <a href="/spot" className="text-xs font-medium text-primary hover:underline">
+          View all
+        </a>
+      </div>
+      {items === null ? (
+        <div className="flex flex-1 flex-col divide-y divide-border/30">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3 px-3 py-1.5">
+              <div className="h-5 w-5 rounded-full bg-muted animate-pulse" />
+              <div className="flex flex-1 flex-col gap-1">
+                <div className="h-3 w-14 rounded bg-muted animate-pulse" />
+                <div className="h-2.5 w-10 rounded bg-muted animate-pulse" />
+              </div>
+              <div className="flex flex-col items-end gap-1">
+                <div className="h-3 w-14 rounded bg-muted animate-pulse" />
+                <div className="h-2.5 w-10 rounded bg-muted animate-pulse" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : error && items.length === 0 ? (
+        <ErrorState message={error} />
+      ) : items.length === 0 ? (
+        <EmptyState
+          icon="solar:star-bold"
+          title="No favorites yet"
+          description="Star assets on the Spot page to build your watchlist"
+          cta={{ label: "Browse markets", href: "/spot" }}
+        />
+      ) : (
+        <div className="flex flex-1 flex-col divide-y divide-border/30">
+          {items.map((coin) => (
+            <div key={coin.symbol} className="flex items-center gap-3 px-3 py-1.5 transition-colors hover:bg-accent/30">
+              {coin.image ? (
+                <img src={coin.image} alt={coin.symbol} className="h-5 w-5 rounded-full" />
+              ) : (
+                <span className="text-xs font-bold text-primary">{coin.symbol.slice(0, 2)}</span>
+              )}
+              <div className="flex flex-1 flex-col">
+                <span className="text-sm font-medium">{coin.symbol}</span>
+                <span className="text-xs text-muted-foreground">{coin.name}</span>
+              </div>
+              <div className="flex flex-col items-end">
+                <span className="text-sm font-semibold tabular-nums">
+                  ${coin.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                </span>
+                {coin.change24h !== 0 && (
+                  <span
+                    className={`inline-flex items-center gap-0.5 text-xs font-medium tabular-nums ${
+                      coin.change24h >= 0 ? "text-emerald-500" : "text-red-500"
+                    }`}
+                  >
+                    <Icon
+                      icon={coin.change24h >= 0 ? "solar:arrow-up-bold" : "solar:arrow-down-bold"}
+                      className="h-3 w-3"
+                    />
+                    {coin.change24h >= 0 ? "+" : ""}
+                    {coin.change24h.toFixed(2)}%
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ========== Empty State ========== */
+function EmptyState({
+  icon,
+  title,
+  description,
+  cta,
+}: {
+  icon: string
+  title: string
+  description: string
+  cta?: { label: string; href: string }
+}) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+      <Icon icon={icon} className="h-8 w-8 text-muted-foreground/40" />
+      <div className="flex flex-col gap-1">
+        <span className="text-sm font-medium text-muted-foreground">{title}</span>
+        <span className="text-xs text-muted-foreground/60">{description}</span>
+      </div>
+      {cta && (
+        <a
+          href={cta.href}
+          className="mt-1 inline-flex items-center gap-1 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:bg-primary hover:text-white"
+        >
+          {cta.label}
+          <Icon icon="solar:arrow-right-up-bold" className="h-3 w-3" />
+        </a>
+      )}
+    </div>
+  )
+}
+
+/* ========== Swap Wrapper (with error boundary) ========== */
+function SwapWidget() {
+  const [hasError, setHasError] = React.useState(false)
+
+  if (hasError) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 rounded-2xl bg-card p-6 min-h-75">
+        <Icon icon="solar:refresh-circle-linear" className="h-8 w-8 text-muted-foreground" />
+        <p className="text-sm text-muted-foreground text-center">Swap widget couldn&apos;t load</p>
+        <a href="/swap" className="text-sm text-primary font-medium hover:underline">
+          Open full Swap page &rarr;
+        </a>
+      </div>
+    )
+  }
+
+  return (
+    <React.Suspense
+      fallback={
+        <div className="flex items-center justify-center rounded-2xl bg-card p-6 min-h-75">
+          <div className="animate-spin rounded-full h-6 w-6 border-2 border-primary/20 border-t-primary" />
+        </div>
+      }
+    >
+      <ErrorCatcher onError={() => setHasError(true)}>
+        <SwapInterface />
+      </ErrorCatcher>
+    </React.Suspense>
+  )
+}
+
+/** Lightweight error catcher using componentDidCatch */
+class ErrorCatcher extends React.Component<
+  { children: React.ReactNode; onError: () => void },
+  { hasError: boolean }
+> {
+  constructor(props: { children: React.ReactNode; onError: () => void }) {
+    super(props)
+    this.state = { hasError: false }
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+  componentDidCatch() {
+    this.props.onError()
+  }
+  render() {
+    if (this.state.hasError) return null
+    return this.props.children
+  }
+}
+
+/* ========== Dashboard Grid ========== */
+interface DashboardGridProps {
+  coins: CoinData[]
+  tradesByPair: Record<string, TradeResult[]>
+  prices: Record<string, number>
+  error?: string
+}
+
+export function DashboardGrid({ coins, tradesByPair, prices, error }: DashboardGridProps) {
+  // prices prop kept for potential future use (swap widget, etc.)
+  void prices
+  return (
+    <div className="grid gap-4 lg:grid-cols-5">
+      {/* Column 1: Markets + Recent Trades stacked */}
+      <div className="flex flex-col gap-4 lg:col-span-3">
+        <MarketsTable coins={coins} error={error} />
+        <RecentTrades coins={coins} tradesByPair={tradesByPair} error={error} />
+      </div>
+
+      {/* Column 2: Swap + Watchlist */}
+      <div className="flex flex-col gap-4 lg:col-span-2">
+        <SwapWidget />
+        <WatchlistPanel coins={coins} error={error} />
+      </div>
+    </div>
+  )
+}
