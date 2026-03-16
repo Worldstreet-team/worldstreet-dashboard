@@ -4,8 +4,15 @@ import * as React from "react"
 import { Icon } from "@iconify/react"
 import { useAuth } from "@/app/context/authContext"
 import { useWallet } from "@/app/context/walletContext"
+import { useSolana } from "@/app/context/solanaContext"
+import { useEvm } from "@/app/context/evmContext"
+import { useSui } from "@/app/context/suiContext"
+import { useTon } from "@/app/context/tonContext"
+import { useTron } from "@/app/context/tronContext"
 import { ErrorState } from "@/components/dashboard/ErrorState"
 import type { CoinData } from "@/lib/market-actions"
+import { calculateDailyPnL, getPrice } from "@/lib/wallet/usePrices"
+import { formatUSD } from "@/lib/wallet/amounts"
 
 function truncAddr(addr: string) {
   if (!addr || addr.length < 14) return addr
@@ -27,11 +34,103 @@ const WALLET_VIEWS = [
 
 type WalletView = (typeof WALLET_VIEWS)[number]["key"]
 
-export function WalletCard({ error }: WalletCardProps) {
+export function WalletCard({ coins, prices, error }: WalletCardProps) {
   const { user, loading } = useAuth()
   const walletCtx = useWallet()
+  const { balance: solBalance, tokenBalances: solTokens } = useSolana()
+  const { balance: ethBalance, tokenBalances: ethTokens, arbitrumBalance: arbBalance, arbitrumTokenBalances: arbTokens } = useEvm()
+  const { balance: suiBalance } = useSui()
+  const { balance: tonBalance } = useTon()
+  const { balance: trxBalance, tokenBalances: trxTokens } = useTron()
+
+  const [spotBalance, setSpotBalance] = React.useState(0)
+  const [futuresBalance, setFuturesBalance] = React.useState(0)
+
   const [isCopied, setIsCopied] = React.useState(false)
   const [activeView, setActiveView] = React.useState<WalletView>("total")
+
+  React.useEffect(() => {
+    const fetchSpotBalance = async () => {
+      if (!user?.userId) return;
+      try {
+        const response = await fetch('/api/positions?status=OPEN');
+        if (response.ok) {
+          const data = await response.json();
+          const positions = Array.isArray(data) ? data : data.positions || [];  
+          const total = positions.reduce((sum: number, pos: any) => sum + parseFloat(pos.investedQuote || '0'), 0);
+          setSpotBalance(total);
+        }
+      } catch (error) {}
+    };
+
+    const fetchFuturesBalance = async () => {
+      if (!user?.userId) return;
+      try {
+        const response = await fetch('/api/futures/wallet/balance');
+        if (response.ok) {
+          const data = await response.json();
+          setFuturesBalance(data.usdtBalance || 0);
+        }
+      } catch (error) {}
+    };
+
+    fetchSpotBalance();
+    fetchFuturesBalance();
+  }, [user]);
+
+  const mainWalletBalance = React.useMemo(() => {
+    const usdtToken = solTokens.find(t => t.symbol === "USDT");
+    return usdtToken?.amount ?? 0;
+  }, [solTokens]);
+
+  const totalBalance = React.useMemo(() => {
+    if (!walletCtx?.walletsGenerated) return 0;
+
+    let total = 0;
+    // Native coins
+    total += solBalance * getPrice(prices, "SOL");
+    total += ethBalance * getPrice(prices, "ETH");
+    total += arbBalance * getPrice(prices, "ETH");
+    total += suiBalance * getPrice(prices, "SUI");
+    total += tonBalance * getPrice(prices, "TON");
+    total += trxBalance * getPrice(prices, "TRX");
+
+    // Tokens
+    solTokens.forEach((token) => { total += token.amount * getPrice(prices, token.symbol); });
+    ethTokens.forEach((token) => { total += token.amount * getPrice(prices, token.symbol); });
+    arbTokens.forEach((token) => { total += token.amount * getPrice(prices, token.symbol); });
+    trxTokens.forEach((token) => { total += token.amount * getPrice(prices, token.symbol); });
+
+    return total;
+  }, [walletCtx?.walletsGenerated, solBalance, ethBalance, arbBalance, suiBalance, tonBalance, trxBalance, solTokens, ethTokens, arbTokens, trxTokens, prices]);
+
+  const holdings = React.useMemo(() => {
+    if (!walletCtx?.walletsGenerated) return {};
+    const h: Record<string, number> = {};
+    h["SOL"] = solBalance;
+    h["ETH"] = (h["ETH"] || 0) + ethBalance + arbBalance;
+    h["SUI"] = suiBalance;
+    h["TON"] = tonBalance;
+    h["TRX"] = trxBalance;
+
+    [solTokens, ethTokens, arbTokens, trxTokens].forEach(tokens => {
+      tokens.forEach((token) => {
+        h[token.symbol] = (h[token.symbol] || 0) + token.amount;
+      });
+    });
+    return h;
+  }, [walletCtx?.walletsGenerated, solBalance, ethBalance, arbBalance, suiBalance, tonBalance, trxBalance, solTokens, ethTokens, arbTokens, trxTokens]);
+
+  const dailyPnL = calculateDailyPnL(holdings, prices, coins);
+  
+  const displayedBalance = React.useMemo(() => {
+    switch (activeView) {
+      case "main": return mainWalletBalance;
+      case "spot": return spotBalance;
+      case "futures": return futuresBalance;
+      case "total": default: return totalBalance + spotBalance + futuresBalance;
+    }
+  }, [activeView, mainWalletBalance, spotBalance, futuresBalance, totalBalance]);
 
   const isLoaded = !loading
   const displayName = user
@@ -115,7 +214,7 @@ export function WalletCard({ error }: WalletCardProps) {
           ))}
         </div>
         <div className="flex items-end gap-3">
-          <span className="text-2xl font-bold tabular-nums tracking-tight">$0.00</span>
+          <span className="text-2xl font-bold tabular-nums tracking-tight">{formatUSD(displayedBalance)}</span>
           {activeView === "main" && solAddress && (
             <button
               onClick={handleCopy}
@@ -137,12 +236,14 @@ export function WalletCard({ error }: WalletCardProps) {
         {/* Today's P&L */}
         <div className="flex flex-col gap-1.5 p-4">
           <div className="flex items-center gap-1.5">
-            <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            <div className={`h-1.5 w-1.5 rounded-full ${dailyPnL >= 0 ? "bg-emerald-500" : "bg-red-500"}`} />
             <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
               Today&apos;s P&amp;L
             </span>
           </div>
-          <span className="text-lg font-bold tabular-nums tracking-tight text-emerald-500">+$0.00</span>
+          <span className={`text-lg font-bold tabular-nums tracking-tight ${dailyPnL >= 0 ? "text-emerald-500" : "text-red-500"}`}>
+            {dailyPnL >= 0 ? "+" : ""}{formatUSD(dailyPnL)}
+          </span>
           <span className="text-[10px] text-muted-foreground">24h change</span>
         </div>
 
@@ -154,7 +255,7 @@ export function WalletCard({ error }: WalletCardProps) {
               Assets
             </span>
           </div>
-          <span className="text-lg font-bold tabular-nums tracking-tight">0</span>
+          <span className="text-lg font-bold tabular-nums tracking-tight">{Object.keys(holdings).filter(k => holdings[k] > 0).length}</span>
           <span className="text-[10px] text-muted-foreground">Active tokens</span>
         </div>
 
@@ -166,7 +267,7 @@ export function WalletCard({ error }: WalletCardProps) {
               Networks
             </span>
           </div>
-          <span className="text-lg font-bold tabular-nums tracking-tight">6</span>
+          <span className="text-lg font-bold tabular-nums tracking-tight">{walletCtx?.walletsGenerated ? "6" : "0"}</span>
           <span className="text-[10px] text-muted-foreground">SOL · ETH · ARB · SUI · TON · TRX</span>
         </div>
       </div>

@@ -50,7 +50,7 @@ export const CustomizerContextProvider: React.FC<CustomizerContextProps> = ({ ch
 
   // Set attributes immediately
   useEffect(() => {
-    document.documentElement.setAttribute("class", activeMode);
+    // We no longer set "class" because next-themes manages it
     document.documentElement.setAttribute("dir", activeDir);
     document.documentElement.setAttribute('data-color-theme', activeTheme);
     document.documentElement.setAttribute("data-layout", activeLayout);

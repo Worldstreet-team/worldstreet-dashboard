@@ -1,14 +1,19 @@
 import React from "react";
 import type { Metadata } from "next";
-import { Outfit } from "next/font/google";
+import { Public_Sans } from "next/font/google";
 import "./css/globals.css";
-import { ThemeModeScript } from "flowbite-react";
 import { CustomizerContextProvider } from "@/app/context/customizerContext";
 import "../utils/i18n";
 import NextTopLoader from "nextjs-toploader";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Providers } from "./providers";
-const font = Outfit({ subsets: ["latin"], weight: ["300", "400", "500", "600", "700"] });
+import { ThemeProvider } from "@/components/theme-provider";
+
+const publicSans = Public_Sans({ 
+  subsets: ["latin"], 
+  weight: ["300", "400", "500", "600", "700"],
+  variable: "--font-sans"
+});
 
 export const metadata: Metadata = {
   title: "WorldStreet - Trading Platform",
@@ -28,11 +33,10 @@ export default function RootLayout({
   const isProduction = process.env.NODE_ENV === "production";
 
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className={publicSans.variable}>
       <head>
-        <ThemeModeScript />
       </head>
-      <body className={`${font.className}`}>
+      <body className="font-sans antialiased text-foreground bg-background">
         <ClerkProvider
           {...(isProduction
             ? {
@@ -44,9 +48,11 @@ export default function RootLayout({
         >
           <NextTopLoader color="var(--color-primary)" />
           <CustomizerContextProvider>
-            <Providers>
-              {children}
-            </Providers>
+            <ThemeProvider>
+              <Providers>
+                {children}
+              </Providers>
+            </ThemeProvider>
           </CustomizerContextProvider>
         </ClerkProvider>
       </body>
