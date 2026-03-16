@@ -78,6 +78,7 @@ export default function BinanceSpotPage() {
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [balanceRefreshKey, setBalanceRefreshKey] = useState(0);
+  const [tradingPanelOpen, setTradingPanelOpen] = useState(true);
 
   // Update pair data when Hyperliquid markets change
   useEffect(() => {
@@ -369,7 +370,7 @@ export default function BinanceSpotPage() {
         </div>
 
         {/* Desktop Main Trading Area */}
-        <div className="h-[calc(100%-60px-200px)] grid grid-cols-[19.5%_46.5%_14%_20%]">
+        <div className={`h-[calc(100%-60px-200px)] grid ${tradingPanelOpen ? 'grid-cols-[19.5%_46.5%_14%_20%]' : 'grid-cols-[19.5%_60.5%_14%_6%]'} transition-[grid-template-columns] duration-200`}>
 
           {/* Market List */}
           <div className="h-full bg-[#0b0e11] border-r border-[#1f2329] overflow-hidden">
@@ -393,13 +394,45 @@ export default function BinanceSpotPage() {
           </div>
 
           {/* Trading Panel */}
-          <div className="h-full bg-[#0b0e11] overflow-y-auto scrollbar-thin scrollbar-thumb-[#1f2329]">
-            <div className="p-2">
-              <BinanceOrderForm
-                selectedPair={`${pairData.name}-USD`}
-                pairData={pairData}
+          <div className="h-full bg-[#0b0e11] overflow-hidden relative">
+            {/* Toggle button */}
+            <button
+              onClick={() => setTradingPanelOpen(prev => !prev)}
+              className="absolute top-2 left-0 z-10 w-5 h-10 flex items-center justify-center bg-[#1e2329] hover:bg-[#2b3139] border border-[#2b3139] rounded-r-md transition-colors"
+              title={tradingPanelOpen ? 'Collapse panel' : 'Expand panel'}
+            >
+              <Icon
+                icon={tradingPanelOpen ? 'ph:caret-right-bold' : 'ph:caret-left-bold'}
+                width={12}
+                className="text-[#848e9c]"
               />
-            </div>
+            </button>
+
+            {tradingPanelOpen ? (
+              <div className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-[#1f2329] p-2">
+                <BinanceOrderForm
+                  selectedPair={`${pairData.name}-USD`}
+                  pairData={pairData}
+                />
+              </div>
+            ) : (
+              <div className="h-full flex flex-col items-center pt-14 gap-3">
+                <button
+                  onClick={() => setTradingPanelOpen(true)}
+                  className="px-1.5 py-2 bg-[#0ecb81] hover:bg-[#0ecb81]/80 rounded text-[10px] font-semibold text-white transition-colors"
+                  style={{ writingMode: 'vertical-rl' }}
+                >
+                  Buy
+                </button>
+                <button
+                  onClick={() => setTradingPanelOpen(true)}
+                  className="px-1.5 py-2 bg-[#f6465d] hover:bg-[#f6465d]/80 rounded text-[10px] font-semibold text-white transition-colors"
+                  style={{ writingMode: 'vertical-rl' }}
+                >
+                  Sell
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
