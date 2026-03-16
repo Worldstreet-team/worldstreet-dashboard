@@ -308,10 +308,11 @@ export default function BinanceSpotPage() {
 
           {/* Center: Pair Info */}
           <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
+            <button onClick={() => setSidebarOpen(true)} className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity">
               <span className="text-[16px] font-bold text-white">{pairData.name}/USD</span>
+              <Icon icon="ph:caret-down" width={14} className="text-[#848e9c]" />
               <span className="text-[11px] text-[#848e9c]">WorldStreet</span>
-            </div>
+            </button>
 
             <div className="flex items-center gap-4 text-[12px]">
               <div className="flex flex-col">
