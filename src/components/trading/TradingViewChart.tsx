@@ -7,13 +7,19 @@ interface TradingViewChartProps {
     theme?: 'light' | 'dark';
 }
 
-function toHyperliquidSymbol(raw: string): string {
-    // Strip common suffixes and separators to get the base asset
+function toTradingViewSymbol(raw: string): string {
     const base = raw
         .replace(/[\/\-_]/g, '')
         .replace(/(USDC|USDT|USD|USDH)$/i, '')
         .toUpperCase();
-    return `HYPERLIQUID:${base}USDH`;
+
+    // Pairs known to have USDC on Bybit
+    const bybitUsdc = ['BTC', 'ETH', 'SOL', 'XRP', 'LINK', 'AVAX', 'DOGE', 'ADA', 'DOT', 'MATIC', 'ARB', 'OP', 'APT', 'SUI', 'NEAR', 'FIL', 'ATOM', 'LTC', 'UNI', 'AAVE'];
+    if (bybitUsdc.includes(base)) {
+        return `BYBIT:${base}USDC`;
+    }
+    // Fallback: Binance USDT (widest altcoin coverage)
+    return `BINANCE:${base}USDT`;
 }
 
 const TradingViewChart = ({ symbol, theme = 'dark' }: TradingViewChartProps) => {
@@ -32,7 +38,7 @@ const TradingViewChart = ({ symbol, theme = 'dark' }: TradingViewChartProps) => 
         script.type = "text/javascript";
         script.async = true;
 
-        const tvSymbol = symbol.includes(":") ? symbol : toHyperliquidSymbol(symbol);
+        const tvSymbol = symbol.includes(":") ? symbol : toTradingViewSymbol(symbol);
 
         const config = {
             "autosize": true,
