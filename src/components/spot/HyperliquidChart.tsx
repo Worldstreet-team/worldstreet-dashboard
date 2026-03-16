@@ -10,11 +10,23 @@ import {
   UTCTimestamp,
   CandlestickSeries,
   HistogramSeries,
+  LineSeries,
   CrosshairMode,
 } from "lightweight-charts";
 
 interface HyperliquidChartProps {
-  symbol: string; // e.g. "BTCUSD", "BTC/USD", "BTC-USD", "ETHUSDC"
+  symbol: string;
+}
+
+interface OhlcInfo {
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  change: number;
+  changePct: number;
+  time: number;
 }
 
 const INTERVALS = [
@@ -35,27 +47,53 @@ function extractBase(symbol: string): string {
     .toUpperCase();
 }
 
+/** Compute a simple moving average over `period` values. */
+function computeSMA(
+  data: { time: UTCTimestamp; value: number }[],
+  period: number
+): { time: UTCTimestamp; value: number }[] {
+  const result: { time: UTCTimestamp; value: number }[] = [];
+  for (let i = period - 1; i < data.length; i++) {
+    let sum = 0;
+    for (let j = i - period + 1; j <= i; j++) sum += data[j].value;
+    result.push({ time: data[i].time, value: sum / period });
+  }
+  return result;
+}
+
+function formatPrice(price: number): string {
+  if (price >= 10000) return price.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  if (price >= 100) return price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (price >= 1) return price.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+  return price.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 6 });
+}
+
+const VOLUME_SMA_PERIOD = 20;
+
 const HyperliquidChart = ({ symbol }: HyperliquidChartProps) => {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const chartAreaRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const volumeSeriesRef = useRef<ISeriesApi<"Histogram"> | null>(null);
+  const volSmaSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const rawCandlesRef = useRef<any[]>([]);
 
   const [interval, setInterval] = useState("30m");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [ohlc, setOhlc] = useState<OhlcInfo | null>(null);
+  const [volSmaValue, setVolSmaValue] = useState<number | null>(null);
 
   const baseCoin = extractBase(symbol);
 
   // Initialize chart
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!chartAreaRef.current) return;
 
-    const chart = createChart(containerRef.current, {
-      width: containerRef.current.clientWidth,
-      height: containerRef.current.clientHeight,
+    const chart = createChart(chartAreaRef.current, {
+      width: chartAreaRef.current.clientWidth,
+      height: chartAreaRef.current.clientHeight,
       layout: {
         background: { color: "#0b0e11" },
         textColor: "#848e9c",
@@ -67,12 +105,20 @@ const HyperliquidChart = ({ symbol }: HyperliquidChartProps) => {
       },
       crosshair: {
         mode: CrosshairMode.Normal,
-        vertLine: { color: "rgba(224, 227, 235, 0.1)", style: 0 },
-        horzLine: { color: "rgba(224, 227, 235, 0.1)", style: 0 },
+        vertLine: {
+          color: "rgba(224, 227, 235, 0.1)",
+          style: 0,
+          labelBackgroundColor: "#2a2e39",
+        },
+        horzLine: {
+          color: "rgba(224, 227, 235, 0.1)",
+          style: 0,
+          labelBackgroundColor: "#2a2e39",
+        },
       },
       rightPriceScale: {
         borderColor: "#2a2e39",
-        scaleMargins: { top: 0.05, bottom: 0.25 },
+        scaleMargins: { top: 0.05, bottom: 0.28 },
       },
       timeScale: {
         borderColor: "#2a2e39",
@@ -89,29 +135,86 @@ const HyperliquidChart = ({ symbol }: HyperliquidChartProps) => {
       borderVisible: false,
       wickUpColor: "#0ecb81",
       wickDownColor: "#f6465d",
+      lastValueVisible: true,
+      priceLineVisible: true,
+      priceLineColor: "#f6465d",
+      priceLineWidth: 1,
     });
 
     const volumeSeries = chart.addSeries(HistogramSeries, {
       priceFormat: { type: "volume" },
-      priceScaleId: "",
+      priceScaleId: "volume",
     });
     volumeSeries.priceScale().applyOptions({
-      scaleMargins: { top: 0.8, bottom: 0 },
+      scaleMargins: { top: 0.85, bottom: 0 },
+    });
+
+    const volSmaSeries = chart.addSeries(LineSeries, {
+      color: "#f0b90b",
+      lineWidth: 1,
+      priceScaleId: "volume",
+      lastValueVisible: false,
+      priceLineVisible: false,
+      crosshairMarkerVisible: false,
     });
 
     chartRef.current = chart;
     candleSeriesRef.current = candleSeries;
     volumeSeriesRef.current = volumeSeries;
+    volSmaSeriesRef.current = volSmaSeries;
+
+    // Crosshair move → update OHLC header
+    chart.subscribeCrosshairMove((param) => {
+      if (!param || !param.time) {
+        // Reset to last bar
+        const candles = rawCandlesRef.current;
+        if (candles.length > 0) {
+          const last = candles[candles.length - 1];
+          const prev = candles.length > 1 ? candles[candles.length - 2] : last;
+          setOhlc({
+            open: last.open,
+            high: last.high,
+            low: last.low,
+            close: last.close,
+            volume: last.volume,
+            change: last.close - prev.close,
+            changePct: prev.close ? ((last.close - prev.close) / prev.close) * 100 : 0,
+            time: last.time,
+          });
+        }
+        return;
+      }
+      const candleData = param.seriesData.get(candleSeries) as any;
+      const volData = param.seriesData.get(volumeSeries) as any;
+      if (candleData) {
+        const candles = rawCandlesRef.current;
+        // Find previous bar
+        const idx = candles.findIndex((c: any) => c.time === (param.time as number));
+        const prev = idx > 0 ? candles[idx - 1] : candleData;
+        setOhlc({
+          open: candleData.open,
+          high: candleData.high,
+          low: candleData.low,
+          close: candleData.close,
+          volume: volData?.value || 0,
+          change: candleData.close - prev.close,
+          changePct: prev.close ? ((candleData.close - prev.close) / prev.close) * 100 : 0,
+          time: param.time as number,
+        });
+      }
+      // Volume SMA value at crosshair
+      const smaData = param.seriesData.get(volSmaSeries) as any;
+      if (smaData && smaData.value !== undefined) {
+        setVolSmaValue(smaData.value);
+      }
+    });
 
     // Resize observer
     const ro = new ResizeObserver((entries) => {
       const { width, height } = entries[0].contentRect;
-      if (width > 0 && height > 0) {
-        chart.applyOptions({ width, height });
-      }
+      if (width > 0 && height > 0) chart.applyOptions({ width, height });
     });
-    ro.observe(containerRef.current);
-    resizeObserverRef.current = ro;
+    ro.observe(chartAreaRef.current);
 
     return () => {
       ro.disconnect();
@@ -119,17 +222,18 @@ const HyperliquidChart = ({ symbol }: HyperliquidChartProps) => {
       chartRef.current = null;
       candleSeriesRef.current = null;
       volumeSeriesRef.current = null;
+      volSmaSeriesRef.current = null;
     };
   }, []);
 
-  // Fetch candles + connect WS whenever symbol or interval changes
+  // Fetch candles + stream
   const fetchAndStream = useCallback(async () => {
-    if (!candleSeriesRef.current || !volumeSeriesRef.current) return;
+    if (!candleSeriesRef.current || !volumeSeriesRef.current || !volSmaSeriesRef.current)
+      return;
 
     setLoading(true);
     setError(null);
 
-    // Disconnect previous WS
     if (wsRef.current) {
       wsRef.current.close();
       wsRef.current = null;
@@ -147,6 +251,8 @@ const HyperliquidChart = ({ symbol }: HyperliquidChartProps) => {
         return;
       }
 
+      rawCandlesRef.current = json.data;
+
       const candles: CandlestickData[] = json.data.map((c: any) => ({
         time: c.time as UTCTimestamp,
         open: c.open,
@@ -158,18 +264,53 @@ const HyperliquidChart = ({ symbol }: HyperliquidChartProps) => {
       const volumes: HistogramData[] = json.data.map((c: any) => ({
         time: c.time as UTCTimestamp,
         value: c.volume,
-        color: c.close >= c.open ? "rgba(14, 203, 129, 0.35)" : "rgba(246, 70, 93, 0.35)",
+        color:
+          c.close >= c.open
+            ? "rgba(14, 203, 129, 0.35)"
+            : "rgba(246, 70, 93, 0.35)",
       }));
+
+      // Volume SMA
+      const volRaw = json.data.map((c: any) => ({
+        time: c.time as UTCTimestamp,
+        value: c.volume as number,
+      }));
+      const smaData = computeSMA(volRaw, VOLUME_SMA_PERIOD);
 
       candleSeriesRef.current.setData(candles);
       volumeSeriesRef.current.setData(volumes);
+      volSmaSeriesRef.current.setData(smaData);
       chartRef.current?.timeScale().fitContent();
+
+      // Set initial OHLC from last bar
+      const last = json.data[json.data.length - 1];
+      const prev =
+        json.data.length > 1 ? json.data[json.data.length - 2] : last;
+      setOhlc({
+        open: last.open,
+        high: last.high,
+        low: last.low,
+        close: last.close,
+        volume: last.volume,
+        change: last.close - prev.close,
+        changePct: prev.close
+          ? ((last.close - prev.close) / prev.close) * 100
+          : 0,
+        time: last.time,
+      });
+      if (smaData.length > 0)
+        setVolSmaValue(smaData[smaData.length - 1].value);
+
       setLoading(false);
 
-      // The API returns the resolved HL coin name for WebSocket subscription
-      const hlCoinName = json.coinName || baseCoin;
+      // Update last price line color
+      const priceColor = last.close >= last.open ? "#0ecb81" : "#f6465d";
+      candleSeriesRef.current.applyOptions({
+        priceLineColor: priceColor,
+      });
 
-      // Connect WebSocket for live candle updates
+      // WebSocket for live updates
+      const hlCoinName = json.coinName || baseCoin;
       const ws = new WebSocket("wss://api.hyperliquid.xyz/ws");
       wsRef.current = ws;
 
@@ -188,29 +329,70 @@ const HyperliquidChart = ({ symbol }: HyperliquidChartProps) => {
           if (msg.channel === "candle" && msg.data) {
             const c = msg.data;
             const time = Math.floor(c.t / 1000) as UTCTimestamp;
-            candleSeriesRef.current?.update({
-              time,
-              open: Number(c.o),
-              high: Number(c.h),
-              low: Number(c.l),
-              close: Number(c.c),
-            });
+            const open = Number(c.o);
+            const high = Number(c.h);
+            const low = Number(c.l);
+            const close = Number(c.c);
+            const volume = Number(c.v);
+            const isUp = close >= open;
+
+            candleSeriesRef.current?.update({ time, open, high, low, close });
             volumeSeriesRef.current?.update({
               time,
-              value: Number(c.v),
-              color:
-                Number(c.c) >= Number(c.o)
-                  ? "rgba(14, 203, 129, 0.35)"
-                  : "rgba(246, 70, 93, 0.35)",
+              value: volume,
+              color: isUp
+                ? "rgba(14, 203, 129, 0.35)"
+                : "rgba(246, 70, 93, 0.35)",
+            });
+
+            // Update raw candles for OHLC overlay
+            const existing = rawCandlesRef.current;
+            if (
+              existing.length > 0 &&
+              existing[existing.length - 1].time === time
+            ) {
+              existing[existing.length - 1] = {
+                time,
+                open,
+                high,
+                low,
+                close,
+                volume,
+              };
+            } else {
+              existing.push({ time, open, high, low, close, volume });
+            }
+
+            // Update OHLC display with latest bar
+            const prev2 =
+              existing.length > 1
+                ? existing[existing.length - 2]
+                : { close: open };
+            setOhlc({
+              open,
+              high,
+              low,
+              close,
+              volume,
+              change: close - prev2.close,
+              changePct: prev2.close
+                ? ((close - prev2.close) / prev2.close) * 100
+                : 0,
+              time,
+            });
+
+            // Update price line color
+            candleSeriesRef.current?.applyOptions({
+              priceLineColor: isUp ? "#0ecb81" : "#f6465d",
             });
           }
         } catch {
-          // ignore parse errors
+          // ignore
         }
       };
 
       ws.onerror = () => {
-        console.warn("[HyperliquidChart] WS error – live updates unavailable");
+        console.warn("[HyperliquidChart] WS error");
       };
     } catch (err: any) {
       console.error("[HyperliquidChart]", err);
@@ -229,14 +411,13 @@ const HyperliquidChart = ({ symbol }: HyperliquidChartProps) => {
     };
   }, [fetchAndStream]);
 
+  const isUp = ohlc ? ohlc.close >= ohlc.open : true;
+  const changeColor = isUp ? "text-[#0ecb81]" : "text-[#f6465d]";
+
   return (
     <div className="flex flex-col h-full w-full bg-[#0b0e11] overflow-hidden">
-      {/* Toolbar */}
-      <div className="flex items-center gap-1 px-2 py-1.5 border-b border-[#2a2e39] flex-shrink-0">
-        <span className="text-xs font-semibold text-white mr-2">
-          {baseCoin}/USD
-        </span>
-        <span className="text-[10px] text-[#848e9c] mr-3">Hyperliquid</span>
+      {/* Top toolbar: timeframes */}
+      <div className="flex items-center gap-0.5 px-2 py-1 border-b border-[#2a2e39] flex-shrink-0">
         {INTERVALS.map((iv) => (
           <button
             key={iv.value}
@@ -250,13 +431,66 @@ const HyperliquidChart = ({ symbol }: HyperliquidChartProps) => {
             {iv.label}
           </button>
         ))}
+        <div className="w-px h-4 bg-[#2a2e39] mx-1.5" />
+        <span className="text-[10px] text-[#848e9c]">Indicators</span>
+      </div>
+
+      {/* OHLC Header */}
+      <div className="flex items-center gap-3 px-2 py-1 flex-shrink-0 flex-wrap">
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-semibold text-white">
+            {baseCoin}/USD
+          </span>
+          <span className="text-[10px] text-[#848e9c]">
+            · {interval} · Hyperliquid
+          </span>
+          {ohlc && (
+            <span className={`inline-block w-2 h-2 rounded-full ${isUp ? 'bg-[#0ecb81]' : 'bg-[#f6465d]'}`} />
+          )}
+        </div>
+
+        {ohlc && (
+          <div className="flex items-center gap-2 text-[11px]">
+            <span className="text-[#848e9c]">
+              O<span className={changeColor}>{formatPrice(ohlc.open)}</span>
+            </span>
+            <span className="text-[#848e9c]">
+              H<span className="text-[#0ecb81]">{formatPrice(ohlc.high)}</span>
+            </span>
+            <span className="text-[#848e9c]">
+              L<span className="text-[#f6465d]">{formatPrice(ohlc.low)}</span>
+            </span>
+            <span className="text-[#848e9c]">
+              C<span className={changeColor}>{formatPrice(ohlc.close)}</span>
+            </span>
+            <span className={`font-medium ${changeColor}`}>
+              {ohlc.change >= 0 ? "+" : ""}
+              {formatPrice(ohlc.change)} ({ohlc.changePct >= 0 ? "+" : ""}
+              {ohlc.changePct.toFixed(2)}%)
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Volume SMA label  */}
+      <div className="px-2 pb-0.5 flex-shrink-0">
+        <span className="text-[10px] text-[#848e9c]">
+          Volume{" "}
+          <span className="text-[#f0b90b]">
+            SMA {VOLUME_SMA_PERIOD}
+          </span>{" "}
+          {volSmaValue !== null && (
+            <span className="text-[#f0b90b]">
+              {volSmaValue.toFixed(2)}
+            </span>
+          )}
+        </span>
       </div>
 
       {/* Chart area */}
       <div className="relative flex-1 min-h-0">
-        <div ref={containerRef} className="absolute inset-0" />
+        <div ref={chartAreaRef} className="absolute inset-0" />
 
-        {/* Loading overlay */}
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-[#0b0e11]/80 z-10">
             <div className="flex items-center gap-2 text-[#848e9c] text-sm">
@@ -277,7 +511,6 @@ const HyperliquidChart = ({ symbol }: HyperliquidChartProps) => {
           </div>
         )}
 
-        {/* Error overlay */}
         {error && !loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-[#0b0e11]/80 z-10">
             <div className="text-center">
