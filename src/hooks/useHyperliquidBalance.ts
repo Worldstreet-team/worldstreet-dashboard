@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useWallet } from '@/app/context/walletContext';
 
 interface HyperliquidBalance {
@@ -30,16 +30,18 @@ interface UseHyperliquidBalanceResult {
 
 export function useHyperliquidBalance(userId?: string, enabled = true): UseHyperliquidBalanceResult {
   const { walletsGenerated, addresses, isLoading: walletsLoading } = useWallet();
+  const ethAddress = addresses?.ethereum;
   const [balances, setBalances] = useState<HyperliquidBalance[]>([]);
   const [usdcBalance, setUsdcBalance] = useState({ total: 0, available: 0, hold: 0 });
   const [accountValue, setAccountValue] = useState(0);
   const [withdrawable, setWithdrawable] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const hasFetchedOnce = useRef(false);
 
-  const fetchBalance = useCallback(async () => {
+  const fetchBalance = useCallback(async (isPolling = false) => {
     // Wait until wallets are generated and addresses are populated
-    if (!enabled || !userId || !walletsGenerated || !addresses?.ethereum) {
+    if (!enabled || !userId || !walletsGenerated || !ethAddress) {
       if (!userId || !enabled) {
         setLoading(false);
       }
@@ -47,17 +49,16 @@ export function useHyperliquidBalance(userId?: string, enabled = true): UseHyper
     }
 
     try {
-      setLoading(true);
+      // Only show loading spinner on initial fetch, not on background polls
+      if (!isPolling) {
+        setLoading(true);
+      }
       setError(null);
 
-      console.log('[useHyperliquidBalance] Fetching balance for user:', userId, 'with address:', addresses.ethereum);
       const response = await fetch(`/api/hyperliquid/balance`);
       
-      // Handle the case where the API might still return 404 despite our checks
       if (response.status === 404) {
-        setLoading(false);
-        // We don't set an error here, just wait for next retry or manual refetch
-        // as this usually means the DB record is just a bit late
+        if (!isPolling) setLoading(false);
         return;
       }
 
@@ -71,19 +72,24 @@ export function useHyperliquidBalance(userId?: string, enabled = true): UseHyper
       setUsdcBalance(data.data.usdcBalance);
       setAccountValue(data.data.accountValue);
       setWithdrawable(data.data.withdrawable);
+      hasFetchedOnce.current = true;
     } catch (err: any) {
       console.error('Failed to fetch Hyperliquid balance:', err);
-      setError(err.message || 'Failed to fetch balance');
+      if (!isPolling) {
+        setError(err.message || 'Failed to fetch balance');
+      }
     } finally {
-      setLoading(false);
+      if (!isPolling) {
+        setLoading(false);
+      }
     }
-  }, [userId, enabled, walletsGenerated, addresses]);
+  }, [userId, enabled, walletsGenerated, ethAddress]);
 
   useEffect(() => {
-    fetchBalance();
+    hasFetchedOnce.current = false;
+    fetchBalance(false);
 
-    // Auto-poll every 15 seconds to keep header balance fresh
-    const interval = setInterval(fetchBalance, 15_000);
+    const interval = setInterval(() => fetchBalance(true), 15_000);
     return () => clearInterval(interval);
   }, [fetchBalance]);
 
@@ -92,8 +98,8 @@ export function useHyperliquidBalance(userId?: string, enabled = true): UseHyper
     usdcBalance,
     accountValue,
     withdrawable,
-    loading: loading || walletsLoading,
+    loading: (loading && !hasFetchedOnce.current) || walletsLoading,
     error,
-    refetch: fetchBalance
+    refetch: () => fetchBalance(false)
   };
 }
