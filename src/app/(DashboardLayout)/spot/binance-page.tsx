@@ -60,9 +60,9 @@ export default function BinanceSpotPage() {
   }, [hyperliquidMarkets]);
 
   // State management
-  const [selectedPair, setSelectedPair] = useState<string>('BTC');
+  const [selectedPair, setSelectedPair] = useState<string>('');
   const [pairData, setPairData] = useState<PairData>({
-    name: 'BTC',
+    name: '',
     price: 0,
     change24h: 0,
     high24h: 0,
@@ -83,6 +83,12 @@ export default function BinanceSpotPage() {
   // Update pair data when Hyperliquid markets change
   useEffect(() => {
     if (hyperliquidMarkets.length > 0) {
+      // Auto-select first available market if no pair is selected yet
+      if (!selectedPair) {
+        const firstMarket = hyperliquidMarkets[0];
+        setSelectedPair(firstMarket.baseAsset);
+      }
+
       const market = hyperliquidMarkets.find(m =>
         m.baseAsset === selectedPair || m.symbol === selectedPair
       );
@@ -131,7 +137,7 @@ export default function BinanceSpotPage() {
 
   const isPositive = pairData.change24h >= 0;
 
-  if (marketsLoading) {
+  if (marketsLoading || !selectedPair) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#0b0e11]">
         <div className="text-center">

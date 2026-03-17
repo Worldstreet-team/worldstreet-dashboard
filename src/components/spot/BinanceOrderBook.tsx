@@ -2,10 +2,9 @@
 
 /**
  * BinanceOrderBook Component
- * 
- * Real-time order book display using Gate.io REST API with polling
- * - Polls /api/orderbook every 3 seconds
- * - Fetches order book data from Gate.io
+ *
+ * Real-time order book display using Hyperliquid L2 book API with polling
+ * - Polls /api/hyperliquid/orderbook every 3 seconds
  * - Displays top 20 bids and asks with depth visualization
  * - Shows spread and last update time
  */
@@ -24,13 +23,6 @@ interface BinanceOrderBookProps {
   selectedPair: string;
 }
 
-interface GateIOOrderBookData {
-  sequence: number;
-  timestamp: number;
-  bids: [string, string][];
-  asks: [string, string][];
-}
-
 const POLLING_INTERVAL = 3000;
 
 export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps) {
@@ -43,54 +35,39 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<number>(0);
-  
+
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef<boolean>(true);
 
-  const formatSymbol = (pair: string): string => {
-    return pair.replace('-', '_');
-  };
+  // Extract base coin from pair like "PURR-USD" → "PURR"
+  const baseCoin = useMemo(() => {
+    return selectedPair.split('-')[0]?.replace(/\//g, '') || selectedPair;
+  }, [selectedPair]);
 
-  const fetchOrderBook = async (pair: string) => {
+  const fetchOrderBook = async (coin: string) => {
     try {
-      const symbol = formatSymbol(pair);
-      
-      // Normalize symbol to always use _USDT format
-      // Examples: SOL-PERP -> SOL_USDT, BTC_ETH -> BTC_USDT, ETH_USDT -> ETH_USDT
-      console.log("Symbol: ", symbol)
-      let normalizedSymbol = symbol;
-      if (symbol.includes('_')) {
-        const [base, quote] = symbol.split('_');
-        // If quote is not USDT, replace it with USDT
-        if (quote.toUpperCase() !== 'USDT') {
-          normalizedSymbol = `${base}_USDT`;
-        }
-        if (quote.toUpperCase() !== 'USDC'){
-          normalizedSymbol = `${base}_USDT`
-        }
-      } else {
-        // No underscore, just add _USDT
-        normalizedSymbol = `${symbol}_USDT`;
-      }
-      
-      const response = await fetch(`/api/orderbook?symbol=${normalizedSymbol}`);
-      
+      const response = await fetch(`/api/hyperliquid/orderbook?coin=${encodeURIComponent(coin)}`);
+
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
       }
 
-      const data: GateIOOrderBookData = await response.json();
-      
+      const json = await response.json();
+
+      if (!json.success) {
+        throw new Error(json.error || 'Unknown error');
+      }
+
       if (!isMountedRef.current) return;
 
-      processOrderBookUpdate(data);
+      processOrderBookUpdate(json.asks, json.bids);
       setConnected(true);
       setLoading(false);
       setError(null);
-      setLastUpdate(data.timestamp || Date.now());
+      setLastUpdate(json.timestamp || Date.now());
     } catch (err) {
       console.error('[OrderBook] Error fetching data:', err);
-      
+
       if (isMountedRef.current) {
         setConnected(false);
         setError(err instanceof Error ? err.message : 'Failed to fetch order book');
@@ -101,7 +78,7 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
 
   useEffect(() => {
     isMountedRef.current = true;
-    
+
     setAsks([]);
     setBids([]);
     setLastPrice(0);
@@ -110,33 +87,34 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
     setLoading(true);
     setError(null);
 
-    fetchOrderBook(selectedPair);
+    fetchOrderBook(baseCoin);
 
     intervalRef.current = setInterval(() => {
-      fetchOrderBook(selectedPair);
+      fetchOrderBook(baseCoin);
     }, POLLING_INTERVAL);
-    
+
     return () => {
       isMountedRef.current = false;
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
     };
-  }, [selectedPair]);
+  }, [baseCoin]);
 
-  const processOrderBookUpdate = (data: GateIOOrderBookData) => {
+  const processOrderBookUpdate = (
+    rawAsks: [string, string][],
+    rawBids: [string, string][]
+  ) => {
     try {
+      // Process asks (sell orders) — lowest first, take top 20
       const processedAsks: OrderBookEntry[] = [];
       let askCumulativeTotal = 0;
-      
-      const sortedAsks = [...data.asks]
-        .map(([priceStr, sizeStr]) => ({
-          price: parseFloat(priceStr),
-          size: parseFloat(sizeStr)
-        }))
+
+      const sortedAsks = rawAsks
+        .map(([px, sz]) => ({ price: parseFloat(px), size: parseFloat(sz) }))
         .sort((a, b) => a.price - b.price)
         .slice(0, 20);
-      
+
       for (const { price, size } of sortedAsks) {
         const total = price * size;
         if (!isNaN(total) && isFinite(total)) {
@@ -145,23 +123,21 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
         }
       }
 
-      processedAsks.reverse();
+      processedAsks.reverse(); // display highest ask at top
       processedAsks.forEach((ask, idx) => {
-        const cumulativeToThis = processedAsks.slice(idx).reduce((sum, a) => sum + a.total, 0);
+        const cumulativeToThis = processedAsks.slice(idx).reduce((s, a) => s + a.total, 0);
         ask.depthPercent = askCumulativeTotal > 0 ? (cumulativeToThis / askCumulativeTotal) * 100 : 0;
       });
 
+      // Process bids (buy orders) — highest first, take top 20
       const processedBids: OrderBookEntry[] = [];
       let bidCumulativeTotal = 0;
-      
-      const sortedBids = [...data.bids]
-        .map(([priceStr, sizeStr]) => ({
-          price: parseFloat(priceStr),
-          size: parseFloat(sizeStr)
-        }))
+
+      const sortedBids = rawBids
+        .map(([px, sz]) => ({ price: parseFloat(px), size: parseFloat(sz) }))
         .sort((a, b) => b.price - a.price)
         .slice(0, 20);
-      
+
       for (const { price, size } of sortedBids) {
         const total = price * size;
         if (!isNaN(total) && isFinite(total)) {
@@ -171,7 +147,7 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
       }
 
       processedBids.forEach((bid, idx) => {
-        const cumulativeToThis = processedBids.slice(0, idx + 1).reduce((sum, b) => sum + b.total, 0);
+        const cumulativeToThis = processedBids.slice(0, idx + 1).reduce((s, b) => s + b.total, 0);
         bid.depthPercent = bidCumulativeTotal > 0 ? (cumulativeToThis / bidCumulativeTotal) * 100 : 0;
       });
 
@@ -184,8 +160,8 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
         setLastPrice(newLastPrice);
         setPriceChange(change);
       }
-    } catch (error) {
-      console.error('Error processing order book update:', error);
+    } catch (err) {
+      console.error('Error processing order book update:', err);
     }
   };
 
@@ -280,7 +256,7 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
 
       {/* Column Headers */}
       <div className="px-3 py-1 grid grid-cols-3 gap-2 text-[10px] text-[#848e9c] font-medium">
-        <div className="text-left">Price(USDT)</div>
+        <div className="text-left">Price(USDC)</div>
         <div className="text-right">Amount</div>
         <div className="text-right">Total</div>
       </div>
