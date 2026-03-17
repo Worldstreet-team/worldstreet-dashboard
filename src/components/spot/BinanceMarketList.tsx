@@ -17,8 +17,6 @@ interface MarketData {
   low24h: number;
   chain: Chain;
   szDecimals?: number;
-  maxLeverage?: number;
-  onlyIsolated?: boolean;
 }
 
 interface BinanceMarketListProps {
@@ -47,12 +45,17 @@ export default function BinanceMarketList({
   });
 
   const filteredMarkets = useMemo(() => {
-    return markets.filter(market => {
+    let filtered = markets.filter(market => {
       const matchesSearch = searchQuery === '' ||
         market.baseAsset.toLowerCase().includes(searchQuery.toLowerCase()) ||
         market.symbol.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesSearch;
     });
+
+    // Sort by 24h volume descending (most active first)
+    filtered.sort((a, b) => (b.volume24h || 0) - (a.volume24h || 0));
+
+    return filtered;
   }, [markets, searchQuery]);
 
   const toggleFavorite = (symbol: string) => {
@@ -181,24 +184,20 @@ export default function BinanceMarketList({
                           className={isFav ? 'text-[#f0b90b]' : 'text-[#848e9c] hover:text-[#f0b90b]'}
                         />
                       </button>
+                      <div className="w-6 h-6 rounded-full bg-[#2b3139] flex items-center justify-center flex-shrink-0">
+                        <span className="text-[10px] font-bold text-[#f0b90b]">
+                          {market.baseAsset.slice(0, 2)}
+                        </span>
+                      </div>
                       <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium text-white flex items-center gap-1.5 mb-0.5">
-                          <Icon
-                            icon="cryptocurrency:eth"
-                            width={12}
-                            className="flex-shrink-0"
-                          />
+                        <div className="text-sm font-medium text-white">
                           {market.baseAsset}<span className="text-[#848e9c]">/{market.quoteAsset}</span>
                         </div>
-                        <div className="text-[10px] text-[#848e9c] flex items-center gap-2">
-                          <span>Basic Data</span>
-                          {market.maxLeverage && (
-                            <span>Max {market.maxLeverage}x</span>
-                          )}
-                          {market.onlyIsolated && (
-                            <span className="text-[#f0b90b]">ISO</span>
-                          )}
-                        </div>
+                        {market.volume24h > 0 && (
+                          <div className="text-[10px] text-[#848e9c]">
+                            Vol {formatVolume(market.volume24h)}
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -209,11 +208,21 @@ export default function BinanceMarketList({
                       </div>
                     </div>
 
-                    {/* Change */}
+                    {/* 24h Change */}
                     <div className="text-right min-w-[70px]">
-                      <div className="text-xs text-[#848e9c] px-2.5 py-1">
-                        --
-                      </div>
+                      {market.change24h !== 0 ? (
+                        <div className={`text-xs font-medium px-2 py-0.5 rounded ${
+                          isPositive
+                            ? 'text-[#0ecb81] bg-[#0ecb81]/10'
+                            : 'text-[#f6465d] bg-[#f6465d]/10'
+                        }`}>
+                          {isPositive ? '+' : ''}{market.change24h.toFixed(2)}%
+                        </div>
+                      ) : (
+                        <div className="text-xs text-[#848e9c] px-2 py-0.5">
+                          0.00%
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -227,10 +236,7 @@ export default function BinanceMarketList({
       <div className="px-4 py-2 border-t border-[#1e2329] shrink-0">
         <div className="text-xs text-[#848e9c] flex items-center justify-between">
           <span>{filteredMarkets.length} markets</span>
-          <span className="flex items-center gap-1">
-            <Icon icon="cryptocurrency:eth" width={12} />
-            Ethereum • WorldStreet
-          </span>
+          <span>Hyperliquid Spot</span>
         </div>
       </div>
     </div>

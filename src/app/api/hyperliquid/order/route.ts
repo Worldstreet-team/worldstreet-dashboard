@@ -7,6 +7,33 @@ import { createAuthorizationContext } from "@/lib/privy/authorization";
 import { HttpTransport, InfoClient, ExchangeClient } from "@nktkas/hyperliquid";
 
 const MIN_ORDER_VALUE = 10; // Hyperliquid universal minimum in USD
+const MAX_SLIPPAGE_PCT = 3; // Maximum allowed slippage for market orders (%)
+
+// Simulate walking the order book to estimate average fill price
+function estimateAvgFill(
+  levels: Array<{ px: string; sz: string }>,
+  size: number
+): { avgPrice: number; filled: number; fullyFilled: boolean } {
+  let remaining = size;
+  let totalCost = 0;
+  let totalFilled = 0;
+
+  for (const level of levels) {
+    if (remaining <= 0) break;
+    const px = parseFloat(level.px);
+    const sz = parseFloat(level.sz);
+    const fill = Math.min(remaining, sz);
+    totalCost += fill * px;
+    totalFilled += fill;
+    remaining -= fill;
+  }
+
+  return {
+    avgPrice: totalFilled > 0 ? totalCost / totalFilled : 0,
+    filled: totalFilled,
+    fullyFilled: remaining <= 0,
+  };
+}
 
 function formatOrderError(raw: string): string {
   if (/minimum value of \$?(\d+)/i.test(raw)) {
@@ -163,6 +190,32 @@ export async function POST(request: NextRequest) {
 
         console.log(`[Hyperliquid Order] Market depth for ${asset}: Bid ${bestBid} (${bidDecimals} dec), Ask ${bestAsk} (${askDecimals} dec)`);
         
+        // Estimate average fill by walking the book
+        const bookSide = side === 'buy'
+          ? l2.levels[1].map((l: any) => ({ px: l.px, sz: l.sz }))  // asks for buys
+          : l2.levels[0].map((l: any) => ({ px: l.px, sz: l.sz })); // bids for sells
+        const estimate = estimateAvgFill(bookSide, Number(amount));
+        const midPrice = (bestBid + bestAsk) / 2;
+
+        if (estimate.avgPrice > 0 && midPrice > 0) {
+          const slippagePct = Math.abs(estimate.avgPrice - midPrice) / midPrice * 100;
+          console.log(`[Hyperliquid Order] Slippage estimate: avg fill $${estimate.avgPrice.toFixed(8)}, mid $${midPrice.toFixed(8)}, slippage ${slippagePct.toFixed(2)}%, filled ${estimate.filled}/${amount}`);
+
+          if (slippagePct > MAX_SLIPPAGE_PCT) {
+            return NextResponse.json({
+              success: false,
+              error: `Order rejected: estimated slippage is ${slippagePct.toFixed(1)}% (max ${MAX_SLIPPAGE_PCT}%). The order book for ${asset} is too thin. Your estimated fill price is $${estimate.avgPrice.toFixed(6)} vs mid price $${midPrice.toFixed(6)}. Try a smaller amount or use a limit order.`
+            }, { status: 400 });
+          }
+
+          if (!estimate.fullyFilled) {
+            return NextResponse.json({
+              success: false,
+              error: `Order rejected: the order book only has enough liquidity for ${estimate.filled.toFixed(2)} ${asset} (you requested ${amount}). Try a smaller amount or use a limit order.`
+            }, { status: 400 });
+          }
+        }
+
         if (side === 'buy') {
           // Buy at Best Ask + 5% buffer, rounded to same decimals as the book
           const rawPrice = bestAsk * 1.05;

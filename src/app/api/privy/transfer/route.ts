@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { connectDB } from "@/lib/mongodb";
 import { UserWallet } from "@/models/UserWallet";
+import WalletTransfer from "@/models/WalletTransfer";
 import { createAuthorizationContext } from "@/lib/privy/authorization";
 import { privyClient } from "@/lib/privy/client";
 import { createViemAccount } from "@privy-io/node/viem";
@@ -190,6 +191,21 @@ export async function POST(request: NextRequest) {
 
     const txHash = result.hash;
     console.log(`[Hyperliquid Deposit] Transaction successful! Hash: ${txHash}`);
+
+    // Record the transfer
+    WalletTransfer.create({
+      userId: authUserId,
+      type: 'internal',
+      direction: 'main-to-spot',
+      chain: 'arbitrum',
+      token: asset,
+      amount: parseFloat(amount),
+      fromAddress: mainWalletAddress,
+      toAddress: HL_BRIDGE,
+      txHash,
+      status: 'confirmed',
+      memo: 'Hyperliquid deposit via Privy',
+    }).catch((e: unknown) => console.error('Failed to record transfer:', e));
 
     return NextResponse.json({
       success: true,

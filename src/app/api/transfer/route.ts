@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { connectDB } from '@/lib/mongodb';
+import WalletTransfer from '@/models/WalletTransfer';
 
 // Helper function to sanitize and categorize errors
 function sanitizeError(error: any, backendResponse?: any): string {
@@ -149,6 +151,22 @@ export async function POST(request: NextRequest) {
                 { status: response.status }
             );
         }
+
+        // Record the transfer in the database (fire-and-forget)
+        connectDB().then(() =>
+          WalletTransfer.create({
+            userId,
+            type: 'internal',
+            direction: direction as string,
+            chain: 'solana',
+            token: asset,
+            amount,
+            toAddress: destinationAddress,
+            txHash: data.txHash || data.signature,
+            status: 'confirmed',
+            memo: `Internal transfer: ${direction}`,
+          })
+        ).catch((e: unknown) => console.error('Failed to record transfer:', e));
 
         return NextResponse.json({
             message: 'Transfer completed successfully',

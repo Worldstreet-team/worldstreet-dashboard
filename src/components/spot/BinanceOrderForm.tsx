@@ -1,10 +1,23 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Icon } from '@iconify/react';
 import { useAuth } from '@/app/context/authContext';
 import { useSpotBalances } from '@/hooks/useSpotBalances';
 import { useHyperliquidMarkets } from '@/hooks/useHyperliquidMarkets';
+
+interface SlippageEstimate {
+  midPrice: number;
+  bestBid: number;
+  bestAsk: number;
+  estimatedAvgPrice: number;
+  slippagePct: number;
+  estimatedValue: number;
+  filledAmount: number;
+  requestedAmount: number;
+  fullyFilled: boolean;
+  warning: string | null;
+}
 
 interface BinanceOrderFormProps {
   selectedPair: string;
@@ -48,6 +61,9 @@ export default function BinanceOrderForm({
   const [success, setSuccess] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [currentMarketPrice, setCurrentMarketPrice] = useState(0);
+  const [slippageEstimate, setSlippageEstimate] = useState<SlippageEstimate | null>(null);
+  const [slippageLoading, setSlippageLoading] = useState(false);
+  const slippageTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Extract base and quote assets from pair
   const [baseAsset, quoteAsset] = selectedPair.split('-');
@@ -85,6 +101,39 @@ export default function BinanceOrderForm({
       setTotal('');
     }
   }, [amount, price, currentMarketPrice, orderType]);
+
+  // Fetch slippage estimate for market orders (debounced 500ms)
+  useEffect(() => {
+    if (slippageTimer.current) clearTimeout(slippageTimer.current);
+
+    if (orderType !== 'market' || !amount || parseFloat(amount) <= 0) {
+      setSlippageEstimate(null);
+      return;
+    }
+
+    setSlippageLoading(true);
+    slippageTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/hyperliquid/slippage-estimate?coin=${baseAsset}&side=${activeTab}&amount=${amount}`
+        );
+        const data = await res.json();
+        if (data.success) {
+          setSlippageEstimate(data.data);
+        } else {
+          setSlippageEstimate(null);
+        }
+      } catch {
+        setSlippageEstimate(null);
+      } finally {
+        setSlippageLoading(false);
+      }
+    }, 500);
+
+    return () => {
+      if (slippageTimer.current) clearTimeout(slippageTimer.current);
+    };
+  }, [amount, orderType, activeTab, baseAsset]);
 
   // Update amount when total changes (for buy orders)
   const handleTotalChange = (value: string) => {
@@ -350,6 +399,59 @@ export default function BinanceOrderForm({
             </span>
           </div>
         </div>
+
+        {/* Slippage Estimate (for market orders) */}
+        {orderType === 'market' && amount && parseFloat(amount) > 0 && (
+          <div className={`p-2.5 rounded border text-xs ${
+            slippageEstimate && (slippageEstimate.slippagePct > 3 || !slippageEstimate.fullyFilled)
+              ? 'bg-[#f6465d]/10 border-[#f6465d]/30'
+              : slippageEstimate && slippageEstimate.slippagePct > 1
+                ? 'bg-[#f0b90b]/10 border-[#f0b90b]/30'
+                : 'bg-[#1e2329] border-[#2b3139]'
+          }`}>
+            {slippageLoading ? (
+              <div className="flex items-center gap-1.5 text-[#848e9c]">
+                <Icon icon="ph:circle-notch" className="animate-spin" width={12} />
+                <span>Estimating fill price...</span>
+              </div>
+            ) : slippageEstimate ? (
+              <div className="space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-[#848e9c]">Est. fill price</span>
+                  <span className="text-white font-medium">${slippageEstimate.estimatedAvgPrice.toFixed(6)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#848e9c]">Mid price</span>
+                  <span className="text-white">${slippageEstimate.midPrice.toFixed(6)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#848e9c]">Est. slippage</span>
+                  <span className={
+                    slippageEstimate.slippagePct > 3 ? 'text-[#f6465d] font-bold'
+                      : slippageEstimate.slippagePct > 1 ? 'text-[#f0b90b] font-medium'
+                      : 'text-[#0ecb81]'
+                  }>
+                    {slippageEstimate.slippagePct.toFixed(2)}%
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#848e9c]">Est. total</span>
+                  <span className="text-white">${slippageEstimate.estimatedValue.toFixed(2)} USDC</span>
+                </div>
+                {slippageEstimate.warning && (
+                  <div className={`mt-1 pt-1 border-t ${
+                    slippageEstimate.slippagePct > 3 || !slippageEstimate.fullyFilled
+                      ? 'border-[#f6465d]/30 text-[#f6465d]'
+                      : 'border-[#f0b90b]/30 text-[#f0b90b]'
+                  }`}>
+                    <Icon icon="ph:warning" width={12} className="inline mr-1" />
+                    {slippageEstimate.warning}
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
+        )}
 
         {/* Error Display */}
         {error && (

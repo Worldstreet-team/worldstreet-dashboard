@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
+import { connectDB } from '@/lib/mongodb';
+import WalletTransfer from '@/models/WalletTransfer';
 
 const BASE_API_URL = 'https://trading.watchup.site';
 
@@ -152,6 +154,22 @@ export async function POST(request: NextRequest) {
         { status: response.status }
       );
     }
+
+    // Record the futures transfer
+    connectDB().then(() =>
+      WalletTransfer.create({
+        userId,
+        type: 'internal',
+        direction: 'futures-to-main',
+        chain: 'solana',
+        token: 'USDT',
+        amount: amountNum,
+        toAddress: destinationAddress,
+        txHash: data.txHash,
+        status: 'confirmed',
+        memo: 'Futures wallet withdrawal',
+      })
+    ).catch((e: unknown) => console.error('Failed to record futures transfer:', e));
 
     return NextResponse.json({
       success: true,

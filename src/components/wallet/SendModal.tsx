@@ -176,6 +176,22 @@ const SendModal: React.FC<SendModalProps> = ({ isOpen, onClose, asset }) => {
 
       setTxHash(hash);
       setStep("success");
+
+      // Record wallet transfer (fire-and-forget)
+      fetch("/api/wallet-transfers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "send",
+          direction: "outgoing",
+          chain: asset.chain,
+          token: asset.symbol,
+          amount: amountNum,
+          toAddress: recipient,
+          txHash: hash,
+          status: "confirmed",
+        }),
+      }).catch((e) => console.error("Failed to record transfer:", e));
     } catch (err: unknown) {
       console.error("Send error:", err);
       const errorMessage = err instanceof Error ? err.message : "Transaction failed";
