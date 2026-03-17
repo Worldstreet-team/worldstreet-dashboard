@@ -3,13 +3,13 @@
 /**
  * BinanceOrderBook Component
  *
- * Real-time order book display using Hyperliquid L2 book API with polling
- * - Polls /api/hyperliquid/orderbook every 3 seconds
- * - Displays top 20 bids and asks with depth visualization
- * - Shows spread and last update time
+ * Real-time order book via Hyperliquid WebSocket (l2Book subscription).
+ * - Fetches initial snapshot + resolved coin name from REST API
+ * - Connects to wss://api.hyperliquid.xyz/ws for live l2Book updates
+ * - Falls back to REST polling if WS fails
  */
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Icon } from '@iconify/react';
 
 interface OrderBookEntry {
@@ -23,7 +23,8 @@ interface BinanceOrderBookProps {
   selectedPair: string;
 }
 
-const POLLING_INTERVAL = 3000;
+const WS_URL = 'wss://api.hyperliquid.xyz/ws';
+const REST_POLL_INTERVAL = 5000;
 
 export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps) {
   const [asks, setAsks] = useState<OrderBookEntry[]>([]);
@@ -36,48 +37,192 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<number>(0);
 
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const pollRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef<boolean>(true);
+  const coinNameRef = useRef<string>('');
+  const lastPriceRef = useRef<number>(0);
 
   // Extract base coin from pair like "PURR-USD" → "PURR"
   const baseCoin = useMemo(() => {
     return selectedPair.split('-')[0]?.replace(/\//g, '') || selectedPair;
   }, [selectedPair]);
 
-  const fetchOrderBook = async (coin: string) => {
-    try {
-      const response = await fetch(`/api/hyperliquid/orderbook?coin=${encodeURIComponent(coin)}`);
+  // ------- process raw levels into display entries -------
+  const processLevels = useCallback(
+    (rawAsks: [string, string][], rawBids: [string, string][]) => {
+      // Asks — lowest first, top 20
+      const processedAsks: OrderBookEntry[] = [];
+      let askCumTotal = 0;
+      const sortedAsks = rawAsks
+        .map(([px, sz]) => ({ price: parseFloat(px), size: parseFloat(sz) }))
+        .sort((a, b) => a.price - b.price)
+        .slice(0, 20);
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
+      for (const { price, size } of sortedAsks) {
+        const total = price * size;
+        if (!isNaN(total) && isFinite(total)) {
+          askCumTotal += total;
+          processedAsks.push({ price, amount: size, total, depthPercent: 0 });
+        }
       }
+      processedAsks.reverse();
+      processedAsks.forEach((a, i) => {
+        const cum = processedAsks.slice(i).reduce((s, x) => s + x.total, 0);
+        a.depthPercent = askCumTotal > 0 ? (cum / askCumTotal) * 100 : 0;
+      });
 
-      const json = await response.json();
+      // Bids — highest first, top 20
+      const processedBids: OrderBookEntry[] = [];
+      let bidCumTotal = 0;
+      const sortedBids = rawBids
+        .map(([px, sz]) => ({ price: parseFloat(px), size: parseFloat(sz) }))
+        .sort((a, b) => b.price - a.price)
+        .slice(0, 20);
 
-      if (!json.success) {
-        throw new Error(json.error || 'Unknown error');
+      for (const { price, size } of sortedBids) {
+        const total = price * size;
+        if (!isNaN(total) && isFinite(total)) {
+          bidCumTotal += total;
+          processedBids.push({ price, amount: size, total, depthPercent: 0 });
+        }
       }
+      processedBids.forEach((b, i) => {
+        const cum = processedBids.slice(0, i + 1).reduce((s, x) => s + x.total, 0);
+        b.depthPercent = bidCumTotal > 0 ? (cum / bidCumTotal) * 100 : 0;
+      });
 
       if (!isMountedRef.current) return;
 
-      processOrderBookUpdate(json.asks, json.bids);
-      setConnected(true);
-      setLoading(false);
-      setError(null);
-      setLastUpdate(json.timestamp || Date.now());
-    } catch (err) {
-      console.error('[OrderBook] Error fetching data:', err);
+      setAsks(processedAsks);
+      setBids(processedBids);
 
-      if (isMountedRef.current) {
-        setConnected(false);
-        setError(err instanceof Error ? err.message : 'Failed to fetch order book');
-        setLoading(false);
+      if (processedBids.length > 0) {
+        const newLast = processedBids[0].price;
+        const prev = lastPriceRef.current;
+        const chg = prev > 0 ? ((newLast - prev) / prev) * 100 : 0;
+        lastPriceRef.current = newLast;
+        setLastPrice(newLast);
+        setPriceChange(chg);
       }
-    }
-  };
+    },
+    []
+  );
 
+  // ------- REST fetch (initial snapshot + fallback) -------
+  const fetchRest = useCallback(
+    async (coin: string): Promise<string | null> => {
+      try {
+        const res = await fetch(
+          `/api/hyperliquid/orderbook?coin=${encodeURIComponent(coin)}`
+        );
+        if (!res.ok) throw new Error(`API error: ${res.status}`);
+        const json = await res.json();
+        if (!json.success) throw new Error(json.error || 'Unknown error');
+
+        if (!isMountedRef.current) return json.coin;
+
+        coinNameRef.current = json.coin;
+        processLevels(json.asks, json.bids);
+        setConnected(true);
+        setLoading(false);
+        setError(null);
+        setLastUpdate(json.timestamp || Date.now());
+
+        return json.coin as string;
+      } catch (err) {
+        console.error('[OrderBook] REST error:', err);
+        if (isMountedRef.current) {
+          setConnected(false);
+          setError(err instanceof Error ? err.message : 'Failed to fetch order book');
+          setLoading(false);
+        }
+        return null;
+      }
+    },
+    [processLevels]
+  );
+
+  // ------- Fallback REST polling if WS dies -------
+  const startFallbackPolling = useCallback(() => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(() => {
+      fetchRest(baseCoin);
+    }, REST_POLL_INTERVAL);
+  }, [fetchRest, baseCoin]);
+
+  // ------- WebSocket connection -------
+  const connectWs = useCallback(
+    (hlCoinName: string) => {
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+      // Stop any fallback polling when WS connects
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+
+      const ws = new WebSocket(WS_URL);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        ws.send(
+          JSON.stringify({
+            method: 'subscribe',
+            subscription: { type: 'l2Book', coin: hlCoinName },
+          })
+        );
+      };
+
+      ws.onmessage = (evt) => {
+        try {
+          const msg = JSON.parse(evt.data);
+          if (msg.channel === 'l2Book' && msg.data?.levels) {
+            const levels = msg.data.levels;
+            // WsLevel format: { px: string, sz: string, n: number }
+            const rawBids: [string, string][] = (levels[0] || []).map(
+              (l: any) => [l.px, l.sz]
+            );
+            const rawAsks: [string, string][] = (levels[1] || []).map(
+              (l: any) => [l.px, l.sz]
+            );
+            processLevels(rawAsks, rawBids);
+            setConnected(true);
+            setError(null);
+            setLastUpdate(msg.data.time || Date.now());
+          }
+        } catch {
+          // ignore parse errors
+        }
+      };
+
+      ws.onerror = () => {
+        console.warn('[OrderBook] WS error — falling back to REST polling');
+        setConnected(false);
+        startFallbackPolling();
+      };
+
+      ws.onclose = () => {
+        if (isMountedRef.current) {
+          setConnected(false);
+          // Reconnect after 3s
+          setTimeout(() => {
+            if (isMountedRef.current && coinNameRef.current) {
+              connectWs(coinNameRef.current);
+            }
+          }, 3000);
+        }
+      };
+    },
+    [processLevels, startFallbackPolling]
+  );
+
+  // ------- Main effect: fetch snapshot → connect WS -------
   useEffect(() => {
     isMountedRef.current = true;
+    lastPriceRef.current = 0;
 
     setAsks([]);
     setBids([]);
@@ -87,83 +232,27 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
     setLoading(true);
     setError(null);
 
-    fetchOrderBook(baseCoin);
+    let cancelled = false;
 
-    intervalRef.current = setInterval(() => {
-      fetchOrderBook(baseCoin);
-    }, POLLING_INTERVAL);
+    (async () => {
+      const hlCoin = await fetchRest(baseCoin);
+      if (cancelled || !hlCoin) return;
+      connectWs(hlCoin);
+    })();
 
     return () => {
+      cancelled = true;
       isMountedRef.current = false;
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
       }
     };
-  }, [baseCoin]);
-
-  const processOrderBookUpdate = (
-    rawAsks: [string, string][],
-    rawBids: [string, string][]
-  ) => {
-    try {
-      // Process asks (sell orders) — lowest first, take top 20
-      const processedAsks: OrderBookEntry[] = [];
-      let askCumulativeTotal = 0;
-
-      const sortedAsks = rawAsks
-        .map(([px, sz]) => ({ price: parseFloat(px), size: parseFloat(sz) }))
-        .sort((a, b) => a.price - b.price)
-        .slice(0, 20);
-
-      for (const { price, size } of sortedAsks) {
-        const total = price * size;
-        if (!isNaN(total) && isFinite(total)) {
-          askCumulativeTotal += total;
-          processedAsks.push({ price, amount: size, total, depthPercent: 0 });
-        }
-      }
-
-      processedAsks.reverse(); // display highest ask at top
-      processedAsks.forEach((ask, idx) => {
-        const cumulativeToThis = processedAsks.slice(idx).reduce((s, a) => s + a.total, 0);
-        ask.depthPercent = askCumulativeTotal > 0 ? (cumulativeToThis / askCumulativeTotal) * 100 : 0;
-      });
-
-      // Process bids (buy orders) — highest first, take top 20
-      const processedBids: OrderBookEntry[] = [];
-      let bidCumulativeTotal = 0;
-
-      const sortedBids = rawBids
-        .map(([px, sz]) => ({ price: parseFloat(px), size: parseFloat(sz) }))
-        .sort((a, b) => b.price - a.price)
-        .slice(0, 20);
-
-      for (const { price, size } of sortedBids) {
-        const total = price * size;
-        if (!isNaN(total) && isFinite(total)) {
-          bidCumulativeTotal += total;
-          processedBids.push({ price, amount: size, total, depthPercent: 0 });
-        }
-      }
-
-      processedBids.forEach((bid, idx) => {
-        const cumulativeToThis = processedBids.slice(0, idx + 1).reduce((s, b) => s + b.total, 0);
-        bid.depthPercent = bidCumulativeTotal > 0 ? (cumulativeToThis / bidCumulativeTotal) * 100 : 0;
-      });
-
-      setAsks(processedAsks);
-      setBids(processedBids);
-
-      if (processedBids.length > 0) {
-        const newLastPrice = processedBids[0].price;
-        const change = lastPrice > 0 ? ((newLastPrice - lastPrice) / lastPrice) * 100 : 0;
-        setLastPrice(newLastPrice);
-        setPriceChange(change);
-      }
-    } catch (err) {
-      console.error('Error processing order book update:', err);
-    }
-  };
+  }, [baseCoin, fetchRest, connectWs]);
 
   const spread = useMemo(() => {
     if (asks.length > 0 && bids.length > 0) {

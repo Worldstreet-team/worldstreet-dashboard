@@ -42,8 +42,8 @@ class HyperliquidClient {
           chain: 'ethereum' as const,
           szDecimals: baseToken?.szDecimals ?? 8,
         };
-      })
-      .filter((m: any) => m.price > 0);
+      });
+    // No filter — show all HL spot markets even if price is currently 0
   }
 
   async getAccount(address: string) {

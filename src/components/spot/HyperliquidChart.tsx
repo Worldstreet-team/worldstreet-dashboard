@@ -241,7 +241,7 @@ const HyperliquidChart = ({ symbol }: HyperliquidChartProps) => {
 
     try {
       const res = await fetch(
-        `/api/hyperliquid/candles?coin=${encodeURIComponent(baseCoin)}&interval=${interval}&limit=500`
+        `/api/hyperliquid/candles?coin=${encodeURIComponent(baseCoin)}&interval=${interval}&limit=1000`
       );
       const json = await res.json();
 
@@ -309,8 +309,22 @@ const HyperliquidChart = ({ symbol }: HyperliquidChartProps) => {
         priceLineColor: priceColor,
       });
 
-      // WebSocket for live updates
-      const hlCoinName = json.coinName || baseCoin;
+      // WebSocket for live candle updates from Hyperliquid
+      // If candles came from Gate.io, resolve HL coin name for WS
+      let hlCoinName = json.coinName || baseCoin;
+      if (json.source === "gateio") {
+        try {
+          const metaRes = await fetch(
+            `/api/hyperliquid/orderbook?coin=${encodeURIComponent(baseCoin)}`
+          );
+          const metaJson = await metaRes.json();
+          if (metaJson.success && metaJson.coin) {
+            hlCoinName = metaJson.coin;
+          }
+        } catch {
+          // use baseCoin as fallback
+        }
+      }
       const ws = new WebSocket("wss://api.hyperliquid.xyz/ws");
       wsRef.current = ws;
 
@@ -442,7 +456,7 @@ const HyperliquidChart = ({ symbol }: HyperliquidChartProps) => {
             {baseCoin}/USD
           </span>
           <span className="text-[10px] text-[#848e9c]">
-            · {interval} · Hyperliquid
+            · {interval}
           </span>
           {ohlc && (
             <span className={`inline-block w-2 h-2 rounded-full ${isUp ? 'bg-[#0ecb81]' : 'bg-[#f6465d]'}`} />
