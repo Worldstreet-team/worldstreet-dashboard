@@ -3,13 +3,13 @@
 /**
  * BinanceOrderBook Component
  *
- * Real-time order book via Hyperliquid WebSocket (l2Book subscription).
- * - Fetches initial snapshot + resolved coin name from REST API
- * - Connects to wss://api.hyperliquid.xyz/ws for live l2Book updates
- * - Falls back to REST polling if WS fails
+ * Real-time order book display using Hyperliquid L2 book API with polling.
+ * - Polls /api/hyperliquid/orderbook every 2 seconds
+ * - Displays top 20 bids and asks with depth visualization
+ * - Shows spread and last update time
  */
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Icon } from '@iconify/react';
 
 interface OrderBookEntry {
@@ -23,8 +23,7 @@ interface BinanceOrderBookProps {
   selectedPair: string;
 }
 
-const WS_URL = 'wss://api.hyperliquid.xyz/ws';
-const REST_POLL_INTERVAL = 5000;
+const POLLING_INTERVAL = 2000;
 
 export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps) {
   const [asks, setAsks] = useState<OrderBookEntry[]>([]);
@@ -37,10 +36,8 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<number>(0);
 
-  const wsRef = useRef<WebSocket | null>(null);
-  const pollRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef<boolean>(true);
-  const coinNameRef = useRef<string>('');
   const lastPriceRef = useRef<number>(0);
 
   // Extract base coin from pair like "PURR-USD" → "PURR"
@@ -48,178 +45,92 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
     return selectedPair.split('-')[0]?.replace(/\//g, '') || selectedPair;
   }, [selectedPair]);
 
-  // ------- process raw levels into display entries -------
-  const processLevels = useCallback(
-    (rawAsks: [string, string][], rawBids: [string, string][]) => {
-      // Asks — lowest first, top 20
-      const processedAsks: OrderBookEntry[] = [];
-      let askCumTotal = 0;
-      const sortedAsks = rawAsks
-        .map(([px, sz]) => ({ price: parseFloat(px), size: parseFloat(sz) }))
-        .sort((a, b) => a.price - b.price)
-        .slice(0, 20);
+  // ------- Process raw levels into display entries -------
+  function processLevels(rawAsks: [string, string][], rawBids: [string, string][]) {
+    // Asks — lowest first, top 20
+    const processedAsks: OrderBookEntry[] = [];
+    let askCumTotal = 0;
+    const sortedAsks = rawAsks
+      .map(([px, sz]) => ({ price: parseFloat(px), size: parseFloat(sz) }))
+      .sort((a, b) => a.price - b.price)
+      .slice(0, 20);
 
-      for (const { price, size } of sortedAsks) {
-        const total = price * size;
-        if (!isNaN(total) && isFinite(total)) {
-          askCumTotal += total;
-          processedAsks.push({ price, amount: size, total, depthPercent: 0 });
-        }
+    for (const { price, size } of sortedAsks) {
+      const total = price * size;
+      if (!isNaN(total) && isFinite(total)) {
+        askCumTotal += total;
+        processedAsks.push({ price, amount: size, total, depthPercent: 0 });
       }
-      processedAsks.reverse();
-      processedAsks.forEach((a, i) => {
-        const cum = processedAsks.slice(i).reduce((s, x) => s + x.total, 0);
-        a.depthPercent = askCumTotal > 0 ? (cum / askCumTotal) * 100 : 0;
-      });
+    }
+    processedAsks.reverse();
+    processedAsks.forEach((a, i) => {
+      const cum = processedAsks.slice(i).reduce((s, x) => s + x.total, 0);
+      a.depthPercent = askCumTotal > 0 ? (cum / askCumTotal) * 100 : 0;
+    });
 
-      // Bids — highest first, top 20
-      const processedBids: OrderBookEntry[] = [];
-      let bidCumTotal = 0;
-      const sortedBids = rawBids
-        .map(([px, sz]) => ({ price: parseFloat(px), size: parseFloat(sz) }))
-        .sort((a, b) => b.price - a.price)
-        .slice(0, 20);
+    // Bids — highest first, top 20
+    const processedBids: OrderBookEntry[] = [];
+    let bidCumTotal = 0;
+    const sortedBids = rawBids
+      .map(([px, sz]) => ({ price: parseFloat(px), size: parseFloat(sz) }))
+      .sort((a, b) => b.price - a.price)
+      .slice(0, 20);
 
-      for (const { price, size } of sortedBids) {
-        const total = price * size;
-        if (!isNaN(total) && isFinite(total)) {
-          bidCumTotal += total;
-          processedBids.push({ price, amount: size, total, depthPercent: 0 });
-        }
+    for (const { price, size } of sortedBids) {
+      const total = price * size;
+      if (!isNaN(total) && isFinite(total)) {
+        bidCumTotal += total;
+        processedBids.push({ price, amount: size, total, depthPercent: 0 });
       }
-      processedBids.forEach((b, i) => {
-        const cum = processedBids.slice(0, i + 1).reduce((s, x) => s + x.total, 0);
-        b.depthPercent = bidCumTotal > 0 ? (cum / bidCumTotal) * 100 : 0;
-      });
+    }
+    processedBids.forEach((b, i) => {
+      const cum = processedBids.slice(0, i + 1).reduce((s, x) => s + x.total, 0);
+      b.depthPercent = bidCumTotal > 0 ? (cum / bidCumTotal) * 100 : 0;
+    });
+
+    if (!isMountedRef.current) return;
+
+    setAsks(processedAsks);
+    setBids(processedBids);
+
+    if (processedBids.length > 0) {
+      const newLast = processedBids[0].price;
+      const prev = lastPriceRef.current;
+      const chg = prev > 0 ? ((newLast - prev) / prev) * 100 : 0;
+      lastPriceRef.current = newLast;
+      setLastPrice(newLast);
+      setPriceChange(chg);
+    }
+  }
+
+  // ------- REST fetch -------
+  const fetchOrderBook = async () => {
+    try {
+      const res = await fetch(
+        `/api/hyperliquid/orderbook?coin=${encodeURIComponent(baseCoin)}`
+      );
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Unknown error');
 
       if (!isMountedRef.current) return;
 
-      setAsks(processedAsks);
-      setBids(processedBids);
-
-      if (processedBids.length > 0) {
-        const newLast = processedBids[0].price;
-        const prev = lastPriceRef.current;
-        const chg = prev > 0 ? ((newLast - prev) / prev) * 100 : 0;
-        lastPriceRef.current = newLast;
-        setLastPrice(newLast);
-        setPriceChange(chg);
-      }
-    },
-    []
-  );
-
-  // ------- REST fetch (initial snapshot + fallback) -------
-  const fetchRest = useCallback(
-    async (coin: string): Promise<string | null> => {
-      try {
-        const res = await fetch(
-          `/api/hyperliquid/orderbook?coin=${encodeURIComponent(coin)}`
-        );
-        if (!res.ok) throw new Error(`API error: ${res.status}`);
-        const json = await res.json();
-        if (!json.success) throw new Error(json.error || 'Unknown error');
-
-        if (!isMountedRef.current) return json.coin;
-
-        coinNameRef.current = json.coin;
-        processLevels(json.asks, json.bids);
-        setConnected(true);
-        setLoading(false);
-        setError(null);
-        setLastUpdate(json.timestamp || Date.now());
-
-        return json.coin as string;
-      } catch (err) {
-        console.error('[OrderBook] REST error:', err);
-        if (isMountedRef.current) {
-          setConnected(false);
-          setError(err instanceof Error ? err.message : 'Failed to fetch order book');
-          setLoading(false);
-        }
-        return null;
-      }
-    },
-    [processLevels]
-  );
-
-  // ------- Fallback REST polling if WS dies -------
-  const startFallbackPolling = useCallback(() => {
-    if (pollRef.current) clearInterval(pollRef.current);
-    pollRef.current = setInterval(() => {
-      fetchRest(baseCoin);
-    }, REST_POLL_INTERVAL);
-  }, [fetchRest, baseCoin]);
-
-  // ------- WebSocket connection -------
-  const connectWs = useCallback(
-    (hlCoinName: string) => {
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
-      // Stop any fallback polling when WS connects
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-
-      const ws = new WebSocket(WS_URL);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        ws.send(
-          JSON.stringify({
-            method: 'subscribe',
-            subscription: { type: 'l2Book', coin: hlCoinName },
-          })
-        );
-      };
-
-      ws.onmessage = (evt) => {
-        try {
-          const msg = JSON.parse(evt.data);
-          if (msg.channel === 'l2Book' && msg.data?.levels) {
-            const levels = msg.data.levels;
-            // WsLevel format: { px: string, sz: string, n: number }
-            const rawBids: [string, string][] = (levels[0] || []).map(
-              (l: any) => [l.px, l.sz]
-            );
-            const rawAsks: [string, string][] = (levels[1] || []).map(
-              (l: any) => [l.px, l.sz]
-            );
-            processLevels(rawAsks, rawBids);
-            setConnected(true);
-            setError(null);
-            setLastUpdate(msg.data.time || Date.now());
-          }
-        } catch {
-          // ignore parse errors
-        }
-      };
-
-      ws.onerror = () => {
-        console.warn('[OrderBook] WS error — falling back to REST polling');
+      processLevels(json.asks, json.bids);
+      setConnected(true);
+      setLoading(false);
+      setError(null);
+      setLastUpdate(json.timestamp || Date.now());
+    } catch (err) {
+      console.error('[OrderBook] REST error:', err);
+      if (isMountedRef.current) {
         setConnected(false);
-        startFallbackPolling();
-      };
+        setError(err instanceof Error ? err.message : 'Failed to fetch order book');
+        setLoading(false);
+      }
+    }
+  };
 
-      ws.onclose = () => {
-        if (isMountedRef.current) {
-          setConnected(false);
-          // Reconnect after 3s
-          setTimeout(() => {
-            if (isMountedRef.current && coinNameRef.current) {
-              connectWs(coinNameRef.current);
-            }
-          }, 3000);
-        }
-      };
-    },
-    [processLevels, startFallbackPolling]
-  );
-
-  // ------- Main effect: fetch snapshot → connect WS -------
+  // ------- Main effect: poll every 2 seconds -------
   useEffect(() => {
     isMountedRef.current = true;
     lastPriceRef.current = 0;
@@ -232,27 +143,21 @@ export default function BinanceOrderBook({ selectedPair }: BinanceOrderBookProps
     setLoading(true);
     setError(null);
 
-    let cancelled = false;
+    // Initial fetch
+    fetchOrderBook();
 
-    (async () => {
-      const hlCoin = await fetchRest(baseCoin);
-      if (cancelled || !hlCoin) return;
-      connectWs(hlCoin);
-    })();
+    // Start polling
+    intervalRef.current = setInterval(fetchOrderBook, POLLING_INTERVAL);
 
     return () => {
-      cancelled = true;
       isMountedRef.current = false;
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
     };
-  }, [baseCoin, fetchRest, connectWs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baseCoin]);
 
   const spread = useMemo(() => {
     if (asks.length > 0 && bids.length > 0) {
