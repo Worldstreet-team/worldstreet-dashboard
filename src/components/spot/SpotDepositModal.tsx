@@ -63,18 +63,17 @@ export default function SpotDepositModal({ isOpen, onClose, onDepositComplete }:
     return chain === "ethereum" ? addresses.ethereum : addresses.solana;
   }, [chain, addresses]);
 
-  // Derive USDT balance based on selected chain
-  const usdtBalance = useMemo(() => {
-    if (chain === "solana") {
-      return getSolUsdtBalance();
-    }
-    // Ethereum: find USDT in token balances
+  // Compute USDT balances for both chains
+  const solUsdtBalance = useMemo(() => getSolUsdtBalance(), [getSolUsdtBalance]);
+  const ethUsdtBalance = useMemo(() => {
     const usdt = ethTokenBalances.find(
       (t) => t.address.toLowerCase() === ETH_USDT_ADDRESS.toLowerCase()
     );
     return usdt?.amount ?? 0;
-  }, [chain, getSolUsdtBalance, ethTokenBalances]);
+  }, [ethTokenBalances]);
 
+  // Active chain balance (used for max button & validation)
+  const usdtBalance = chain === "solana" ? solUsdtBalance : ethUsdtBalance;
   const balanceLoading = chain === "solana" ? solLoading : evmLoading;
 
   // Check if user has enough SOL for transaction fees
@@ -246,13 +245,31 @@ export default function SpotDepositModal({ isOpen, onClose, onDepositComplete }:
                         />
                       </button>
                     </div>
+
+                    {/* Both chain balances */}
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-[#4a5056]">USDT Balance</span>
-                      <span className="text-xs text-white font-medium">
-                        {balanceLoading ? (
+                      <span className="text-xs text-[#4a5056] flex items-center gap-1">
+                        <Icon icon="cryptocurrency:eth" width={12} />
+                        Ethereum USDT
+                      </span>
+                      <span className={`text-xs font-medium ${chain === "ethereum" ? "text-white" : "text-[#848e9c]"}`}>
+                        {evmLoading ? (
                           <Icon icon="ph:spinner" width={12} className="animate-spin inline" />
                         ) : (
-                          `${usdtBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT`
+                          `${ethUsdtBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT`
+                        )}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-[#4a5056] flex items-center gap-1">
+                        <Icon icon="cryptocurrency:sol" width={12} />
+                        Solana USDT
+                      </span>
+                      <span className={`text-xs font-medium ${chain === "solana" ? "text-white" : "text-[#848e9c]"}`}>
+                        {solLoading ? (
+                          <Icon icon="ph:spinner" width={12} className="animate-spin inline" />
+                        ) : (
+                          `${solUsdtBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT`
                         )}
                       </span>
                     </div>
