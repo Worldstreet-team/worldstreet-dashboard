@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
 
     const authContext = await createAuthorizationContext(clerkJwt);
 
-    const { asset, side, amount, price, orderType, stopPrice, isSpot: requestIsSpot } = await request.json();
+    const { asset, side, amount, price, orderType, stopPrice, isSpot: requestIsSpot, reduceOnly } = await request.json();
 
     if (!asset || !side || !amount || !orderType) {
       return NextResponse.json({ success: false, error: "Missing required fields" }, { status: 400 });
@@ -167,6 +167,7 @@ export async function POST(request: NextRequest) {
     // 2. Implementation of Market Orders via IOC Limit orders (as per instructions)
     let finalPrice = price;
     let finalTif: any = { limit: { tif: "Gtc" } };
+    let wouldFillImmediately = false;
 
     if (orderType === 'market') {
       try {
@@ -254,6 +255,23 @@ export async function POST(request: NextRequest) {
           tpsl: isAbove ? 'tp' : 'sl' // HL logic for direction
         }
       };
+    } else if (orderType === 'limit') {
+      // Check if limit order would fill immediately (crosses the spread)
+      try {
+        const bookName = isSpot ? spotCoinName : asset;
+        const l2 = await info.l2Book({ coin: bookName });
+        if (l2?.levels?.[0]?.[0] && l2?.levels?.[1]?.[0]) {
+          const bestBid = parseFloat(l2.levels[0][0].px);
+          const bestAsk = parseFloat(l2.levels[1][0].px);
+          if (side === 'buy' && Number(price) >= bestAsk) {
+            wouldFillImmediately = true;
+          } else if (side === 'sell' && Number(price) <= bestBid) {
+            wouldFillImmediately = true;
+          }
+        }
+      } catch (e) {
+        console.warn('[Hyperliquid Order] Failed to check limit price vs book:', e);
+      }
     }
 
     // Use the ROUNDED values (what actually gets sent to HL) for the min check
@@ -280,7 +298,7 @@ export async function POST(request: NextRequest) {
           b: side === 'buy',
           p: roundedPrice,
           s: roundedSize,
-          r: false,
+          r: reduceOnly === true,
           t: finalTif
         }
       ],
@@ -297,7 +315,8 @@ export async function POST(request: NextRequest) {
       data: result,
       orderType,
       side,
-      asset
+      asset,
+      wouldFillImmediately
     });
 
   } catch (error: any) {

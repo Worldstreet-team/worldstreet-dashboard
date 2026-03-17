@@ -19,6 +19,7 @@ import HyperliquidBalanceDisplay from '@/components/spot/HyperliquidBalanceDispl
 import SpotDepositModal from '@/components/spot/SpotDepositModal';
 import SpotWithdrawModal from '@/components/spot/SpotWithdrawModal';
 import { useHyperliquidMarkets } from '@/hooks/useHyperliquidMarkets';
+import { useOpenOrders } from '@/hooks/useOpenOrders';
 
 interface PairData {
   name: string;
@@ -34,6 +35,9 @@ export default function BinanceSpotPage() {
 
   // Clerk authentication
   const { user, isLoaded } = useUser();
+
+  // Open orders for chart integration
+  const { orders: openOrders } = useOpenOrders();
 
   // Use Hyperliquid markets for spot trading
   const {
@@ -231,7 +235,7 @@ export default function BinanceSpotPage() {
         <div className="flex-1 overflow-hidden">
           {mobileActiveTab === 'chart' && (
             <div className="h-full">
-              <HyperliquidChart symbol={`${pairData.name}USD`} />
+              <HyperliquidChart symbol={`${pairData.name}USD`} openOrders={openOrders} />
             </div>
           )}
 
@@ -428,7 +432,7 @@ export default function BinanceSpotPage() {
           {/* Chart */}
           <div className="h-full bg-[#0b0e11] border-r border-[#1f2329]">
             <div className="h-full">
-              <HyperliquidChart symbol={`${pairData.name}USD`} />
+              <HyperliquidChart symbol={`${pairData.name}USD`} openOrders={openOrders} />
             </div>
           </div>
 

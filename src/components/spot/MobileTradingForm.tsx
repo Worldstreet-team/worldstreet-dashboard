@@ -30,6 +30,11 @@ export default function MobileTradingForm({ selectedPair, chain, tokenAddress }:
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [currentMarketPrice, setCurrentMarketPrice] = useState<number>(0);
+  const [bestBid, setBestBid] = useState(0);
+  const [bestAsk, setBestAsk] = useState(0);
+  const [showTPSL, setShowTPSL] = useState(false);
+  const [takeProfitPrice, setTakeProfitPrice] = useState('');
+  const [stopLossPrice, setStopLossPrice] = useState('');
 
   const [baseAsset, quoteAsset] = selectedPair.split('-');
 
@@ -61,6 +66,31 @@ export default function MobileTradingForm({ selectedPair, chain, tokenAddress }:
     const interval = setInterval(updatePrice, 2000);
     return () => clearInterval(interval);
   }, [selectedPair, hyperliquidMarkets, baseAsset]);
+
+  // Fetch best bid/ask for limit order reference
+  useEffect(() => {
+    const fetchBidAsk = async () => {
+      try {
+        const res = await fetch(
+          `/api/hyperliquid/slippage-estimate?coin=${baseAsset}&side=buy&amount=1`
+        );
+        const data = await res.json();
+        if (data.success && data.data) {
+          if (data.data.bestBid) setBestBid(data.data.bestBid);
+          if (data.data.bestAsk) setBestAsk(data.data.bestAsk);
+        }
+      } catch { /* ignore */ }
+    };
+    fetchBidAsk();
+    const interval = setInterval(fetchBidAsk, 5000);
+    return () => clearInterval(interval);
+  }, [baseAsset]);
+
+  // Check if limit order would fill immediately
+  const wouldFillImmediately = orderType === 'limit' && price && (
+    (side === 'buy' && bestAsk > 0 && parseFloat(price) >= bestAsk) ||
+    (side === 'sell' && bestBid > 0 && parseFloat(price) <= bestBid)
+  );
 
   // Update total calculation
   useEffect(() => {
@@ -145,11 +175,93 @@ export default function MobileTradingForm({ selectedPair, chain, tokenAddress }:
     setExecuting(true);
     
     try {
-      // For now, show a placeholder message since we're removing Drift
-      // In a real implementation, this would integrate with Hyperliquid trading
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Calculate token amount — mobile buy uses USDC, sell uses token
+      let tokenAmount: number;
+      if (side === 'buy' && orderType === 'market') {
+        tokenAmount = currentMarketPrice > 0 ? parseFloat(amount) / currentMarketPrice : 0;
+      } else if (side === 'buy' && orderType !== 'market') {
+        tokenAmount = parseFloat(price) > 0 ? parseFloat(amount) / parseFloat(price) : 0;
+      } else {
+        tokenAmount = parseFloat(amount);
+      }
+
+      if (tokenAmount <= 0) {
+        setError('Could not calculate order amount. Check your inputs.');
+        setExecuting(false);
+        return;
+      }
+
+      const response = await fetch('/api/hyperliquid/order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          asset: baseAsset,
+          side,
+          amount: tokenAmount,
+          price: orderType === 'market' ? 0 : parseFloat(price),
+          orderType,
+          isSpot: true,
+          stopPrice: orderType === 'stop-limit' ? parseFloat(stopPrice) : undefined
+        })
+      });
+
+      const result = await response.json();
       
-      setSuccess(`${side === 'buy' ? 'Buy' : 'Sell'} order placed successfully!`);
+      if (result.success) {
+        const statuses = result.data?.response?.data?.statuses;
+        const firstStatus = statuses?.[0];
+        let msg = `${side === 'buy' ? 'Buy' : 'Sell'} order placed successfully!`;
+
+        if (firstStatus?.filled) {
+          const f = firstStatus.filled;
+          msg = `Filled ${f.totalSz} ${baseAsset} @ $${parseFloat(f.avgPx).toFixed(4)} avg`;
+        } else if (firstStatus?.resting) {
+          msg = `Limit order placed (ID: ${firstStatus.resting.oid})`;
+        }
+
+        // Place TP/SL if set and order filled
+        if (firstStatus?.filled && (takeProfitPrice || stopLossPrice)) {
+          const fillSize = parseFloat(firstStatus.filled.totalSz);
+          const oppositeSide = side === 'buy' ? 'sell' : 'buy';
+          const tpslParts: string[] = [];
+
+          if (takeProfitPrice && parseFloat(takeProfitPrice) > 0) {
+            try {
+              const tpRes = await fetch('/api/hyperliquid/order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  asset: baseAsset, side: oppositeSide, amount: fillSize,
+                  price: parseFloat(takeProfitPrice), orderType: 'stop-limit',
+                  isSpot: true, stopPrice: parseFloat(takeProfitPrice), reduceOnly: true
+                })
+              });
+              const tpResult = await tpRes.json();
+              tpslParts.push(tpResult.success ? `TP at $${takeProfitPrice}` : `TP failed`);
+            } catch { tpslParts.push('TP failed'); }
+          }
+          if (stopLossPrice && parseFloat(stopLossPrice) > 0) {
+            try {
+              const slRes = await fetch('/api/hyperliquid/order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  asset: baseAsset, side: oppositeSide, amount: fillSize,
+                  price: parseFloat(stopLossPrice), orderType: 'stop-limit',
+                  isSpot: true, stopPrice: parseFloat(stopLossPrice), reduceOnly: true
+                })
+              });
+              const slResult = await slRes.json();
+              tpslParts.push(slResult.success ? `SL at $${stopLossPrice}` : `SL failed`);
+            } catch { tpslParts.push('SL failed'); }
+          }
+          if (tpslParts.length > 0) msg += ` | ${tpslParts.join(' | ')}`;
+        }
+
+        setSuccess(msg);
+      } else {
+        setError(result.error || 'Failed to execute trade');
+      }
       
       // Reset form
       setAmount('');
@@ -157,16 +269,18 @@ export default function MobileTradingForm({ selectedPair, chain, tokenAddress }:
       setStopPrice('');
       setTotal('');
       setSliderValue(0);
+      setTakeProfitPrice('');
+      setStopLossPrice('');
 
       // Refresh balances
       setTimeout(() => {
         refetchBalances();
       }, 100);
 
-      // Clear success message after 3 seconds
+      // Clear success message after 5 seconds
       setTimeout(() => {
         setSuccess(null);
-      }, 3000);
+      }, 5000);
       
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to execute trade');
@@ -259,6 +373,32 @@ export default function MobileTradingForm({ selectedPair, chain, tokenAddress }:
               Order executes at this price after trigger
             </div>
           )}
+          {/* Best Bid/Ask Reference */}
+          {orderType === 'limit' && bestAsk > 0 && (
+            <div className="flex justify-between text-[10px] mt-1">
+              <button
+                type="button"
+                onClick={() => setPrice(bestBid.toFixed(6))}
+                className="text-success hover:underline"
+              >
+                Bid: ${bestBid.toFixed(4)}
+              </button>
+              <button
+                type="button"
+                onClick={() => setPrice(bestAsk.toFixed(6))}
+                className="text-error hover:underline"
+              >
+                Ask: ${bestAsk.toFixed(4)}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Immediate Fill Warning */}
+      {wouldFillImmediately && (
+        <div className="p-2 bg-warning/10 border border-warning/30 rounded-lg text-[10px] text-warning">
+          ⚠ This price is at or {side === 'buy' ? 'above' : 'below'} market — order will fill immediately like a market order.
         </div>
       )}
 
@@ -312,6 +452,53 @@ export default function MobileTradingForm({ selectedPair, chain, tokenAddress }:
           </span>
         </div>
       </div>
+
+      {/* TP/SL Section */}
+      {orderType !== 'stop-limit' && (
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowTPSL(!showTPSL)}
+            className="flex items-center gap-1 text-xs text-muted hover:text-dark dark:hover:text-white transition-colors w-full"
+          >
+            <span className="text-[10px]">{showTPSL ? '▼' : '▶'}</span>
+            <span>TP/SL</span>
+            {(takeProfitPrice || stopLossPrice) && (
+              <span className="ml-auto text-[10px] text-success">Active</span>
+            )}
+          </button>
+          {showTPSL && (
+            <div className="mt-2 space-y-2">
+              <div>
+                <label className="block text-[10px] text-success mb-1">Take Profit</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={takeProfitPrice}
+                    onChange={(e) => setTakeProfitPrice(e.target.value)}
+                    placeholder="TP price"
+                    className="w-full rounded-lg bg-muted/20 dark:bg-white/5 border border-success/30 px-2 py-1.5 text-xs text-dark dark:text-white placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-success"
+                  />
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted">{quoteAsset}</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] text-error mb-1">Stop Loss</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={stopLossPrice}
+                    onChange={(e) => setStopLossPrice(e.target.value)}
+                    placeholder="SL price"
+                    className="w-full rounded-lg bg-muted/20 dark:bg-white/5 border border-error/30 px-2 py-1.5 text-xs text-dark dark:text-white placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-error"
+                  />
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted">{quoteAsset}</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Error Message */}
       {error && (

@@ -14,8 +14,19 @@ import {
   CrosshairMode,
 } from "lightweight-charts";
 
+interface OpenOrderForChart {
+  coin: string;
+  side: 'B' | 'A';
+  limitPx: string;
+  sz: string;
+  oid: number;
+  orderType?: string;
+  tif?: string | null;
+}
+
 interface HyperliquidChartProps {
   symbol: string;
+  openOrders?: OpenOrderForChart[];
 }
 
 interface OhlcInfo {
@@ -70,7 +81,7 @@ function formatPrice(price: number): string {
 
 const VOLUME_SMA_PERIOD = 20;
 
-const HyperliquidChart = ({ symbol }: HyperliquidChartProps) => {
+const HyperliquidChart = ({ symbol, openOrders = [] }: HyperliquidChartProps) => {
   const chartAreaRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -78,6 +89,7 @@ const HyperliquidChart = ({ symbol }: HyperliquidChartProps) => {
   const volSmaSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const rawCandlesRef = useRef<any[]>([]);
+  const priceLinesRef = useRef<Map<number, any>>(new Map());
 
   const [interval, setInterval] = useState("30m");
   const [loading, setLoading] = useState(true);
@@ -424,6 +436,58 @@ const HyperliquidChart = ({ symbol }: HyperliquidChartProps) => {
       }
     };
   }, [fetchAndStream]);
+
+  // Render open orders as price lines on the chart
+  useEffect(() => {
+    if (!candleSeriesRef.current) return;
+    const series = candleSeriesRef.current;
+
+    // Remove old price lines
+    priceLinesRef.current.forEach((line) => {
+      try { series.removePriceLine(line); } catch { /* ignore */ }
+    });
+    priceLinesRef.current.clear();
+
+    // Filter orders for current symbol
+    const currentBase = extractBase(symbol);
+    const relevantOrders = openOrders.filter(o => {
+      const orderBase = o.coin.replace(/\/.*$/, '').replace(/@\d+/, '');
+      return orderBase.toUpperCase() === currentBase;
+    });
+
+    // Add price lines for each order
+    relevantOrders.forEach((order) => {
+      const price = parseFloat(order.limitPx);
+      if (!price || isNaN(price)) return;
+      const isBuy = order.side === 'B';
+      const isTrigger = order.orderType === 'trigger' || (order.tif && typeof order.tif === 'object');
+
+      let color: string;
+      let title: string;
+      let lineStyle: number;
+
+      if (isTrigger) {
+        // TP/SL trigger order
+        color = isBuy ? '#f6465d' : '#0ecb81';
+        title = isBuy ? `SL $${price.toFixed(2)}` : `TP $${price.toFixed(2)}`;
+        lineStyle = 1; // dotted
+      } else {
+        color = isBuy ? '#0ecb81' : '#f6465d';
+        title = `${isBuy ? 'Buy' : 'Sell'} Limit $${price.toFixed(2)}`;
+        lineStyle = 2; // dashed
+      }
+
+      const line = series.createPriceLine({
+        price,
+        color,
+        lineWidth: 1,
+        lineStyle,
+        axisLabelVisible: true,
+        title,
+      });
+      priceLinesRef.current.set(order.oid, line);
+    });
+  }, [openOrders, symbol]);
 
   const isUp = ohlc ? ohlc.close >= ohlc.open : true;
   const changeColor = isUp ? "text-[#0ecb81]" : "text-[#f6465d]";
