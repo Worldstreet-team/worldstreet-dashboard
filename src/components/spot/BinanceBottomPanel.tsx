@@ -168,7 +168,7 @@ export default function BinanceBottomPanel({
                         <td className={`px-2 py-2 font-medium ${o.side === 'B' ? 'text-[#0ecb81]' : 'text-[#f6465d]'}`}>
                           {o.side === 'B' ? 'Buy' : 'Sell'}
                         </td>
-                        <td className="px-2 py-2 text-[#848e9c]">{o.orderType || 'Limit'}</td>
+                        <td className="px-2 py-2 text-[#848e9c]">{o.tif === 'Ioc' ? 'Market' : (o.orderType || 'Limit')}</td>
                         <td className="px-2 py-2 text-right text-white">{o.limitPx}</td>
                         <td className="px-2 py-2 text-right text-white">{o.origSz || o.sz}</td>
                         <td className="px-2 py-2 text-center">

@@ -209,9 +209,10 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Hyperliquid Order] Placing ${orderType} ${side} for ${roundedSize} ${asset} at ${roundedPrice} (raw: ${amount} @ ${finalPrice})`);
 
-    // Server-side minimum order value check using rounded values
+    // Server-side minimum order value check using rounded values (buys only)
+    // Sells are always allowed so users can close positions of any size
     const orderValue = Number(roundedSize) * Number(roundedPrice);
-    if (orderValue < MIN_ORDER_VALUE) {
+    if (side === 'buy' && orderValue < MIN_ORDER_VALUE) {
       return NextResponse.json({
         success: false,
         error: `Minimum order value is $${MIN_ORDER_VALUE}. Your order is worth $${orderValue.toFixed(2)}.`

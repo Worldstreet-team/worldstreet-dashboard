@@ -132,13 +132,16 @@ export default function BinanceOrderForm({
       return;
     }
 
-    // Client-side minimum order value check ($10)
-    const priceForCalc = orderType === 'market' ? currentMarketPrice : parseFloat(price);
-    if (priceForCalc > 0) {
-      const orderValue = parseFloat(amount) * priceForCalc;
-      if (orderValue < 10) {
-        setError(`Minimum order value is $10. Your order is worth $${orderValue.toFixed(2)}.`);
-        return;
+    // Client-side minimum order value check ($10) — only for buys
+    // Sells should always be allowed so users can close positions
+    if (activeTab === 'buy') {
+      const priceForCalc = orderType === 'market' ? currentMarketPrice : parseFloat(price);
+      if (priceForCalc > 0) {
+        const orderValue = parseFloat(amount) * priceForCalc;
+        if (orderValue < 10) {
+          setError(`Minimum order value is $10. Your order is worth $${orderValue.toFixed(2)}.`);
+          return;
+        }
       }
     }
 
