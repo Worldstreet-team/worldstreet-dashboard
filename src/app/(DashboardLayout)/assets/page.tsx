@@ -11,6 +11,8 @@ import { formatAmount, formatUSD } from "@/lib/wallet/amounts";
 import { usePrices, getPrice } from "@/lib/wallet/usePrices";
 import Footer from "@/components/dashboard/Footer";
 import { ReceiveModal, SendModal, AddTokenModal } from "@/components/wallet";
+import SpotFundingSwap from "@/components/wallet/SpotFundingSwap";
+import FundingHistory from "@/components/wallet/FundingHistory";
 import { useUser } from "@clerk/nextjs";
 
 // Asset type definition
@@ -605,10 +607,11 @@ const AssetsPage = () => {
           </div>
         </div>
 
-        {/* Spot Trading Interface
-        <div className="col-span-12 lg:col-span-4">
-          <SpotInterface />
-        </div> */}
+        {/* Fund Spot Wallet */}
+        <div className="col-span-12 lg:col-span-4 space-y-4">
+          <SpotFundingSwap />
+          <FundingHistory />
+        </div>
 
         <div className="col-span-12">
           <Footer />
