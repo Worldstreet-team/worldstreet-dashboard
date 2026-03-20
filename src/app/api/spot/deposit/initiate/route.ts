@@ -30,8 +30,8 @@ export async function POST(request: NextRequest) {
       await request.json();
 
     // Validate inputs
-    if (!depositChain || !["ethereum", "solana"].includes(depositChain)) {
-      return NextResponse.json({ error: "Invalid depositChain (ethereum | solana)" }, { status: 400 });
+    if (!depositChain || !["ethereum", "solana", "tron"].includes(depositChain)) {
+      return NextResponse.json({ error: "Invalid depositChain (ethereum | solana | tron)" }, { status: 400 });
     }
     if (!depositAmount || depositAmount < 5) {
       return NextResponse.json({ error: "Minimum deposit is 5 USDC equivalent" }, { status: 400 });

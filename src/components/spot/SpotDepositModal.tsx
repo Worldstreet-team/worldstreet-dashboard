@@ -6,6 +6,7 @@ import { useSpotDeposit, type DepositInfo } from '@/hooks/useSpotDeposit';
 import { useWallet } from '@/app/context/walletContext';
 import { useSolana } from '@/app/context/solanaContext';
 import { useEvm } from '@/app/context/evmContext';
+import { useTron } from '@/app/context/tronContext';
 
 interface SpotDepositModalProps {
   isOpen: boolean;
@@ -51,19 +52,22 @@ export default function SpotDepositModal({ isOpen, onClose, onDepositComplete }:
   const { addresses, isLoading: walletsLoading } = useWallet();
   const { getUsdtBalance: getSolUsdtBalance, balance: solNativeBalance, loading: solLoading } = useSolana();
   const { tokenBalances: ethTokenBalances, loading: evmLoading } = useEvm();
+  const { tokenBalances: tronTokenBalances, balance: tronNativeBalance, loading: tronLoading } = useTron();
 
   // Form state
-  const [chain, setChain] = useState<"ethereum" | "solana">("ethereum");
+  const [chain, setChain] = useState<"ethereum" | "solana" | "tron">("ethereum");
   const [amount, setAmount] = useState("");
   const [copied, setCopied] = useState(false);
 
   // Derive wallet address from context based on selected chain
   const fromAddress = useMemo(() => {
     if (!addresses) return "";
-    return chain === "ethereum" ? addresses.ethereum : addresses.solana;
+    if (chain === "ethereum") return addresses.ethereum;
+    if (chain === "solana") return addresses.solana;
+    return addresses.tron;
   }, [chain, addresses]);
 
-  // Compute USDT balances for both chains
+  // Compute USDT balances for all chains
   const solUsdtBalance = useMemo(() => getSolUsdtBalance(), [getSolUsdtBalance]);
   const ethUsdtBalance = useMemo(() => {
     const usdt = ethTokenBalances.find(
@@ -71,13 +75,21 @@ export default function SpotDepositModal({ isOpen, onClose, onDepositComplete }:
     );
     return usdt?.amount ?? 0;
   }, [ethTokenBalances]);
+  const tronUsdtBalance = useMemo(() => {
+    const usdt = tronTokenBalances.find(
+      (t) => t.symbol === "USDT"
+    );
+    return usdt?.amount ?? 0;
+  }, [tronTokenBalances]);
 
   // Active chain balance (used for max button & validation)
-  const usdtBalance = chain === "solana" ? solUsdtBalance : ethUsdtBalance;
-  const balanceLoading = chain === "solana" ? solLoading : evmLoading;
+  const usdtBalance = chain === "solana" ? solUsdtBalance : chain === "tron" ? tronUsdtBalance : ethUsdtBalance;
+  const balanceLoading = chain === "solana" ? solLoading : chain === "tron" ? tronLoading : evmLoading;
 
-  // Check if user has enough SOL for transaction fees
-  const needsSol = chain === "solana" && solNativeBalance < 0.01;
+  // Check if user has enough native token for transaction fees
+  const needsGas =
+    (chain === "solana" && solNativeBalance < 0.01) ||
+    (chain === "tron" && tronNativeBalance < 30);
 
   // Resume polling on mount
   useEffect(() => {
@@ -168,24 +180,29 @@ export default function SpotDepositModal({ isOpen, onClose, onDepositComplete }:
               {/* Network Selection */}
               <div>
                 <label className="block text-xs text-[#848e9c] mb-2">Send USDT from</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {(["ethereum", "solana"] as const).map((c) => (
-                    <button
-                      key={c}
-                      onClick={() => setChain(c)}
-                      className={`flex items-center justify-center gap-2 py-3 rounded-lg border text-sm font-medium transition-colors ${
-                        chain === c
-                          ? "border-[#f0b90b] bg-[#f0b90b]/10 text-[#f0b90b]"
-                          : "border-[#2b3139] text-[#848e9c] hover:border-[#3b4149]"
-                      }`}
-                    >
-                      <Icon
-                        icon={c === "ethereum" ? "cryptocurrency:eth" : "cryptocurrency:sol"}
-                        width={18}
-                      />
-                      {c === "ethereum" ? "Ethereum" : "Solana"}
-                    </button>
-                  ))}
+                <div className="grid grid-cols-3 gap-2">
+                  {(["ethereum", "solana", "tron"] as const).map((c) => {
+                    const chainConfig = {
+                      ethereum: { icon: "cryptocurrency:eth", label: "Ethereum" },
+                      solana: { icon: "cryptocurrency:sol", label: "Solana" },
+                      tron: { icon: "cryptocurrency:trx", label: "Tron" },
+                    };
+                    const cfg = chainConfig[c];
+                    return (
+                      <button
+                        key={c}
+                        onClick={() => setChain(c)}
+                        className={`flex items-center justify-center gap-2 py-3 rounded-lg border text-sm font-medium transition-colors ${
+                          chain === c
+                            ? "border-[#f0b90b] bg-[#f0b90b]/10 text-[#f0b90b]"
+                            : "border-[#2b3139] text-[#848e9c] hover:border-[#3b4149]"
+                        }`}
+                      >
+                        <Icon icon={cfg.icon} width={18} />
+                        {cfg.label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -221,7 +238,7 @@ export default function SpotDepositModal({ isOpen, onClose, onDepositComplete }:
               {/* Wallet Address (auto-fetched) */}
               <div>
                 <label className="block text-xs text-[#848e9c] mb-2">
-                  Your {chain === "ethereum" ? "Ethereum" : "Solana"} wallet
+                  Your {chain === "ethereum" ? "Ethereum" : chain === "solana" ? "Solana" : "Tron"} wallet
                 </label>
                 {walletsLoading ? (
                   <div className="flex items-center gap-2 px-3 py-3 bg-[#0b0e11] border border-[#2b3139] rounded-lg">
@@ -246,7 +263,7 @@ export default function SpotDepositModal({ isOpen, onClose, onDepositComplete }:
                       </button>
                     </div>
 
-                    {/* Both chain balances */}
+                    {/* All chain balances */}
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-[#4a5056] flex items-center gap-1">
                         <Icon icon="cryptocurrency:eth" width={12} />
@@ -273,11 +290,24 @@ export default function SpotDepositModal({ isOpen, onClose, onDepositComplete }:
                         )}
                       </span>
                     </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-[#4a5056] flex items-center gap-1">
+                        <Icon icon="cryptocurrency:trx" width={12} />
+                        Tron USDT
+                      </span>
+                      <span className={`text-xs font-medium ${chain === "tron" ? "text-white" : "text-[#848e9c]"}`}>
+                        {tronLoading ? (
+                          <Icon icon="ph:spinner" width={12} className="animate-spin inline" />
+                        ) : (
+                          `${tronUsdtBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT`
+                        )}
+                      </span>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex items-center gap-2 px-3 py-3 bg-[#f6465d]/10 border border-[#f6465d]/20 rounded-lg">
                     <Icon icon="ph:warning" width={14} className="text-[#f6465d]" />
-                    <span className="text-xs text-[#f6465d]">No {chain === "ethereum" ? "Ethereum" : "Solana"} wallet found</span>
+                    <span className="text-xs text-[#f6465d]">No {chain === "ethereum" ? "Ethereum" : chain === "solana" ? "Solana" : "Tron"} wallet found</span>
                   </div>
                 )}
               </div>
@@ -287,12 +317,15 @@ export default function SpotDepositModal({ isOpen, onClose, onDepositComplete }:
                 <p className="text-xs text-[#f6465d]">{error}</p>
               )}
 
-              {/* SOL fee warning */}
-              {needsSol && !error && (
+              {/* Gas fee warning */}
+              {needsGas && !error && (
                 <div className="flex items-start gap-2 p-3 rounded-lg bg-[#f0b90b]/10 border border-[#f0b90b]/20">
                   <Icon icon="ph:warning-fill" width={16} className="text-[#f0b90b] mt-0.5 shrink-0" />
                   <span className="text-xs text-[#f0b90b]">
-                    You need at least 0.01 SOL for Solana network fees. Your current balance is {solNativeBalance.toFixed(4)} SOL. Please send some SOL to your wallet before depositing.
+                    {chain === "solana"
+                      ? `You need at least 0.01 SOL for Solana network fees. Your current balance is ${solNativeBalance.toFixed(4)} SOL. Please send some SOL to your wallet before depositing.`
+                      : `You need at least 30 TRX for Tron network energy fees. Your current balance is ${tronNativeBalance.toFixed(2)} TRX. Please send some TRX to your wallet before depositing.`
+                    }
                   </span>
                 </div>
               )}
@@ -300,7 +333,7 @@ export default function SpotDepositModal({ isOpen, onClose, onDepositComplete }:
               {/* Submit */}
               <button
                 onClick={isTerminal ? handleNewDeposit : handleInitiate}
-                disabled={loading || (!isTerminal && (!amount || parseFloat(amount) < 5 || !fromAddress || needsSol))}
+                disabled={loading || (!isTerminal && (!amount || parseFloat(amount) < 5 || !fromAddress || needsGas))}
                 className="w-full py-3 bg-[#f0b90b] hover:bg-[#f0b90b]/90 disabled:bg-[#2b3139] disabled:text-[#4a5056] text-black font-semibold text-sm rounded-lg transition-colors"
               >
                 {loading ? (
